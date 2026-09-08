@@ -17,8 +17,8 @@ from a pasted context document.
 
 - [x] Vendor `dieselsim` into the repo
 - [x] Confirm the solver runs and produces sane numbers
-- [ ] `PLAN.md`, `DECISIONS.md`, `STATUS.md` committed
-- [ ] Resolve OPEN-A through OPEN-E
+- [x] `PLAN.md`, `DECISIONS.md`, `STATUS.md` committed
+- [x] Resolve OPEN-A, C, D, E (ADR-006 to ADR-009)
 
 **Exit criteria:** a new session can read three files and know exactly where
 the project stands.
@@ -57,7 +57,8 @@ is wrong, and the UI gets blamed.
   1500 rpm, runs away to 33 bar BMEP at 2500. Needs a rate-limited boost
   follower with a stability argument, not a gain guess.
 - **#3** is a symptom of #2, not a separate bug. Expect it to resolve with it.
-- **#7 — cold combustion.** See OPEN-A.
+- **#7 — cold combustion.** Resolved by ADR-006: two grids, cold and warm,
+  interpolated on coolant temperature. Doubles grid build time.
 
 ### 1d. Deferred, documented
 

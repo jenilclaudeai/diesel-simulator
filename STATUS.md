@@ -29,17 +29,36 @@ Repo `dieselsim/` is byte-identical to the delivered tarball.
 
 ---
 
-## Blocking — needed before Phase 1 starts
+## Blocking — nothing
 
-| # | Question | Why it blocks |
+All questions that blocked Phase 1 are resolved. Two open items remain, neither
+blocking:
+
+| # | Question | Needed by |
 |---|---|---|
-| OPEN-A | Cold-start combustion approach | Changes grid dimensionality and build time |
-| OPEN-C | Project JSON contents | Changes the file format everything else reads |
-| OPEN-D | Enjoy mode engine roster | Determines which grids get prebuilt |
-| OPEN-E | Scope of "visually configurable" | Sizes the schematics work |
-| OPEN-B | Persona operating model | Process, not architecture |
+| OPEN-B | Persona operating model | process, not architecture |
+| OPEN-F | Enjoy mode roster contents | Phase 5 |
 
-Full text of each in `DECISIONS.md` § Open decisions.
+### Resolved 2026-09-08
+
+| Was | Now |
+|---|---|
+| OPEN-A cold combustion | ADR-006 — two grids, cold + warm, interpolated |
+| OPEN-C project file | ADR-007 — spec + vehicle + gearbox, no grid |
+| OPEN-D Enjoy roster | ADR-008 — curated set via `builder.py` |
+| OPEN-E visual config | ADR-009 — live 2D schematics, no 3D |
+
+Consequences worth carrying forward:
+
+- **Grid build time doubles** (ADR-006) and compounds with the
+  `multiprocessing` limitation. The Web Worker pool question in Phase 2 matters
+  more than it did.
+- **Sharing a custom engine means the recipient rebuilds the grid** (ADR-007).
+  The import UI must set that expectation rather than appearing to hang.
+- **Every roster engine needs `verify()` run and recorded** (ADR-008).
+  `builder.py` sizes hardware; the solver decides what it does.
+- **Schematics must be derived from spec fields**, never hand-drawn to
+  approximate them (ADR-009), or they drift from the physics they depict.
 
 ---
 
@@ -73,7 +92,7 @@ Source: `PROJECT_CONTEXT.md` § 2.7. Nothing fixed yet.
 | 4 | Light-load fuel understated ~2× | Phase 1b — measure first |
 | 5 | `operating_point` path-dependent | deferred, documented |
 | 6 | `l` key dead in DCT | Phase 1a |
-| 7 | No cold-temperature combustion | OPEN-A |
+| 7 | No cold-temperature combustion | ADR-006 — two-grid |
 | 8 | Unknown-provenance code in `engine.py` | Phase 1a — audit |
 | 9 | Worn-vs-new audio pair suspect | Phase 1b |
 | 10 | `render_transient` seams | deferred |
@@ -92,10 +111,11 @@ DCT clamping teleporting road speed · `q_wall_frac` 0/0 at zero fuelling.
 
 ## Next actions
 
-1. Answer OPEN-A, C, D, E
-2. ~~Check scipy usage~~ — done, numpy only
-3. Open a PR for this branch and merge to `main`
-4. Begin Phase 1a
+1. Merge `docs/project-plan` to `main`
+2. Begin **Phase 1a** — cheap bug fixes (#1, #6, #12) and the #8 audit of
+   unknown-provenance code in `engine.py`
+3. Phase 1b — measure #4 before changing anything: trace `fuel_kg_h` at low
+   load against the grid's `fuel_mg`
 
 ---
 

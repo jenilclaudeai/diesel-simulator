@@ -234,45 +234,154 @@ not quoted from memory.
 
 ---
 
-## Open decisions
+## ADR-006 — Cold-start combustion via two grids
 
-These are blocking or near-blocking and are tracked in `STATUS.md`.
+**Status:** Accepted (2026-09-08) — resolves OPEN-A, addresses known bug #7
 
-### OPEN-A — Cold-start combustion (known bug #7)
+### Context
 
-The real-time grid is solved warm, so the gauge, fan and radiator respond to
-coolant temperature but the engine does not actually run worse cold.
+The real-time grid is solved warm. The coolant gauge, fan and radiator respond
+to temperature, but the engine does not actually run worse cold. A cold diesel
+that does not rattle is a conspicuous falsehood to the target user.
 
-| Approach | Cost | Fidelity |
+### Decision
+
+Solve **two grids — cold and warm — and interpolate on coolant temperature.**
+
+### Rationale
+
+The physics that produces cold rattle is a chain the solver already models:
+lower wall temperature → more heat lost per cycle → longer ignition delay →
+larger premixed fraction → sharper `dp/dθ` → the high structural modes light
+up. Two endpoints capture that; a full third grid axis captures it more
+smoothly at N× the build cost.
+
+| Approach | Build cost | Fidelity |
 |---|---|---|
-| Third grid axis on coolant T | build time × N | highest |
-| **Two grids (cold + warm), interpolate on coolant T** | 2× build | captures the cold rattle |
-| Leave as-is | free | a cold diesel that does not rattle |
+| Third grid axis on coolant T | N × | highest, smooth |
+| **Two grids, interpolate** | 2 × | captures the rattle |
+| Leave warm-only | 1 × | rejected |
 
-Recommendation: two-grid. The cold rattle is the part users actually hear, and
-it comes from longer ignition delay → bigger premixed spike → sharper `dp/dθ`.
+### Consequences
+
+- Grid build time doubles. Already the slowest operation in Expert mode, and it
+  compounds with the `multiprocessing` limitation noted in ADR-001.
+- Interpolation between two thermal endpoints is linear in coolant T. Real
+  behaviour is not linear, so mid-warm-up is approximate. Accepted: the
+  endpoints are right and the direction of travel is right.
+- The cold grid needs a defined temperature. Proposal: solve cold at ambient /
+  `thermal.oil_T_start`, warm at `thermal.coolant_T`.
+- Enjoy mode's prebuilt grids ship in pairs.
+
+### Note
+
+Recorded as two-grid on the strength of the recommendation made when the
+question was put. If the intent was the full third axis, supersede this.
+
+---
+
+## ADR-007 — Project file contents
+
+**Status:** Accepted (2026-09-08) — resolves OPEN-C
+
+### Decision
+
+A project JSON contains **engine spec + vehicle + gearbox configuration**.
+The solved grid is **not** bundled.
+
+### Consequences
+
+- Files stay small and diff-able. A project is text and can live in git.
+- **Sharing a custom engine means the recipient rebuilds the grid**, which
+  needs Pyodide and takes minutes. The UI must set that expectation at import
+  time rather than appearing to hang.
+- Enjoy mode is unaffected — its curated engines ship with prebuilt grids
+  (ADR-008).
+- The grid cache is keyed by spec hash, so re-importing a project already built
+  on that machine resolves instantly from IndexedDB.
+
+### Revisit when
+
+Sharing becomes a common flow and the rebuild wait is the main complaint. An
+optional "export with grid" toggle would be the fix.
+
+---
+
+## ADR-008 — Enjoy mode ships a curated roster built with `builder.py`
+
+**Status:** Accepted (2026-09-08) — resolves OPEN-D
+
+### Decision
+
+Enjoy mode ships a curated set of engines authored via `builder.py` from
+headline numbers, rather than exposing the four development presets
+(`hd_i6`, `ld_i4`, `crdi15`, `single`).
+
+### Rationale
+
+The presets are development fixtures, chosen to exercise the solver across its
+range. A roster should instead span *characters* an enthusiast recognises —
+different displacements, cylinder counts, turbo arrangements and torque shapes
+— so that switching engines feels like a meaningfully different vehicle rather
+than the same curve rescaled.
+
+### Consequences
+
+- Roster contents become a new open item (OPEN-F), needed before Phase 5.
+- Each roster engine needs two prebuilt grids (ADR-006), generated at build
+  time by native Python — not in-browser — and shipped as static assets.
+- `builder.py` sizes hardware from headline numbers, but **the solver decides
+  what the engine actually does**. Every roster entry must be run through
+  `verify()` and its achieved-vs-requested figures recorded in the repo.
+- Development presets remain available in Expert mode.
+
+---
+
+## ADR-009 — Visual configuration means live 2D schematics
+
+**Status:** Accepted (2026-09-08) — resolves OPEN-E
+
+### Decision
+
+Spec editing is backed by **2D schematics that update live** as values change.
+No 3D part models.
+
+### Scope
+
+- Cylinder cross-section redrawing with bore, stroke, conrod, compression ratio
+  and pin offset
+- Valve-timing dial showing IVO / IVC / EVO / EVC and the overlap region
+- Injection timing marked on the same crank-angle circle
+- Turbo compressor map with surge and choke lines and the live operating point
+- Ring pack and bearing clearance detail in the tribology panel
+
+### Rationale
+
+The schematics are not decoration — they are how a user builds intuition about
+what a number means. Watching overlap open up as EVC moves teaches more than
+the number does. This is the *Automation* lesson.
+
+### Consequences
+
+- SVG, driven by the same signals as the numeric inputs, so there is exactly
+  one source of truth.
+- Every schematic must be **derived from spec fields**, never hand-drawn to
+  approximate them, or it will drift from the physics it claims to depict.
+- Substantially cheaper than 3D, and works on mobile.
+
+---
+
+## Open decisions
 
 ### OPEN-B — Persona team operating model
 
-Proposed: use the twelve roles as **review lenses at decision points** (physics
-pair reviews physics ADRs, testers write acceptance criteria, the two
-non-technical users are consulted on UX only) rather than as active agents in
-every response. Running all twelve every turn costs a great deal of context for
-little added rigour.
+Proposed: use the twelve roles as **review lenses at decision points** — the
+physics pair reviews physics ADRs, the testers write acceptance criteria, the
+two non-technical users are consulted on UX only — rather than as active agents
+in every response. Running all twelve every turn costs a great deal of context
+for little added rigour.
 
-### OPEN-C — Project JSON contents
+### OPEN-F — Enjoy mode roster contents
 
-Engine spec only, or spec + vehicle + gearbox config + solved grid? Bundling
-the grid makes files large but lets a recipient drive a shared engine
-immediately instead of waiting on a rebuild.
-
-### OPEN-D — Enjoy mode engine roster
-
-The four existing presets (`hd_i6`, `ld_i4`, `crdi15`, `single`), or a curated
-set built with `builder.py`?
-
-### OPEN-E — Scope of "visually configurable"
-
-Assumed: live-updating 2D schematics — cross-section redrawing as bore / stroke
-/ CR change, a valve-timing dial, a turbo map with the operating point plotted
-on it. Not 3D part models. Needs confirmation.
+Which engines, and how many? Opened by ADR-008. Needed before Phase 5, not
+before Phase 1.
