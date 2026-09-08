@@ -1,0 +1,8 @@
+numpy>=1.24
+scipy>=1.10
+matplotlib>=3.7
+
+# optional: live audio for play.py
+#   pip install sounddevice        (also: sudo apt install libportaudio2)
+# optional: large speedup on the thermo hot path
+#   pip install numba

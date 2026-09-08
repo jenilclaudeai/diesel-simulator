@@ -1,0 +1,13 @@
+{
+  "key": "crdi22",
+  "name": "2.2 CRDi",
+  "displacement": 2.2,
+  "n_cyl": 4,
+  "rated_rpm": 3800,
+  "peak_torque": 360,
+  "peak_power": 110,
+  "plateau": [
+    1750,
+    2750
+  ]
+}

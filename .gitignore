@@ -1,0 +1,22 @@
+# caches
+__pycache__/
+*.py[cod]
+.dieselsim_grid_*.pkl
+.cache/
+
+# generated outputs
+out/
+*.png
+*.wav
+*.csv
+
+# environments
+.venv/
+venv/
+env/
+.python-version
+
+# editors / OS
+.vscode/
+.idea/
+.DS_Store
