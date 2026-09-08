@@ -236,7 +236,16 @@ not quoted from memory.
 
 ## ADR-006 — Cold-start combustion via two grids
 
-**Status:** Accepted (2026-09-08) — resolves OPEN-A, addresses known bug #7
+**Status:** ON HOLD (2026-09-08) — blocked by REVIEW-001 finding B-1
+
+> **Do not implement.** Measurement shows the cold-start combustion sensitivity
+> this decision exists to capture is largely absent from the solver: `dp/dθ`
+> moves 1.7% across a 90 K coolant swing, `premix_fraction` is pinned at 0.0200
+> at every temperature, and ignition delay is quantised to the crank step.
+> Two-grid linear interpolation error on ignition delay reaches −27.5%.
+> Diagnose the pinned `premix_fraction` first — it may restore the sensitivity
+> and will change the numbers this decision was made on.
+> See `reviews/REVIEW-001.md`.
 
 ### Context
 
