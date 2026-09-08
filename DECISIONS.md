@@ -245,7 +245,10 @@ not quoted from memory.
 > Two-grid linear interpolation error on ignition delay reaches −27.5%.
 > Diagnose the pinned `premix_fraction` first — it may restore the sensitivity
 > and will change the numbers this decision was made on.
-> See `reviews/REVIEW-001.md`.
+> Root cause now diagnosed in `reviews/FINDING-001.md`: the Watson premixed-
+> fraction correlation returns a negative value at modern common-rail ignition
+> delays and is absorbed by its 0.02 floor, so the premixed spike cannot
+> respond to anything. Resolve that before reconsidering this ADR.
 
 ### Context
 
