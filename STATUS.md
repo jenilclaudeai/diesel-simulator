@@ -111,10 +111,15 @@ DCT clamping teleporting road speed · `q_wall_frac` 0/0 at zero fuelling.
 
 ## Next actions
 
-1. **Decide FINDING-001 P-2** — P-1 (the double-counted pilot) is fixed on
+1. **FINDING-002 is the root cause** — peak `dp/dθ` occurs 10° *before*
+   combustion starts, so the reported pressure-rise rate measures compression.
+   `acoustics.py:195` drives diesel clatter from that same signal. Combustion-
+   window dp/dθ responds +11.5% to temperature; the whole-cycle max responds
+   +0.4%. Fix path in `reviews/FINDING-002.md`.
+2. **Decide FINDING-001 P-2** — P-1 (the double-counted pilot) is fixed on
    `fix/pilot-double-count`. P-2 remains: the Watson correlation is out of
    domain at modern common-rail delays. Options A/C/D in FINDING-001.
-2. ~~Decide FINDING-001 P-1~~ — done — `premix_fraction` is pinned at its 0.02 floor
+3. ~~Decide FINDING-001 P-1~~ — done — `premix_fraction` is pinned at its 0.02 floor
    because the Watson correlation returns a negative value at modern
    common-rail ignition delays. Four options recorded; PHY1 recommends fixing
    the double-counted pilot effect first, then replacing the correlation.
