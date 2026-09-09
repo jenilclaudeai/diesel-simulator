@@ -86,7 +86,7 @@ Source: `PROJECT_CONTEXT.md` § 2.7. Nothing fixed yet.
 
 | # | Issue | Plan |
 |---|---|---|
-| 1 | `n_cycles=6` not converged | Phase 1a |
+| 1 | `n_cycles=6` not converged | **measured 10.8% drift**, worse than documented; test added |
 | 2 | Fuelling open-loop on rpm | Phase 1c — design work |
 | 3 | Torque limiter ±3% | symptom of #2 |
 | 4 | Light-load fuel understated ~2× | Phase 1b — measure first |
@@ -111,7 +111,10 @@ DCT clamping teleporting road speed · `q_wall_frac` 0/0 at zero fuelling.
 
 ## Next actions
 
-1. **Decide FINDING-001** — `premix_fraction` is pinned at its 0.02 floor
+1. **Decide FINDING-001 P-2** — P-1 (the double-counted pilot) is fixed on
+   `fix/pilot-double-count`. P-2 remains: the Watson correlation is out of
+   domain at modern common-rail delays. Options A/C/D in FINDING-001.
+2. ~~Decide FINDING-001 P-1~~ — done — `premix_fraction` is pinned at its 0.02 floor
    because the Watson correlation returns a negative value at modern
    common-rail ignition delays. Four options recorded; PHY1 recommends fixing
    the double-counted pilot effect first, then replacing the correlation.
@@ -122,6 +125,18 @@ DCT clamping teleporting road speed · `q_wall_frac` 0/0 at zero fuelling.
    load against the grid's `fuel_mg`
 
 ---
+
+## Tests
+
+`python3 tests/test_physics.py` — dependency-free, no pytest needed.
+
+Golden operating points are locked at 0.5% tolerance, including `hd_i6`
+@ 1700 rpm reproducing the 2310 N.m peak torque from `PROJECT_CONTEXT.md`
+section 1.5.
+
+Three defects are encoded as KNOWN rather than FAIL. When one is fixed the
+suite reports UNEXPECTED PASS, which is the signal to promote it to a real
+assertion.
 
 ## Housekeeping
 

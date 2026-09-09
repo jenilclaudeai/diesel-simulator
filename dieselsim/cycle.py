@@ -429,10 +429,14 @@ class CycleSolver:
                                 phi = m_fuel * Fuel.AFR_stoich / m_air
                                 b = 1.0 - 0.926 * max(phi, 0.05) ** 0.37 / \
                                     max(tau_ms, 0.12) ** 0.26
-                                premix[c] = min(0.72, max(0.02, b)) * \
-                                    (1.0 - 0.55 * f_pilot / 0.05
-                                     if f_pilot > 0 else 1.0)
-                                premix[c] = min(0.72, max(0.02, premix[c]))
+                                # The pilot's suppression of premixed burn is
+                                # already carried by tau: `boost` above
+                                # shortens the main ignition delay when the
+                                # pilot has ignited, and Watson's correlation
+                                # is a function of that delay. A separate
+                                # multiplier here would count the same effect
+                                # twice -- see reviews/FINDING-001.md (P-1).
+                                premix[c] = min(0.72, max(0.02, b))
                                 burn_dur[c] = self.burn_duration(
                                     dur_main, phi, rpm)
 
