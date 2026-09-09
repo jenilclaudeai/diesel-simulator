@@ -43,7 +43,7 @@ blocking:
 
 | Was | Now |
 |---|---|
-| OPEN-A cold combustion | ADR-006 — two grids, cold + warm, interpolated |
+| OPEN-A cold combustion | ADR-006 — **ON HOLD**, blocked by REVIEW-001 B-1 |
 | OPEN-C project file | ADR-007 — spec + vehicle + gearbox, no grid |
 | OPEN-D Enjoy roster | ADR-008 — curated set via `builder.py` |
 | OPEN-E visual config | ADR-009 — live 2D schematics, no 3D |
@@ -92,7 +92,7 @@ Source: `PROJECT_CONTEXT.md` § 2.7. Nothing fixed yet.
 | 4 | Light-load fuel understated ~2× | Phase 1b — measure first |
 | 5 | `operating_point` path-dependent | deferred, documented |
 | 6 | `l` key dead in DCT | Phase 1a |
-| 7 | No cold-temperature combustion | ADR-006 — two-grid |
+| 7 | No cold-temperature combustion | root cause found — see FINDING-001 |
 | 8 | Unknown-provenance code in `engine.py` | Phase 1a — audit |
 | 9 | Worn-vs-new audio pair suspect | Phase 1b |
 | 10 | `render_transient` seams | deferred |
@@ -111,7 +111,11 @@ DCT clamping teleporting road speed · `q_wall_frac` 0/0 at zero fuelling.
 
 ## Next actions
 
-1. Merge `docs/project-plan` to `main`
+1. **Decide FINDING-001** — `premix_fraction` is pinned at its 0.02 floor
+   because the Watson correlation returns a negative value at modern
+   common-rail ignition delays. Four options recorded; PHY1 recommends fixing
+   the double-counted pilot effect first, then replacing the correlation.
+   ADR-006 stays on hold until this is settled.
 2. Begin **Phase 1a** — cheap bug fixes (#1, #6, #12) and the #8 audit of
    unknown-provenance code in `engine.py`
 3. Phase 1b — measure #4 before changing anything: trace `fuel_kg_h` at low
