@@ -1,147 +1,158 @@
 # Status
 
-**Updated:** 2026-09-08
-**Phase:** 0 — Foundations
-**Branch:** `docs/project-plan`
+**Updated:** 2026-09-09
+**Phase:** 1 — Physics truth pass, substantially complete
+**Branch:** `fix/physical-source-levels` (stacked, see Branches below)
 
-Read this first in a new session, then `PLAN.md`, then `DECISIONS.md`.
-Those three files replace pasting a context document.
+Read this first in a new session, then `PLAN.md`, then `DECISIONS.md`, then
+`reviews/`. Those replace pasting a context document.
 
 ---
 
 ## Where things stand
 
-The Python `dieselsim` package is in the repo and verified working.
-Architecture is decided (ADR-001 to ADR-005). No frontend code exists yet.
+Architecture is decided (ADR-001 to ADR-009, with ADR-006 on hold). No frontend
+code exists yet. The Python physics has been through a review pass that
+produced six findings, five fixes, a regression suite and a standing audit tool.
 
-### Verified in this container
+### The pattern that came out of it
 
-```
-crdi15 @ 2000 rpm, full load, n_cycles=9
-  torque 232.8 N·m · power 48.8 kW · BSFC 229 · boost 2.15 · p_max 138 bar
-```
+Five of the six findings share one shape: **a mechanism fully built, correctly
+wired, and fed a quantity that is effectively zero or pinned against a clamp.
+None raised an error.**
 
-Sane for a 1.5 L CRDI. Solve took **10.0 s here** against 1.47 s documented on
-developer hardware — this container's CPU is much slower. **Do not use this
-container to benchmark Pyodide.** That has to happen on real hardware.
+- `premix_fraction` sat on its 0.02 floor (FINDING-001)
+- `sharp` sat on its 3.0 ceiling (FINDING-003)
+- every acoustic amplitude was normalised away (FINDING-004)
+- the roller-follower branch never accumulated boundary friction (FINDING-005)
+- `h_min_ring` was always its 12 nm clamp (FINDING-006)
 
-Repo `dieselsim/` is byte-identical to the delivered tarball.
+`tools/audit_dead_signals.py` exists to catch the sixth. **Run it after any
+physics change, and port it alongside the solver** — the same failure in
+TypeScript would be far harder to find, and Phase 3 ports the whole real-time
+loop.
+
+Latest audit: 102 scalars over 8 operating points — **0 dead, 1 frozen (the
+now-honestly-named `h_ring_tdc`), 1 tiny (`Pb_valvetrain`)**.
 
 ---
 
-## Blocking — nothing
+## Findings
 
-All questions that blocked Phase 1 are resolved. Two open items remain, neither
-blocking:
-
-| # | Question | Needed by |
+| # | Issue | Status |
 |---|---|---|
-| OPEN-B | Persona operating model | process, not architecture |
-| OPEN-F | Enjoy mode roster contents | Phase 5 |
+| 001 | `premix_fraction` pinned; Watson correlation out of domain at modern common-rail delays | P-1 and P-2 fixed |
+| 002 | `dp/dθ` peaks 10° *before* ignition, so it measures compression; clatter was driven by it | fixed |
+| 003 | clatter high-mode weight pinned at its ceiling; divisor 3 orders of magnitude out | fixed |
+| 004 | every physical amplitude discarded by two normalisation stages | fixed |
+| 005 | roller-follower branch never accumulated `Pb_vt`; cam wear structurally impossible | fixed, **but insufficient** |
+| 006 | `h_min_ring` always its clamp, and exposed as a headline field | fixed |
 
-### Resolved 2026-09-08
+### Still open inside those
 
-| Was | Now |
-|---|---|
-| OPEN-A cold combustion | ADR-006 — **ON HOLD**, blocked by REVIEW-001 B-1 |
-| OPEN-C project file | ADR-007 — spec + vehicle + gearbox, no grid |
-| OPEN-D Enjoy roster | ADR-008 — curated set via `builder.py` |
-| OPEN-E visual config | ADR-009 — live 2D schematics, no 3D |
-
-Consequences worth carrying forward:
-
-- **Grid build time doubles** (ADR-006) and compounds with the
-  `multiprocessing` limitation. The Web Worker pool question in Phase 2 matters
-  more than it did.
-- **Sharing a custom engine means the recipient rebuilds the grid** (ADR-007).
-  The import UI must set that expectation rather than appearing to hang.
-- **Every roster engine needs `verify()` run and recorded** (ADR-008).
-  `builder.py` sizes hardware; the solver decides what it does.
-- **Schematics must be derived from spec fields**, never hand-drawn to
-  approximate them (ADR-009), or they drift from the physics they depict.
-
----
-
-## Resolved this session
-
-**The solver needs numpy only — no scipy.** This was the highest-value unknown
-and it came out well. `scipy.signal` is imported only by `acoustics.py` and
-`play.py`, both of which are being ported to TypeScript anyway. Verified by
-blocking scipy at import and solving successfully (171.3 N·m, crdi15 @ 1800 rpm
-load 0.8).
-
-Pyodide payload is therefore numpy-only, well under the 15–30 MB originally
-assumed. ADR-001 is now firm rather than provisional.
-
-**New issue found:** `batch.py` imports `multiprocessing`, which does not exist
-in Pyodide. Browser grid build is either single-threaded or a pool of Web
-Workers each running its own Pyodide. Decision deferred to Phase 2 — see
-ADR-001.
+- **FINDING-005 is not closed.** `Pb_valvetrain` is now nonzero but runs 1e-5
+  to 1e-8 of total. The flat-tappet case is *lowest* at 3.9e-7 W — the case
+  that should wear most. Cam wear is still negligible and lash still does not
+  grow at 8000 h. Suspects: `sigma_cam`, or entrainment velocity at nose
+  reversal. Untested.
+- **FINDING-004 has not been listened to.** Every judgement was band ratios and
+  RMS. It changes the character of every rendered sound. Four WAVs were
+  produced for A/B; the warm-vs-cold pair at load 0.6 is the one that matters.
 
 ---
 
 ## Known bugs — status
 
-Source: `PROJECT_CONTEXT.md` § 2.7. Nothing fixed yet.
-
-| # | Issue | Plan |
+| # | Issue | Status |
 |---|---|---|
 | 1 | `n_cycles=6` not converged | **measured 10.8% drift**, worse than documented; test added |
-| 2 | Fuelling open-loop on rpm | Phase 1c — design work |
+| 2 | Fuelling open-loop on rpm | not started — Phase 1c |
 | 3 | Torque limiter ±3% | symptom of #2 |
-| 4 | Light-load fuel understated ~2× | Phase 1b — measure first |
+| 4 | Light-load fuel understated ~2× | not started — measure first |
 | 5 | `operating_point` path-dependent | deferred, documented |
-| 6 | `l` key dead in DCT | Phase 1a |
-| 7 | No cold-temperature combustion | root cause found — see FINDING-001 |
-| 8 | Unknown-provenance code in `engine.py` | Phase 1a — audit |
-| 9 | Worn-vs-new audio pair suspect | Phase 1b |
+| 6 | `l` key dead in DCT | not started |
+| 7 | No cold-temperature combustion | root-caused through FINDINGs 001–004 |
+| 8 | Unknown-provenance code in `engine.py` | **not audited yet** |
+| 9 | Worn-vs-new audio pair suspect | root-caused — FINDING-004 and 005 |
 | 10 | `render_transient` seams | deferred |
 | 11 | Coast downshift calibration | deferred |
-| 12 | Grade small-angle form | Phase 1a |
-
-### Do not reintroduce
-
-Ring/skirt film dimensional errors (400 µm films) · missing piston pin, timing
-gear, crank seal, HP fuel pump friction · unstable oil thermal integrator ·
-`_impulses()` zero-width window silently deleting three sound sources · TBN
-consumed 10× too fast · converter sized off rated instead of stall speed ·
-DCT clamping teleporting road speed · `q_wall_frac` 0/0 at zero fuelling.
+| 12 | Grade small-angle form | not started |
 
 ---
 
-## Next actions
+## Also found, not yet actioned
 
-1. **Decide FINDING-001 P-2** — P-1 (the double-counted pilot) is fixed on
-   `fix/pilot-double-count`. P-2 remains: the Watson correlation is out of
-   domain at modern common-rail delays. Options A/C/D in FINDING-001.
-2. ~~Decide FINDING-001 P-1~~ — done — `premix_fraction` is pinned at its 0.02 floor
-   because the Watson correlation returns a negative value at modern
-   common-rail ignition delays. Four options recorded; PHY1 recommends fixing
-   the double-counted pilot effect first, then replacing the correlation.
-   ADR-006 stays on hold until this is settled.
-2. Begin **Phase 1a** — cheap bug fixes (#1, #6, #12) and the #8 audit of
-   unknown-provenance code in `engine.py`
-3. Phase 1b — measure #4 before changing anything: trace `fuel_kg_h` at low
-   load against the grid's `fuel_mg`
+- **Trace arrays are shape-inconsistent.** `traces.p` is per-cylinder 2D while
+  `traces.theta` is 1D, and at load 1.0 their lengths differ (1430 vs 720).
+  Hit twice while writing diagnostics. **Resolve before the Angular cycle page
+  consumes traces.**
+- **ADR-006 is on hold** and should be reassessed now that FINDINGs 001–004
+  have changed the numbers it was decided on.
+- **`SPL_CAL` and the 5.0e9 clatter divisor are chosen constants.** The package
+  advertises exactly two fitted scalars (`NOX_CAL`, `SOOT_CAL`). That claim is
+  no longer accurate; either derive the constants or update the claim.
 
 ---
 
 ## Tests
 
-`python3 tests/test_physics.py` — dependency-free, no pytest needed.
+```
+python3 tests/test_physics.py        # 13 passed, 0 failed, 2 known defects
+python3 tools/audit_dead_signals.py  # diagnostic, reports only
+```
 
-Golden operating points are locked at 0.5% tolerance, including `hd_i6`
-@ 1700 rpm reproducing the 2310 N.m peak torque from `PROJECT_CONTEXT.md`
-section 1.5.
+Golden points are locked at 0.5%. They were re-baselined after FINDING-001 P-2
+with the justification recorded inline — torque and BSFC moved under 1%, p_max
+rose ~3%, and `hd_i6` still reproduces the documented 2310 N·m and stays inside
+the 160–200 bar band.
 
-Three defects are encoded as KNOWN rather than FAIL. When one is fixed the
-suite reports UNEXPECTED PASS, which is the signal to promote it to a real
-assertion.
+Known defects report as KNOWN, not FAIL. When one is fixed the suite reports
+UNEXPECTED PASS, which is the signal to promote it to a real assertion.
+
+---
+
+## Branches
+
+Split by whether the change can be validated numerically.
+
+| branch | contents | validated by |
+|---|---|---|
+| `physics/verified-fixes` | P-2 premix, motored pressure, `dpdtheta_comb`, roller `Pb_vt`, `h_ring_mid`, audit tool, tests | regression suite, 12 passed 0 failed |
+| `audio/physical-levels` | all `acoustics.py` changes — clatter source, `sharp` divisor, physical source levels | **ear only** |
+
+The audio branch depends on `physics/verified-fixes` for `p_motored` and
+`dpdtheta_comb`, so merge that first.
+
+The four earlier stacked branches (`fix/premix-from-delay-injection`,
+`fix/combustion-dpdtheta`, `test/cold-oil-and-coolant`,
+`fix/physical-source-levels`) are superseded by this split and can be deleted
+once it lands.
+
+---
+
+## Next actions
+
+1. **Listen to the audio pair** before merging branch 4. It is the one change
+   here that cannot be validated numerically.
+2. Decide whether FINDING-005's remaining cam-wear insensitivity is worth
+   chasing, or whether roller cams genuinely barely wear and the durability
+   story should say so.
+3. Audit known bug #8 — unknown-provenance code in `engine.py`. Not started,
+   and it is the last unexamined thing in the solver.
+4. Fix the trace shape inconsistency before any UI work.
+5. Reassess ADR-006 against the new combustion numbers.
+6. Then Phase 2 — `SolverPort` and the Pyodide worker.
+
+---
 
 ## Housekeeping
 
-- The GitHub PAT used this session appears in chat history. **Revoke it when
-  the session ends** and issue a fresh fine-grained token next time.
-- Working style: ask rather than assume; options come with trade-offs and
-  positives; warn before context budget limits.
-- GitHub Flow — branch per change, PR, merge to `main`.
+- The GitHub PAT used in these sessions appears in chat history. **Revoke it**
+  and issue a fresh fine-grained token.
+- Solve time in the dev container is ~10 s against 1.47 s on developer
+  hardware. **Do not benchmark Pyodide here.**
+- The solver needs **numpy only**; `scipy.signal` is confined to `acoustics.py`
+  and `play.py`, both being ported to TypeScript.
+- `batch.py` imports `multiprocessing`, which does not exist in Pyodide.
+- Working style: ask rather than assume; options come with trade-offs; warn
+  before context budget limits.

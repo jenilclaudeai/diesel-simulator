@@ -58,7 +58,15 @@ class OperatingPoint:
     oil_pressure: float = 0.0
     h_min_rod: float = 0.0
     h_min_main: float = 0.0
-    h_min_ring: float = 0.0
+    # FINDING-006: the ring film minimum occurs at TDC/BDC where piston
+    # speed is zero, so it sits on lubrication.ring_film_thickness's
+    # h_floor = 12e-9 clamp in every condition tested -- 102 scalars over 8
+    # operating points, identical to floating-point equality. Named for
+    # where it is taken so it cannot be mistaken for a varying measurement.
+    # For anything that should respond to load, speed or oil condition,
+    # read h_ring_mid.
+    h_ring_tdc: float = 0.0
+    h_ring_mid: float = 0.0      # mid-stroke film -- the useful one
     lambda_ring: float = 0.0
     oil_cons_g_h: float = 0.0
     friction_breakdown: dict = field(default_factory=dict)
@@ -334,7 +342,8 @@ class DieselEngine:
         op.oil_pressure = fr["gallery_pressure"]
         op.h_min_rod = fr["h_rod"]
         op.h_min_main = fr["h_main"]
-        op.h_min_ring = fr["h_ring"]
+        op.h_ring_tdc = fr["h_ring"]
+        op.h_ring_mid = fr["h_ring_mid"]
         op.lambda_ring = fr["lambda_ring"]
         op.oil_cons_g_h = self.wear.oil_consumption_g_per_h(rpm, cyc.imep_gross)
         op.friction_breakdown = {

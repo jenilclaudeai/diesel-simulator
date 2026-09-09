@@ -51,6 +51,7 @@ SOOT_CAL = 0.28
 class CycleTraces:
     theta: np.ndarray
     p: np.ndarray
+    p_motored: np.ndarray     # FINDING-002: reference for combustion-driven rise
     T: np.ndarray
     V: np.ndarray
     mdot_int: np.ndarray
@@ -77,6 +78,7 @@ class CycleResult:
     pmep: float = 0.0
     p_max: float = 0.0
     dpdtheta_max: float = 0.0
+    dpdtheta_comb: float = 0.0   # combustion-driven only; see FINDING-002
     T_max: float = 0.0
     T_burned_max: float = 0.0
     theta_pmax: float = 0.0
@@ -297,6 +299,7 @@ class CycleSolver:
             accel = 1.0 if cyc >= n_cycles - 2 else spool_accel
 
             p_tr = np.zeros((nc, self.n))
+            pm_tr = np.zeros((nc, self.n))
             T_tr = np.zeros((nc, self.n))
             mi_tr = np.zeros((nc, self.n))
             me_tr = np.zeros((nc, self.n))
@@ -424,18 +427,31 @@ class CycleSolver:
                             if di_m[c] >= 1.0:
                                 soc_m[c] = tl
                                 tau = (soc_m[c] - soi_main) % 720.0
-                                tau_ms = tau / (rpm * 6.0) * 1000.0
                                 m_air = max(m * (1.0 - yb), 1e-9)
                                 phi = m_fuel * Fuel.AFR_stoich / m_air
-                                b = 1.0 - 0.926 * max(phi, 0.05) ** 0.37 / \
-                                    max(tau_ms, 0.12) ** 0.26
-                                # The pilot's suppression of premixed burn is
-                                # already carried by tau: `boost` above
-                                # shortens the main ignition delay when the
-                                # pilot has ignited, and Watson's correlation
-                                # is a function of that delay. A separate
-                                # multiplier here would count the same effect
-                                # twice -- see reviews/FINDING-001.md (P-1).
+                                # Premixed fraction, derived rather than
+                                # correlated (FINDING-001 P-2).
+                                #
+                                # The premixed burn is physically the fuel
+                                # that entered the chamber before ignition
+                                # occurred. Injection rate is constant over
+                                # the main event, so that fraction is simply
+                                # the delay divided by the main injection
+                                # duration -- both of which the solver has
+                                # already computed from nozzle flow.
+                                #
+                                # This replaces a Watson-type correlation,
+                                # b = 1 - 0.926*phi^0.37 / tau_ms^0.26, which
+                                # was calibrated for 1-2 ms delays and returns
+                                # a negative value at the 0.1-0.4 ms delays a
+                                # modern common-rail engine actually runs. It
+                                # was clamped to its 0.02 floor at every
+                                # operating point tested, so the premixed
+                                # spike could not respond to anything.
+                                if dur_main > 1e-9:
+                                    b = tau / dur_main
+                                else:
+                                    b = 0.02
                                 premix[c] = min(0.72, max(0.02, b))
                                 burn_dur[c] = self.burn_duration(
                                     dur_main, phi, rpm)
@@ -603,6 +619,7 @@ class CycleSolver:
 
                     if last:
                         p_tr[c, kk] = p_new
+                        pm_tr[c, kk] = p_mot
                         T_tr[c, kk] = T_new
                         mi_tr[c, kk] = mi
                         me_tr[c, kk] = me
@@ -642,6 +659,14 @@ class CycleSolver:
         r.theta_pmax = float(self.theta[int(np.argmax(p_tr[0]))])
         dpd = np.diff(np.concatenate([p_tr[0], p_tr[0][:1]])) / dth
         r.dpdtheta_max = float(dpd.max()) / 1e5
+        # Combustion-driven pressure rise only (FINDING-002).
+        # dpdtheta_max above is taken over the whole trace and its maximum
+        # falls on the compression stroke, ~10 deg before ignition, so it
+        # cannot respond to combustion. Subtracting the motored trace leaves
+        # the rise that combustion actually caused.
+        _pc = p_tr[0] - pm_tr[0]
+        _dpc = np.diff(np.concatenate([_pc, _pc[:1]])) / dth
+        r.dpdtheta_comb = float(_dpc.max()) / 1e5
         r.m_fuel = m_fuel
         r.m_air_trapped = float(np.mean(SN["mtr"] * (1.0 - SN["ybtr"])))
         r.afr = r.m_air_trapped / max(m_fuel, 1e-15)
@@ -674,7 +699,8 @@ class CycleSolver:
         r.state = dict(p_int=p_int, T_int=T_int, yb_int=yb_int,
                        p_exh=p_exh, T_exh=T_exh, yb_exh=yb_exh)
         r.traces = CycleTraces(
-            theta=self.theta.copy(), p=p_tr, T=T_tr, V=self.V.copy(),
+            theta=self.theta.copy(), p=p_tr, p_motored=pm_tr,
+            T=T_tr, V=self.V.copy(),
             mdot_int=mi_tr, mdot_exh=me_tr, hrr=hrr_tr, T_burned=tb_tr,
             p_int_manifold=pim_tr, p_exh_manifold=pem_tr, mdot_blowby=bb_tr,
             valve_lift_int=lift_i, valve_lift_exh=lift_e, soi_deg=soi_main,
