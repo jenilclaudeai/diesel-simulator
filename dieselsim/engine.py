@@ -101,12 +101,20 @@ class DieselEngine:
         self._mode_cache = {}
         self._torque_cal = {}
         self._calibrating = False
-        # cycles used when calibrating the torque limiter.  Six is NOT
-        # converged (boost is still creeping), and a limiter calibrated on
-        # an unconverged solve mis-sets the fuel by several per cent.
-        self.cal_cycles = 10
-        # calibrate the limiter at the same convergence as the
-        # points it will be judged on, or the fit is biased
+        # Cycles used when calibrating the torque limiter.
+        #
+        # BUG-8: this was assigned twice, 10 then 8, with comments arguing
+        # opposite cases -- one that 6 is unconverged so more cycles are
+        # needed, one that the limiter should be calibrated at the same
+        # convergence as the points it is judged on. The second assignment
+        # won silently and the first was dead code.
+        #
+        # Keeping 8, which is the value that was actually in force and which
+        # every number in the validation table was produced with. The second
+        # argument is also the better one: a limiter fitted at a different
+        # convergence than it is evaluated at carries that bias into the fit.
+        # Note this interacts with known bug #1 -- n_cycles=6 drifts 10.8%,
+        # and 8 is not fully converged either.
         self.cal_cycles = 8
         self._th0 = (self.spec.thermal.piston_T, self.spec.thermal.head_T,
                      self.spec.thermal.liner_T_top,
@@ -162,8 +170,15 @@ class DieselEngine:
             f_max = self.fuel_limit_raw(rpm)
         cal = self._torque_cal.get(key)
         if cal is not None:
-            a, b = cal
-            return float(np.clip((T_target - b) / a, 0.0, f_max))
+            # BUG-8: the cache used to store only (a, b) and clip against
+            # fuel_limit_raw, while the calibration below raised its own
+            # ceiling to f_max * AFR headroom. The same rpm and target then
+            # returned 8.7% less fuel once the cache was warm -- measured on
+            # crdi15 at 1800 rpm, 286.6 N.m: 61.31 mg cold, 55.97 mg warm,
+            # the latter being exactly fuel_limit_raw. Store the ceiling so
+            # both paths clip identically.
+            a, b, f_cap = cal
+            return float(np.clip((T_target - b) / a, 0.0, f_cap))
 
         self._calibrating = True
         try:
@@ -192,7 +207,7 @@ class DieselEngine:
                 return f_max
             b = T1 - a * f1
             if T2 <= T_target:               # the cap is out of reach
-                self._torque_cal[key] = (a, b)
+                self._torque_cal[key] = (a, b, f_max)
                 return f_max
             f, T = f2, T2
             for _ in range(max_iter):
@@ -210,7 +225,7 @@ class DieselEngine:
                 f, T = f_new, T_new
         finally:
             self._calibrating = False
-        self._torque_cal[key] = (a, b)
+        self._torque_cal[key] = (a, b, f_max)
         return float(np.clip((T_target - b) / a, 0.0, f_max))
 
     def reset_torque_cal(self):

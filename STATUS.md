@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-09-09
+**Updated:** 2026-09-09 (session 2)
 **Phase:** 1 — Physics truth pass, substantially complete
 **Branch:** `fix/physical-source-levels` (stacked, see Branches below)
 
@@ -47,6 +47,7 @@ now-honestly-named `h_ring_tdc`), 1 tiny (`Pb_valvetrain`)**.
 | 004 | every physical amplitude discarded by two normalisation stages | fixed |
 | 005 | roller-follower branch never accumulated `Pb_vt`; cam wear structurally impossible | fixed, **but insufficient** |
 | 006 | `h_min_ring` always its clamp, and exposed as a headline field | fixed |
+| 007 | bug #8 audit; `fuel_for_torque` returned 8.7% different fuel depending on cache warmth | fixed |
 
 ### Still open inside those
 
@@ -72,7 +73,7 @@ now-honestly-named `h_ring_tdc`), 1 tiny (`Pb_valvetrain`)**.
 | 5 | `operating_point` path-dependent | deferred, documented |
 | 6 | `l` key dead in DCT | not started |
 | 7 | No cold-temperature combustion | root-caused through FINDINGs 001–004 |
-| 8 | Unknown-provenance code in `engine.py` | **not audited yet** |
+| 8 | Unknown-provenance code in `engine.py` | **closed** — FINDING-007; found a real cache bug |
 | 9 | Worn-vs-new audio pair suspect | root-caused — FINDING-004 and 005 |
 | 10 | `render_transient` seams | deferred |
 | 11 | Coast downshift calibration | deferred |
@@ -137,11 +138,9 @@ once it lands.
 2. Decide whether FINDING-005's remaining cam-wear insensitivity is worth
    chasing, or whether roller cams genuinely barely wear and the durability
    story should say so.
-3. Audit known bug #8 — unknown-provenance code in `engine.py`. Not started,
-   and it is the last unexamined thing in the solver.
-4. Fix the trace shape inconsistency before any UI work.
-5. Reassess ADR-006 against the new combustion numbers.
-6. Then Phase 2 — `SolverPort` and the Pyodide worker.
+3. Fix the trace shape inconsistency before any UI work.
+4. Reassess ADR-006 against the new combustion numbers.
+5. Then Phase 2 — `SolverPort` and the Pyodide worker.
 
 ---
 
