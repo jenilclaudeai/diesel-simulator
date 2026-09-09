@@ -115,6 +115,10 @@ class MicPosition:
     reverb: float = 0.0
 
 
+# Single calibration constant mapping physical source levels to output
+# amplitude. Set so a rated full-load engine_bay render sits near 0.2 RMS.
+SPL_CAL = 0.10
+
 MICS = {
     "exhaust_tip": MicPosition(
         "exhaust_tip",
@@ -159,6 +163,29 @@ class EngineSound:
         self._rng = np.random.default_rng(12345)
         self.wear = None          # attach a WearModel to hear the engine age
 
+        # ---- reference scales for physical source levels (FINDING-004) ----
+        # Each source is normalised to unit std for its SHAPE, then scaled by
+        # a physical LEVEL. These references make that level dimensionless and
+        # approximately 1.0 at the engine's own rated full-load condition, so
+        # the mic gains below stay meaningful across engines of any size.
+        #
+        # Derived from spec, not from a solved point, so they are deterministic
+        # and available before the first render.
+        g = spec.geom
+        rated = max(getattr(spec, "rated_rpm", 2000.0), 1.0)
+        # rated air flow: displacement * cycles/s * density * assumed VE, times
+        # an assumed pressure ratio for boosted engines
+        pr = 2.2 if getattr(spec.turbo, "enabled", False) else 1.0
+        self._ref_mdot = max(g.displacement * (rated / 120.0) * 1.19 * 1.15
+                             * pr, 1e-6)
+        # boundary friction power at rated, taken as a fraction of an assumed
+        # rated brake power (FMEP ~1.1 bar of which roughly half is boundary)
+        self._ref_Pb = max(0.5 * 1.1e5 * g.displacement * (rated / 120.0),
+                           1.0)
+        self._ref_dpdt = 5.0e9        # measured band across shipped presets
+        self._ref_vseat = 0.10        # m/s, typical seating velocity
+        self._ref_turbo = 1.2e5       # rpm
+
     # ------------------------------------------------------------------ #
     # crank-angle-domain source construction
     # ------------------------------------------------------------------ #
@@ -191,8 +218,22 @@ class EngineSound:
         src["int_flow"] = self._phase_sum(mdot_i, th)
 
         # ---- 3. combustion: dp/dtheta ---------------------------------
+        # FINDING-002: the raw cylinder pressure trace is dominated by the
+        # compression stroke -- its peak dp/dtheta falls ~10 deg BEFORE
+        # ignition. Exciting the structural modes with it means the clatter
+        # is driven by piston motion rather than by combustion, so injection
+        # timing, rail pressure and charge temperature barely alter it.
+        #
+        # Subtracting the motored trace leaves the pressure rise combustion
+        # actually caused. That signal responds +13.6% between a 273 K and a
+        # 363 K engine, against +0.4% for the raw trace.
         p1 = cyc.traces.p[0]
-        dpdth = np.gradient(p1, th[1] - th[0])
+        p_mot = getattr(cyc.traces, "p_motored", None)
+        if p_mot is not None:
+            p_comb = p1 - p_mot[0]
+        else:
+            p_comb = p1          # older traces: fall back, no silent zeros
+        dpdth = np.gradient(p_comb, th[1] - th[0])
         src["dpdth"] = self._phase_sum(dpdth, th)
 
         # ---- 4. injector events ---------------------------------------
@@ -339,7 +380,10 @@ class EngineSound:
         # turbine takes the sharpest edges out of the pulse
         if s.turbo.enabled:
             y = _lowpass(y, 1400.0, fs, order=1)
-        out["exhaust"] = y / (np.std(y) + 1e-12)
+        # FINDING-004: shape from normalisation, level from physics.
+        # Flow noise scales roughly with mass flow to the 1.5 power.
+        out["exhaust"] = y / (np.std(y) + 1e-12) * \
+            (meta["mdot_air"] / self._ref_mdot) ** 1.5
 
         # ---------------- intake -------------------------------------
         qi = sample("int_flow") * spd
@@ -365,13 +409,24 @@ class EngineSound:
         knock = np.zeros(n)
         # block / head structural modes.  Higher peak dp/dt excites the
         # high-frequency modes far more strongly -- that is diesel knock.
-        sharp = min(3.0, meta["dpdt_max"] / 6.0e6)
+        # FINDING-003: this divisor was 6.0e6, roughly three orders of
+        # magnitude too small for the signal it scales. dpdt_max runs
+        # 5e9-1.3e10 Pa/s across the shipped presets, so `sharp` sat pinned
+        # at its 3.0 ceiling for every engine at every operating point --
+        # the parameter did nothing. A 13% cold/warm difference in dpdt_max
+        # was being absorbed entirely by the clamp.
+        #
+        # 5.0e9 puts the presets in a 1.0-2.5 band with headroom. Note this
+        # makes most engines duller than before, because before they were
+        # all pinned at maximum high-mode excitation.
+        sharp = min(3.0, meta["dpdt_max"] / 5.0e9)
         for f0, Q, gn in ((680.0, 11.0, 1.00), (1450.0, 14.0, 0.72),
                           (2350.0, 16.0, 0.55), (3600.0, 18.0, 0.42),
                           (5200.0, 20.0, 0.26)):
             w = gn * (1.0 + sharp * (f0 / 2000.0) ** 1.1)
             knock += _resonator(exc, f0, Q, fs, gain=w)
-        out["combustion"] = knock / (np.std(knock) + 1e-12)
+        out["combustion"] = knock / (np.std(knock) + 1e-12) * \
+            (meta["dpdt_max"] / self._ref_dpdt)
 
         # ---------------- mechanical impulses --------------------------
         tick = sample("valve") * (meta["v_seating"] / 1.2) ** 1.5
@@ -386,7 +441,9 @@ class EngineSound:
         mech = (tick / (np.std(tick) + 1e-12)
                 + 0.75 * inj / (np.std(inj) + 1e-12)
                 + 0.9 * slap / (np.std(slap) + 1e-12))
-        out["mech"] = mech / (np.std(mech) + 1e-12)
+        # impulse energy goes as seating velocity squared
+        out["mech"] = mech / (np.std(mech) + 1e-12) * \
+            (max(meta["v_seating"], 1e-6) / self._ref_vseat) ** 2
 
         # ---------------- turbocharger ---------------------------------
         if s.turbo.enabled and meta["turbo_rpm"] > 1000.0:
@@ -407,7 +464,8 @@ class EngineSound:
             amp = (meta["boost"] - 1.0) * spd ** 2
             y = (0.55 * whine + 0.45 * whoosh /
                  (np.std(whoosh) + 1e-12)) * np.maximum(amp, 0.0)
-            out["turbo"] = y / (np.std(y) + 1e-12)
+            out["turbo"] = y / (np.std(y) + 1e-12) * \
+                (meta["turbo_rpm"] / self._ref_turbo) ** 2
         else:
             out["turbo"] = np.zeros(n)
 
@@ -428,7 +486,10 @@ class EngineSound:
         firing = 0.6 + 0.4 * np.abs(sample("dpdth"))
         firing /= (np.max(firing) + 1e-12)
         rum = rum * firing
-        out["rumble"] = rum / (np.std(rum) + 1e-12)
+        # rumble is boundary-friction noise: level tracks boundary power,
+        # which is what makes a cold or worn engine sound busier
+        out["rumble"] = rum / (np.std(rum) + 1e-12) * \
+            (max(meta["Pb"], 1e-9) / self._ref_Pb) ** 0.5
 
         # ---------------- mix at the microphone ------------------------
         m = MICS[mic]
@@ -440,9 +501,12 @@ class EngineSound:
         y /= max(1.0, m.distance_m) ** 0.55
         if m.reverb > 0.0:
             y = y + m.reverb * self._cheap_reverb(y)
-        # overall level tracks bmep and speed the way a real engine does
-        lvl = (0.25 + 0.75 * min(1.6, meta["load"])) * (0.45 + 0.55 * spd)
-        y = _softclip(y / (np.std(y) + 1e-12) * 0.22 * lvl, 1.1)
+        # FINDING-004: previously this renormalised the whole mix and set the
+        # level from load and speed alone, which discarded every physical
+        # amplitude the sources carried. The sources now arrive with physical
+        # levels, so the mix is scaled by a single calibration constant and
+        # only limited for clipping.
+        y = _softclip(y * SPL_CAL, 1.1)
         return y, out
 
     def _cheap_reverb(self, x):

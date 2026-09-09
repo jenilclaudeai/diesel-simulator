@@ -148,6 +148,21 @@ def test_combustion_dpdtheta_responds():
           f"cold is {100 * rise:+.1f}% sharper (must exceed 8%)")
 
 
+def test_sharp_not_clamped():
+    """
+    FINDING-003: the clatter high-mode weight was min(3.0, dpdt_max/6.0e6)
+    with dpdt_max around 5e9, so it sat pinned at its ceiling for every
+    engine at every operating point.
+    """
+    src = os.path.join(os.path.dirname(__file__), "..",
+                       "dieselsim", "acoustics.py")
+    with open(src) as fh:
+        body = fh.read()
+    check("sharp divisor rescaled",
+          0.0 if 'dpdt_max"] / 6.0e6' in body else 1.0, 1.0, 0.0,
+          "6.0e6 pins sharp at its 3.0 ceiling")
+
+
 def test_no_pilot_double_count():
     """
     FINDING-001 P-1: the pilot's suppression of premixed burn must be
@@ -168,6 +183,7 @@ def main():
                test_premix_responds_to_temperature,
                test_cold_start_sharpens_dpdtheta,
                test_combustion_dpdtheta_responds,
+               test_sharp_not_clamped,
                test_no_pilot_double_count):
         try:
             fn()
