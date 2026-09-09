@@ -424,18 +424,31 @@ class CycleSolver:
                             if di_m[c] >= 1.0:
                                 soc_m[c] = tl
                                 tau = (soc_m[c] - soi_main) % 720.0
-                                tau_ms = tau / (rpm * 6.0) * 1000.0
                                 m_air = max(m * (1.0 - yb), 1e-9)
                                 phi = m_fuel * Fuel.AFR_stoich / m_air
-                                b = 1.0 - 0.926 * max(phi, 0.05) ** 0.37 / \
-                                    max(tau_ms, 0.12) ** 0.26
-                                # The pilot's suppression of premixed burn is
-                                # already carried by tau: `boost` above
-                                # shortens the main ignition delay when the
-                                # pilot has ignited, and Watson's correlation
-                                # is a function of that delay. A separate
-                                # multiplier here would count the same effect
-                                # twice -- see reviews/FINDING-001.md (P-1).
+                                # Premixed fraction, derived rather than
+                                # correlated (FINDING-001 P-2).
+                                #
+                                # The premixed burn is physically the fuel
+                                # that entered the chamber before ignition
+                                # occurred. Injection rate is constant over
+                                # the main event, so that fraction is simply
+                                # the delay divided by the main injection
+                                # duration -- both of which the solver has
+                                # already computed from nozzle flow.
+                                #
+                                # This replaces a Watson-type correlation,
+                                # b = 1 - 0.926*phi^0.37 / tau_ms^0.26, which
+                                # was calibrated for 1-2 ms delays and returns
+                                # a negative value at the 0.1-0.4 ms delays a
+                                # modern common-rail engine actually runs. It
+                                # was clamped to its 0.02 floor at every
+                                # operating point tested, so the premixed
+                                # spike could not respond to anything.
+                                if dur_main > 1e-9:
+                                    b = tau / dur_main
+                                else:
+                                    b = 0.02
                                 premix[c] = min(0.72, max(0.02, b))
                                 burn_dur[c] = self.burn_duration(
                                     dur_main, phi, rpm)
