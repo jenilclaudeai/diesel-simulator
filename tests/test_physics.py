@@ -53,10 +53,17 @@ def known(name, cond, note):
 # PROJECT_CONTEXT.md section 1.5.
 # --------------------------------------------------------------------- #
 
+# Re-baselined 2026-09-08 after FINDING-001 P-2 replaced the Watson premixed-
+# fraction correlation with premix = tau / dur_main. Torque and BSFC moved
+# under 1%; p_max rose ~3% everywhere, which is the physically expected
+# direction (more premixed burn -> sharper, higher peak). hd_i6 p_max goes
+# 173.7 -> 178.5 bar, still inside the 160-200 bar band in
+# PROJECT_CONTEXT.md section 1.5, and hd_i6 torque still reproduces the
+# documented 2310 N.m.
 GOLDEN = {
-    ("crdi15", 1800, 0.6): dict(torque=124.894, bsfc=263.50, pmax=107.23),
-    ("crdi15", 3000, 1.0): dict(torque=220.004, bsfc=215.09, pmax=147.40),
-    ("hd_i6", 1700, 1.0): dict(torque=2308.265, bsfc=214.58, pmax=173.68),
+    ("crdi15", 1800, 0.6): dict(torque=124.391, bsfc=265.40, pmax=110.78),
+    ("crdi15", 3000, 1.0): dict(torque=219.675, bsfc=214.70, pmax=151.98),
+    ("hd_i6", 1700, 1.0): dict(torque=2313.331, bsfc=214.11, pmax=178.53),
 }
 
 
@@ -83,11 +90,10 @@ def test_n_cycles_convergence():
 
 def test_premix_responds_to_temperature():
     """
-    FINDING-001: premix_fraction is pinned at its 0.02 floor because the
-    Watson correlation returns a negative value at modern common-rail
-    ignition delays.
-
-    This test flips to UNEXPECTED PASS when the correlation is replaced.
+    Promoted to a real assertion 2026-09-08. FINDING-001 P-2 replaced the
+    Watson correlation with premix = tau / dur_main, so the premixed
+    fraction now responds to charge temperature instead of sitting pinned
+    at its 0.02 floor. Guards against regression.
     """
     vals = []
     for T in (273.0, 363.0):
@@ -96,9 +102,10 @@ def test_premix_responds_to_temperature():
         eng._apply_thermal_state()
         vals.append(eng.operating_point(
             1800, load=0.6, n_cycles=9).cycle.premix_fraction)
-    pinned = abs(vals[1] - vals[0]) < 1e-9 and abs(vals[0] - 0.02) < 1e-9
-    known("premix_fraction responds to coolant temperature", pinned,
-          f"pinned at {vals[0]:.4f} across 273-363K (FINDING-001)")
+    swing = abs(vals[0] - vals[1]) / max(vals[1], 1e-9)
+    check("premix responds to coolant T", 1.0 if swing > 0.20 else 0.0, 1.0,
+          0.0, f"cold {vals[0]:.4f} vs warm {vals[1]:.4f}, swing "
+               f"{100 * swing:.0f}% (must exceed 20%)")
 
 
 def test_cold_start_sharpens_dpdtheta():
@@ -117,8 +124,28 @@ def test_cold_start_sharpens_dpdtheta():
             1800, load=0.6, n_cycles=9).cycle.dpdtheta_max)
     cold, warm = vals
     rise = (cold - warm) / warm
-    known("cold start sharpens dp/dtheta audibly", rise < 0.15,
-          f"cold is only {100 * rise:+.1f}% sharper (FINDING-001)")
+    known("cold start sharpens whole-cycle dp/dtheta", rise < 0.15,
+          f"raw dp/dtheta only {100 * rise:+.1f}% -- expected, it is "
+          f"compression-dominated (FINDING-002); use dpdtheta_comb")
+
+
+def test_combustion_dpdtheta_responds():
+    """
+    FINDING-002: dpdtheta_max peaks ~10 deg before ignition, so it measures
+    compression. dpdtheta_comb subtracts the motored trace and leaves the
+    rise combustion actually caused, which does respond to temperature.
+    """
+    vals = []
+    for T in (273.0, 363.0):
+        eng = DieselEngine(preset="crdi15")
+        eng.T_coolant = T
+        eng._apply_thermal_state()
+        vals.append(eng.operating_point(
+            1800, load=0.6, n_cycles=9).cycle.dpdtheta_comb)
+    rise = (vals[0] - vals[1]) / vals[1]
+    check("combustion dp/dtheta responds to coolant T",
+          1.0 if rise > 0.08 else 0.0, 1.0, 0.0,
+          f"cold is {100 * rise:+.1f}% sharper (must exceed 8%)")
 
 
 def test_no_pilot_double_count():
@@ -140,6 +167,7 @@ def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
                test_cold_start_sharpens_dpdtheta,
+               test_combustion_dpdtheta_responds,
                test_no_pilot_double_count):
         try:
             fn()

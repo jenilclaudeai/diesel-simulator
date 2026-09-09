@@ -228,6 +228,26 @@ class FrictionModel:
                 mu_roll = 0.0035 + 0.010 * np.exp(-np.abs(dL) * om_cam / 0.35)
                 u_sl = 0.06 * np.abs(dL) * om_cam
                 T_lobe = mu_roll * F_cam * (vt.cam_base_radius + L)
+                # FINDING-005: this branch previously never accumulated
+                # Pb_vt, so any engine with a roller follower reported
+                # exactly zero valvetrain boundary friction. Wear is driven
+                # by boundary power, so cam wear and lash growth were
+                # identically zero forever and valvetrain tick never aged.
+                #
+                # A roller slides far less than a flat tappet, but not zero:
+                # ~6% sliding at the contact, per u_sl above. Resolve the
+                # boundary share the same way the flat-tappet branch does,
+                # with an equivalent radius that includes the roller.
+                R_eq_r = 1.0 / (1.0 / max(vt.cam_base_radius, 1e-4)
+                                + 1.0 / max(vt.follower_radius, 1e-4))
+                w_line_r = np.maximum(F_cam, 1.0) / (nv * 0.012)
+                h_er = np.array([lub.hamrock_dowson_film(mu_cam,
+                                                         max(u, 1e-4),
+                                                         R_eq_r, w)
+                                 for u, w in zip(u_sl, w_line_r)])
+                lam_r = h_er / self.sigma_cam
+                fb_r = 1.0 / (1.0 + (lam_r / lub.LAMBDA_0) ** lub.LAMBDA_K)
+                Pb_vt += float(np.mean(mu_b * fb_r * F_cam * u_sl))
             else:                              # flat tappet, high sliding
                 u_sl = np.abs(dL) * om_cam
                 R_eq = vt.cam_base_radius

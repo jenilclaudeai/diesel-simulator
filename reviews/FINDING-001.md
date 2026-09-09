@@ -147,3 +147,77 @@ biggest available improvement.
 - Whether 0.4 ms is the correct ignition delay for this engine has not been
   independently validated. If the delay is itself too short for another reason,
   P-2's framing changes.
+
+---
+
+# P-2 attempt — Option A implemented, partial result
+
+**Branch:** `fix/premix-from-delay-injection` · **Status:** not merged, needs a decision
+
+## What was done
+
+Replaced the Watson correlation with a derived quantity. The premixed burn is
+physically the fuel that entered the chamber before ignition. Injection rate is
+constant over the main event, so that fraction is simply:
+
+```
+premix = tau / dur_main
+```
+
+Both terms were already computed by the solver from nozzle flow. This removes an
+empirical correlation rather than recalibrating one, which is what the package's
+stated philosophy points to.
+
+## What it fixed
+
+`premix_fraction` is no longer pinned. It now reads 0.10–0.17 — physically
+sensible for a modern common-rail engine with a pilot — and responds strongly
+to temperature: **+67% cold** (0.1023 warm → 0.1709 at 273 K).
+
+The regression suite reports UNEXPECTED PASS on the premix test, which is the
+intended signal.
+
+## What it did NOT fix
+
+**`dp/dθ` still moves only +0.4% cold.** The cold rattle does not emerge.
+
+A 67% swing in premixed fraction should sharpen the pressure rise noticeably.
+It does not, which means **a further link is broken downstream** — most likely
+the premixed Wiebe shape parameters (`r_pre` vs `r_dif` at `cycle.py:455`) are
+too similar for the blend to matter, or the heat release is dominated by
+something else entirely.
+
+Ignition delay also remains quantised to the crank step (flat at 2.425° from
+273–353 K, then 1.425°), so the premix response is a step, not a curve.
+
+## Effect on validation
+
+| Point | torque | BSFC | p_max |
+|---|---|---|---|
+| crdi15 @1800/0.6 | −0.40% | +0.72% | **+3.31%** |
+| crdi15 @3000/1.0 | −0.15% | −0.18% | **+3.11%** |
+| hd_i6 @1700/1.0 | +0.22% | −0.22% | **+2.79%** |
+
+Torque is preserved — `hd_i6` still gives 2313 N·m against the documented
+2310. BSFC moves under 1%. **p_max rises ~3% everywhere**, which is the
+physically expected direction: more premixed burn means a sharper, higher peak.
+
+`hd_i6` p_max goes 173.7 → 178.5 bar, still inside the 160–200 bar band in
+`PROJECT_CONTEXT.md` §1.5.
+
+Four golden assertions now fail. They are not wrong — the baseline moved for a
+defensible reason.
+
+## The decision
+
+1. **Accept and re-baseline.** The change is more physical than what it
+   replaced and validation still holds. Update the goldens with this finding as
+   the justification, promote the premix test to a real assertion.
+2. **Accept, then chase the Wiebe shape.** As above, but treat the flat `dp/dθ`
+   as the next finding, since the cold rattle is still missing.
+3. **Revert.** The premix fix alone does not deliver the user-visible behaviour
+   it was meant to, and a 3% p_max shift is not free.
+
+Recommendation: **2**. The premix fix is correct on its own merits and should
+not be held hostage to the downstream problem, but the cold rattle is the thing
+the work was for and it is still absent. Do not close FINDING-001.
