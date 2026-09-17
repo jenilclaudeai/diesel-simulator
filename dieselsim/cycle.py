@@ -49,6 +49,42 @@ SOOT_CAL = 0.28
 
 @dataclass
 class CycleTraces:
+    """
+    Crank-angle-resolved traces for one solved cycle.
+
+    All fields share the same crank-axis length `n` (720 at the default 1 deg
+    step), at every load and preset. But `theta` indexes **two different
+    references**, which is the thing that will catch you -- see FINDING-008.
+
+      cylinder-local, shape (n_cyl, n)
+          p, p_motored, T, hrr, T_burned, mdot_int, mdot_exh, mdot_blowby
+          Each row is aligned to THAT cylinder's own TDC firing, so every
+          cylinder reports peak pressure at the same theta. Index [0] for
+          cylinder 1.
+
+      cylinder-local, shape (n,)
+          V, valve_lift_int, valve_lift_exh
+          Identical geometry for every cylinder, so stored once.
+
+      global engine angle, shape (n,)
+          p_int_manifold, p_exh_manifold
+          The manifolds see every cylinder, so these are in engine angle and
+          their pulses are genuinely spread across the firing order.
+
+    Consequences:
+      - p[c] against V is correct for every c, for free. Both are local.
+      - p[c] against theta for more than one cylinder draws every curve on
+        top of the others instead of spread across the firing order.
+      - Overlaying manifold pressure on cylinder events is right only for
+        cylinder 0, and wrong by that cylinder's phase offset otherwise.
+      - Geometry.phase_deg(i) gives the offset needed to convert.
+
+    Nothing raises an error in any of those cases.
+
+    Separately: do not ravel a 2D field and index theta with the result.
+    p.ravel() on a 4-cylinder engine gives 2880 points against theta's 720.
+    Take p[0].
+    """
     theta: np.ndarray
     p: np.ndarray
     p_motored: np.ndarray     # FINDING-002: reference for combustion-driven rise

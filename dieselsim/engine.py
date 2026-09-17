@@ -399,8 +399,20 @@ class DieselEngine:
             Fg = (p - 1.03e5) * g.piston_area
             Fi = -g.recip_mass * acc
             t_c = (Fg + Fi) * dxdth
+            # FINDING-008: p_tr[c] is stored at kk = (k + phase_idx[c]) % n,
+            # so local index kk holds the value from global step
+            # kk - phase_idx[c]. Recovering the global trace therefore needs
+            # a NEGATIVE roll. The shipped sign was positive.
+            #
+            # This was latent, not live: for an evenly-fired engine the set
+            # of phase offsets is symmetric under negation mod 720 -- crdi15
+            # {0,540,180,360} negates to {0,180,540,360}, hd_i6 likewise --
+            # so the summed torque is identical either way and only the
+            # per-cylinder identities swap. Verified for all four presets.
+            # It becomes a real error for an uneven-fire engine, which
+            # builder.py and vee_angle_deg make reachable.
             shift = int(round(g.phase_deg(c) / dth))
-            T += np.roll(t_c, shift)
+            T += np.roll(t_c, -shift)
         return T - fr["torque"]
 
     # ------------------------------------------------------------------ #

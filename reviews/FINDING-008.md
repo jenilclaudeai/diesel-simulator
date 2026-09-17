@@ -163,3 +163,56 @@ line.
   measured; the measured residual is consistent with it.
 - Whether the local convention is *intended* cannot be established from the
   code. `crank_torque` clearly knows about it, which argues intent.
+
+---
+
+## Independent verification and one correction
+
+Re-measured from a clean clone before acting on any of the above.
+
+### Confirmed
+
+`crdi15` @ 1800 rpm, load 0.8 — all four cylinders report peak pressure at
+θ ≈ 11° despite `phase_deg` of 0 / 540 / 180 / 360, while the exhaust manifold
+from the same traces object peaks at 565°. Local and global in one dataclass,
+as described.
+
+### Correction: the roll sign was latent, not live
+
+The finding states the sign is backwards, which is correct. It does not
+establish whether that is currently harmful. It is not.
+
+For an evenly-fired engine the set of phase offsets is **symmetric under
+negation mod 720**, so rolling the wrong way permutes which cylinder lands
+where and leaves the sum unchanged:
+
+| preset | phases | negated | summed torque |
+|---|---|---|---|
+| crdi15 | 0, 540, 180, 360 | 0, 180, 540, 360 | identical |
+| hd_i6 | 0, 480, 240, 600, 120, 360 | 0, 240, 480, 120, 600, 360 | identical |
+| single | 0 | 0 | identical |
+
+So no shipped number was wrong, and `torque_trace` was correct for every
+preset by symmetry rather than by construction.
+
+**It becomes a live error the moment the firing is uneven** — a V-twin, an
+odd-fire V6, anything where `vee_angle_deg` breaks the symmetry. `builder.py`
+lets a user create exactly that, and the failure would appear as a
+plausible-looking but wrong torque trace with no error raised.
+
+Fixed to `np.roll(t_c, -shift)` with the reasoning recorded inline.
+
+### Note on the 1440
+
+The finding correctly identifies `AcousticEngine.grid` at `dtheta=0.5` as the
+1440 in the package. Worth carrying into ADR-003's TypeScript port: the
+`AudioWorklet` inherits two crank grids at different resolutions bridged by
+`np.interp`, and that interpolation has to be reproduced, not assumed away.
+
+### Merged with the parallel branch
+
+`docs/trace-shape-convention` reached the same conclusion about the 1430 being
+a measurement error and added a `CycleTraces` docstring. That docstring covered
+only the 1D/2D split and **would have been misleading**, because it implied a
+single shared `theta`. It has been rewritten here to state both references and
+their consequences. FINDING-002's retraction is kept.

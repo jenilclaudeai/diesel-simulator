@@ -100,12 +100,25 @@ then discarded. Motored pressure is exactly the reference needed.
 Step 3 changes all rendered audio. It should be done with the worn/new audio
 pair from known bug #9 as a check, since that pair is already suspect.
 
-## Also found
+## Also noted — and later retracted
 
-- **Trace arrays are shape-inconsistent.** `traces.p` is per-cylinder 2D while
-  `traces.theta` is 1D, and at load 1.0 the lengths differ (1430 vs 720).
-  Anything consuming traces has to handle this defensively. Worth a separate
-  issue before the Angular cycle page is built on them.
+This finding originally claimed the trace arrays were shape-inconsistent, with
+`traces.p` 2D, `traces.theta` 1D, and lengths differing at load 1.0 (1430 vs
+720).
+
+**That was wrong, and it was my error, not the package's.** Verified across all
+four presets and `n_cyl` of 1, 4 and 6: every field has the same crank-angle
+length at every load. The 1430 came from ravelling a 4-cylinder `(4, 720)`
+array into 2880 points and indexing `theta` with the result.
+
+The 1D/2D split is deliberate and sensible: `(n_cyl, n)` for quantities that
+genuinely differ between cylinders, `(n,)` for those identical to every
+cylinder and differing only by firing phase. It was undocumented, which is why
+I misread it twice. Now documented on the `CycleTraces` docstring.
+
+No code change was needed. Retained here rather than deleted because a
+retracted finding is more useful to a future reader than a silently removed
+one.
 
 ## Caveats
 
