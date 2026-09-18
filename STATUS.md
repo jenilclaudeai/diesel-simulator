@@ -69,7 +69,7 @@ now-honestly-named `h_ring_tdc`), 1 tiny (`Pb_valvetrain`)**.
 | 1 | `n_cycles=6` not converged | **measured 10.8% drift**, worse than documented; test added |
 | 2 | Fuelling open-loop on rpm | not started — Phase 1c |
 | 3 | Torque limiter ±3% | symptom of #2 |
-| 4 | Light-load fuel understated ~2× | not started — measure first |
+| 4 | Light-load fuel understated ~2× | **measured — does not reproduce at 2×; real gap ~29%.** FINDING-009 |
 | 5 | `operating_point` path-dependent | deferred, documented |
 | 6 | `l` key dead in DCT | **fixed** — now reports why instead of silently no-opping |
 | 7 | No cold-temperature combustion | root-caused through FINDINGs 001–004 |
