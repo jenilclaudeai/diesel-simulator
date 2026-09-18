@@ -1,7 +1,7 @@
 # Status
 
 **Updated:** 2026-09-09 (session 2)
-**Phase:** 1 — Physics truth pass, substantially complete
+**Phase:** 1 — Physics truth pass complete; measurement sweep done
 **Branch:** `fix/physical-source-levels` (stacked, see Branches below)
 
 Read this first in a new session, then `PLAN.md`, then `DECISIONS.md`, then
@@ -17,7 +17,7 @@ produced six findings, five fixes, a regression suite and a standing audit tool.
 
 ### The pattern that came out of it
 
-Five of the six findings share one shape: **a mechanism fully built, correctly
+Five of the first six findings share one shape: **a mechanism fully built, correctly
 wired, and fed a quantity that is effectively zero or pinned against a clamp.
 None raised an error.**
 
@@ -48,6 +48,11 @@ now-honestly-named `h_ring_tdc`), 1 tiny (`Pb_valvetrain`)**.
 | 005 | roller-follower branch never accumulated `Pb_vt`; cam wear structurally impossible | fixed, **but insufficient** |
 | 006 | `h_min_ring` always its clamp, and exposed as a headline field | fixed |
 | 007 | bug #8 audit; `fuel_for_torque` returned 8.7% different fuel depending on cache warmth | fixed |
+| 008 | `theta` indexes two references — per-cylinder local vs global engine angle | documented; roll sign fixed |
+| 009 | bug #4 overstated — light-load gap is ~29%, not 2× | measured; no fix needed |
+| 010 | bug #2 overstated — the loop converges; real gap is missing p_max/T_exh limits | measured |
+| 011 | **the real-time grid is the least accurate part** — worst −10.06%, spread 13.5 pp | measured, **blocks Phase 2** |
+| 012 | `transient()` has no stall floor; returns NaN then crashes | diagnosed |
 
 ### Still open inside those
 
