@@ -70,12 +70,12 @@ now-honestly-named `h_ring_tdc`), 1 tiny (`Pb_valvetrain`)**.
 | 2 | Fuelling open-loop on rpm | **measured — loop converges, no instability.** Real gap is missing p_max/T_exh limits. FINDING-010 |
 | 3 | Torque limiter ±3% | partly addressed by the FINDING-007 cache fix; re-measure |
 | 4 | Light-load fuel understated ~2× | **measured — does not reproduce at 2×; real gap ~29%.** FINDING-009 |
-| 5 | `operating_point` path-dependent | deferred, documented |
+| 5 | `operating_point` path-dependent | **measured 3.92%**, not "mild"; compounds in the grid build — FINDING-011 |
 | 6 | `l` key dead in DCT | **fixed** — now reports why instead of silently no-opping |
 | 7 | No cold-temperature combustion | root-caused through FINDINGs 001–004 |
 | 8 | Unknown-provenance code in `engine.py` | **closed** — FINDING-007; found a real cache bug |
 | 9 | Worn-vs-new audio pair suspect | root-caused — FINDING-004 and 005 |
-| 10 | `render_transient` seams | deferred |
+| 10 | `render_transient` seams | **still unmeasured** — blocked by FINDING-012; code reading suggests crank-phase reset at every chunk |
 | 11 | Coast downshift calibration | deferred |
 | 12 | Grade small-angle form | **already correct** — `atan`/`sin`/`cos` all present; entry was stale |
 
