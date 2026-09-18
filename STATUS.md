@@ -70,7 +70,7 @@ now-honestly-named `h_ring_tdc`), 1 tiny (`Pb_valvetrain`)**.
 | 2 | Fuelling open-loop on rpm | not started — Phase 1c |
 | 3 | Torque limiter ±3% | symptom of #2 |
 | 4 | Light-load fuel understated ~2× | not started — measure first |
-| 5 | `operating_point` path-dependent | deferred, documented |
+| 5 | `operating_point` path-dependent | **measured 3.92%**, not "mild"; compounds in the grid build — FINDING-011 |
 | 6 | `l` key dead in DCT | not started |
 | 7 | No cold-temperature combustion | root-caused through FINDINGs 001–004 |
 | 8 | Unknown-provenance code in `engine.py` | **closed** — FINDING-007; found a real cache bug |
