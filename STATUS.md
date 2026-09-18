@@ -75,7 +75,7 @@ now-honestly-named `h_ring_tdc`), 1 tiny (`Pb_valvetrain`)**.
 | 7 | No cold-temperature combustion | root-caused through FINDINGs 001–004 |
 | 8 | Unknown-provenance code in `engine.py` | **closed** — FINDING-007; found a real cache bug |
 | 9 | Worn-vs-new audio pair suspect | root-caused — FINDING-004 and 005 |
-| 10 | `render_transient` seams | deferred |
+| 10 | `render_transient` seams | **still unmeasured** — blocked by FINDING-012; code reading suggests crank-phase reset at every chunk |
 | 11 | Coast downshift calibration | deferred |
 | 12 | Grade small-angle form | not started |
 
