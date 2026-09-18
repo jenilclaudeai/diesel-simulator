@@ -71,13 +71,13 @@ now-honestly-named `h_ring_tdc`), 1 tiny (`Pb_valvetrain`)**.
 | 3 | Torque limiter ±3% | symptom of #2 |
 | 4 | Light-load fuel understated ~2× | not started — measure first |
 | 5 | `operating_point` path-dependent | deferred, documented |
-| 6 | `l` key dead in DCT | not started |
+| 6 | `l` key dead in DCT | **fixed** — now reports why instead of silently no-opping |
 | 7 | No cold-temperature combustion | root-caused through FINDINGs 001–004 |
 | 8 | Unknown-provenance code in `engine.py` | **closed** — FINDING-007; found a real cache bug |
 | 9 | Worn-vs-new audio pair suspect | root-caused — FINDING-004 and 005 |
 | 10 | `render_transient` seams | deferred |
 | 11 | Coast downshift calibration | deferred |
-| 12 | Grade small-angle form | not started |
+| 12 | Grade small-angle form | **already correct** — `atan`/`sin`/`cos` all present; entry was stale |
 
 ---
 
