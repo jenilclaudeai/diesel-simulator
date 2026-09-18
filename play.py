@@ -981,6 +981,11 @@ class LiveEngine:
         self.derate_charge = 1.0
         self.engine_stopped = False
         self.overheat_msg = ""
+        # BUG-6: short-lived feedback for key presses that cannot apply in
+        # the current configuration. Without this, a key that does nothing
+        # is indistinguishable from a key that did something invisible.
+        self.hint = ""
+        self.hint_t = 0.0
         self.tank_L = self.veh.fuel_tank_L
         self.out_of_fuel = False
         self.perf = grid.blend_perf(self.rpm, 0.0)
@@ -1190,6 +1195,10 @@ class LiveEngine:
         The converter couples two inertias stiffly, so integrate it in
         sub-steps -- a single 60 Hz Euler step rings.
         """
+        if self.hint_t > 0.0:                      # BUG-6 hint decay
+            self.hint_t = max(0.0, self.hint_t - dt)
+            if self.hint_t == 0.0:
+                self.hint = ""
         self._cruise(dt)
         if self.out_of_fuel or self.engine_stopped:
             self.throttle = 0.0
@@ -1563,6 +1572,8 @@ def draw(live: LiveEngine, snd: LiveSound, t, audio_on, dropouts):
         warn = RED + live.overheat_msg + OFF
     elif live.overheat_msg:
         warn = YEL + live.overheat_msg + OFF
+    elif live.hint and live.hint_t > 0.0:
+        warn = YEL + live.hint + OFF
     else:
         warn = ""
     dry = RED + " OUT OF FUEL" + OFF if live.out_of_fuel else ""
@@ -2014,7 +2025,17 @@ def main():
                     elif c == "[":
                         live.dl.grade = max(-0.20, live.dl.grade - 0.01)
                     elif c == "l":
-                        live.dl.lock_allowed = not live.dl.lock_allowed
+                        # BUG-6: lock_allowed is only read in _step_tc. A DCT
+                        # has no torque converter, so there is nothing to lock
+                        # up and the key previously toggled a flag nothing
+                        # read -- silently, which is the worst outcome.
+                        if live.dl.veh.trans == "tc":
+                            live.dl.lock_allowed = not live.dl.lock_allowed
+                            live.hint = ("lockup allowed" if live.dl.lock_allowed
+                                         else "lockup blocked")
+                        else:
+                            live.hint = "lockup does not apply -- DCT has no converter"
+                        live.hint_t = 2.5
                     elif c == "c":
                         live.cruise_toggle()
                     elif c in "+=":
