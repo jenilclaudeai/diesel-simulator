@@ -67,8 +67,8 @@ now-honestly-named `h_ring_tdc`), 1 tiny (`Pb_valvetrain`)**.
 | # | Issue | Status |
 |---|---|---|
 | 1 | `n_cycles=6` not converged | **measured 10.8% drift**, worse than documented; test added |
-| 2 | Fuelling open-loop on rpm | not started — Phase 1c |
-| 3 | Torque limiter ±3% | symptom of #2 |
+| 2 | Fuelling open-loop on rpm | **measured — loop converges, no instability.** Real gap is missing p_max/T_exh limits. FINDING-010 |
+| 3 | Torque limiter ±3% | partly addressed by the FINDING-007 cache fix; re-measure |
 | 4 | Light-load fuel understated ~2× | not started — measure first |
 | 5 | `operating_point` path-dependent | deferred, documented |
 | 6 | `l` key dead in DCT | not started |
