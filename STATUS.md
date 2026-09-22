@@ -24,8 +24,14 @@ grid cell lives in `dieselsim/grid.py`, shared by native and browser. A cell
 built under Pyodide matches native to 4.8e-10 (performance) and 99.81%
 bit-identical float32 sources. Phase 2's exit criterion is met at cell level.
 
-Reproduce: `tools/pyodide/` → `npm install && npm run suite`. See ADR-001,
-*Measured* parts 1 and 2.
+**The SolverPort exists and works end to end** (`web/solver/`, ADR-010,
+*Proposed*). Main-thread client → real worker loop → Pyodide → unmodified
+dieselsim: 16/16 tests, native agreement 1.55e-10, typed errors, cancellation
+per grid cell. Three hazards found and fixed on the way — silently ignored
+override typos, aliased registered presets, and Python output lost in worker
+threads. ADR-010 lists three decisions that need input.
+
+Reproduce: `tools/pyodide/` → `npm run suite`; `web/solver/` → `npm test`.
 
 ## Where things stand
 
@@ -121,7 +127,7 @@ now-honestly-named `h_ring_tdc`), 1 tiny (`Pb_valvetrain`)**.
 ## Tests
 
 ```
-python3 tests/test_physics.py        # 15 passed, 0 failed, 2 known defects
+python3 tests/test_physics.py        # 17 passed, 0 failed, 2 known defects
 python3 tools/audit_dead_signals.py  # diagnostic, reports only
 ```
 

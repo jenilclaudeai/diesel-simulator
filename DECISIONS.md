@@ -481,3 +481,72 @@ yet at full-grid level, and not yet in a browser.
 `tests/test_physics.py` now fails if any `dieselsim/` module imports scipy at
 module level. Mutation-tested: reintroducing the import is caught and the file
 and line are named. Static, because the suite also runs under Pyodide.
+
+---
+
+## ADR-010 — The SolverPort contract
+
+**Status:** Proposed (2026-09-22) — implemented and tested, awaiting acceptance
+
+### Context
+
+ADR-001 calls for "one seam, Pyodide behind it". This defines that seam.
+
+### Decisions
+
+1. **Framework-free TypeScript** (`web/solver/`). No Angular dependency, so
+   the seam is testable in plain Node now and Angular consumes it later.
+2. **Transport-neutral worker.** The worker loop talks through a three-method
+   `Endpoint` (`post`, `listen`, `close`), not the browser `Worker` API. The
+   same `serveSolver()` runs in a browser Worker and under Node's
+   `worker_threads` — so the tests exercise the real worker code, not a mock.
+3. **JSON across the Python boundary**, plus raw little-endian float32 bytes
+   for crank-angle sources. The TypeScript side never walks Python objects
+   element by element; `dieselsim/bridge.py` is testable natively.
+4. **Engines are `{preset}` or `{headline}`, plus dotted-path `overrides`** —
+   the convention `batch.py` already used, now validated
+   (`dieselsim/overrides.py`). An unknown path, wrong type or non-finite value
+   is `invalid-request`, with a "did you mean" suggestion.
+5. **Typed errors.** `SolverError.kind` is one of `invalid-request`,
+   `non-finite`, `python`, `load`, `cancelled`, `protocol`. Python exceptions
+   are mapped at the boundary with the traceback attached. Non-finite solver
+   output is caught in Python and reported, never returned as a number.
+   Addresses REVIEW-001 m-1.
+6. **Cancellation granularity is one grid cell.** Python runs synchronously in
+   the worker; the loop yields between cells so a cancel can land. Interrupting
+   mid-cell would need `SharedArrayBuffer`, which needs COOP/COEP headers,
+   which ADR-003 deliberately avoids so GitHub Pages hosting works.
+
+### Verified
+
+16/16 end-to-end tests through the real worker under Node: native agreement
+to 1.55e-10 on points and grid cells; malformed requests rejected with useful
+messages; a 6-cell build cancelled after 1 cell; the solver usable after
+cancellation; concurrent requests correctly matched; `dispose()` rejects
+in-flight and later calls.
+
+### Found and fixed on the way
+
+- **Overrides with a typo were silently ignored** (`batch._apply`'s bare
+  `setattr` created a new attribute). A parameter sweep would have reported
+  "no effect".
+- **Registered presets were aliased** — `builder.register` returned the same
+  object on every lookup, so a mutation leaked into the next one. Harmless in
+  a one-shot CLI; in a long-lived worker, every request would inherit the
+  previous request's edits. Built-in presets were never affected.
+- **Python's output was silently lost** inside Node worker threads, because
+  Pyodide's default writer needs a real file descriptor. The Node adapter now
+  routes stdout/stderr explicitly. The browser adapter must do the same.
+
+All three have regression tests; the aliasing one is mutation-tested.
+
+### Not yet decided — needs input
+
+- **Where the dieselsim sources come from in the browser.** Bundled as a
+  static asset at build time is the obvious answer; it needs a build step.
+- **Where Pyodide itself is served from.** Same-origin (GitHub Pages, ~10 MB
+  of runtime plus numpy) or CDN (smaller deploy, third-party dependency at
+  runtime, and blocked on some networks — as it is in the dev container).
+- **Grid cache keying** (REVIEW-001 M-2) — the request shape now makes it
+  possible: preset/headline + sorted overrides + contract version + a hash of
+  the package sources. Not built yet.

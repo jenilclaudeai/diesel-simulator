@@ -29,6 +29,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .engine import DieselEngine
+from .overrides import apply_overrides
 
 
 @dataclass
@@ -59,13 +60,12 @@ class PointResult:
 
 
 def _apply(spec, overrides):
-    """overrides = {'turbo.turbine_area_eff': 4.0e-4, 'afr_limit': 18.0, ...}"""
-    for path, val in (overrides or {}).items():
-        obj = spec
-        parts = path.split(".")
-        for p in parts[:-1]:
-            obj = getattr(obj, p)
-        setattr(obj, parts[-1], val)
+    """overrides = {'turbo.turbine_area_eff': 4.0e-4, 'afr_limit': 18.0, ...}
+
+    Delegates to dieselsim.overrides, which rejects unknown paths instead of
+    silently creating new attributes (a typo used to make a sweep report
+    'no effect')."""
+    apply_overrides(spec, overrides)
 
 
 def _solve_one(job):
