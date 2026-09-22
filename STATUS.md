@@ -42,8 +42,7 @@ Reproduce: `tools/pyodide/` → `npm run suite`; `web/solver/` → `npm test`.
 The repo does not auto-delete merged branches, so each child PR must be
 retargeted to `main` after its parent merges.
 
-**CI is written and staged in `tools/ci/`** but not active: the token lacks the
-Workflows permission. Three jobs — native Python on 3.10 and 3.12, the same
+**CI is active** (`.github/workflows/ci.yml`). Three jobs — native Python on 3.10 and 3.12, the same
 suite under Pyodide, and the TypeScript solver end to end. Verified locally,
 including a full 3.10 run.
 

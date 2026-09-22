@@ -1,9 +1,5 @@
 # Continuous integration for dieselsim.
 #
-# STAGED, NOT ACTIVE: GitHub only runs workflows from .github/workflows/,
-# and pushing there needs a token with the "Workflows" permission. To
-# activate, move this file to .github/workflows/ci.yml.
-#
 # Three independent jobs, so a failure says where the problem is:
 #   physics          native CPython, the reference implementation
 #   physics-pyodide  the SAME suite under Pyodide - ADR-001's guarantee
