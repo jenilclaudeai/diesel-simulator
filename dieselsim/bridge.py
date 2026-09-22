@@ -20,8 +20,10 @@ dieselsim.overrides: an unknown path, a type mismatch or a non-finite value is
 an error, never silently ignored.
 """
 import copy
+import hashlib
 import json
 import math
+import os
 import sys
 
 import numpy as np
@@ -83,8 +85,26 @@ def _finite(d, what):
     return d
 
 
+def source_hash():
+    """
+    SHA-256 over the package's own .py files -- the identity of the physics
+    that is actually loaded. Grid caches are keyed on it, so any change to the
+    solver invalidates every cached grid instead of serving stale physics.
+
+    Algorithm, which web/solver's tests reproduce from disk: for each .py file
+    in sorted name order, feed  name + NUL + raw bytes + NUL.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    h = hashlib.sha256()
+    for name in sorted(f for f in os.listdir(here) if f.endswith(".py")):
+        with open(os.path.join(here, name), "rb") as fh:
+            h.update(name.encode() + b"\0" + fh.read() + b"\0")
+    return h.hexdigest()
+
+
 def runtime_info(_req_json="{}"):
     return json.dumps({
+        "source_hash": source_hash(),
         "contract": CONTRACT_VERSION,
         "python": sys.version.split()[0],
         "numpy": np.__version__,

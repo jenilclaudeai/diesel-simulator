@@ -547,6 +547,29 @@ All three have regression tests; the aliasing one is mutation-tested.
 - **Where Pyodide itself is served from.** Same-origin (GitHub Pages, ~10 MB
   of runtime plus numpy) or CDN (smaller deploy, third-party dependency at
   runtime, and blocked on some networks — as it is in the dev container).
-- **Grid cache keying** (REVIEW-001 M-2) — the request shape now makes it
-  possible: preset/headline + sorted overrides + contract version + a hash of
-  the package sources. Not built yet.
+- ~~Grid cache keying~~ — **built**; see *ADR-010 addendum: grid cache* below.
+
+### ADR-010 addendum: grid cache (2026-09-22)
+
+Resolves REVIEW-001 **M-2** (cache key undefined; Python float formatting
+unstable across versions) and **M-3** (no quota or eviction policy).
+
+- **Key** = SHA-256 of canonical JSON of {grid format, physics version, engine,
+  rpms, loads, n_cycles}. Computed in TypeScript, where number formatting is
+  fixed by ECMA-262 and identical in every engine, with object keys sorted.
+  Override order and number spelling (`5e-4` / `0.0005`) do not change it.
+- **Physics version** = SHA-256 of the `dieselsim/*.py` sources. Any change to
+  the solver invalidates every cached grid. Computed identically by Python
+  (`bridge.source_hash()`) and TypeScript (`sourceHash()`) — **verified equal
+  against the real worker**.
+- **A cache hit never boots Pyodide.** The app supplies the physics version
+  from its build; it is checked against the worker only on a miss, where a
+  mismatch fails loudly as a stale bundle.
+- **Budget** 50 MB (~30 default grids at 1.66 MB), LRU by last *use*. A grid
+  larger than the budget is refused; a browser `QuotaExceededError` evicts one
+  more entry and retries once. **A failure to store never fails the build.**
+- The memory cache clones on the way in and out, so callers never share an
+  object with it — the same aliasing bug `builder.register` had.
+
+Verified: 20 fast tests (fake solver, fake IndexedDB) and 2 more through the
+real worker — a real miss took 8.8 s and the hit 0.4 ms.

@@ -3,6 +3,12 @@
 import { Worker } from "node:worker_threads";
 import { WorkerSolver } from "../src/worker-client.js";
 import { SolverError, type GridProgress } from "../src/solver-port.js";
+import { sourceHash } from "../src/cache-key.js";
+import { CachedSolver } from "../src/cached-solver.js";
+import { MemoryGridCache } from "../src/grid-cache.js";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 // native CPython 3.12 / numpy 2.4.4, crdi15 1800 rpm load 0.6, n_cycles 9
 const NATIVE_TORQUE = 124.39075523765574;
@@ -74,6 +80,29 @@ const [a, b] = await Promise.all([
   solver.solvePoint({ engine: { preset: "crdi15" }, rpm: 1800, load: 0.2 }),
 ]);
 check("concurrent requests resolve to their own results", a.load === 0.6 && b.load === 0.2 && a.torque > b.torque);
+
+// The main thread must be able to compute the physics version WITHOUT booting
+// Pyodide, or cached grids cannot open instantly. So TypeScript's sourceHash()
+// has to agree exactly with Python's source_hash(). If they ever differ, every
+// cache lookup misses forever, silently.
+const pkg = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..", "dieselsim");
+const files = Object.fromEntries(fs.readdirSync(pkg).filter(f => f.endsWith(".py"))
+  .map(f => [f, new Uint8Array(fs.readFileSync(path.join(pkg, f)))]));
+const tsHash = await sourceHash(files);
+check("TypeScript sourceHash() == Python source_hash()", tsHash === info.source_hash,
+      `${tsHash.slice(0, 16)}… vs ${info.source_hash.slice(0, 16)}…`);
+
+const cached = new CachedSolver(solver, new MemoryGridCache(), tsHash);
+const cellReq = { engine: { preset: "crdi15" }, rpms: [1800], loads: [0.6] };
+const tMiss = performance.now();
+const g1 = await cached.buildGrid(cellReq);
+const missS = (performance.now() - tMiss) / 1000;
+const tHit = performance.now();
+const g2 = await cached.buildGrid(cellReq);
+const hitMs = performance.now() - tHit;
+check("real solver: miss then hit", cached.lastCacheEvent?.outcome === "hit"
+      && g2.cells[0]!.perf["torque"] === g1.cells[0]!.perf["torque"],
+      `miss ${missS.toFixed(1)} s, hit ${hitMs.toFixed(1)} ms`);
 
 const pending = solver.solvePoint({ engine: { preset: "crdi15" }, rpm: 1800, load: 0.6 });
 solver.dispose();

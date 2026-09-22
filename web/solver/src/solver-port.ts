@@ -21,6 +21,8 @@ export type EngineRef =
 export type Overrides = Record<string, number | boolean | string | number[]>;
 
 export interface RuntimeInfo {
+  /** SHA-256 of the dieselsim sources actually loaded — the physics version */
+  source_hash: string;
   contract: number;
   python: string;
   numpy: string;
