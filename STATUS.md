@@ -51,7 +51,7 @@ now-honestly-named `h_ring_tdc`), 1 tiny (`Pb_valvetrain`)**.
 | 008 | `theta` indexes two references — per-cylinder local vs global engine angle | documented; roll sign fixed |
 | 009 | bug #4 overstated — light-load gap is ~29%, not 2× | measured; no fix needed |
 | 010 | bug #2 overstated — the loop converges; real gap is missing p_max/T_exh limits | measured |
-| 011 | **the real-time grid is the least accurate part** — worst −10.06%, spread 13.5 pp | measured, **blocks Phase 2** |
+| 011 | the real-time grid was the least accurate part — worst −10.06% | **fixed** — per-cell fresh engines at `n_cycles=9`; now exact vs reference |
 | 012 | `transient()` floor sat inside the solver's NaN region and could not catch NaN | **fixed** — stall detection; root cause as first recorded was wrong |
 
 ### Still open inside those
@@ -75,7 +75,7 @@ now-honestly-named `h_ring_tdc`), 1 tiny (`Pb_valvetrain`)**.
 | 2 | Fuelling open-loop on rpm | **measured — loop converges, no instability.** Real gap is missing p_max/T_exh limits. FINDING-010 |
 | 3 | Torque limiter ±3% | partly addressed by the FINDING-007 cache fix; re-measure |
 | 4 | Light-load fuel understated ~2× | **measured — does not reproduce at 2×; real gap ~29%.** FINDING-009 |
-| 5 | `operating_point` path-dependent | **measured 3.92%**, not "mild"; compounds in the grid build — FINDING-011 |
+| 5 | `operating_point` path-dependent | **root cause found** — `Turbocharger` keeps `n_rpm`/`vgt_pos` across calls; `warm_start=False` does not reset it. Grid now immune (FINDING-011); the API itself still leaks |
 | 6 | `l` key dead in DCT | **fixed** — now reports why instead of silently no-opping |
 | 7 | No cold-temperature combustion | root-caused through FINDINGs 001–004 |
 | 8 | Unknown-provenance code in `engine.py` | **closed** — FINDING-007; found a real cache bug |
