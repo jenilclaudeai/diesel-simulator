@@ -33,6 +33,12 @@ export function canonicalJson(value: unknown): string {
 }
 
 async function sha256Hex(data: Uint8Array): Promise<string> {
+  // WebCrypto exists only in secure contexts: https, or localhost. Served
+  // over plain http on a LAN address it is undefined - say so, rather than
+  // failing with "cannot read properties of undefined".
+  if (!globalThis.crypto?.subtle) {
+    throw new Error("WebCrypto unavailable: this page must be served over https or from localhost");
+  }
   const digest = await crypto.subtle.digest("SHA-256", data as Uint8Array<ArrayBuffer>);
   return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("");
 }

@@ -1,0 +1,40 @@
+{
+  "name": "app",
+  "version": "0.0.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test",
+    "prepare-assets": "node scripts/prepare-assets.mjs",
+    "prestart": "npm run prepare-assets",
+    "prebuild": "npm run prepare-assets",
+    "build:pages": "ng build --base-href /diesel-simulator/",
+    "prebuild:pages": "npm run prepare-assets",
+    "e2e": "node e2e/dyno.e2e.mjs"
+  },
+  "private": true,
+  "packageManager": "npm@10.9.7",
+  "dependencies": {
+    "@angular/common": "^22.1.0",
+    "@angular/compiler": "^22.1.0",
+    "@angular/core": "^22.1.0",
+    "@angular/forms": "^22.1.0",
+    "@angular/platform-browser": "^22.1.0",
+    "@angular/router": "^22.1.0",
+    "pyodide": "314.0.7",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^22.1.8",
+    "@angular/cli": "^22.1.8",
+    "@angular/compiler-cli": "^22.1.0",
+    "jsdom": "^28.0.0",
+    "prettier": "^3.8.1",
+    "puppeteer-core": "^25.11.0",
+    "typescript": "~6.0.2",
+    "vitest": "^4.0.8"
+  }
+}
