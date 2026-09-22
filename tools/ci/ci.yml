@@ -1,0 +1,82 @@
+# Continuous integration for dieselsim.
+#
+# STAGED, NOT ACTIVE: GitHub only runs workflows from .github/workflows/,
+# and pushing there needs a token with the "Workflows" permission. To
+# activate, move this file to .github/workflows/ci.yml.
+#
+# Three independent jobs, so a failure says where the problem is:
+#   physics          native CPython, the reference implementation
+#   physics-pyodide  the SAME suite under Pyodide - ADR-001's guarantee
+#   solver           the TypeScript SolverPort, end to end through a real worker
+name: CI
+
+on:
+  pull_request:           # every PR, including stacked PRs onto non-main branches
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  physics:
+    name: physics (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.10 is the oldest supported version, and this project has a history
+        # of syntax that works on 3.12 but not 3.10 (f-string escapes).
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - run: pip install -r requirements.txt
+      # every file, not only those the suite imports - play.py and demo.py
+      # are never imported by the tests
+      - name: byte-compile everything
+        run: python -m compileall -q dieselsim tests tools play.py demo.py
+      - run: python tests/test_physics.py
+
+  physics-pyodide:
+    name: physics under Pyodide
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: tools/pyodide
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tools/pyodide/package-lock.json
+      - run: npm ci
+      - run: npm run suite
+
+  solver:
+    name: SolverPort (TypeScript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web/solver
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/solver/package-lock.json
+      - run: npm ci
+      - run: npm test

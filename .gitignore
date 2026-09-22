@@ -23,10 +23,8 @@ env/
 
 # pyodide harness
 tools/pyodide/node_modules/
-tools/pyodide/package-lock.json
 tools/pyodide/*.whl
 
 # solver package
 web/solver/node_modules/
 web/solver/dist/
-web/solver/package-lock.json
