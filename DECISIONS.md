@@ -397,3 +397,57 @@ for little added rigour.
 
 Which engines, and how many? Opened by ADR-008. Needed before Phase 5, not
 before Phase 1.
+
+---
+
+## ADR-001 — Measured (2026-09-22)
+
+Addendum, not an amendment. The decision stands; these are the numbers it was
+waiting on.
+
+**The solver runs unmodified under Pyodide.** Pyodide 314.0.7 (Python 3.14.2,
+numpy 2.4.6) in Node, the `dieselsim/` directory copied in byte-for-byte.
+`scipy` is never imported.
+
+**It produces the same numbers.** `crdi15`, 1800 rpm, load 0.6, `n_cycles=9`:
+
+| | native CPython 3.12 / numpy 2.4.4 | Pyodide 3.14 / numpy 2.4.6 | relative diff |
+|---|---|---|---|
+| torque | 124.39075523765574 | 124.39075521835555 | 1.6e-10 |
+| BSFC | 265.4029925226589 | 265.40299251761337 | 1.9e-11 |
+| p_max | 110.78218326804465 | 110.78218325918708 | 8.0e-11 |
+
+Different interpreter, different numpy, different maths library — agreement to
+about ten significant figures.
+
+**It is about 2× slower, not 3–8×.** Same container, run sequentially:
+
+| solve | native | Pyodide | ratio |
+|---|---|---|---|
+| 1st | 6.61 s | 22.47 s | 3.4× |
+| 2nd | 6.66 s | 17.16 s | 2.6× |
+| 3rd | 6.53 s | 11.40 s | 1.7× |
+
+Native is flat; Pyodide speeds up as V8 tiers the WebAssembly up from its
+baseline compiler to its optimising one. A fresh worker pays ~3.4× on its first
+solve; warm, ~1.7×. A grid build is dozens of solves in one worker, so nearly
+all of it runs warm.
+
+Load cost: 2.9–5.1 s for the runtime plus numpy in this container.
+
+**Consequences**
+
+- The "revisit when grid rebuild time makes Expert mode unpleasant" trigger is
+  much further away than feared. The Rust/WASM port is not needed on current
+  evidence.
+- Keep the first-solve penalty in mind for UX: a single ad-hoc solve in a
+  freshly-spawned worker is the slow case. A long-lived worker amortises it.
+
+**Caveats**
+
+- Node's V8, not a browser. Chrome shares V8; Firefox and especially Safari
+  use different engines and may differ.
+- One operating point, three runs, one single-core container. The ratio is
+  robust in direction and rough in magnitude.
+
+Reproduce with `tools/pyodide/` — see its README.

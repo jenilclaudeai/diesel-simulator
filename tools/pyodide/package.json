@@ -1,0 +1,12 @@
+{
+  "name": "dieselsim-pyodide-harness",
+  "private": true,
+  "description": "Runs the unmodified dieselsim package and its regression suite under Pyodide in Node. Proves ADR-001 on every change.",
+  "type": "module",
+  "scripts": {
+    "suite": "node run-suite.mjs"
+  },
+  "dependencies": {
+    "pyodide": "314.0.7"
+  }
+}
