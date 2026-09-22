@@ -52,7 +52,7 @@ now-honestly-named `h_ring_tdc`), 1 tiny (`Pb_valvetrain`)**.
 | 009 | bug #4 overstated — light-load gap is ~29%, not 2× | measured; no fix needed |
 | 010 | bug #2 overstated — the loop converges; real gap is missing p_max/T_exh limits | measured |
 | 011 | **the real-time grid is the least accurate part** — worst −10.06%, spread 13.5 pp | measured, **blocks Phase 2** |
-| 012 | `transient()` has no stall floor; returns NaN then crashes | diagnosed |
+| 012 | `transient()` floor sat inside the solver's NaN region and could not catch NaN | **fixed** — stall detection; root cause as first recorded was wrong |
 
 ### Still open inside those
 
@@ -103,7 +103,7 @@ now-honestly-named `h_ring_tdc`), 1 tiny (`Pb_valvetrain`)**.
 ## Tests
 
 ```
-python3 tests/test_physics.py        # 13 passed, 0 failed, 2 known defects
+python3 tests/test_physics.py        # 14 passed, 0 failed, 2 known defects
 python3 tools/audit_dead_signals.py  # diagnostic, reports only
 ```
 

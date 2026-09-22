@@ -3,7 +3,7 @@
 **Found while:** trying to measure known bug #10 (`render_transient`
 cross-fade seams), which needs a transient log as input
 **Lens:** QA1, SR1
-**Status:** diagnosed, not fixed
+**Status:** fixed — **root cause as first recorded was wrong**, corrected below
 **Severity:** a crash on an ordinary input, with a misleading error
 
 ---
@@ -98,3 +98,72 @@ the code, **not a measurement**, and should not be treated as one.
 One preset, one load profile. The stall threshold was not mapped, and whether
 other entry points (`durability_run`, `warmup`) share the missing floor is
 untested.
+
+
+---
+
+## Correction — the root cause above is wrong
+
+The section "Root cause" states the flywheel integration has **no floor at
+zero speed** and that rpm "integrates straight through zero into negative".
+That is incorrect. Reading `transient()` rather than inferring from a traceback:
+
+```python
+om = max(om, 2.0 * math.pi * 150.0 / 60.0)
+```
+
+**There is a floor, at 150 rpm.** rpm never goes negative. The earlier
+measurement recording `min=150.0` was the floor showing itself, and I
+misread it.
+
+### What actually happens
+
+Solving `crdi15` at 20% of the fuel limit, stepping down:
+
+| rpm | torque |
+|---|---|
+| 500 | −6.27 |
+| 400 | −14.48 |
+| 300 | −26.72 |
+| 250 | −35.64 |
+| **200** | **NaN** |
+| **150** | **NaN** |
+
+The solver is valid down to about 250 rpm — negative torque, friction exceeding
+indicated work, which is correct for a dying engine — and returns NaN from
+about 200 rpm down.
+
+So the real defect is two things together:
+
+1. **The floor is set inside the solver's failure region.** 150 rpm is below
+   where the solver stops working.
+2. **The floor cannot catch NaN.** `max(nan, x)` returns `nan` in Python, so
+   once the solver emits NaN torque, `om` becomes NaN and passes straight
+   through the clamp meant to bound it.
+
+The engine is held at 150 rpm, the solver is asked about a speed it cannot
+model, it answers NaN, and the NaN walks through the floor.
+
+### Fix
+
+- **Stall detection** at `max(300, 0.4 × idle_rpm)` — above the solver's
+  measured limit with margin, scaling with the engine. Below it the engine is
+  declared stalled, its logged rpm is 0, `stalled=True` is recorded, and
+  integration stops: a stalled diesel does not restart itself.
+- **Explicit non-finite guard** on the solver's torque, raising a
+  `RuntimeError` that names the rpm and time. It should never fire — the stall
+  check sits above the failure region — but if it does, it fails loudly at the
+  source rather than three frames downstream.
+- Every log entry now carries `stalled`.
+
+Verified: the lugging case now runs 756 → … → 342 → stalled, 14 entries, no
+NaN. The benign case (1500 rpm start, 20 N·m) is unchanged.
+
+### Why this correction is worth keeping visible
+
+This is the second root cause recorded this session that did not survive
+reading the code — after the trace-shape claim in FINDING-002. Both were
+inferred from a stack trace or a symptom rather than confirmed at the source.
+The measurements in every finding held; the *explanations* built on top of two
+of them did not. Worth treating inferred root causes as hypotheses until the
+code has been read.

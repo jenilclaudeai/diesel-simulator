@@ -163,6 +163,26 @@ def test_sharp_not_clamped():
           "6.0e6 pins sharp at its 3.0 ceiling")
 
 
+def test_transient_stalls_cleanly():
+    """
+    FINDING-012: lugging below stall used to return nan in the log and then
+    crash three frames downstream, because the 150 rpm floor sat inside the
+    solver's failure region and max(nan, floor) is nan. It must now stop with
+    stalled=True and no non-finite values.
+    """
+    import math
+    import warnings
+    warnings.filterwarnings("ignore")
+    eng = DieselEngine(preset="crdi15")
+    log = eng.transient(1.0, lambda t: 0.2, lambda t, rpm: 60.0,
+                        dt=0.02, n_cycles=3)
+    finite = all(math.isfinite(e["rpm"]) for e in log)
+    check("transient stall is clean",
+          1.0 if (finite and log[-1]["stalled"]) else 0.0, 1.0, 0.0,
+          f"{len(log)} steps, stalled={log[-1]['stalled']}, "
+          f"all finite={finite}")
+
+
 def test_no_pilot_double_count():
     """
     FINDING-001 P-1: the pilot's suppression of premixed burn must be
@@ -184,6 +204,7 @@ def main():
                test_cold_start_sharpens_dpdtheta,
                test_combustion_dpdtheta_responds,
                test_sharp_not_clamped,
+               test_transient_stalls_cleanly,
                test_no_pilot_double_count):
         try:
             fn()

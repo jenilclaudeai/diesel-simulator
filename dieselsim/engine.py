@@ -673,6 +673,14 @@ class DieselEngine:
         J = g.flywheel_inertia
         t = 0.0
         log = []
+        # FINDING-012: stall speed. The cycle solver returns finite torque
+        # down to ~250 rpm on crdi15 (negative -- friction exceeding
+        # indicated work, which is right for a dying engine) and NaN from
+        # ~200 rpm down. The previous floor clamped at 150 rpm, inside that
+        # failure region, and `max(nan, floor)` returns nan, so it could not
+        # catch what it was there to catch. A diesel has stopped well before
+        # either figure; declare a stall above the solver's limit instead.
+        rpm_stall = max(300.0, 0.4 * self.spec.idle_rpm)
         while t < duration:
             thr = float(throttle_fn(t))
             f_cmd = thr * self.fuel_limit(rpm)
@@ -682,15 +690,25 @@ class DieselEngine:
                             min(0.45, 0.02 * (self.spec.idle_rpm - rpm)))
             op = self.operating_point(rpm, fuel_mg=f_cmd, n_cycles=n_cycles)
             T_load = float(load_torque_fn(t, rpm))
+            if not math.isfinite(op.torque):
+                raise RuntimeError(
+                    f"transient: cycle solver returned non-finite torque at "
+                    f"{rpm:.1f} rpm, t={t:.3f} s. This is below the solver's "
+                    f"valid range; the stall check should have caught it.")
             om = 2.0 * math.pi * rpm / 60.0
             om += (op.torque - T_load) / J * dt
-            om = max(om, 2.0 * math.pi * 150.0 / 60.0)
             rpm = om * 60.0 / (2.0 * math.pi)
             self._update_oil(op, dt)
-            log.append(dict(t=t, rpm=rpm, throttle=thr, fuel=f_cmd,
-                            torque=op.torque, power=op.power,
+            stalled = rpm < rpm_stall
+            log.append(dict(t=t, rpm=0.0 if stalled else rpm, throttle=thr,
+                            fuel=f_cmd, torque=op.torque, power=op.power,
                             boost=op.boost_pr, turbo_rpm=op.turbo_rpm,
                             T_load=T_load, smoke=op.soot_g_h,
-                            afr=op.cycle.afr, bsfc=op.bsfc, op=op))
+                            afr=op.cycle.afr, bsfc=op.bsfc, op=op,
+                            stalled=stalled))
+            if stalled:
+                # a stalled diesel does not restart itself; stop integrating
+                # rather than asking the solver about speeds it cannot model
+                break
             t += dt
         return log
