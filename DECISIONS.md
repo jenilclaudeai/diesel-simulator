@@ -451,3 +451,33 @@ Load cost: 2.9–5.1 s for the runtime plus numpy in this container.
   robust in direction and rough in magnitude.
 
 Reproduce with `tools/pyodide/` — see its README.
+
+### ADR-001 — Measured, part 2: the grid builds in the browser too
+
+The first measurement covered single operating points. The real-time grid is
+the thing Expert mode actually rebuilds, and it additionally calls
+`EngineSound.build_sources()` — in `acoustics.py`, which imported `scipy` at
+**module level**. So the grid path was unimportable under a numpy-only Pyodide
+even though `build_sources()` never runs any scipy code.
+
+Fixed by deferring the import (`_LazySignal`); call sites and native behaviour
+unchanged. The grid cell moved from `play.py` (which imports `termios` and can
+never run in a browser) into `dieselsim/grid.py`, so native and browser share
+one implementation. Refactor verified **bit-identical** natively: 0 of 64
+performance values and 0 of 24 source arrays differ.
+
+Same cell, `crdi15` 1800 rpm load 0.6, built under Pyodide against native:
+
+| | result |
+|---|---|
+| 16 performance values (float64) | worst relative diff 4.8e-10 |
+| 8,640 source samples (float32) | 8,624 bit-identical (99.81%); the rest differ by one float32 rounding step, ≤5.5e-8 of scale |
+| scipy imported | no |
+
+**PLAN Phase 2's exit criterion — "a grid built in-browser matches one built by
+native Python within tolerance" — is met at cell level**, in Node's Pyodide. Not
+yet at full-grid level, and not yet in a browser.
+
+`tests/test_physics.py` now fails if any `dieselsim/` module imports scipy at
+module level. Mutation-tested: reintroducing the import is caught and the file
+and line are named. Static, because the suite also runs under Pyodide.

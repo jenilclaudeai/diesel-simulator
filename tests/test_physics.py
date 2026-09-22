@@ -183,6 +183,38 @@ def test_transient_stalls_cleanly():
           f"all finite={finite}")
 
 
+def test_package_is_numpy_only_at_import():
+    """
+    ADR-001: the browser runs the solver under a numpy-only Pyodide, and the
+    real-time grid must build there too. That holds only while no module in
+    dieselsim/ imports scipy at MODULE level -- acoustics.py used to, which
+    made the whole grid path unimportable in the browser even though no scipy
+    code ran. Imports inside functions, or the _LazySignal shim, are fine.
+
+    Static rather than a subprocess test, because this suite also runs under
+    Pyodide (tools/pyodide), where subprocesses do not exist.
+    """
+    import ast
+    pkg = os.path.join(os.path.dirname(__file__), "..", "dieselsim")
+    offenders = []
+    for fn in sorted(os.listdir(pkg)):
+        if not fn.endswith(".py"):
+            continue
+        with open(os.path.join(pkg, fn)) as fh:
+            tree = ast.parse(fh.read())
+        for node in tree.body:                      # module level only
+            names = []
+            if isinstance(node, ast.Import):
+                names = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names = [node.module]
+            if any(n.split(".")[0] == "scipy" for n in names):
+                offenders.append(f"{fn}:{node.lineno}")
+    check("no module-level scipy import in dieselsim/",
+          0.0 if offenders else 1.0, 1.0, 0.0,
+          ", ".join(offenders) if offenders else "numpy-only at import")
+
+
 def test_no_pilot_double_count():
     """
     FINDING-001 P-1: the pilot's suppression of premixed burn must be
@@ -205,6 +237,7 @@ def main():
                test_combustion_dpdtheta_responds,
                test_sharp_not_clamped,
                test_transient_stalls_cleanly,
+               test_package_is_numpy_only_at_import,
                test_no_pilot_double_count):
         try:
             fn()

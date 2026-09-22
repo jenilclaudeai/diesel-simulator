@@ -28,7 +28,29 @@ import wave
 from dataclasses import dataclass, field
 
 import numpy as np
-from scipy import signal
+class _LazySignal:
+    """
+    scipy.signal, imported on first use rather than at module import.
+
+    Only the DSP helpers (_resonator, _bandpass, _lowpass, _highpass),
+    render() and spectrum() need scipy. build_sources() -- which the real-time
+    grid calls for every cell -- does not. With a top-level import, merely
+    importing this module required scipy, so a grid could not be built under a
+    numpy-only Pyodide even though no scipy code would ever run.
+
+    Deferring the import keeps every call site unchanged and native behaviour
+    identical, and lets the browser build grids without shipping scipy.
+    """
+    _mod = None
+
+    def __getattr__(self, name):
+        if _LazySignal._mod is None:
+            from scipy import signal as _s
+            _LazySignal._mod = _s
+        return getattr(_LazySignal._mod, name)
+
+
+signal = _LazySignal()
 
 C_AIR_STP = 343.0
 RHO_AIR = 1.20

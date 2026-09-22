@@ -18,8 +18,14 @@ agree with native CPython to ~1e-10 relative. Warm, it is **~1.7× slower** than
 native, not the 3–8× ADR-001 assumed; the first solve in a fresh worker is
 ~3.4×. `scipy` is never imported.
 
+**The grid builds under Pyodide too.** `acoustics.py`'s module-level scipy
+import made the grid path unimportable in the browser; it is now lazy, and the
+grid cell lives in `dieselsim/grid.py`, shared by native and browser. A cell
+built under Pyodide matches native to 4.8e-10 (performance) and 99.81%
+bit-identical float32 sources. Phase 2's exit criterion is met at cell level.
+
 Reproduce: `tools/pyodide/` → `npm install && npm run suite`. See ADR-001,
-*Measured*, for the numbers.
+*Measured* parts 1 and 2.
 
 ## Where things stand
 
@@ -115,7 +121,7 @@ now-honestly-named `h_ring_tdc`), 1 tiny (`Pb_valvetrain`)**.
 ## Tests
 
 ```
-python3 tests/test_physics.py        # 14 passed, 0 failed, 2 known defects
+python3 tests/test_physics.py        # 15 passed, 0 failed, 2 known defects
 python3 tools/audit_dead_signals.py  # diagnostic, reports only
 ```
 
