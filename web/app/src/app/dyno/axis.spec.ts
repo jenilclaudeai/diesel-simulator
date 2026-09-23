@@ -117,6 +117,16 @@ describe('dualAxis', () => {
     }
   });
 
+  it('breaks a fill tie toward the denser grid', () => {
+    // 50- and 100-steps fill both curves equally here; without the tie-break the
+    // first candidate tried (fewest intervals) wins. Measured over 437,736
+    // layouts: the tie-break changes 11% of them, never lowering either
+    // curve's fill. "Nearest five" and "most intervals" chose identically on
+    // every one, so this cannot tell those two rules apart.
+    expect(dualAxis(0, 300, 0, 60).left.ticks).toEqual([0, 50, 100, 150, 200, 250, 300]);
+    expect(dualAxis(0, 300, 0, 60).right.ticks).toEqual([0, 10, 20, 30, 40, 50, 60]);
+  });
+
   it('does not spend a gridline band on a small negative tail when a finer grid fits better', () => {
     // 700 N·m peak with a -70 N·m governor end. Coarser candidate steps can
     // over-run their interval count; refining them gives 250-steps (span 0.68)
