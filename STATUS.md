@@ -31,6 +31,11 @@ per grid cell. Three hazards found and fixed on the way — silently ignored
 override typos, aliased registered presets, and Python output lost in worker
 threads. ADR-010 lists three decisions that need input.
 
+**Grids are cached** (REVIEW-001 M-2 and M-3 closed). Keyed on the engine and
+a fingerprint of the physics, so a solver change invalidates old grids. A hit
+never boots Pyodide: 0.4 ms against 8.8 s for a real miss. TypeScript and
+Python compute the fingerprint identically, verified against the real worker.
+
 Reproduce: `tools/pyodide/` → `npm run suite`; `web/solver/` → `npm test`.
 
 ## Where things stand

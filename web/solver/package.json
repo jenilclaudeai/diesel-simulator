@@ -5,13 +5,15 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "tsc -p tsconfig.json && node dist/test/roundtrip.test.js"
+    "test": "tsc -p tsconfig.json && node dist/test/cache.test.js && node dist/test/roundtrip.test.js",
+    "test:fast": "tsc -p tsconfig.json && node dist/test/cache.test.js"
   },
   "dependencies": {
     "pyodide": "314.0.7"
   },
   "devDependencies": {
     "@types/node": "^22.20.4",
+    "fake-indexeddb": "^6.2.5",
     "typescript": "^5.9.3"
   }
 }
