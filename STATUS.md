@@ -30,6 +30,34 @@ Measured at the start of session 4 against `git log` and `gh pr list`:
   (macOS, Python 3.12). Container-specific notes under Housekeeping are marked
   as such rather than deleted.
 
+### What session 4 did
+
+- **PR #15** (this file) rebased onto `main` and brought up to date; CI 4/4
+  green. **Merging it needs a human**: Claude Code's permission check blocks
+  merging a PR without review. The rule above is therefore "the human merges
+  the STATUS PR before the session ends".
+- **PR #17 — the dyno axis fix**, verified end to end on the Mac:
+  `ng test` 14 passed; `build:pages` builds; e2e **12 passed, 0 failed** in
+  real Chrome, with 800 / 2900 / 4600 rpm matching native Python (87.3 /
+  223.2 / −25.1 N·m); screenshot shows 250 / 100 tops, round labels, shared
+  gridlines, zero aligned.
+- **The surviving tie-break mutant was untested code, not dead code.**
+  Disabling it changes 48,280 of 437,736 layouts (11%), never lowering either
+  curve's fill (7,695 equal, 385 better, 0 worse). New test added; mutation
+  3 of 5 caught against a passing baseline. The two survivors both reduce to
+  "most intervals wins a tie", which chose identically to "nearest five" on
+  every input — equivalent over the measured range, recorded as such, not as
+  caught.
+- **PR #18 — `web/app` in CI**, stacked on #17: `ng test` + `build:pages`.
+  Dry-run in a fresh clone; a broken spec and a type error each exit 1.
+  E2e is not in CI yet.
+- **Found:** `web/app` does not build unless `web/solver` has had `npm ci`
+  (it compiles `../solver/src` and needs the `pyodide` types) — TS2307
+  otherwise. Undocumented until now; the CI job does both.
+- **Found:** `NATIVE_REF` for the e2e check was undocumented, and without it
+  the check compares nothing against native Python and still passes (9
+  checks, not 11–12). How to produce it is under Tests below.
+
 ---
 
 ## Phase 2 — state
@@ -173,9 +201,26 @@ python3 tools/audit_dead_signals.py              # diagnostic; 0 dead, 1 frozen,
 cd tools/pyodide && npm ci && npm run suite      # the same suite under Pyodide
 cd web/solver && npm ci && npm run test:fast     # 20 cache tests, seconds
 cd web/solver && npm test                        # + the round trip through a real worker
+cd web/solver && npm ci                          # BEFORE any web/app build: the app compiles ../solver/src
+cd web/app && npm test -- --watch=false          # 14 unit tests (vitest), once #17 is merged
 cd web/app && npm run build:pages                # never plain `build`
-cd web/app && npm run e2e                        # 11 browser checks
+cd web/app && NATIVE_REF='...' CHROME_PATH=... npm run e2e   # 12 browser checks with 3 reference points
 ```
+
+**e2e needs `NATIVE_REF`** or it silently skips the native comparison and
+passes on the other 9 checks. It is `{"<rpm>": torque}` for points on the page's
+default `crdi15` full-load pull, computed natively the way the page does it (a
+fresh engine per point, `load=1`, `n_cycles=9`):
+
+```bash
+python3 -c 'import json; from dieselsim import bridge as b
+print(json.dumps({r: json.loads(b.solve_point(json.dumps({"engine": {"preset": "crdi15"}, "rpm": r, "load": 1})))["torque"] for r in (800, 2900, 4600)}))'
+```
+
+Session 4 values: `{"800": 87.2755, "2900": 223.2136, "4600": -25.1289}`. The
+rpms must be on the page's sweep (idle to max in 10 steps, rounded to 50) or a
+check fails as "no row". On macOS, `CHROME_PATH="/Applications/Google
+Chrome.app/Contents/MacOS/Google Chrome"`.
 
 Golden points are locked at 0.5%. They were re-baselined after FINDING-001 P-2
 with the justification recorded inline — torque and BSFC moved under 1%, p_max
@@ -196,8 +241,11 @@ a dead branch.
 
 | PR | branch | contents | state |
 |---|---|---|---|
-| #15 | `docs/status-session-3` | this file; FINDING status lines | merging in session 4 |
-| — | `fix/dyno-axis-ticks` | nice-number dyno axes; `ng test` runs | session 4: verify, PR |
+| #15 | `docs/status-session-3` | this file; FINDING status lines | CI green; **merge first** |
+| #17 | `fix/dyno-axis-ticks` | nice-number dyno axes; `ng test` runs; tie-break test | CI 4/4 green |
+| #18 | `ci/web-app` | `web-app` CI job — **stacked on #17** | CI 5/5 green; new job ran 14 tests + Pages build in 32 s |
+
+Merge order: #15, then #17, then retarget #18 to `main` and merge it.
 
 Merged earlier: #5 `physics/verified-fixes`, #6 `audio/physical-levels`
 (**not yet listened to** — revert that merge if the mix is wrong), #7 the
@@ -210,11 +258,11 @@ bug-8 audit, #8–#14 the Phase 2 stack, #16 `CLAUDE.md`.
 Session 3's list, with what has happened since. Items 1–3 are session 4's work.
 
 1. ~~**Merge the stack** once #14 is green.~~ Done — #8–#14 merged, CI green.
-2. **Chart axis scaling** in `web/app/src/app/dyno/dyno.ts` — written on
-   `fix/dyno-axis-ticks`, not yet verified end to end. Run `build:pages` and
-   e2e; resolve the surviving tie-break-toward-5 mutant; open the PR.
-3. **Put `web/app` in CI** — stacked on 2, because `ng test` only runs after
-   that branch's `angular.json` fix.
+2. ~~**Chart axis scaling**~~ — verified in session 4 and opened as **#17**;
+   awaiting merge.
+3. ~~**Put `web/app` in CI**~~ — **#18**, stacked on #17; awaiting merge.
+   Follow-up: add the browser e2e check to CI (needs Chrome on the runner and
+   a `NATIVE_REF` step).
 4. **Listen to the audio** — the warm-vs-cold pair at load 0.6 matters most.
 5. **FINDING-005**: chase cam boundary friction, or state that roller cams
    genuinely barely wear. Test on `hd_i6` / `single` (mechanical lash).
@@ -232,6 +280,12 @@ Session 3's list, with what has happened since. Items 1–3 are session 4's work
 - **The PAT has been pasted into chat in every session. Revoke it** and issue
   a fresh fine-grained token; keep it out of any handoff document. Give the
   next one **Checks: read** (and Actions: read) so CI results are visible.
+- **Node on the Mac used from session 4:** `node` on PATH is Homebrew
+  `node@20` (20.19.0) and Homebrew `node` is 24.2.0 — both below Angular 22's
+  minimum (22.22.3 / 24.15.0), and the CLI refuses to start. Session 4 used a
+  checksum-verified portable Node 22.23.3 in
+  `~/.cache/dieselsim/node-v22.23.3-darwin-arm64/` (prepend its `bin` to PATH).
+  System Node was left untouched; upgrading it is the owner's call.
 - **Dev-container notes (sessions 1–3; not re-measured on the Mac used from
   session 4).** The next two bullets were measured in that container.
 - **Background jobs in the dev container must be detached with
