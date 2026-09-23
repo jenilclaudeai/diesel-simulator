@@ -35,7 +35,7 @@ class FakeSolver implements SolverPort {
   constructor(private readonly hash: string) {}
   async ready(): Promise<RuntimeInfo> {
     this.readies++;
-    return { source_hash: this.hash, contract: 1, python: "x", numpy: "x", presets: [], grid_cycles: 9, source_keys: [], load_s: 0 };
+    return { source_hash: this.hash, contract: 1, python: "x", numpy: "x", presets: [], preset_info: {}, grid_cycles: 9, source_keys: [], load_s: 0 };
   }
   async solvePoint(): Promise<PointResult> { throw new Error("not used"); }
   async buildGrid(req: GridRequest) { this.builds++; return fakeGrid(req); }

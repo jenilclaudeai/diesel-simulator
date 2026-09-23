@@ -271,6 +271,46 @@ def test_no_pilot_double_count():
           "reintroducing the 0.55 multiplier double-counts the pilot")
 
 
+def test_runtime_info_describes_every_preset():
+    """
+    The web app labels engines and chooses the dyno rpm range from
+    runtime_info()["preset_info"] without solving anything. Every preset
+    must be described, and the description must agree with the spec: a
+    unit slip here (m^3 vs L) or a swapped rpm field draws a wrong sweep
+    with no error. Displacement is cross-checked against bore and stroke,
+    not against the property the bridge itself reads.
+    """
+    import json
+    import math
+    from dieselsim import bridge
+    from dieselsim.config import PRESETS
+    info = json.loads(bridge.runtime_info())
+    described = info.get("preset_info", {})
+    problems = []
+    if sorted(described) != sorted(info["presets"]):
+        problems.append(f"described {sorted(described)} != presets {sorted(info['presets'])}")
+    for key in info["presets"]:
+        d = described.get(key)
+        if d is None:
+            continue
+        spec = PRESETS[key]()
+        g = spec.geom
+        for f in ("idle_rpm", "rated_rpm", "max_rpm"):
+            if d[f] != float(getattr(spec, f)):
+                problems.append(f"{key}: {f} {d[f]} vs spec {getattr(spec, f)}")
+        disp_l = math.pi / 4 * g.bore ** 2 * g.stroke * g.n_cyl * 1000.0
+        if abs(d["displacement_l"] - disp_l) > 1e-9 * disp_l:
+            problems.append(f"{key}: {d['displacement_l']} L vs {disp_l} L from bore/stroke")
+        if d["n_cyl"] != g.n_cyl:
+            problems.append(f"{key}: n_cyl {d['n_cyl']} vs {g.n_cyl}")
+        if not 0 < d["idle_rpm"] < d["rated_rpm"] <= d["max_rpm"]:
+            problems.append(f"{key}: rpm order idle {d['idle_rpm']} rated {d['rated_rpm']} max {d['max_rpm']}")
+        if not d["name"]:
+            problems.append(f"{key}: empty name")
+    check("runtime_info describes every preset", 0.0 if problems else 1.0,
+          1.0, 0.0, "; ".join(problems) or f"{len(described)} presets")
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -281,7 +321,8 @@ def main():
                test_package_is_numpy_only_at_import,
                test_override_typo_rejected,
                test_registered_preset_not_aliased,
-               test_no_pilot_double_count):
+               test_no_pilot_double_count,
+               test_runtime_info_describes_every_preset):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001
