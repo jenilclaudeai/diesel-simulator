@@ -215,6 +215,47 @@ def test_package_is_numpy_only_at_import():
           ", ".join(offenders) if offenders else "numpy-only at import")
 
 
+def test_override_typo_rejected():
+    """
+    batch._apply used a bare setattr, so "turbo.turbin_area_eff" silently
+    created a new attribute and a sweep reported 'no effect'. Overrides are
+    now validated: unknown paths, type mismatches and non-finite values raise.
+    """
+    from dieselsim.config import PRESETS
+    from dieselsim.overrides import OverrideError, apply_overrides
+    caught = 0
+    for bad in ({"turbo.turbin_area_eff": 1.0},      # typo
+                {"afr_limit": "18"},                  # wrong type
+                {"afr_limit": float("nan")}):         # non-finite
+        try:
+            apply_overrides(PRESETS["crdi15"](), bad)
+        except OverrideError:
+            caught += 1
+    spec = apply_overrides(PRESETS["crdi15"](), {"turbo.turbine_area_eff": 5e-4})
+    ok = caught == 3 and spec.turbo.turbine_area_eff == 5e-4
+    check("bad overrides rejected, good ones applied", 1.0 if ok else 0.0,
+          1.0, 0.0, f"{caught}/3 rejected")
+
+
+def test_registered_preset_not_aliased():
+    """
+    builder.register stored `lambda s=spec: s`, so every lookup returned the
+    same object and a mutation -- a rating override, an edit -- leaked into
+    every later lookup. Fatal in a long-lived browser worker. Each lookup must
+    now be an independent copy, like the built-in factories.
+    """
+    from dieselsim.builder import register
+    from dieselsim.config import PRESETS
+    register("_alias_probe", PRESETS["crdi15"]())
+    a = PRESETS["_alias_probe"]()
+    a.torque_limit = 123.0
+    leaked = PRESETS["_alias_probe"]().torque_limit == 123.0
+    del PRESETS["_alias_probe"]
+    check("registered presets are independent copies",
+          0.0 if leaked else 1.0, 1.0, 0.0,
+          "mutation leaked" if leaked else "no leak")
+
+
 def test_no_pilot_double_count():
     """
     FINDING-001 P-1: the pilot's suppression of premixed burn must be
@@ -238,6 +279,8 @@ def main():
                test_sharp_not_clamped,
                test_transient_stalls_cleanly,
                test_package_is_numpy_only_at_import,
+               test_override_typo_rejected,
+               test_registered_preset_not_aliased,
                test_no_pilot_double_count):
         try:
             fn()

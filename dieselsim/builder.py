@@ -42,6 +42,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import copy
 from dataclasses import asdict
 
 from .config import (AirPath, Cooling, EngineSpec, Geometry, Injection,
@@ -243,8 +244,13 @@ def build_engine(name: str,
 # registration and files
 # ==========================================================================
 def register(key: str, spec: EngineSpec):
-    """Make a spec available everywhere as PRESETS[key]."""
-    PRESETS[key] = lambda s=spec: s
+    """Make a spec available everywhere as PRESETS[key].
+
+    Returns a deep copy per lookup, like the built-in preset factories do.
+    It used to return the same object every time, so any mutation -- a rating
+    override, a spec edit -- leaked into every later lookup of that preset,
+    which in a long-lived browser worker means into the next request."""
+    PRESETS[key] = lambda s=spec: copy.deepcopy(s)
     return key
 
 

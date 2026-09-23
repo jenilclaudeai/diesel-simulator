@@ -1,0 +1,17 @@
+{
+  "name": "@dieselsim/solver",
+  "private": true,
+  "description": "SolverPort: the one seam between the UI and the Python solver (ADR-001). Framework-free so it is testable without Angular.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "tsc -p tsconfig.json && node dist/test/roundtrip.test.js"
+  },
+  "dependencies": {
+    "pyodide": "314.0.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "typescript": "^5.9.3"
+  }
+}
