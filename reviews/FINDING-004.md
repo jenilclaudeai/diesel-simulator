@@ -3,7 +3,7 @@
 **Opened by:** FINDING-003, where a fully cold engine with 255% more friction
 rendered 11% *quieter*
 **Lens:** PHY1, QA2
-**Status:** diagnosed, not fixed — this is architectural
+**Status:** fixed — PR #6 (`audio/physical-levels`). **Not yet listened to**; see STATUS.md. *(Updated 2026-09-23: this line was not updated when the fix landed, and read "diagnosed, not fixed — this is architectural" until then.)*
 **Severity:** highest of the four findings
 
 ## Symptom

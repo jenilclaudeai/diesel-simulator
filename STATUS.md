@@ -1,56 +1,63 @@
 # Status
 
-**Updated:** 2026-09-09 (session 2)
-**Phase:** 2 — started. ADR-001 validated: the solver runs unmodified under Pyodide
-**Branch:** `fix/physical-source-levels` (stacked, see Branches below)
+**Updated:** 2026-09-23 (session 3)
+**Phase:** 2 — mostly done. Python runs in the browser, the SolverPort exists,
+grids are cached, CI runs, and the first web page (a dyno pull) works end to end.
+**Stack tip:** `phase2/web-app` (PRs #8–#14, see Branches below)
 
 Read this first in a new session, then `PLAN.md`, then `DECISIONS.md`, then
 `reviews/`. Those replace pasting a context document.
 
 ---
 
-## Phase 2 — first result
+## Phase 2 — state
 
 **ADR-001 is validated by measurement.** The unmodified solver runs under
-Pyodide 314.0.7 (Python 3.14.2, numpy 2.4.6) and the **full regression suite
-passes there — 14 passed, 0 failed**, identical to native. Single-point results
-agree with native CPython to ~1e-10 relative. Warm, it is **~1.7× slower** than
-native, not the 3–8× ADR-001 assumed; the first solve in a fresh worker is
-~3.4×. `scipy` is never imported.
+Pyodide 314.0.7 (Python 3.14.2, numpy 2.4.6); the full regression suite passes
+there, identical to native. Single-point results agree with native CPython to
+~1e-10 relative. Warm, ~1.7× slower than native; ~3.4× on a fresh worker's
+first solve. `scipy` is never imported.
 
-**The grid builds under Pyodide too.** `acoustics.py`'s module-level scipy
-import made the grid path unimportable in the browser; it is now lazy, and the
-grid cell lives in `dieselsim/grid.py`, shared by native and browser. A cell
-built under Pyodide matches native to 4.8e-10 (performance) and 99.81%
-bit-identical float32 sources. Phase 2's exit criterion is met at cell level.
+**The grid builds under Pyodide too.** The grid cell lives in
+`dieselsim/grid.py`, shared by native and browser; a cell built under Pyodide
+matches native to 4.8e-10 (performance) and 99.81% bit-identical float32
+sources. Phase 2's exit criterion is met at cell level — not yet at full-grid
+level in a real browser.
 
-**The SolverPort exists and works end to end** (`web/solver/`, ADR-010,
-*Proposed*). Main-thread client → real worker loop → Pyodide → unmodified
-dieselsim: 16/16 tests, native agreement 1.55e-10, typed errors, cancellation
-per grid cell. Three hazards found and fixed on the way — silently ignored
-override typos, aliased registered presets, and Python output lost in worker
-threads. ADR-010 lists three decisions that need input.
+**The SolverPort exists** (`web/solver/`, ADR-010, Accepted). Main-thread
+client → real worker loop → Pyodide → unmodified dieselsim. Typed errors,
+cancellation per grid cell.
 
-**Grids are cached** (REVIEW-001 M-2 and M-3 closed). Keyed on the engine and
-a fingerprint of the physics, so a solver change invalidates old grids. A hit
-never boots Pyodide: 0.4 ms against 8.8 s for a real miss. TypeScript and
-Python compute the fingerprint identically, verified against the real worker.
+**Grids are cached** (REVIEW-001 M-2, M-3 closed). Keyed on engine + a
+fingerprint of the physics sources; a hit never boots Pyodide (0.4 ms vs 8.8 s).
 
-Reproduce: `tools/pyodide/` → `npm run suite`; `web/solver/` → `npm test`.
+**The first web page exists** (`web/app/`, Angular 22.1.7, zoneless, signals,
+OnPush). A dyno pull: pick an engine, torque and power draw in as each point is
+solved by Python in a worker. Build with `npm run build:pages` — a plain
+`build` renders a blank page on GitHub Pages. 11 e2e browser checks.
 
-**Pull requests #8–#12 are open** as a stack, one commit each, merge bottom-up.
-The repo does not auto-delete merged branches, so each child PR must be
-retargeted to `main` after its parent merges.
+**CI runs** (`.github/workflows/ci.yml`: native Python 3.10 + 3.12, the suite
+under Pyodide, the SolverPort end to end) on every PR, including stacked ones.
+The handoff believed it had never run; PR mergeable states show it had: #13
+`clean`, #14 `unstable`. #14 was failing — see *Session 3* below.
+**`web/app` is not in CI**: neither `build:pages` nor the e2e checks.
 
-**CI is active** (`.github/workflows/ci.yml`). Three jobs — native Python on 3.10 and 3.12, the same
-suite under Pyodide, and the TypeScript solver end to end. Verified locally,
-including a full 3.10 run.
+### Session 3 — PR #14 was red, and CI had said so
+
+#14 made `RuntimeInfo.preset_info` required but did not update the
+`FakeSolver` in `web/solver/test/cache.test.ts`, so `tsc` failed before any
+test ran (`TS2741`). The parent branch passes 20/20. CI caught it; nobody could
+read the result with the token in use. Fixed, and `preset_info` — which the
+dyno page uses to label engines and choose its rpm sweep — now has a native
+test that cross-checks displacement against bore and stroke and each rpm field
+against the spec. Mutation-tested: 4 of 4 applied mutants caught (an initial
+version let `rated_rpm = max_rpm` through; tightened).
 
 ## Where things stand
 
-Architecture is decided (ADR-001 to ADR-009, with ADR-006 on hold). No frontend
-code exists yet. The Python physics has been through a review pass that
-produced six findings, five fixes, a regression suite and a standing audit tool.
+Architecture is decided (ADR-001 to ADR-010, with ADR-006 on hold). The Python
+physics has been through a review pass that produced twelve findings, nine
+fixes, a regression suite and a standing audit tool.
 
 ### The pattern that came out of it
 
@@ -125,10 +132,9 @@ now-honestly-named `h_ring_tdc`), 1 tiny (`Pb_valvetrain`)**.
 
 ## Also found, not yet actioned
 
-- **Trace arrays are shape-inconsistent.** `traces.p` is per-cylinder 2D while
-  `traces.theta` is 1D, and at load 1.0 their lengths differ (1430 vs 720).
-  Hit twice while writing diagnostics. **Resolve before the Angular cycle page
-  consumes traces.**
+- **Trace arrays index two crank-angle references** — diagnosed as FINDING-008
+  (per-cylinder local vs global engine angle). The fix is an API-contract
+  decision. **Resolve before the Angular cycle page consumes traces.**
 - **ADR-006 is on hold** and should be reassessed now that FINDINGs 001–004
   have changed the numbers it was decided on.
 - **`SPL_CAL` and the 5.0e9 clatter divisor are chosen constants.** The package
@@ -140,8 +146,13 @@ now-honestly-named `h_ring_tdc`), 1 tiny (`Pb_valvetrain`)**.
 ## Tests
 
 ```
-python3 tests/test_physics.py        # 17 passed, 0 failed, 2 known defects
-python3 tools/audit_dead_signals.py  # diagnostic, reports only
+python3 tests/test_physics.py                    # 18 passed, 0 failed, 2 known defects
+python3 tools/audit_dead_signals.py              # diagnostic; 0 dead, 1 frozen, 1 tiny
+cd tools/pyodide && npm ci && npm run suite      # the same suite under Pyodide
+cd web/solver && npm ci && npm run test:fast     # 20 cache tests, seconds
+cd web/solver && npm test                        # + the round trip through a real worker
+cd web/app && npm run build:pages                # never plain `build`
+cd web/app && npm run e2e                        # 11 browser checks
 ```
 
 Golden points are locked at 0.5%. They were re-baselined after FINDING-001 P-2
@@ -156,44 +167,59 @@ UNEXPECTED PASS, which is the signal to promote it to a real assertion.
 
 ## Branches
 
-Split by whether the change can be validated numerically.
+Everything below `main` is one open stack; each PR targets the branch beneath
+it and shows only its own commits. **Merge bottom-up.** The repo does not
+auto-delete merged branches, so after each merge retarget the next PR to
+`main` or it merges into a dead branch.
 
-| branch | contents | validated by |
+| PR | branch | contents |
 |---|---|---|
-| `physics/verified-fixes` | P-2 premix, motored pressure, `dpdtheta_comb`, roller `Pb_vt`, `h_ring_mid`, audit tool, tests | regression suite, 12 passed 0 failed |
-| `audio/physical-levels` | all `acoustics.py` changes — clatter source, `sharp` divisor, physical source levels | **ear only** |
+| #8 | `fix/grid-build-accuracy` | FINDING-011 — per-cell fresh engines |
+| #9 | `phase2/pyodide-harness` | ADR-001 measured |
+| #10 | `phase2/grid-cell-in-package` | grid cell in `dieselsim/grid.py`; lazy scipy |
+| #11 | `phase2/solver-port` | SolverPort, ADR-010 |
+| #12 | `phase2/grid-cache` | grid cache |
+| #13 | `ci/github-actions` | CI workflow + lockfiles |
+| #14 | `phase2/web-app` | the dyno page; session-3 test fix |
 
-The audio branch depends on `physics/verified-fixes` for `p_motored` and
-`dpdtheta_comb`, so merge that first.
-
-The four earlier stacked branches (`fix/premix-from-delay-injection`,
-`fix/combustion-dpdtheta`, `test/cold-oil-and-coolant`,
-`fix/physical-source-levels`) are superseded by this split and can be deleted
-once it lands.
+Merged earlier: #5 `physics/verified-fixes`, #6 `audio/physical-levels`
+(**not yet listened to** — revert that merge if the mix is wrong), #7 the
+bug-8 audit.
 
 ---
 
 ## Next actions
 
-1. **Listen to the audio pair** before merging branch 4. It is the one change
-   here that cannot be validated numerically.
-2. Decide whether FINDING-005's remaining cam-wear insensitivity is worth
-   chasing, or whether roller cams genuinely barely wear and the durability
-   story should say so.
-3. Fix the trace shape inconsistency before any UI work.
-4. Reassess ADR-006 against the new combustion numbers.
-5. Then Phase 2 — `SolverPort` and the Pyodide worker.
+1. **Merge the stack** once #14 is green.
+2. **Chart axis scaling** in `web/app/src/app/dyno/dyno.ts` — a 235 N·m peak
+   gets a 500 axis and non-round ticks. Needs nice-number ticks (1/2/5 × 10ⁿ).
+3. **Put `web/app` in CI**: `build:pages` at least.
+4. **Listen to the audio** — the warm-vs-cold pair at load 0.6 matters most.
+5. **FINDING-005**: chase cam boundary friction, or state that roller cams
+   genuinely barely wear. Test on `hd_i6` / `single` (mechanical lash).
+6. **Bug #3** re-measure after FINDING-007; **#10** still unmeasured;
+   **#11** untouched.
+7. **FINDING-008** contract decision before any cycle page.
+8. **Reassess ADR-006** against the post-FINDING-001–004 numbers.
+9. Then **Phase 3** — real-time loop in TypeScript; manual gearbox needs a
+   clutch model that does not exist yet.
 
 ---
 
 ## Housekeeping
 
-- The GitHub PAT used in these sessions appears in chat history. **Revoke it**
-  and issue a fresh fine-grained token.
-- Solve time in the dev container is ~10 s against 1.47 s on developer
-  hardware. **Do not benchmark Pyodide here.**
+- **The PAT has been pasted into chat in every session. Revoke it** and issue
+  a fresh fine-grained token; keep it out of any handoff document. Give the
+  next one **Checks: read** (and Actions: read) so CI results are visible.
+- **Background jobs in the dev container must be detached with
+  `setsid nohup … < /dev/null &`.** Plain `nohup … &` is killed when the tool
+  call returns — measured in session 3 (a 30 s sleep did not survive; the
+  `setsid` twin did). Earlier sessions' advice to use plain `nohup` is wrong.
+- Solve time in the dev container is ~6.5 s against 1.47 s on developer
+  hardware, one core. **Do not benchmark Pyodide here**, and never run two
+  heavy jobs at once.
 - The solver needs **numpy only**; `scipy.signal` is confined to `acoustics.py`
-  and `play.py`, both being ported to TypeScript.
+  and `play.py`. A test enforces this.
 - `batch.py` imports `multiprocessing`, which does not exist in Pyodide.
-- Working style: ask rather than assume; options come with trade-offs; warn
-  before context budget limits.
+- Working style: measure before fixing; ask rather than assume; options come
+  with trade-offs and positives; warn before context budget limits.

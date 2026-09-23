@@ -2,7 +2,7 @@
 
 **Opened by:** FINDING-004's fix, which made source levels physical and then
 showed a worn engine rendering *quieter* than a new one
-**Status:** diagnosed, not fixed
+**Status:** roller `Pb_vt` fixed — PR #5. **Still open**: that fix is necessary but not sufficient (see the end of this file). *(Updated 2026-09-23: this line was not updated when the fix landed, and read "diagnosed, not fixed" until then.)*
 **Confirms:** the second half of known bug #9
 
 ## Measurement
