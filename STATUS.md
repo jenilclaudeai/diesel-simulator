@@ -1,12 +1,34 @@
 # Status
 
-**Updated:** 2026-09-23 (session 3)
+**Updated:** 2026-09-24 (session 4)
 **Phase:** 2 — mostly done. Python runs in the browser, the SolverPort exists,
 grids are cached, CI runs, and the first web page (a dyno pull) works end to end.
-**Stack tip:** `phase2/web-app` (PRs #8–#14, see Branches below)
+**Main:** everything through PR #16 is merged; CI on `main` is green. Open work
+is listed under Branches below.
 
 Read this first in a new session, then `PLAN.md`, then `DECISIONS.md`, then
-`reviews/`. Those replace pasting a context document.
+`reviews/`. Those replace pasting a context document. `CLAUDE.md` says the same
+for Claude Code sessions.
+
+---
+
+## Session 4 — the handoff had drifted again
+
+Measured at the start of session 4 against `git log` and `gh pr list`:
+
+- `STATUS.md` on `main` was still the **session-2** version (2026-09-09): "no
+  frontend code exists yet", PRs #8–#12 "open". The session-3 rewrite existed
+  but sat unmerged in PR #15 — so the failure `CLAUDE.md` warns about happened
+  to the very file that fixes it. **Merge the STATUS update in the same session
+  that writes it.**
+- The session-3 text below already assumed the stack was open; by the time it
+  was read, #8–#14 and #16 (`CLAUDE.md`) had all merged.
+- The chart-axis fix (next action 2 in session 3) had been written and pushed
+  as `fix/dyno-axis-ticks` with **no PR**, and its own commit message said
+  `build:pages` and e2e had not been run.
+- Sessions 1–3 ran in a Linux dev container; session 4 runs on a local Mac
+  (macOS, Python 3.12). Container-specific notes under Housekeeping are marked
+  as such rather than deleted.
 
 ---
 
@@ -167,33 +189,32 @@ UNEXPECTED PASS, which is the signal to promote it to a real assertion.
 
 ## Branches
 
-Everything below `main` is one open stack; each PR targets the branch beneath
-it and shows only its own commits. **Merge bottom-up.** The repo does not
-auto-delete merged branches, so after each merge retarget the next PR to
-`main` or it merges into a dead branch.
+The session-3 stack (#8–#14) merged on 2026-09-22/23, and `CLAUDE.md` (#16) on
+2026-09-23. Merged branches are **not** auto-deleted: after merging a parent,
+retarget its child PR to `main` (`gh pr edit <n> --base main`) or it merges into
+a dead branch.
 
-| PR | branch | contents |
-|---|---|---|
-| #8 | `fix/grid-build-accuracy` | FINDING-011 — per-cell fresh engines |
-| #9 | `phase2/pyodide-harness` | ADR-001 measured |
-| #10 | `phase2/grid-cell-in-package` | grid cell in `dieselsim/grid.py`; lazy scipy |
-| #11 | `phase2/solver-port` | SolverPort, ADR-010 |
-| #12 | `phase2/grid-cache` | grid cache |
-| #13 | `ci/github-actions` | CI workflow + lockfiles |
-| #14 | `phase2/web-app` | the dyno page; session-3 test fix |
+| PR | branch | contents | state |
+|---|---|---|---|
+| #15 | `docs/status-session-3` | this file; FINDING status lines | merging in session 4 |
+| — | `fix/dyno-axis-ticks` | nice-number dyno axes; `ng test` runs | session 4: verify, PR |
 
 Merged earlier: #5 `physics/verified-fixes`, #6 `audio/physical-levels`
 (**not yet listened to** — revert that merge if the mix is wrong), #7 the
-bug-8 audit.
+bug-8 audit, #8–#14 the Phase 2 stack, #16 `CLAUDE.md`.
 
 ---
 
 ## Next actions
 
-1. **Merge the stack** once #14 is green.
-2. **Chart axis scaling** in `web/app/src/app/dyno/dyno.ts` — a 235 N·m peak
-   gets a 500 axis and non-round ticks. Needs nice-number ticks (1/2/5 × 10ⁿ).
-3. **Put `web/app` in CI**: `build:pages` at least.
+Session 3's list, with what has happened since. Items 1–3 are session 4's work.
+
+1. ~~**Merge the stack** once #14 is green.~~ Done — #8–#14 merged, CI green.
+2. **Chart axis scaling** in `web/app/src/app/dyno/dyno.ts` — written on
+   `fix/dyno-axis-ticks`, not yet verified end to end. Run `build:pages` and
+   e2e; resolve the surviving tie-break-toward-5 mutant; open the PR.
+3. **Put `web/app` in CI** — stacked on 2, because `ng test` only runs after
+   that branch's `angular.json` fix.
 4. **Listen to the audio** — the warm-vs-cold pair at load 0.6 matters most.
 5. **FINDING-005**: chase cam boundary friction, or state that roller cams
    genuinely barely wear. Test on `hd_i6` / `single` (mechanical lash).
@@ -211,6 +232,8 @@ bug-8 audit.
 - **The PAT has been pasted into chat in every session. Revoke it** and issue
   a fresh fine-grained token; keep it out of any handoff document. Give the
   next one **Checks: read** (and Actions: read) so CI results are visible.
+- **Dev-container notes (sessions 1–3; not re-measured on the Mac used from
+  session 4).** The next two bullets were measured in that container.
 - **Background jobs in the dev container must be detached with
   `setsid nohup … < /dev/null &`.** Plain `nohup … &` is killed when the tool
   call returns — measured in session 3 (a 30 s sleep did not survive; the
@@ -221,7 +244,7 @@ bug-8 audit.
 - The solver needs **numpy only**; `scipy.signal` is confined to `acoustics.py`
   and `play.py`. A test enforces this.
 - `batch.py` imports `multiprocessing`, which does not exist in Pyodide.
-- **Tool-call budget.** Chat caps tool calls per turn (the "reached its
+- **Tool-call budget** *(hit in chat sessions 1–3; not yet observed in Claude Code)*. Chat caps tool calls per turn (the "reached its
   tool-use limit" banner); session 3 hit it by spending ~40 calls, many on
   polling. Rules: one call per long job — start it, wait, report in the same
   call, never separate sleep-and-check calls; batch related reads and checks
