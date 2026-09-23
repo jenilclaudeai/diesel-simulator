@@ -71,16 +71,13 @@ from scipy import signal
 
 from dieselsim.acoustics import MICS, EngineSound
 from dieselsim.engine import DieselEngine
+from dieselsim.grid import GRID_CYCLES, solve_cell
 
 FS = 44100
 BLOCK = 1024
 CACHE_VERSION = 6   # 6: grid solved per-cell on fresh engines at GRID_CYCLES
 
-# FINDING-011: the grid was solved at n_cycles=6 on one engine iterated
-# sequentially. Measured against a fresh-engine n_cycles=9 reference: mean
-# -1.96%, worst -10.06%, spread 13.5 percentage points, errors changing sign
-# across the map. Every value the driver experiences is interpolated from it.
-GRID_CYCLES = 9
+# GRID_CYCLES and the cell solve live in dieselsim.grid (FINDING-011).
 
 # ======================================================================
 # THE SWITCH.  "tc" = torque-converter automatic, "dct" = dual clutch.
@@ -177,42 +174,10 @@ class SosStream:
 # the pre-solved grid
 # ==========================================================================
 def _grid_cell(task):
-    """
-    Solve one grid cell on a FRESH engine. Module-level so a spawn-context
-    worker can pickle it.
-
-    Fresh per cell because nothing else isolates a solve: Turbocharger keeps
-    shaft speed (n_rpm) and VGT position (vgt_pos) as instance state across
-    operating_point calls, and warm_start=False resets only the gas state,
-    not the turbo -- measured 3.89% off after high-rpm history even with the
-    flag off. This also matches exactly how the regression suite's golden
-    values are produced.
-
-    The spec is passed as an object rather than a preset name, so rating
-    overrides reach the worker and nothing depends on the preset registry.
-    """
+    """Worker entry for EngineGrid.build. Module-level so spawn can pickle it.
+    The cell itself lives in dieselsim.grid, shared with the browser."""
     spec, i, j, rpm, ld, n_cycles = task
-    eng = DieselEngine(spec=spec)
-    op = eng.operating_point(float(rpm), load=float(ld), n_cycles=n_cycles)
-    snd = EngineSound(eng.spec, fs=FS)
-    snd.wear = eng.wear
-    sd = snd.build_sources(op)
-    # keep only what the runtime needs, as float32
-    src = {k2: np.asarray(sd[k2], dtype=np.float32)
-           for k2 in ("exh_flow", "int_flow", "dpdth", "inj", "valve", "slap")}
-    src["_meta"] = sd["_meta"]
-    perf = dict(
-        torque=op.torque, power=op.power, fuel_mg=op.fuel_mg,
-        boost=op.boost_pr, turbo_rpm=op.turbo_rpm,
-        afr=op.cycle.afr, soot=op.soot_g_h, nox=op.nox_g_kwh,
-        egr=op.egr_pct, T_exh=op.T_exh, p_max=op.p_max,
-        bsfc=op.bsfc, fmep=op.fmep, dpdt=op.cycle.dpdtheta_max,
-        fuel_kg_h=op.fuel_kg_h,
-        # q_wall_frac is heat-to-wall divided by fuel energy, so at zero
-        # fuelling it is 0/0 and the solver's 1e-9 floor turns it into a huge
-        # number.  Clamp it here or the coolant node gets a nonsense heat
-        # input at low load.
-        q_wall=float(np.clip(op.cycle.q_wall_frac, 0.05, 0.45)))
+    src, perf = solve_cell(spec, rpm, ld, n_cycles=n_cycles, fs=FS)
     return i, j, src, perf
 
 
