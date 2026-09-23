@@ -221,5 +221,12 @@ bug-8 audit.
 - The solver needs **numpy only**; `scipy.signal` is confined to `acoustics.py`
   and `play.py`. A test enforces this.
 - `batch.py` imports `multiprocessing`, which does not exist in Pyodide.
+- **Tool-call budget.** Chat caps tool calls per turn (the "reached its
+  tool-use limit" banner); session 3 hit it by spending ~40 calls, many on
+  polling. Rules: one call per long job — start it, wait, report in the same
+  call, never separate sleep-and-check calls; batch related reads and checks
+  into one script; test + commit + push in one call; aim for ~15 calls a
+  turn, commit before nearing the cap, and end each turn with a written
+  status so a cut-off lands between steps, not mid-step.
 - Working style: measure before fixing; ask rather than assume; options come
   with trade-offs and positives; warn before context budget limits.
