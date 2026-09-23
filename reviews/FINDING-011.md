@@ -99,3 +99,81 @@ Nine points, one preset, one grid geometry. The 13.5 pp spread is specific to
 this iteration order; a different order would redistribute it, not remove it.
 Build-time multipliers are estimates, not measurements — this container's CPU
 is ~7× slower than developer hardware, so timing here would mislead.
+
+---
+
+## Resolution — option 3, with one design change
+
+Implemented the recommended option: the grid is now solved per cell in
+workers, at `GRID_CYCLES = 9`, via the existing `--jobs` flag. `CACHE_VERSION`
+bumped 5 → 6 so stale grids rebuild.
+
+### Why one fresh engine per cell, not per row
+
+The obvious cheaper design was one engine per rpm row with
+`warm_start=False`, which would keep `fuel_for_torque`'s per-rpm calibration
+cache. **Measured, that does not work.** After driving the engine through
+high-rpm points, a `warm_start=False` solve at 1800 rpm / 0.6 is still
+**−3.89%** off the fresh-engine value.
+
+The reason is the real root cause of known bug #5. `Turbocharger` holds
+**shaft speed (`n_rpm`) and VGT position (`vgt_pos`) as instance state**,
+mutated during every solve at `turbo.py:171` and `:195`. `warm_start=False`
+resets only the cycle's gas state (`state0`); the turbo carries on at whatever
+speed the previous call left it. So the flag does not mean what its name says.
+
+It is also **never called anywhere** in the package — dead API that promises
+isolation it cannot deliver. Left unchanged here to keep this fix narrow, but
+worth fixing before Phase 2's `SolverPort` reaches for it expecting a clean
+solve.
+
+A fresh engine per cell is therefore the only clean definition, and it is
+exactly how the regression suite's golden values are produced. Parallel
+workers pay for the lost calibration cache.
+
+### Other choices
+
+- Workers receive the **spec object**, not a preset name, so
+  `--torque-limit` / `--power-limit` overrides reach them and nothing depends
+  on the preset registry being rebuilt inside a spawned process.
+- `spawn` context, matching `batch.py`.
+- `jobs == 1` runs in-process with no pool — same fresh-engine-per-cell
+  semantics, no spawn overhead, and usable anywhere multiprocessing is not
+  (which includes Pyodide).
+
+### Verified
+
+**Correctness.** 3×3 `crdi15` grid built with the new code against a
+fresh-engine `n_cycles=9` reference:
+
+| rpm | load | grid | reference | diff |
+|---|---|---|---|---|
+| 800 | 0.0 | −17.631 | −17.631 | 0.0000% |
+| 800 | 0.5 | 42.802 | 42.802 | 0.0000% |
+| 800 | 1.0 | 87.276 | 87.276 | 0.0000% |
+| 2700 | 0.0 | −15.007 | −15.007 | 0.0000% |
+| 2700 | 0.5 | 102.490 | 102.490 | 0.0000% |
+| 2700 | 1.0 | 229.907 | 229.907 | 0.0000% |
+| 4600 | 0.0 | −26.458 | −26.458 | 0.0000% |
+| 4600 | 0.5 | −16.726 | −16.726 | 0.0000% |
+| 4600 | 1.0 | −25.129 | −25.129 | 0.0000% |
+
+**Exact on every cell**, where the old build was off by up to −10.06%.
+
+**Parallel path.** A 2×2 grid built with `jobs=2` through the `spawn` pool is
+bit-identical to `jobs=1` in-process — both performance values and crank-angle
+sources. Pickling and worker construction work.
+
+**Speed — not measured.** This container has one core and runs ~7× slower than
+developer hardware: 9 cells took 52 s, about 5.8 s each. A default 8×6 grid is
+48 cells. On a multi-core machine the build should end up comparable to or
+faster than the old ~2 minutes despite 9 cycles instead of 6 and no shared
+calibration, but that is an estimate and needs timing on real hardware.
+
+### Observation, not a finding
+
+The top rpm row (`max_rpm` = 4600) is negative torque at every load. That is
+the governor: above rated, droop pulls `fuel_limit` toward zero, so "full load"
+there is almost no fuel and the engine is motoring. Physically reasonable, but
+it means the grid's highest row describes a governed-out engine, which matters
+for how the real-time loop interpolates near redline.

@@ -62,6 +62,7 @@ import select
 import sys
 import termios
 import threading
+import multiprocessing as mp
 import time
 import tty
 
@@ -73,7 +74,13 @@ from dieselsim.engine import DieselEngine
 
 FS = 44100
 BLOCK = 1024
-CACHE_VERSION = 5
+CACHE_VERSION = 6   # 6: grid solved per-cell on fresh engines at GRID_CYCLES
+
+# FINDING-011: the grid was solved at n_cycles=6 on one engine iterated
+# sequentially. Measured against a fresh-engine n_cycles=9 reference: mean
+# -1.96%, worst -10.06%, spread 13.5 percentage points, errors changing sign
+# across the map. Every value the driver experiences is interpolated from it.
+GRID_CYCLES = 9
 
 # ======================================================================
 # THE SWITCH.  "tc" = torque-converter automatic, "dct" = dual clutch.
@@ -169,6 +176,46 @@ class SosStream:
 # ==========================================================================
 # the pre-solved grid
 # ==========================================================================
+def _grid_cell(task):
+    """
+    Solve one grid cell on a FRESH engine. Module-level so a spawn-context
+    worker can pickle it.
+
+    Fresh per cell because nothing else isolates a solve: Turbocharger keeps
+    shaft speed (n_rpm) and VGT position (vgt_pos) as instance state across
+    operating_point calls, and warm_start=False resets only the gas state,
+    not the turbo -- measured 3.89% off after high-rpm history even with the
+    flag off. This also matches exactly how the regression suite's golden
+    values are produced.
+
+    The spec is passed as an object rather than a preset name, so rating
+    overrides reach the worker and nothing depends on the preset registry.
+    """
+    spec, i, j, rpm, ld, n_cycles = task
+    eng = DieselEngine(spec=spec)
+    op = eng.operating_point(float(rpm), load=float(ld), n_cycles=n_cycles)
+    snd = EngineSound(eng.spec, fs=FS)
+    snd.wear = eng.wear
+    sd = snd.build_sources(op)
+    # keep only what the runtime needs, as float32
+    src = {k2: np.asarray(sd[k2], dtype=np.float32)
+           for k2 in ("exh_flow", "int_flow", "dpdth", "inj", "valve", "slap")}
+    src["_meta"] = sd["_meta"]
+    perf = dict(
+        torque=op.torque, power=op.power, fuel_mg=op.fuel_mg,
+        boost=op.boost_pr, turbo_rpm=op.turbo_rpm,
+        afr=op.cycle.afr, soot=op.soot_g_h, nox=op.nox_g_kwh,
+        egr=op.egr_pct, T_exh=op.T_exh, p_max=op.p_max,
+        bsfc=op.bsfc, fmep=op.fmep, dpdt=op.cycle.dpdtheta_max,
+        fuel_kg_h=op.fuel_kg_h,
+        # q_wall_frac is heat-to-wall divided by fuel energy, so at zero
+        # fuelling it is 0/0 and the solver's 1e-9 floor turns it into a huge
+        # number.  Clamp it here or the coolant node gets a nonsense heat
+        # input at low load.
+        q_wall=float(np.clip(op.cycle.q_wall_frac, 0.05, 0.45)))
+    return i, j, src, perf
+
+
 class EngineGrid:
     """Crank-angle acoustic sources + scalar performance on an (rpm, load) grid."""
 
@@ -189,7 +236,8 @@ class EngineGrid:
     def path(self):
         return f".dieselsim_grid_{self.preset}_v{CACHE_VERSION}.pkl"
 
-    def build(self, verbose=True, torque_limit=0.0, power_limit=0.0):
+    def build(self, verbose=True, torque_limit=0.0, power_limit=0.0,
+              jobs=None):
         eng = DieselEngine(preset=self.preset)
         s = eng.spec
         if torque_limit > 0.0:
@@ -199,46 +247,41 @@ class EngineGrid:
         self.spec = s
         self.rpms = np.linspace(s.idle_rpm, s.max_rpm, self.n_rpm)
         self.loads = np.linspace(0.0, 1.0, self.n_load)
-        snd = EngineSound(s, fs=FS)
-        snd.wear = eng.wear
-        self.grid_deg = snd.grid
+        self.grid_deg = EngineSound(s, fs=FS).grid
         self.src = [[None] * self.n_load for _ in range(self.n_rpm)]
         self.perf = [[None] * self.n_load for _ in range(self.n_rpm)]
+        tasks = [(s, i, j, rpm, ld, GRID_CYCLES)
+                 for i, rpm in enumerate(self.rpms)
+                 for j, ld in enumerate(self.loads)]
+        total = len(tasks)
+        jobs = max(1, min(jobs or os.cpu_count() or 1, total))
         t0 = time.time()
-        total = self.n_rpm * self.n_load
         k = 0
-        for i, rpm in enumerate(self.rpms):
-            for j, ld in enumerate(self.loads):
-                op = eng.operating_point(float(rpm), load=float(ld),
-                                         n_cycles=6)
-                sd = snd.build_sources(op)
-                # keep only what the runtime needs, as float32
-                self.src[i][j] = {
-                    k2: np.asarray(sd[k2], dtype=np.float32)
-                    for k2 in ("exh_flow", "int_flow", "dpdth", "inj",
-                               "valve", "slap")}
-                self.src[i][j]["_meta"] = sd["_meta"]
-                self.perf[i][j] = dict(
-                    torque=op.torque, power=op.power, fuel_mg=op.fuel_mg,
-                    boost=op.boost_pr, turbo_rpm=op.turbo_rpm,
-                    afr=op.cycle.afr, soot=op.soot_g_h, nox=op.nox_g_kwh,
-                    egr=op.egr_pct, T_exh=op.T_exh, p_max=op.p_max,
-                    bsfc=op.bsfc, fmep=op.fmep, dpdt=op.cycle.dpdtheta_max,
-                    fuel_kg_h=op.fuel_kg_h,
-                    # q_wall_frac is heat-to-wall divided by fuel energy, so
-                    # at zero fuelling it is 0/0 and the solver's 1e-9 floor
-                    # turns it into a huge number.  Clamp it here or the
-                    # coolant node gets a nonsense heat input at low load.
-                    q_wall=float(np.clip(op.cycle.q_wall_frac, 0.05, 0.45)))
-                k += 1
-                if verbose:
-                    el = time.time() - t0
-                    eta = el / k * (total - k)
-                    sys.stdout.write(
-                        f"\r  solving grid {k:3d}/{total}  "
-                        f"({rpm:5.0f} rpm, load {ld:4.2f})  "
-                        f"eta {eta:5.0f} s   ")
-                    sys.stdout.flush()
+
+        def _store(res):
+            nonlocal k
+            i, j, src, perf = res
+            self.src[i][j] = src
+            self.perf[i][j] = perf
+            k += 1
+            if verbose:
+                el = time.time() - t0
+                eta = el / k * (total - k)
+                sys.stdout.write(
+                    f"\r  solving grid {k:3d}/{total} on {jobs} worker"
+                    f"{'s' if jobs > 1 else ''}  eta {eta:5.0f} s   ")
+                sys.stdout.flush()
+
+        if jobs == 1:
+            # in-process: no spawn overhead, and still one fresh engine per
+            # cell, so results are identical to the parallel path
+            for t in tasks:
+                _store(_grid_cell(t))
+        else:
+            ctx = mp.get_context("spawn")     # matches batch.py
+            with ctx.Pool(jobs) as pool:
+                for res in pool.imap_unordered(_grid_cell, tasks):
+                    _store(res)
         self.peak_torque = max(self.perf[i][j]["torque"]
                                for i in range(self.n_rpm)
                                for j in range(self.n_load))
@@ -1872,7 +1915,7 @@ def main():
     ap.add_argument("--start-kmh", type=float, default=0.0, metavar="V",
                     help="road speed to start rolling at")
     ap.add_argument("--jobs", "-j", type=int, default=0,
-                    metavar="N", help="parallel processes for --curve "
+                    metavar="N", help="parallel processes for --curve and grid builds "
                     "(0 = one per core)")
     ap.add_argument("--curve-csv", metavar="CSV",
                     help="also write the curve as csv")
@@ -1914,7 +1957,7 @@ def main():
         except Exception as e:
             print(f"  cache unreadable ({e!r}) -- rebuilding")
             grid.build(True, args.torque_limit,
-                       args.power_limit).save()
+                       args.power_limit, jobs=args.jobs or None).save()
     else:
         print(f"solving the physics grid for '{args.preset}' "
               f"({args.rpm_points} x {args.load_points} points).")
