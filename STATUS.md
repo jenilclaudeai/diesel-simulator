@@ -38,6 +38,14 @@ Python compute the fingerprint identically, verified against the real worker.
 
 Reproduce: `tools/pyodide/` → `npm run suite`; `web/solver/` → `npm test`.
 
+**Pull requests #8–#12 are open** as a stack, one commit each, merge bottom-up.
+The repo does not auto-delete merged branches, so each child PR must be
+retargeted to `main` after its parent merges.
+
+**CI is active** (`.github/workflows/ci.yml`). Three jobs — native Python on 3.10 and 3.12, the same
+suite under Pyodide, and the TypeScript solver end to end. Verified locally,
+including a full 3.10 run.
+
 ## Where things stand
 
 Architecture is decided (ADR-001 to ADR-009, with ADR-006 on hold). No frontend
