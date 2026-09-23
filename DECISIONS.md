@@ -486,7 +486,7 @@ and line are named. Static, because the suite also runs under Pyodide.
 
 ## ADR-010 — The SolverPort contract
 
-**Status:** Proposed (2026-09-22) — implemented and tested, awaiting acceptance
+**Status:** Accepted (2026-09-22)
 
 ### Context
 
@@ -540,13 +540,25 @@ in-flight and later calls.
 
 All three have regression tests; the aliasing one is mutation-tested.
 
-### Not yet decided — needs input
+### Decided 2026-09-22
 
-- **Where the dieselsim sources come from in the browser.** Bundled as a
-  static asset at build time is the obvious answer; it needs a build step.
-- **Where Pyodide itself is served from.** Same-origin (GitHub Pages, ~10 MB
-  of runtime plus numpy) or CDN (smaller deploy, third-party dependency at
-  runtime, and blocked on some networks — as it is in the dev container).
+- **Pyodide is self-hosted**, same origin as the app — not a CDN. Measured
+  payload 9.3 MB compressed (16.7 MB raw), downloaded only by Expert mode.
+  Chosen for: works on networks that block third-party CDNs (the dev
+  container is one), no runtime dependency on a third party, version locked to
+  the app, offline possible later. Cost: ~17 MB of deploy and hosting
+  bandwidth — about 10,000 first-time Expert loads a month within GitHub
+  Pages' 100 GB soft limit. The shared-cache argument for CDNs no longer holds:
+  browsers partition their HTTP cache per site.
+- **The dieselsim sources are bundled at build time** into one content-hashed
+  asset, and the physics fingerprint (`sourceHash`) is computed in the same
+  step. Runtime fetching of individual files was rejected: it needs a
+  generated file list anyway, the cache needs the fingerprint before Pyodide
+  boots anyway, and a deploy could leave a browser holding a mix of old and new
+  files — silently wrong physics.
+- **Hosting will likely change when paid Expert mode arrives**: GitHub Pages'
+  terms prohibit commercial SaaS. Both choices produce plain static files, so
+  nothing here may depend on GitHub-Pages-specific behaviour.
 - ~~Grid cache keying~~ — **built**; see *ADR-010 addendum: grid cache* below.
 
 ### ADR-010 addendum: grid cache (2026-09-22)

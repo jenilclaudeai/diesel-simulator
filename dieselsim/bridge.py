@@ -102,6 +102,14 @@ def source_hash():
     return h.hexdigest()
 
 
+def _preset_info(key):
+    s = PRESETS[key]()
+    return {"name": s.name, "idle_rpm": float(s.idle_rpm),
+            "rated_rpm": float(s.rated_rpm), "max_rpm": float(s.max_rpm),
+            "displacement_l": float(s.geom.displacement * 1000.0),
+            "n_cyl": int(s.geom.n_cyl)}
+
+
 def runtime_info(_req_json="{}"):
     return json.dumps({
         "source_hash": source_hash(),
@@ -109,6 +117,9 @@ def runtime_info(_req_json="{}"):
         "python": sys.version.split()[0],
         "numpy": np.__version__,
         "presets": sorted(PRESETS),
+        # what a UI needs to label an engine and choose an rpm range, without
+        # a solve: built-in presets construct instantly
+        "preset_info": {k: _preset_info(k) for k in sorted(PRESETS)},
         "grid_cycles": GRID_CYCLES,
         "source_keys": list(SOURCE_KEYS),
     })

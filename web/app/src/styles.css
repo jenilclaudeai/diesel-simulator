@@ -1,0 +1,38 @@
+/* Three colours, shades allowed (project brief).
+   Machine grey: workshop enamel. Block slate: engine block. Fuel amber. */
+:root {
+  --grey: #dfe3dc;
+  --grey-deep: #cfd5cb;
+  --slate: #223039;
+  --slate-muted: rgba(34, 48, 57, 0.78);   /* 5:1 on --grey */
+  --slate-faint: rgba(34, 48, 57, 0.14);
+  --amber: #d39422;                        /* fills; slate text on it is 5.6:1 */
+  --amber-ink: #9c6708;                    /* lines and text on grey; 3.4:1 as a graphic */
+
+  --type: "Bahnschrift", "DIN Alternate", "DIN 2014", "Roboto Condensed",
+          "Arial Narrow", system-ui, sans-serif;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; }
+
+body {
+  background: var(--grey);
+  color: var(--slate);
+  font-family: var(--type);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 3px solid var(--amber-ink);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}

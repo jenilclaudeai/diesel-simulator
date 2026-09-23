@@ -1,0 +1,106 @@
+:host { display: block; }
+
+.bar {
+  padding: 0.9rem clamp(1rem, 4vw, 2.5rem);
+  border-bottom: 1px solid var(--slate-faint);
+}
+.wordmark { font-weight: 700; letter-spacing: 0.01em; }
+
+.page {
+  max-width: 60rem;
+  padding: clamp(1.5rem, 4vw, 3rem) clamp(1rem, 4vw, 2.5rem) 4rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(2.1rem, 6vw, 3.6rem);
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.015em;
+  font-stretch: condensed;
+}
+
+.lead {
+  margin: 0.6rem 0 1.8rem;
+  max-width: 38em;
+  color: var(--slate-muted);
+  font-size: 1.15rem;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 1rem 1.25rem;
+}
+.field { display: grid; gap: 0.3rem; font-size: 0.95rem; color: var(--slate-muted); }
+select {
+  font: inherit;
+  color: var(--slate);
+  background: var(--grey-deep);
+  border: 1px solid var(--slate-faint);
+  border-radius: 4px;
+  padding: 0.55rem 0.7rem;
+  min-width: 15rem;
+}
+
+/* The one filled thing on the page. */
+.run {
+  font: inherit;
+  font-weight: 700;
+  color: var(--slate);
+  background: var(--amber);
+  border: 0;
+  border-radius: 4px;
+  padding: 0.65rem 1.4rem;
+  cursor: pointer;
+}
+.run:hover:not(:disabled) { background: #dca238; }
+.run:disabled, select:disabled { cursor: not-allowed; opacity: 0.55; }
+
+.status { min-height: 1.6em; margin: 1rem 0 0.6rem; color: var(--slate-muted); }
+.err { color: var(--slate); font-weight: 600; }
+
+.sheet { margin: 0.5rem 0 0; }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+.grid { stroke: var(--slate-faint); stroke-width: 1; }
+.zero { stroke: var(--slate); stroke-width: 1.2; stroke-dasharray: 4 4; }
+.tick { font-size: 13px; fill: var(--slate-muted); font-family: var(--type); }
+.tick.tq { fill: var(--amber-ink); }
+.axis { font-size: 13px; fill: var(--slate-muted); font-family: var(--type); }
+
+polyline { fill: none; stroke-linejoin: round; stroke-linecap: round; }
+.torque { stroke: var(--amber-ink); stroke-width: 3.2; }
+.power { stroke: var(--slate); stroke-width: 2.4; }
+.dot.tq { fill: var(--amber-ink); }
+.dot.pw { fill: var(--slate); }
+
+.key { display: flex; flex-wrap: wrap; gap: 0.4rem 1.6rem; margin-top: 0.5rem; font-size: 0.95rem; }
+.k::before {
+  content: ""; display: inline-block; width: 1.4rem; height: 3px;
+  margin-right: 0.5rem; vertical-align: middle; border-radius: 2px;
+}
+.k.tq::before { background: var(--amber-ink); }
+.k.pw::before { background: var(--slate); }
+
+.readouts {
+  display: flex; flex-wrap: wrap; gap: 1rem 3rem;
+  margin: 2rem 0 1.5rem;
+}
+.readouts dt { color: var(--slate-muted); font-size: 0.95rem; }
+.readouts dd { margin: 0.1rem 0 0; font-size: 1.05rem; }
+.readouts strong { font-size: 2.2rem; font-weight: 600; line-height: 1; margin-right: 0.15em; }
+
+.data { border-collapse: collapse; width: 100%; font-size: 0.95rem; margin-top: 0.5rem; }
+.data caption { text-align: left; color: var(--slate-muted); padding-bottom: 0.4rem; }
+.data th { text-align: right; font-weight: 600; padding: 0.35rem 0.6rem; border-bottom: 1px solid var(--slate-faint); }
+.data td { text-align: right; padding: 0.3rem 0.6rem; border-bottom: 1px solid var(--slate-faint); }
+.data th:first-child, .data td:first-child { text-align: left; }
+
+.note { margin: 1rem 0 0; max-width: 40em; color: var(--slate-muted); }
+.about { margin: 2.5rem 0 0; max-width: 44em; font-size: 0.9rem; color: var(--slate-muted); }
+
+@media (max-width: 40rem) {
+  .data { font-size: 0.85rem; }
+  .data th, .data td { padding: 0.3rem 0.35rem; }
+}

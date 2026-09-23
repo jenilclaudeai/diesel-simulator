@@ -28,3 +28,9 @@ tools/pyodide/*.whl
 # solver package
 web/solver/node_modules/
 web/solver/dist/
+
+# angular app build artefacts
+web/app/node_modules/
+web/app/dist/
+web/app/.angular/
+web/app/out-tsc/

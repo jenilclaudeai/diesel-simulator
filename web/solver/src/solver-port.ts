@@ -20,6 +20,15 @@ export type EngineRef =
  */
 export type Overrides = Record<string, number | boolean | string | number[]>;
 
+export interface PresetInfo {
+  name: string;
+  idle_rpm: number;
+  rated_rpm: number;
+  max_rpm: number;
+  displacement_l: number;
+  n_cyl: number;
+}
+
 export interface RuntimeInfo {
   /** SHA-256 of the dieselsim sources actually loaded — the physics version */
   source_hash: string;
@@ -27,6 +36,7 @@ export interface RuntimeInfo {
   python: string;
   numpy: string;
   presets: string[];
+  preset_info: Record<string, PresetInfo>;
   grid_cycles: number;
   source_keys: string[];
   /** seconds to load Pyodide, numpy and the package — the cold-start cost */

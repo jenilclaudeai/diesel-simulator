@@ -1,0 +1,123 @@
+<header class="bar">
+  <span class="wordmark">Diesel Sim</span>
+</header>
+
+<main class="page">
+  @if (spec(); as s) {
+    <h1>{{ s.name }}</h1>
+    <p class="lead">
+      {{ fmt2.format(s.displacement_l) }} litres, {{ s.n_cyl }} {{ s.n_cyl === 1 ? 'cylinder' : 'cylinders' }}.
+      Full-load pull from {{ fmt0.format(rpms()[0]!) }} to {{ fmt0.format(rpms()[rpms().length - 1]!) }} rpm.
+    </p>
+  } @else {
+    <h1>Dyno pull</h1>
+    <p class="lead">Every point on this curve is a full combustion-cycle solve, run by Python in your browser.</p>
+  }
+
+  <div class="controls">
+    <label class="field">
+      <span>Engine</span>
+      <select [disabled]="solver.status() !== 'ready' || running()"
+              (change)="selectEngine($any($event.target).value)">
+        @for (p of presets(); track p.key) {
+          <option [value]="p.key" [selected]="p.key === engine()">{{ p.name }}</option>
+        }
+      </select>
+    </label>
+    <button type="button" class="run" (click)="run()"
+            [disabled]="solver.status() !== 'ready' || running()">
+      {{ running() ? 'Running' : points().length ? 'Run again' : 'Run dyno pull' }}
+    </button>
+  </div>
+
+  <p class="status" role="status" aria-live="polite">
+    @switch (solver.status()) {
+      @case ('loading') { Loading Python and numpy into your browser. About 9 MB the first time. }
+      @case ('error') { <span class="err">{{ solver.error() }}</span> }
+      @case ('ready') {
+        @if (progress(); as p) {
+          Solving {{ fmt0.format(p.rpm) }} rpm, point {{ p.n }} of {{ p.of }}.
+        } @else if (runError()) {
+          <span class="err">{{ runError() }}</span>
+        } @else if (elapsedS() !== undefined) {
+          Pull complete: {{ points().length }} points in {{ fmt1.format(elapsedS()!) }} s.
+        } @else {
+          Ready. Each point takes a few seconds; the curve fills in as they finish.
+        }
+      }
+    }
+  </p>
+
+  @if (chart(); as c) {
+    <figure class="sheet">
+      <svg [attr.viewBox]="'0 0 ' + c.W + ' ' + c.H" role="img" [attr.aria-label]="summary()">
+        @for (t of c.tTicks; track t.v) {
+          <line class="grid" [attr.x1]="c.M.l" [attr.x2]="c.W - c.M.r" [attr.y1]="t.y" [attr.y2]="t.y" />
+          <text class="tick tq" [attr.x]="c.M.l - 8" [attr.y]="t.y + 4" text-anchor="end">{{ fmt0.format(t.v) }}</text>
+          <text class="tick pw" [attr.x]="c.W - c.M.r + 8" [attr.y]="t.y + 4">{{ fmt0.format(t.p) }}</text>
+        }
+        @if (c.negative) {
+          <line class="zero" [attr.x1]="c.M.l" [attr.x2]="c.W - c.M.r" [attr.y1]="c.zeroY" [attr.y2]="c.zeroY" />
+        }
+        @for (t of c.xTicks; track t.r) {
+          <text class="tick" [attr.x]="t.x" [attr.y]="c.H - c.M.b + 22" text-anchor="middle">{{ fmt0.format(t.r) }}</text>
+        }
+        <text class="axis" [attr.x]="c.W - c.M.r" [attr.y]="c.H - 6" text-anchor="end">rpm</text>
+        <polyline class="power" [attr.points]="c.power" />
+        <polyline class="torque" [attr.points]="c.torque" />
+        @for (d of c.dots; track $index) {
+          <circle class="dot pw" [attr.cx]="d.x" [attr.cy]="d.yp" r="4" />
+          <circle class="dot tq" [attr.cx]="d.x" [attr.cy]="d.yt" r="4.5" />
+        }
+      </svg>
+      <figcaption class="key">
+        <span class="k tq">Torque, N·m (left)</span>
+        <span class="k pw">Power, kW (right)</span>
+      </figcaption>
+    </figure>
+  }
+
+  @if (peaks(); as pk) {
+    <dl class="readouts">
+      <div>
+        <dt>Peak torque</dt>
+        <dd><strong>{{ fmt0.format(pk.torque.torque) }}</strong> N·m at {{ fmt0.format(pk.torque.rpm) }} rpm</dd>
+      </div>
+      <div>
+        <dt>Peak power</dt>
+        <dd><strong>{{ fmt0.format(pk.power.powerKw) }}</strong> kW at {{ fmt0.format(pk.power.rpm) }} rpm</dd>
+      </div>
+    </dl>
+
+    <table class="data">
+      <caption>Every point, as solved</caption>
+      <thead>
+        <tr><th scope="col">rpm</th><th scope="col">Torque N·m</th><th scope="col">Power kW</th>
+            <th scope="col">BSFC g/kWh</th><th scope="col">Boost ratio</th><th scope="col">Peak pressure bar</th></tr>
+      </thead>
+      <tbody>
+        @for (p of points(); track p.rpm) {
+          <tr>
+            <td>{{ fmt0.format(p.rpm) }}</td>
+            <td>{{ fmt1.format(p.torque) }}</td>
+            <td>{{ fmt1.format(p.powerKw) }}</td>
+            <td>{{ p.r.bsfc > 0 && p.r.bsfc < 2000 ? fmt0.format(p.r.bsfc) : 'n/a' }}</td>
+            <td>{{ fmt2.format(p.r.boost_pr) }}</td>
+            <td>{{ fmt0.format(p.r.p_max / 1e5) }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    @if (chart()?.negative) {
+      <p class="note">Below zero, the governor has cut fuel: past rated speed the engine cannot hold these revs on its own.</p>
+    }
+  }
+
+  @if (solver.info(); as i) {
+    <p class="about">
+      Solved in your browser by Python {{ i.python }} with numpy {{ i.numpy }}, loaded in {{ fmt1.format(i.load_s) }} s.
+      Physics build {{ i.source_hash.slice(0, 12) }}.
+      @if (!solver.cacheAvailable) { Result caching is off because this page is not served over https. }
+    </p>
+  }
+</main>
