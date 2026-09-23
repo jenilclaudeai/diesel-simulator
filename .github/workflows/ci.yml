@@ -1,9 +1,10 @@
 # Continuous integration for dieselsim.
 #
-# Three independent jobs, so a failure says where the problem is:
+# Four independent jobs, so a failure says where the problem is:
 #   physics          native CPython, the reference implementation
 #   physics-pyodide  the SAME suite under Pyodide - ADR-001's guarantee
 #   solver           the TypeScript SolverPort, end to end through a real worker
+#   web-app          the Angular app: unit tests and the GitHub Pages build
 name: CI
 
 on:
@@ -76,3 +77,30 @@ jobs:
           cache-dependency-path: web/solver/package-lock.json
       - run: npm ci
       - run: npm test
+
+  # The Angular app. Unit tests, then the GitHub Pages build - never plain
+  # `build`, which renders a blank page on Pages. The app compiles the solver
+  # from ../solver/src, so web/solver's dependencies are installed too (for
+  # the pyodide types). The browser e2e check is not run here yet.
+  web-app:
+    name: web app (Angular)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web/app
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          # Angular 22 needs >= 22.22.3; "22" resolves to the latest 22.x
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            web/app/package-lock.json
+            web/solver/package-lock.json
+      - run: npm ci
+        working-directory: web/solver
+      - run: npm ci
+      - run: npm test -- --watch=false
+      - run: npm run build:pages
