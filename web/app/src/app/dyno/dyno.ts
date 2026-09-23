@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
 import type { PointResult, PresetInfo } from '@dieselsim/solver';
 import { describe, SolverService } from '../solver/solver.service';
+import { dualAxis } from './axis';
 
 interface Pt { rpm: number; torque: number; powerKw: number; r: PointResult; }
 
@@ -9,13 +10,6 @@ const W = 800, H = 420, M = { l: 60, r: 60, t: 18, b: 44 };
 const fmt0 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 const fmt1 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
 const fmt2 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 });
-
-/** 1, 2 or 5 times a power of ten, at or above x. */
-function niceCeil(x: number): number {
-  if (x <= 0) return 1;
-  const p = 10 ** Math.floor(Math.log10(x));
-  return [1, 2, 2.5, 5, 10].map(m => m * p).find(v => v >= x)!;
-}
 
 @Component({
   selector: 'app-dyno',
@@ -61,11 +55,14 @@ export class Dyno implements OnInit {
     const rpms = this.rpms(), pts = this.points();
     if (!rpms.length) return undefined;
     const x0 = rpms[0]!, x1 = rpms[rpms.length - 1]!;
-    const tMax = niceCeil(Math.max(50, ...pts.map(p => p.torque)) * 1.08);
-    const tMin = Math.min(0, ...pts.map(p => p.torque));
-    const tLo = tMin < 0 ? -niceCeil(-tMin) : 0;
-    const pMax = niceCeil(Math.max(10, ...pts.map(p => p.powerKw)) * 1.08);
-    const pLo = tLo === 0 ? 0 : (tLo / tMax) * pMax;
+    // Shared gridlines, round labels on both axes, tops at the first tick at or
+    // above each peak. The floors only frame an empty chart: applied to real
+    // data they squashed a small engine (35.7 N·m on a 60 axis).
+    const T = pts.map(p => p.torque), P = pts.map(p => p.powerKw);
+    const ax = pts.length
+      ? dualAxis(Math.min(0, ...T), Math.max(...T), Math.min(0, ...P), Math.max(...P))
+      : dualAxis(0, 50, 0, 10);
+    const tMax = ax.left.hi, tLo = ax.left.lo, pMax = ax.right.hi, pLo = ax.right.lo;
     const x = (rpm: number) => M.l + (rpm - x0) / (x1 - x0) * (W - M.l - M.r);
     const yT = (v: number) => M.t + (tMax - v) / (tMax - tLo) * (H - M.t - M.b);
     const yP = (v: number) => M.t + (pMax - v) / (pMax - pLo) * (H - M.t - M.b);
@@ -73,8 +70,7 @@ export class Dyno implements OnInit {
     const step = x1 - x0 > 2500 ? 1000 : 500;
     const xTicks = [];
     for (let r = Math.ceil(x0 / step) * step; r <= x1; r += step) xTicks.push({ r, x: x(r) });
-    const tTicks = [0, 0.25, 0.5, 0.75, 1].map(f => tLo + (tMax - tLo) * f)
-      .map(v => ({ v, y: yT(v), p: pLo + (pMax - pLo) * ((v - tLo) / (tMax - tLo)) }));
+    const tTicks = ax.left.ticks.map((v, i) => ({ v, y: yT(v), p: ax.right.ticks[i]! }));
     return {
       W, H, M, xTicks, tTicks, zeroY: yT(0), negative: tLo < 0,
       torque: line(p => yT(p.torque)), power: line(p => yP(p.powerKw)),
