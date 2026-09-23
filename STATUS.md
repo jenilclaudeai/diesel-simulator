@@ -1,13 +1,25 @@
 # Status
 
 **Updated:** 2026-09-09 (session 2)
-**Phase:** 1 — Physics truth pass complete; measurement sweep done
+**Phase:** 2 — started. ADR-001 validated: the solver runs unmodified under Pyodide
 **Branch:** `fix/physical-source-levels` (stacked, see Branches below)
 
 Read this first in a new session, then `PLAN.md`, then `DECISIONS.md`, then
 `reviews/`. Those replace pasting a context document.
 
 ---
+
+## Phase 2 — first result
+
+**ADR-001 is validated by measurement.** The unmodified solver runs under
+Pyodide 314.0.7 (Python 3.14.2, numpy 2.4.6) and the **full regression suite
+passes there — 14 passed, 0 failed**, identical to native. Single-point results
+agree with native CPython to ~1e-10 relative. Warm, it is **~1.7× slower** than
+native, not the 3–8× ADR-001 assumed; the first solve in a fresh worker is
+~3.4×. `scipy` is never imported.
+
+Reproduce: `tools/pyodide/` → `npm install && npm run suite`. See ADR-001,
+*Measured*, for the numbers.
 
 ## Where things stand
 

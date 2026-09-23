@@ -20,3 +20,8 @@ env/
 .vscode/
 .idea/
 .DS_Store
+
+# pyodide harness
+tools/pyodide/node_modules/
+tools/pyodide/package-lock.json
+tools/pyodide/*.whl
