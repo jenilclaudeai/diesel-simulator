@@ -474,3 +474,17 @@ The page now states its engine's figure under the table
 `--write-accuracy`). The table carries the physics build it was measured on;
 on any other build the page says the accuracy has not been measured rather
 than showing a stale number.
+
+### Cost of a converged grid (measured)
+
+`play.py`'s `EngineGrid(converged=True)` (`--converged-grid`): one converged
+limiter calibration per rpm row, shared by its cells, then every cell at real
+time for 200 cycles. `crdi15`, 8 × 6 cells, 6 workers, this Mac:
+
+| build | time | unsettled cells | peak torque |
+|---|---|---|---|
+| fast (default) | 55 s | — | 224.2 N·m |
+| converged | **544 s (9.1 min)** | 4 of 48, period-averaged and flagged | 222.0 N·m |
+
+About 10× the fast build — affordable for Enjoy mode's prebuilt roster
+(ADR-008), out of the question in the browser.
