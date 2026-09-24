@@ -357,6 +357,41 @@ def test_converged_flag_is_honest():
           f"n_cycles {seen.get('n_cycles')}, spool_accel {seen.get('spool_accel')}")
 
 
+def test_unsettled_cell_is_period_averaged():
+    """FINDING-013: a converged-mode cell whose last cycles have not settled
+    is averaged over whole oscillation periods and flagged. Synthetic: a
+    21-cycle sawtooth in IMEP (the shape measured at crdi_1p5 1450/0.5),
+    ending mid-ramp, so the last cycle alone is well off the mean."""
+    import math
+    from types import SimpleNamespace
+    from dieselsim.grid import oscillation_period, settle_or_average
+    import random
+    random.seed(3)
+    checks = {
+        "constant": oscillation_period([5.0] * 120) == 0,
+        "noise": oscillation_period([random.gauss(0, 1) for _ in range(120)]) == 0,
+        "decay": oscillation_period([math.exp(-i / 30) for i in range(120)]) == 0,
+        "sine 17": oscillation_period([math.sin(2 * math.pi * i / 17) for i in range(120)]) == 17,
+        "sawtooth 21 on a ramp": oscillation_period([(i % 21) / 21 + 0.01 * i for i in range(120)]) == 21,
+    }
+    spec = DieselEngine(preset="crdi15").spec
+    imep = [1.0e6 * (1.0 + 0.1 * ((i % 21) / 21 - 0.5)) for i in range(200)][:-7]
+    means = [dict(imep_net=v, work=v, boost=2.0) for v in imep]
+    op = SimpleNamespace(cycle=SimpleNamespace(converged=False, cycle_means=means),
+                         torque=100.0, power=100.0 * 2 * math.pi * 2000 / 60,
+                         rpm=2000.0, bsfc=220.0)
+    over, flags = settle_or_average(op, spec)
+    true_mean = sum(imep[-21:]) / 21                    # mean over one whole period
+    dT_expected = (true_mean - imep[-1]) * spec.geom.displacement / (4 * math.pi)
+    checks["flagged unsettled, period 21"] = flags["settled"] == 0.0 and flags["osc_period"] == 21.0
+    checks["torque averaged over whole periods"] = abs(over["torque"] - (100.0 + dT_expected)) < 1e-6 * abs(dT_expected)
+    op.cycle.converged = True
+    checks["settled cell untouched"] = settle_or_average(op, spec) == ({}, dict(settled=1.0, osc_period=0.0, osc_spread=0.0))
+    bad = [k for k, v in checks.items() if not v]
+    check("unsettled cell period-averaged and flagged", float(len(bad)), 0.0, 0.0,
+          ", ".join(bad) or f"{len(checks)} checks")
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -370,7 +405,8 @@ def main():
                test_no_pilot_double_count,
                test_runtime_info_describes_every_preset,
                test_limiter_calibrates_under_evaluation_schedules,
-               test_converged_flag_is_honest):
+               test_converged_flag_is_honest,
+               test_unsettled_cell_is_period_averaged):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001

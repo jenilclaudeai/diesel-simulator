@@ -248,6 +248,13 @@ class DieselEngine:
     def reset_torque_cal(self):
         self._torque_cal = {}
 
+    def seed_fuel_limit(self, rpm: float, fuel_mg: float):
+        """Make fuel_limit(rpm) return fuel_mg without calibrating. For
+        builders that calibrate once per speed and share the result across a
+        row of cells -- in converged mode a calibration costs several
+        200-cycle solves."""
+        self._torque_cal[int(round(rpm / 25.0))] = (1.0, 0.0, float(fuel_mg))
+
     # ------------------------------------------------------------------
     def fuel_limit_raw(self, rpm: float) -> float:
         """Smoke-limited / torque-curve-shaped max fuel per cyl-cycle [mg]."""
