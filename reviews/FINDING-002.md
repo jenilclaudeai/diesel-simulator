@@ -3,7 +3,7 @@
 **Opened by:** FINDING-001 P-2, which fixed `premix_fraction` but did not
 produce cold rattle
 **Lenses:** PHY1 (lead), QA2
-**Status:** diagnosed, not fixed
+**Status:** fixed — PR #5; read `dpdtheta_comb`, not `dpdtheta_max`. *(Updated 2026-09-23: this line was not updated when the fix landed, and read "diagnosed, not fixed" until then.)*
 **Severity:** this is the root cause FINDING-001 was chasing
 
 ---

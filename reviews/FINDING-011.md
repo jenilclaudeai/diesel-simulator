@@ -3,7 +3,7 @@
 **Opened by:** measuring known bug #5 (path dependence), which led to the grid
 build in `play.py`
 **Lens:** PHY1, QA2
-**Status:** measured, not fixed — the fix has a cost that needs a decision
+**Status:** fixed — PR #8 (`fix/grid-build-accuracy`); per-cell fresh engines at `n_cycles=9`. *(Updated 2026-09-23: this line was not updated when the fix landed, and read "measured, not fixed — the fix has a cost that needs a decision" until then.)*
 **Relevant to:** PLAN Phase 2, which ports this grid to the browser
 
 ---

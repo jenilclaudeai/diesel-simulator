@@ -2,7 +2,7 @@
 
 **Opened by:** REVIEW-001 B-1
 **Lenses:** PHY1 (lead), PHY2, SW2
-**Status:** diagnosed, not fixed — the fix is a physics decision, see below
+**Status:** P-1 and P-2 fixed — PR #5 (`physics/verified-fixes`). *(Updated 2026-09-23: this line was not updated when the fix landed, and read "diagnosed, not fixed — the fix is a physics decision, see below" until then.)*
 **Blocks:** ADR-006, and reframes known bug #7
 
 ---

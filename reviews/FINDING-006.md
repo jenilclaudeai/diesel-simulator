@@ -2,7 +2,7 @@
 
 **Found by:** `tools/audit_dead_signals.py`, written after four consecutive
 findings shared the same shape
-**Status:** diagnosed, not fixed
+**Status:** fixed — PR #5; `h_ring_tdc` renamed honestly, read `h_ring_mid`. *(Updated 2026-09-23: this line was not updated when the fix landed, and read "diagnosed, not fixed" until then.)*
 
 ## The audit
 
