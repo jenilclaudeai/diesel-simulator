@@ -585,3 +585,25 @@ unstable across versions) and **M-3** (no quota or eviction policy).
 
 Verified: 20 fast tests (fake solver, fake IndexedDB) and 2 more through the
 real worker — a real miss took 8.8 s and the hit 0.4 ms.
+
+### ADR-001 — Measured, part 3: agreement loosens where the fast path is unconverged (2026-09-25)
+
+Addendum, not an amendment. With FINDING-013 item 1 (the torque limiter
+calibrated under the full-load schedules), native CPython and Pyodide agree at
+`crdi15` 1800 rpm / 0.6 to **1.2e-6** relative, not the ~1e-10 measured in
+part 1. Same numpy (2.4.6) on both sides, so not a numpy difference.
+
+Measured step by step: the limiter's calibration is a chain of six
+warm-started 9-cycle solves with the same iteration count on both platforms,
+and the difference grows along it — 1.3e-10, 7.6e-11, 1.8e-8, 7.5e-8, 3.7e-7,
+1.1e-6. Without EGR in the calibration the VGT limit cycle (FINDING-013 item
+3) is active there, and a limit cycle amplifies a 1e-10 platform difference.
+
+**Consequences**
+
+- The decision stands: 1e-6 is physically negligible, and converged solves
+  (offline) do not carry the limit cycle.
+- `web/solver/test/roundtrip.test.ts` tolerance 1e-8 → 1e-5, justified inline
+  and shown to still fail on a 0.1% error.
+- "Agrees to ~1e-10" is a property of converged or non-oscillating points,
+  not of the fast path in general.
