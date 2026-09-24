@@ -311,6 +311,52 @@ def test_runtime_info_describes_every_preset():
           1.0, 0.0, "; ".join(problems) or f"{len(described)} presets")
 
 
+def test_limiter_calibrates_under_evaluation_schedules():
+    """FINDING-013 item 1: every torque-limiter calibration solve must run
+    with the full-load schedules (load_est=1) its result is judged under.
+    Before the fix they saw f / fuel_limit_raw -- EGR on across part of the
+    plateau -- and the limiter overshot its cap by up to +5.5%."""
+    eng = DieselEngine(preset="crdi15")
+    seen = []
+    real = eng.operating_point
+
+    def spy(*a, **k):
+        if eng._calibrating:
+            seen.append(k.get("load_est"))
+        return real(*a, **k)
+
+    eng.operating_point = spy
+    eng.fuel_limit(2500.0)                      # capped speed: calibrates
+    bad = [x for x in seen if x != 1.0]
+    check("limiter calibration uses load_est=1",
+          0.0 if (seen and not bad) else 1.0, 0.0, 0.0,
+          f"{len(seen)} calibration solves, load_est {sorted(set(map(str, seen)))}")
+
+
+def test_converged_flag_is_honest():
+    """FINDING-013: CycleResult.converged was set True on every solve without
+    checking. A fixed-count fast solve establishes nothing, so it must say
+    False; converged mode must run at real time for CONVERGED_CYCLES."""
+    op = DieselEngine(preset="single").operating_point(2000, load=0.8, n_cycles=6)
+    check("fast solve does not claim convergence", float(op.cycle.converged),
+          0.0, 0.0)
+    eng = DieselEngine(preset="single")
+    eng.converged_mode = True
+    seen = {}
+    real_run = eng.cycle.run
+
+    def run(*a, **k):
+        seen.update(k)
+        return real_run(*a, **k)
+
+    eng.cycle.run = run
+    eng.operating_point(2000, load=0.8, n_cycles=6)
+    check("converged mode runs CONVERGED_CYCLES at real time",
+          0.0 if (seen.get("n_cycles") == eng.CONVERGED_CYCLES
+                  and seen.get("spool_accel") == 1.0) else 1.0, 0.0, 0.0,
+          f"n_cycles {seen.get('n_cycles')}, spool_accel {seen.get('spool_accel')}")
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -322,7 +368,9 @@ def main():
                test_override_typo_rejected,
                test_registered_preset_not_aliased,
                test_no_pilot_double_count,
-               test_runtime_info_describes_every_preset):
+               test_runtime_info_describes_every_preset,
+               test_limiter_calibrates_under_evaluation_schedules,
+               test_converged_flag_is_honest):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001

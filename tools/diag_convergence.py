@@ -253,7 +253,86 @@ def candidates(names=None, ns=(9, 12)):
                   + f" {max(errs, key=abs):+7.2f} {rms:6.2f}")
 
 
+def _settle_point(job):
+    preset, rpm, load, flim, n = job
+    eng = DieselEngine(preset=preset)
+    if eng.torque_cap(rpm) is not None:
+        eng._torque_cal[int(round(rpm / 25.0))] = (1.0, 0.0, flim)
+    eng.cycle.run = partial(eng.cycle.run, spool_accel=1.0)
+    op = eng.operating_point(rpm, fuel_mg=load * flim, n_cycles=n)
+    return preset, rpm, load, [m["work"] for m in op.cycle.cycle_means], op.torque
+
+
+def settle(n=534):
+    """--settle: at real time (spool_accel 1), how many cycles until the
+    cycle's gross work stays within 1 / 0.5 / 0.1 % of its final value?"""
+    pts = [(p, r, ld, DieselEngine(preset=p).fuel_limit(r), n) for p, r, ld in CAND_POINTS]
+    with Pool(max(1, (os.cpu_count() or 2) - 2)) as pool:
+        res = pool.map(_settle_point, pts)
+    print(f"cycles at real time until gross work stays within x% of its value at cycle {n}")
+    print(f"{'point':22} {'1%':>5} {'0.5%':>5} {'0.1%':>5}  final torque")
+    for p, r, ld, w, T in res:
+        fin = sum(w[-10:]) / 10
+        def first(tol):
+            for i in range(len(w)):
+                if all(abs(x - fin) / fin <= tol for x in w[i:]):
+                    return i + 1
+            return None
+        print(f"{p + ' ' + str(r) + '/' + str(ld):22} {first(0.01):5} {first(0.005):5} {first(0.001):5}  {T:.2f}")
+
+
+def _validate_point(job):
+    preset, rpm, load, n = job
+    eng = DieselEngine(preset=preset)
+    flim = eng.fuel_limit(rpm)                      # fast calibration, then fixed
+    eng = DieselEngine(preset=preset)
+    if eng.torque_cap(rpm) is not None:
+        eng._torque_cal[int(round(rpm / 25.0))] = (1.0, 0.0, flim)
+    eng.cycle.run = partial(eng.cycle.run, spool_accel=1.0)
+    op = eng.operating_point(rpm, fuel_mg=load * flim, n_cycles=n)
+    return preset, rpm, load, [(m["work"], m["boost"]) for m in op.cycle.cycle_means]
+
+
+def validate_n(n=400, checks=(100, 150, 200, 300)):
+    """--validate-n: over the --map grid, at real time, how far is each
+    candidate cycle count from cycle n (gross work and boost)?"""
+    jobs = []
+    for p in PRESETS:
+        s = DieselEngine(preset=p).spec
+        for i in range(6):
+            rpm = round((s.idle_rpm + (s.rated_rpm - s.idle_rpm) * i / 5) / 50) * 50
+            jobs += [(p, rpm, ld, n) for ld in LOADS]
+    with Pool(max(1, (os.cpu_count() or 2) - 2)) as pool:
+        res = pool.map(_validate_point, jobs)
+    print(f"real time, {len(res)} points: |value at cycle k - mean of the last 10 of {n}|, % of it")
+    print(f"{'k':>5} {'work max':>9} {'work p95':>9} {'boost max':>10}  worst point (work)")
+    for k in checks:
+        dw, db = [], []
+        for p, r, ld, m in res:
+            w_fin = sum(x[0] for x in m[-10:]) / 10
+            b_fin = sum(x[1] for x in m[-10:]) / 10
+            dw.append((100 * abs(m[k - 1][0] - w_fin) / max(abs(w_fin), 1e-9), f"{p} {r}/{ld}"))
+            db.append(100 * abs(m[k - 1][1] - b_fin) / max(b_fin, 1e-9))
+        dws = sorted(x[0] for x in dw)
+        worst = max(dw)
+        print(f"{k:5d} {dws[-1]:9.3f} {dws[int(0.95 * len(dws))]:9.3f} {max(db):10.3f}  {worst[1]}")
+    import json
+    json.dump([dict(preset=p, rpm=r, load=ld, work=[x[0] for x in m], boost=[x[1] for x in m])
+               for p, r, ld, m in res],
+              open(os.path.join(os.path.dirname(__file__), "..", "out", "validate_n.json"), "w"))
+    # and: is the tail itself steady? (limit cycles at 1x would show here)
+    tail = max(100 * (max(x[0] for x in m[-10:]) - min(x[0] for x in m[-10:]))
+               / max(abs(sum(x[0] for x in m[-10:]) / 10), 1e-9) for _, _, _, m in res)
+    print(f"largest work spread over the last 10 cycles: {tail:.3f}%")
+
+
 if __name__ == "__main__":
+    if "--validate-n" in sys.argv:
+        validate_n()
+        sys.exit()
+    if "--settle" in sys.argv:
+        settle()
+        sys.exit()
     if "--candidates" in sys.argv:
         candidates()
         sys.exit()
