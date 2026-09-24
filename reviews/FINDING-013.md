@@ -4,7 +4,9 @@
 plateau (was 11%). Symptom of #1, not a separate bug"; re-measure after
 FINDING-007, listed as next action 6 in `STATUS.md`
 **Lens:** PHY1 (lead), PHY2, QA2
-**Status:** measured, not fixed — every fix is a physics decision, see Options
+**Status:** measured, not fixed. Item 3 measured further in session 4 — it is
+**not** local to `crdi15`, and at part load it merges with item 2; see
+*Item 3, measured* at the end. The fix needs a design decision.
 **Reproduce:** `python3 tools/diag_torque_limiter.py` (≈2 min on 6 cores), then
 `--egr-sweep` and `--converge`
 
@@ -110,6 +112,15 @@ converge at all, so read the n=20 and n=40 columns as indicative only.)
 
 `--converge`, limiter fuelling, EGR forced off, fresh engine per row:
 
+> *Correction (session 4, later the same day):* "fresh engine per row" is
+> true but misleading. On a capped preset, `operating_point(fuel_mg=F)` first
+> calls `fuel_limit()` to compute `load_est`, which runs the limiter
+> calibration: three 8-cycle solves at other fuellings. Each row's solve
+> therefore warm-starts from the same deterministic 24-cycle calibration
+> state. The conclusion stands, because every row starts from an identical
+> state, but the rows were not cold starts. The same applies to the first
+> table and to the web app, whose every capped point runs that calibration.
+
 | n_cycles | `crdi15` torque | boost | `crdi_1p5` torque | boost |
 |---|---|---|---|---|
 | 6 | 224.37 | 2.048 | 216.30 | 1.896 |
@@ -181,3 +192,126 @@ fresh engines at 8 cycles, while the reported pull warm-starts from the
 calibration's final state, so the parts do not sum exactly to the evaluated
 error. The limit cycle is shown at one speed only. Nothing here changes code:
 `tools/diag_torque_limiter.py` is diagnostic.
+
+---
+
+## Item 3, measured — the solver's two control loops do not reach steady state in 9 cycles
+
+*Added in session 4, after the options above were written. The options for
+items 2 and 3 are superseded by the ones below; the text above is kept.*
+
+Reproduce: `python3 tools/diag_convergence.py --accel | --map | --candidates`.
+
+### The mechanism of the limit cycle: `spool_accel`
+
+`CycleSolver.run()` advances the turbo shaft **and the VGT integral
+controller** 14× faster than real time on every cycle but the last two, while
+the manifold pressures the controller reads still fill in real crank time.
+From the controller's point of view its sensor lag is 14× longer than
+physical, and an integral controller with lag oscillates. Per-cycle trace
+(`tools/diag_torque_limiter.py --trace`, final solve only): the vanes swing
+between the closed clamp (0.32) and ~0.79 every cycle, boost 2.16–2.64, with
+an 8-cycle period.
+
+Same point (`crdi15` 1650 rpm, limiter fuelling, EGR off), same simulated
+turbo time, fresh engine:
+
+| `spool_accel` | cycles | boost spread, last 8 accelerated cycles | torque |
+|---|---|---|---|
+| **14 (shipped)** | 40 | **20.33%** | 237.06 |
+| 8 | 68 | 23.06% | 216.07 |
+| 4 | 135 | 1.25% | 230.20 |
+| 2 | 268 | 0.00% | 231.41 |
+| 1 | 534 | 0.00% | 232.10 |
+
+### Where it happens
+
+`--map`: boost spread over cycles 30–37 of a 40-cycle solve, 5 presets × 6
+speeds × 4 loads. **21 of 120 points exceed 1%**, up to 30.7%:
+
+- `crdi15`: 9 of 24, at full load 1450–2700 rpm and at part load 2100–4000 rpm
+- `crdi_1p5`: 8 of 24, mostly **part load** (load 0.25 at every speed from
+  1450 to 4000 rpm, 20–31%)
+- `hd_i6`: 2 (1.6% at 1100 rpm); `ld_i4`: 1 (1.2%); `single` has no turbo.
+
+`crdi_1p5` looked converged at 1650 rpm full load only because its vanes sit
+on the fully-open clamp there.
+
+### How wrong the shipped solve is
+
+Against a converged reference — `spool_accel = 1` for 534 cycles; boost
+spread over its last 20 cycles ≤ 0.001% at every point — with identical
+fuelling and schedules (the limiter cache is pre-seeded, so no calibration
+re-runs):
+
+| point | reference N·m | shipped n=9 | shipped n=12 |
+|---|---|---|---|
+| `crdi15` 1450 / 1.0 | 215.77 | +0.59% | −1.57% |
+| `crdi15` 2100 / 0.75 | 180.35 | **−12.94%** | −0.66% |
+| `crdi15` 4000 / 0.25 | 36.05 | −1.11% | **−20.09%** |
+| `crdi_1p5` 2100 / 0.5 | 110.14 | **−16.89%** | −9.44% |
+| `crdi_1p5` 3350 / 0.25 | 43.48 | **−43.58%** | −23.96% |
+| `hd_i6` 1100 / 1.0 | 1757.38 | −0.56% | +2.38% |
+| `hd_i6` 1300 / 1.0 (converges in --map) | 2015.33 | +1.36% | +0.99% |
+| `ld_i4` 2100 / 0.5 (converges in --map) | 164.19 | −2.87% | −1.26% |
+| `crdi15` 800 / 1.0 (converges in --map) | 88.55 | −1.44% | −1.44% |
+
+RMS error at n=9 is **16.2%**. More cycles do not reliably help (n=12 is worse
+at two points). Even points that do not oscillate are 1.4–2.9% off: they have
+not finished converging either.
+
+### At part load it is the EGR loop (item 2)
+
+| point | EGR delivered, shipped n=9 | converged | target | vanes, shipped / converged |
+|---|---|---|---|---|
+| `crdi_1p5` 3350 / 0.25 | **27.93%** | 13.13% | 13.12% | 0.260 (clamp) / 0.634 |
+| `crdi15` 2100 / 0.75 | **13.18%** | 4.47% | 4.71% | 0.320 (clamp) / 0.502 |
+
+The model's steady state hits the EGR target to 0.01 points. At 9 cycles it
+delivers 2.1–2.8× the target, because the valve starts 25% open (item 2) and
+trims in real time, with the vanes shut on their clamp. Items 2 and 3 are one
+problem: **neither control loop reaches its steady state in 9 cycles.**
+
+### Four VGT-only fixes were tried; none works
+
+Applied from outside the solver by wrapping `Turbocharger.step`. The wrapper
+was checked first: in "shipped" mode it reproduces the unwrapped solver
+bit-for-bit at two points, and its controller-override path matches to 4.9e-9
+(a limit cycle amplifies rounding). Each candidate changes only the
+accelerated cycles, so real-time (1×) behaviour — the physical turbo lag —
+is untouched.
+
+| candidate | worst, n=9 | RMS, n=9 | worst, n=12 | RMS, n=12 |
+|---|---|---|---|---|
+| shipped: shaft 14×, controller 14× | −43.58% | 16.21% | −23.96% | 10.95% |
+| C1: controller at 1× | −26.80% | 11.94% | −53.52% | 18.77% |
+| C2: both ramp 14× → 1× | −43.65% | 18.18% | −76.59% | 26.52% |
+| C3: controller capped at 2× | −38.13% | 15.58% | −71.93% | 24.74% |
+| C4: both 4× | −40.17% | 16.49% | −76.53% | 26.10% |
+
+They cannot work at part load, because they leave the EGR loop as it is.
+
+### Consequences
+
+- **The real-time grid and the web app carry these errors.** Both solve at
+  `n_cycles=9` on fresh engines. `crdi15` is the app's default engine.
+- **The golden points lock in unconverged values.** They are 9-cycle solves;
+  `crdi15` 1800 / 0.6 is a part-load point with EGR active.
+- **Item 1's numbers were measured on unconverged solves**, so item 1 has to
+  be re-measured after this is fixed; its mechanism (fit with EGR on, judge
+  with it off) is unaffected.
+- Known bug #1 ("use `n_cycles >= 9`") is a symptom of this, not a rule that
+  can be satisfied by picking a larger number.
+
+### Options (supersede the item 2 and 3 options above)
+
+| option | positives | trade-offs |
+|---|---|---|
+| **A. Solve for the controllers' steady state.** In the accelerated cycles, replace the two continuous integral controllers with a once-per-cycle update on cycle-mean boost and burnt fraction (damped secant toward the target, clamp-aware). The last two cycles and all 1× (transient) running are unchanged. | Keeps the cost at ~9–12 cycles. Principled: a steady state does not depend on how the controller got there. Fixes VGT and EGR together. | New solver code in `cycle.py`/`turbo.py` needing its own convergence proof across the map. Moves every part-load number and some full-load ones: golden points re-baselined with justification, the 2310 N·m validation re-checked, every cached grid invalidated (automatic via the physics fingerprint). |
+| B. Run to convergence at 1× | correct by construction; no new control code | 10–60× slower: grid builds go from minutes to hours; unusable in the browser |
+| C. Warm-start actuators from a neighbouring converged cell | cheap in grid sweeps | reintroduces the path dependence FINDING-011 removed; does not help single points |
+| D. Document it and flag it in the UI | nothing moves | part-load numbers up to 44% wrong on the default engine; against the governing principle in PLAN.md |
+
+Recommended: **A**, prototyped behind a flag first, judged against the 1×
+reference on the nine points above and on `--map`, and only then made the
+default. Then re-measure item 1.

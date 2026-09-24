@@ -130,6 +130,42 @@ def _conv_point(job):
     return n, op.torque, op.boost_pr
 
 
+def trace(preset, rpm, F, n=40):
+    """--trace: VGT position, shaft speed and boost at the end of every cycle
+    of one solve, with the min/max vane position within the cycle."""
+    eng = DieselEngine(preset=preset)
+    steps = eng.cycle.n
+    log = []
+    real_step = eng.turbo.step
+
+    def step(*a, **k):
+        r = real_step(*a, **k)
+        log.append((eng.turbo.vgt_pos, eng.turbo.n_rpm, a[3] / a[1]))
+        return r
+
+    eng.turbo.step = step
+    # operating_point() on a capped preset first runs the limiter calibration
+    # (three 8-cycle solves, via fuel_limit() for load_est); keep only the
+    # steps of the final solve
+    real_run = eng.cycle.run
+
+    def run(*a, **k):
+        log.clear()
+        return real_run(*a, **k)
+
+    eng.cycle.run = run
+    op = eng.operating_point(rpm, fuel_mg=F, n_cycles=n, egr=0.0)
+    assert len(log) == n * steps, (len(log), n * steps)
+    vmin = eng.spec.turbo.vgt_min_frac
+    print(f"{preset} {rpm} rpm, F = {F:.2f} mg, EGR 0, n = {n}; vgt clamps "
+          f"[{vmin}, 1.0]; final torque {op.torque:.2f}")
+    print(f"{'cyc':>4} {'vgt_end':>8} {'vgt_min':>8} {'vgt_max':>8} {'turbo_rpm':>10} {'boost':>6}")
+    for c in range(n):
+        seg = log[c * steps:(c + 1) * steps]
+        v = [x[0] for x in seg]
+        print(f"{c:4d} {v[-1]:8.3f} {min(v):8.3f} {max(v):8.3f} {seg[-1][1]:10.0f} {seg[-1][2]:6.3f}")
+
+
 def main():
     jobs = [(p, r) for p in PRESETS for r in RPMS]
     with Pool(max(1, (os.cpu_count() or 2) - 2)) as pool:
@@ -151,7 +187,13 @@ def main():
 
 if __name__ == "__main__":
     os.makedirs(os.path.join(os.path.dirname(__file__), "..", "out"), exist_ok=True)
-    if "--converge" in sys.argv:
+    if "--trace" in sys.argv:
+        rows = json.load(open(os.path.join(os.path.dirname(__file__), "..", "out",
+                                           "diag_torque_limiter.json")))
+        for preset in PRESETS:
+            trace(preset, 1650, next(r["F"] for r in rows
+                                     if r["preset"] == preset and r["rpm"] == 1650))
+    elif "--converge" in sys.argv:
         converge()
     elif "--egr-sweep" in sys.argv:
         egr_sweep()
