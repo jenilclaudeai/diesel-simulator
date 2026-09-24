@@ -111,6 +111,7 @@
     @if (chart()?.negative) {
       <p class="note">Below zero, the governor has cut fuel: past rated speed the engine cannot hold these revs on its own.</p>
     }
+    <p class="note accuracy">{{ accuracy() }}</p>
   }
 
   @if (solver.info(); as i) {

@@ -454,3 +454,23 @@ calibration's own 1% tolerance.
 
 See FINDING-016: they had been passing on a switch of the main ignition delay
 between two values, which the corrected fuelling no longer triggers.
+
+### Caveat online: what the dyno page's fast solve is worth
+
+`tools/diag_torque_limiter.py --pull` — every preset's 10-point full-load pull
+as the page solves it (fresh engine, load 1, n_cycles 9, item 1 applied)
+against converged solves. Physics build `64c825e675fc`.
+
+| preset | worst gap, positive torque | governed end (negative torque) |
+|---|---|---|
+| `crdi15` | −5.9% at 1650 rpm | 2.0 N·m |
+| `crdi_1p5` | −8.5% at 1200 rpm | 20.1 N·m |
+| `hd_i6` | −3.3% at 1950 rpm | 14.2 N·m |
+| `ld_i4` | −3.8% at 2600 rpm | 5.1 N·m |
+| `single` (no turbo) | 0.0% | 0.0 N·m |
+
+The page now states its engine's figure under the table
+(`web/app/src/app/dyno/accuracy.ts`, generated from this run by
+`--write-accuracy`). The table carries the physics build it was measured on;
+on any other build the page says the accuracy has not been measured rather
+than showing a stale number.
