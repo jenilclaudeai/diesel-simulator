@@ -29,7 +29,7 @@ Modes (native Python, multiprocessing):
               C4       both 4x
 
 Diagnostic only; changes nothing.
-Run:  python3 tools/diag_convergence.py --map | --accel | --candidates
+Run:  python3 tools/diag_convergence.py --map | --accel | --candidates | --settle | --validate-n
 """
 import os
 import sys
@@ -159,7 +159,7 @@ def apply_candidate(eng, name, n):
         st["i"], st["n"] = 0, k.get("n_cycles", n)
         return real_run(*a, **k)
 
-    def step(dt, p_amb, T_amb, p_int, *rest):
+    def step(dt, p_amb, T_amb, p_int, *rest, **kw):
         m = st["n"]
         c = st["i"] // steps
         st["i"] += 1
@@ -168,7 +168,7 @@ def apply_candidate(eng, name, n):
         sa = shaft_a(c, m) if c < m - 2 else 1.0
         ca = ctrl_a(c, m) if c < m - 2 else 1.0
         v0 = t.vgt_pos
-        r = real_step(dt0 * sa, p_amb, T_amb, p_int, *rest)
+        r = real_step(dt0 * sa, p_amb, T_amb, p_int, *rest, **kw)
         if t.s.vgt and ca != sa:
             bt = rest[-1] if rest else None
             tgt = bt if bt else t.s.wastegate_pset
@@ -209,20 +209,38 @@ CAND_POINTS = (  # preset, rpm, load -- the worst limit cycles in --map, plus
 )
 
 
-def candidates():
+REF_CACHE = os.path.join(os.path.dirname(__file__), "..", "out", "diag_convergence_ref.json")
+
+
+def candidates(names=None, ns=(9, 12)):
+    """names: candidates to score (default all wrapper candidates). The 1x
+    references are slow (534 cycles each) and are cached in out/, keyed by
+    the physics source hash so a solver change recomputes them."""
+    import json
+    from dieselsim.bridge import source_hash
+    names = names or list(CANDIDATES)
     pts = [(p, r, ld, DieselEngine(preset=p).fuel_limit(r)) for p, r, ld in CAND_POINTS]
-    jobs = [("reference", p, r, ld, f, 534) for p, r, ld, f in pts]
-    jobs += [(c, p, r, ld, f, n) for c in CANDIDATES for p, r, ld, f in pts for n in (9, 12)]
+    cache = {}
+    if os.path.exists(REF_CACHE):
+        cache = json.load(open(REF_CACHE))
+    key = lambda p, r, ld: f"{source_hash()[:12]}|{p}|{r}|{ld}"
+    todo = [("reference", p, r, ld, f, 534) for p, r, ld, f in pts if key(p, r, ld) not in cache]
+    jobs = todo + [(c, p, r, ld, f, n) for c in names for p, r, ld, f in pts for n in ns]
     with Pool(max(1, (os.cpu_count() or 2) - 2)) as pool:
         res = pool.map(_cand_point, jobs)
-    ref = {(p, r, ld): (T, sp) for c, p, r, ld, n, T, sp in res if c == "reference"}
+    for c, p, r, ld, n, T, sp in res:
+        if c == "reference":
+            cache[key(p, r, ld)] = [T, sp]
+    os.makedirs(os.path.dirname(REF_CACHE), exist_ok=True)
+    json.dump(cache, open(REF_CACHE, "w"), indent=1)
+    ref = {(p, r, ld): tuple(cache[key(p, r, ld)]) for p, r, ld, _ in pts}
     print("torque error vs converged reference (spool_accel 1, 534 cycles), %")
     cols = [f"{p[:6]}@{r}/{ld}" for p, r, ld, _ in pts]
     print(f"{'':12} " + " ".join(f"{c:>15}" for c in cols) + f" {'worst':>7} {'rms':>6}")
     print(f"{'reference':12} " + " ".join(f"{ref[k[:3]][0]:15.2f}" for k in pts))
     print(f"{'ref spread%':12} " + " ".join(f"{ref[k[:3]][1]:15.3f}" for k in pts))
-    for c in CANDIDATES:
-        for n in (9, 12):
+    for c in names:
+        for n in ns:
             errs = []
             for p, r, ld, _ in pts:
                 T = next(T for cc, pp, rr, ll, nn, T, _ in res if (cc, pp, rr, ll, nn) == (c, p, r, ld, n))
@@ -232,10 +250,91 @@ def candidates():
                   + f" {max(errs, key=abs):+7.2f} {rms:6.2f}")
 
 
+def _settle_point(job):
+    preset, rpm, load, flim, n = job
+    eng = DieselEngine(preset=preset)
+    if eng.torque_cap(rpm) is not None:
+        eng._torque_cal[int(round(rpm / 25.0))] = (1.0, 0.0, flim)
+    eng.cycle.run = partial(eng.cycle.run, spool_accel=1.0)
+    op = eng.operating_point(rpm, fuel_mg=load * flim, n_cycles=n)
+    return preset, rpm, load, [m["work"] for m in op.cycle.cycle_means], op.torque
+
+
+def settle(n=534):
+    """--settle: at real time (spool_accel 1), how many cycles until the
+    cycle's gross work stays within 1 / 0.5 / 0.1 % of its final value?"""
+    pts = [(p, r, ld, DieselEngine(preset=p).fuel_limit(r), n) for p, r, ld in CAND_POINTS]
+    with Pool(max(1, (os.cpu_count() or 2) - 2)) as pool:
+        res = pool.map(_settle_point, pts)
+    print(f"cycles at real time until gross work stays within x% of its value at cycle {n}")
+    print(f"{'point':22} {'1%':>5} {'0.5%':>5} {'0.1%':>5}  final torque")
+    for p, r, ld, w, T in res:
+        fin = sum(w[-10:]) / 10
+        def first(tol):
+            for i in range(len(w)):
+                if all(abs(x - fin) / fin <= tol for x in w[i:]):
+                    return i + 1
+            return None
+        print(f"{p + ' ' + str(r) + '/' + str(ld):22} {first(0.01):5} {first(0.005):5} {first(0.001):5}  {T:.2f}")
+
+
+def _validate_point(job):
+    preset, rpm, load, n = job
+    eng = DieselEngine(preset=preset)
+    flim = eng.fuel_limit(rpm)                      # fast calibration, then fixed
+    eng = DieselEngine(preset=preset)
+    if eng.torque_cap(rpm) is not None:
+        eng._torque_cal[int(round(rpm / 25.0))] = (1.0, 0.0, flim)
+    eng.cycle.run = partial(eng.cycle.run, spool_accel=1.0)
+    op = eng.operating_point(rpm, fuel_mg=load * flim, n_cycles=n)
+    return preset, rpm, load, [(m["work"], m["boost"]) for m in op.cycle.cycle_means]
+
+
+def validate_n(n=400, checks=(100, 150, 200, 300)):
+    """--validate-n: over the --map grid, at real time, how far is each
+    candidate cycle count from cycle n (gross work and boost)?"""
+    jobs = []
+    for p in PRESETS:
+        s = DieselEngine(preset=p).spec
+        for i in range(6):
+            rpm = round((s.idle_rpm + (s.rated_rpm - s.idle_rpm) * i / 5) / 50) * 50
+            jobs += [(p, rpm, ld, n) for ld in LOADS]
+    with Pool(max(1, (os.cpu_count() or 2) - 2)) as pool:
+        res = pool.map(_validate_point, jobs)
+    print(f"real time, {len(res)} points: |value at cycle k - mean of the last 10 of {n}|, % of it")
+    print(f"{'k':>5} {'work max':>9} {'work p95':>9} {'boost max':>10}  worst point (work)")
+    for k in checks:
+        dw, db = [], []
+        for p, r, ld, m in res:
+            w_fin = sum(x[0] for x in m[-10:]) / 10
+            b_fin = sum(x[1] for x in m[-10:]) / 10
+            dw.append((100 * abs(m[k - 1][0] - w_fin) / max(abs(w_fin), 1e-9), f"{p} {r}/{ld}"))
+            db.append(100 * abs(m[k - 1][1] - b_fin) / max(b_fin, 1e-9))
+        dws = sorted(x[0] for x in dw)
+        worst = max(dw)
+        print(f"{k:5d} {dws[-1]:9.3f} {dws[int(0.95 * len(dws))]:9.3f} {max(db):10.3f}  {worst[1]}")
+    import json
+    json.dump([dict(preset=p, rpm=r, load=ld, work=[x[0] for x in m], boost=[x[1] for x in m])
+               for p, r, ld, m in res],
+              open(os.path.join(os.path.dirname(__file__), "..", "out", "validate_n.json"), "w"))
+    # and: is the tail itself steady? (limit cycles at 1x would show here)
+    tail = max(100 * (max(x[0] for x in m[-10:]) - min(x[0] for x in m[-10:]))
+               / max(abs(sum(x[0] for x in m[-10:]) / 10), 1e-9) for _, _, _, m in res)
+    print(f"largest work spread over the last 10 cycles: {tail:.3f}%")
+
+
 if __name__ == "__main__":
+    if "--validate-n" in sys.argv:
+        validate_n()
+        sys.exit()
+    if "--settle" in sys.argv:
+        settle()
+        sys.exit()
     if "--candidates" in sys.argv:
         candidates()
         sys.exit()
+    # --fix scored the in-solver steady-state control experiment
+    # (steady_ctrl), which lives only on the draft PR #20 branch.
     if "--accel" in sys.argv:
         accel_sweep()
     else:

@@ -84,6 +84,15 @@ class OperatingPoint:
 
 
 class DieselEngine:
+    # FINDING-013: cycles for a converged solve. The fast path (14x shaft
+    # acceleration, n_cycles ~9) is not converged wherever the VGT or EGR
+    # loop is active -- up to -43.6% at part load against a real-time
+    # reference. With converged_mode set, every operating_point() (the torque
+    # limiter's calibration included) runs at real time for this many cycles
+    # and reports whether its last cycles settled (CycleResult.converged).
+    # For offline builds: too slow for the browser.
+    CONVERGED_CYCLES = 200
+
     def __init__(self, spec: EngineSpec = None, dtheta: float = 1.0,
                  preset: str = "hd_i6"):
         self.spec = spec or get_preset(preset)
@@ -101,6 +110,7 @@ class DieselEngine:
         self._mode_cache = {}
         self._torque_cal = {}
         self._calibrating = False
+        self.converged_mode = False
         # Cycles used when calibrating the torque limiter.
         #
         # BUG-8: this was assigned twice, 10 then 8, with comments arguing
@@ -191,16 +201,22 @@ class DieselEngine:
             # that.  It is safe to close this loop here, and only here,
             # because the torque cap bounds the result: without a cap the
             # same feedback runs away (more fuel -> more boost -> more fuel).
-            op0 = self.operating_point(rpm, fuel_mg=f_max, n_cycles=self.cal_cycles)
+            # FINDING-013 item 1: every calibration solve runs with the
+            # full-load schedules (load_est=1) that the calibrated fuel is
+            # later judged under. They used to see f / fuel_limit_raw -- EGR
+            # on across part of the plateau -- and the limiter overshot its
+            # cap by up to +5.5% where EGR switched on.
+            op0 = self.operating_point(rpm, fuel_mg=f_max, n_cycles=self.cal_cycles,
+                                       load_est=1.0)
             headroom = float(np.clip(op0.cycle.afr / max(self.spec.afr_limit,
                                                          1e-6), 1.0, 2.2))
             f_ceiling = f_max * headroom
             f1 = 0.60 * f_ceiling
             T1 = self.operating_point(rpm, fuel_mg=f1,
-                                      n_cycles=self.cal_cycles).torque
+                                      n_cycles=self.cal_cycles, load_est=1.0).torque
             f2 = f_ceiling
             T2 = self.operating_point(rpm, fuel_mg=f2,
-                                      n_cycles=self.cal_cycles).torque
+                                      n_cycles=self.cal_cycles, load_est=1.0).torque
             f_max = f_ceiling
             a = (T2 - T1) / max(f2 - f1, 1e-9)
             if a <= 1e-6:                    # degenerate: refuse to invert
@@ -215,7 +231,8 @@ class DieselEngine:
                 if abs(f_new - f) < 0.05:
                     break
                 T_new = self.operating_point(rpm, fuel_mg=f_new,
-                                             n_cycles=self.cal_cycles).torque
+                                             n_cycles=self.cal_cycles,
+                                             load_est=1.0).torque
                 if abs(T_new - T_target) <= tol * abs(T_target):
                     f, T = f_new, T_new
                     break
@@ -300,20 +317,36 @@ class DieselEngine:
                         n_cycles: int = 10, warm_start: bool = True,
                         update_oil: bool = False,
                         p_amb: float = 101325.0,
-                        T_amb: float = 298.0) -> OperatingPoint:
+                        T_amb: float = 298.0,
+                        converged: bool = None,
+                        load_est: float = None) -> OperatingPoint:
+        """
+        converged: run at real time for CONVERGED_CYCLES instead of the
+            accelerated n_cycles, and check that the last cycles settled
+            (FINDING-013). None follows self.converged_mode.
+        load_est: the load the EGR / boost-target / SOI schedules see. By
+            default fuel_mg / fuel_limit(rpm). The torque limiter's
+            calibration passes 1.0 so it is fitted under the same full-load
+            schedules it is judged under (FINDING-013 item 1).
+        """
         g = self.spec.geom
+        conv = self.converged_mode if converged is None else converged
         if fuel_mg is None:
             load = 0.0 if load is None else load
             fuel_mg = max(0.0, load) * self.fuel_limit(rpm)
-        load_est = fuel_mg / max(self.fuel_limit(rpm), 1e-9)
+        if load_est is None:
+            load_est = fuel_mg / max(self.fuel_limit(rpm), 1e-9)
         if egr is None:
             egr = self.egr_schedule(rpm, load_est)
 
         cyc = self.cycle.run(
             rpm, fuel_mg, self.turbo, egr_cmd=egr, p_amb=p_amb, T_amb=T_amb,
-            n_cycles=n_cycles, boost_target=self.boost_target(rpm, load_est),
+            boost_target=self.boost_target(rpm, load_est),
             soi_shift=self.soi_schedule(rpm, load_est),
-            state0=self._state if warm_start else None)
+            state0=self._state if warm_start else None,
+            **(dict(n_cycles=self.CONVERGED_CYCLES, spool_accel=1.0,
+                    check_convergence=True) if conv
+               else dict(n_cycles=n_cycles)))
         self._state = cyc.state
 
         fr = self.friction.evaluate(cyc.traces.theta, cyc.traces.p[0], rpm,
@@ -688,7 +721,9 @@ class DieselEngine:
             if rpm < self.spec.idle_rpm:
                 f_cmd = max(f_cmd, self.fuel_limit(rpm) *
                             min(0.45, 0.02 * (self.spec.idle_rpm - rpm)))
-            op = self.operating_point(rpm, fuel_mg=f_cmd, n_cycles=n_cycles)
+            # always the fast path: a transient step is not a steady state
+            op = self.operating_point(rpm, fuel_mg=f_cmd, n_cycles=n_cycles,
+                                      converged=False)
             T_load = float(load_torque_fn(t, rpm))
             if not math.isfinite(op.torque):
                 raise RuntimeError(

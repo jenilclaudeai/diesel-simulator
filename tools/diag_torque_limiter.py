@@ -166,6 +166,74 @@ def trace(preset, rpm, F, n=40):
         print(f"{c:4d} {v[-1]:8.3f} {min(v):8.3f} {max(v):8.3f} {seg[-1][1]:10.0f} {seg[-1][2]:6.3f}")
 
 
+class _OldCalibration(DieselEngine):
+    """The limiter as it was before FINDING-013 item 1: calibration solves
+    see load_est = f / fuel_limit_raw instead of 1."""
+    def operating_point(self, *a, **k):
+        if self._calibrating and k.get("load_est") == 1.0:
+            k["load_est"] = None
+        return super().operating_point(*a, **k)
+
+
+def _conv_limiter(job):
+    variant, preset, rpm = job
+    cls = _OldCalibration if variant == "before" else DieselEngine
+    eng = cls(preset=preset)
+    eng.converged_mode = True
+    op = eng.operating_point(rpm, load=1.0)
+    return variant, preset, rpm, eng.torque_cap(rpm), op.torque, op.egr_pct
+
+
+def converged_limiter():
+    """--converged: the limiter's residual with every solve converged (real
+    time, CONVERGED_CYCLES), before and after calibrating under the
+    evaluation's schedules (FINDING-013 item 1)."""
+    rpms = (1250, 1650, 2050, 2500, 2900, 3350, 4000)
+    jobs = [(v, p, r) for v in ("before", "after") for p in PRESETS for r in rpms]
+    with Pool(max(1, (os.cpu_count() or 2) - 2)) as pool:
+        res = pool.map(_conv_limiter, jobs)
+    print(f"converged ({DieselEngine.CONVERGED_CYCLES} cycles, real time): torque vs cap, %")
+    print(f"{'preset':9} {'rpm':>5} {'cap':>6} {'before':>8} {'after':>8}")
+    for p in PRESETS:
+        for r in rpms:
+            b = next(x for x in res if x[:3] == ("before", p, r))
+            a = next(x for x in res if x[:3] == ("after", p, r))
+            c = b[3]
+            print(f"{p:9} {r:5d} {c:6.1f} {100 * (b[4] - c) / c:+8.2f} {100 * (a[4] - c) / c:+8.2f}")
+
+
+def _pull_point(job):
+    mode, preset, rpm = job
+    eng = DieselEngine(preset=preset)
+    eng.converged_mode = (mode == "converged")
+    return mode, preset, rpm, eng.operating_point(rpm, load=1.0, n_cycles=9).torque
+
+
+def dyno_pull():
+    """--pull: every preset's 10-point full-load pull as the web app runs it
+    (fresh engine, load 1, n_cycles 9) against converged mode."""
+    from dieselsim.config import PRESETS as ALL
+    jobs = []
+    for p in sorted(ALL):
+        s = DieselEngine(preset=p).spec
+        rpms = [round((s.idle_rpm + (s.max_rpm - s.idle_rpm) * i / 9) / 50) * 50 for i in range(10)]
+        jobs += [(m, p, r) for m in ("fast", "converged") for r in rpms]
+    with Pool(max(1, (os.cpu_count() or 2) - 2)) as pool:
+        res = pool.map(_pull_point, jobs)
+    print("dyno pull, fast (web app) vs converged: torque N.m, error %")
+    for p in sorted(ALL):
+        rows = sorted({x[2] for x in res if x[1] == p})
+        errs = []
+        for r in rows:
+            f = next(x[3] for x in res if x[:3] == ("fast", p, r))
+            c = next(x[3] for x in res if x[:3] == ("converged", p, r))
+            e = 100 * (f - c) / abs(c) if abs(c) > 1.0 else float("nan")
+            errs.append((abs(e) if e == e else 0.0, r, f, c, e))
+            print(f"  {p:9} {r:5d}  fast {f:8.2f}  converged {c:8.2f}  {e:+7.2f}%")
+        w = max(errs)
+        print(f"  {p}: worst {w[4]:+.2f}% at {w[1]} rpm")
+
+
 def main():
     jobs = [(p, r) for p in PRESETS for r in RPMS]
     with Pool(max(1, (os.cpu_count() or 2) - 2)) as pool:
@@ -187,7 +255,11 @@ def main():
 
 if __name__ == "__main__":
     os.makedirs(os.path.join(os.path.dirname(__file__), "..", "out"), exist_ok=True)
-    if "--trace" in sys.argv:
+    if "--converged" in sys.argv:
+        converged_limiter()
+    elif "--pull" in sys.argv:
+        dyno_pull()
+    elif "--trace" in sys.argv:
         rows = json.load(open(os.path.join(os.path.dirname(__file__), "..", "out",
                                            "diag_torque_limiter.json")))
         for preset in PRESETS:

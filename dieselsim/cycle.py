@@ -147,7 +147,27 @@ class CycleResult:
     turbo: dict = field(default_factory=dict)
     traces: CycleTraces = None
     state: dict = field(default_factory=dict)
-    converged: bool = False
+    converged: bool = False       # see _tail_converged (FINDING-013)
+    n_cycles_used: int = 0
+    cycle_means: list = field(default_factory=list)
+
+
+TAIL_CYCLES = 10       # cycles judged by _tail_converged
+TAIL_TOL = 1e-3        # relative spread allowed over them
+
+
+def _tail_converged(means, n=TAIL_CYCLES, tol=TAIL_TOL):
+    """True when gross work and boost each vary by less than tol (relative)
+    over the last n cycles. Meaningful only for a real-time solve: in an
+    accelerated one the last two cycles run at a different rate."""
+    if len(means) < n:
+        return False
+    for key in ("work", "boost"):
+        v = [m[key] for m in means[-n:]]
+        mean = sum(v) / n
+        if (max(v) - min(v)) > tol * max(abs(mean), 1e-12):
+            return False
+    return True
 
 
 class CycleSolver:
@@ -253,7 +273,8 @@ class CycleSolver:
     # ------------------------------------------------------------------ #
     def run(self, rpm, fuel_mg_per_cycle, turbo, egr_cmd=0.0,
             p_amb=101325.0, T_amb=298.0, n_cycles=12, boost_target=None,
-            soi_shift=0.0, state0=None, spool_accel=14.0) -> CycleResult:
+            soi_shift=0.0, state0=None, spool_accel=14.0,
+            check_convergence=False) -> CycleResult:
         spec, g, thb = self.spec, self.spec.geom, self.spec.thermal
         nc = g.n_cyl
         om = 2.0 * math.pi * rpm / 60.0
@@ -330,9 +351,11 @@ class CycleSolver:
         h_int_wall = 12.0 * V_int ** 0.66
         h_exh_wall = 165.0 * V_exh ** 0.66
 
+        cycle_means = []
         for cyc in range(n_cycles):
             last = (cyc == n_cycles - 1)
             accel = 1.0 if cyc >= n_cycles - 2 else spool_accel
+            cm_yb = cm_megr = cm_mc = cm_pint = 0.0
 
             p_tr = np.zeros((nc, self.n))
             pm_tr = np.zeros((nc, self.n))
@@ -683,9 +706,31 @@ class CycleSolver:
                 if last:
                     pim_tr[k] = p_int
                     pem_tr[k] = p_exh
+                cm_yb += yb_int
+                cm_megr += mdot_egr
+                cm_mc += mdot_c
+                cm_pint += p_int
+
+            cycle_means.append(dict(
+                yb_int=cm_yb / self.n, mdot_egr=cm_megr / self.n,
+                mdot_comp=cm_mc / self.n, boost=cm_pint / self.n / p_amb,
+                egr_valve=A_egr / A_egr_max if A_egr_max > 0 else 0.0,
+                vgt=turbo.vgt_pos, turbo_rpm=turbo.n_rpm,
+                work=float(np.mean(SN["Wg"])),
+                imep_net=float(np.mean(SN["Wg"]) + np.mean(SN["Wp"]))
+                / g.displacement_cyl))
 
         # ================= results =================
         r = CycleResult(rpm=rpm)
+        # per-cycle means, every cycle: a convergence diagnostic (FINDING-013)
+        r.cycle_means = cycle_means
+        r.n_cycles_used = n_cycles
+        # FINDING-013: this was `r.converged = True` at the end of every
+        # solve, unchecked (the dead-signal audit allow-listed it). A
+        # fixed-count accelerated solve establishes nothing, so it now stays
+        # False; only a caller that asks (converged mode, real time) gets a
+        # check of the tail -- see _tail_converged.
+        r.converged = bool(check_convergence and _tail_converged(cycle_means))
         Vd = g.displacement_cyl
         r.imep_gross = float(np.mean(SN["Wg"])) / Vd
         r.pmep = float(np.mean(SN["Wp"])) / Vd
@@ -742,7 +787,6 @@ class CycleSolver:
             valve_lift_int=lift_i, valve_lift_exh=lift_e, soi_deg=soi_main,
             soc_pilot_deg=float(soc_p[0]), soc_main_deg=float(soc_m[0]),
             pilot_soi_deg=soi_pilot, inj_dur_main_deg=dur_main)
-        r.converged = True
         return r
 
     # ------------------------------------------------------------------ #

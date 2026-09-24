@@ -315,3 +315,64 @@ They cannot work at part load, because they leave the EGR loop as it is.
 Recommended: **A**, prototyped behind a flag first, judged against the 1×
 reference on the nine points above and on `--map`, and only then made the
 default. Then re-measure item 1.
+
+---
+
+## Option A, attempted (session 4) — full load converges, part load does not
+
+*Draft PR #20, behind `steady_ctrl` (off by default; with it off the solver is
+bit-identical, suite 18/0/2, audit identical to `main`). Scored with
+`python3 tools/diag_convergence.py --fix` against the 1× reference.*
+
+| variant | worst n=16 | RMS n=16 | kept? |
+|---|---|---|---|
+| shipped | −28.34% | 11.38% | — |
+| per-actuator secants, VGT held (shaft free) | — | 27.43% at n=9 | no: the shaft lags ~5 cycles at 14×, so per-cycle updates oscillate |
+| + shaft held; EGR secant on burnt fraction | — | — | no: fights the boost loop, 56% EGR at one point |
+| **Broyden on (speed, VGT) + flow-ratio EGR** | **−16.83%** | **8.51%** | **yes (in #20)** |
+| + plenum burnt fraction set to its equilibrium each held cycle | +35.96% | 12.26% | no: reverted |
+
+Full load converges with the kept variant — within 0.4% by n=12–16 at
+`crdi15` 1450 and 800 and `hd_i6` 1300 — and the limit cycle is gone. Part load
+with EGR does not. Per-cycle means (`CycleResult.cycle_means`, added for this)
+show why at `crdi15` 2100 / 0.75: the solve is still moving when the held
+cycles run out — the first 3–4 cycles are spent spinning the shaft up from a
+fresh engine's 12,000 rpm — so the last held step is large and uncorrected,
+and EGR flow collapses in the two free cycles (7.5 → 1.2 → 0.5 g/s).
+
+**Correction to the options table above:** option A was described as keeping
+the cost at ~9–12 cycles. That estimate was not supported: with shaft, VGT and
+EGR coupled, no variant tried reaches the stopping rule set for the attempt
+(RMS < 1% within 16 cycles).
+
+### Option A with an adaptive cycle count (session 4, third attempt)
+
+`n_cycles` becomes a minimum; held cycles are added until the cycle means stop
+changing (`_steady_converged`: work and boost 0.1%, shaft speed 0.2%, burnt
+fraction 0.0005), up to 40. The shaft starts near its running speed instead of
+12,000 rpm. The Broyden (speed, VGT) step was replaced: shaft speed ↔ boost by
+1-D secant; VGT ↔ net power by a fixed conservative gain, because net power
+responds to the vanes with a ~1-cycle lag and a learned slope made the vanes
+wander (0.32–0.60) without settling.
+
+| point | vs reference | cycles | converged |
+|---|---|---|---|
+| `crdi15` 1450 / 1.0 | +0.29% | 11 | yes |
+| `hd_i6` 1100 / 1.0 | −0.11% | 14 | yes |
+| `hd_i6` 1300 / 1.0 | −0.14% | 15 | yes |
+| `crdi15` 2100 / 0.75 | −0.71% | 26 | yes |
+| `crdi_1p5` 2100 / 0.5 | −1.34% | 38 | yes |
+| `ld_i4` 2100 / 0.5 | −2.86% | 40 | no |
+| `crdi15` 4000 / 0.25 | +4.63% | 40 | no |
+| `crdi15` 800 / 1.0 | **+10.99%** | 40 | no — shipped n=9 is −1.44% here |
+| `crdi_1p5` 3350 / 0.25 | +11.57% | 40 | no |
+
+RMS 5.6% (shipped n=9: 16.2%; Broyden n=16: 8.5%). The timebox set for this
+attempt — the nine points within 1% inside 40 cycles — is not met, so it stops
+here. Converged points still sit 0.1–1.3% from the reference, consistent with
+the EGR flow formula's fixed point ignoring manifold backflow.
+
+Also found: `CycleResult.converged` was set `True` unconditionally at the end
+of every solve, so every solve claimed convergence without checking; the
+dead-signal audit listed it as expected-constant. Nothing read it. It is now
+`False` unless a `steady_ctrl` solve met the convergence test.
