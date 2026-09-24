@@ -54,6 +54,10 @@ Measured at the start of session 4 against `git log` and `gh pr list`:
 - **Found:** `web/app` does not build unless `web/solver` has had `npm ci`
   (it compiles `../solver/src` and needs the `pyodide` types) — TS2307
   otherwise. Undocumented until now; the CI job does both.
+- **FINDING-013** (PR #19), from re-measuring bug #3 — see the Findings table.
+  The largest item is not the limiter: `crdi15` at 1650 rpm full-load fuel
+  oscillates 211.6–237.9 N·m from 6 to 40 cycles and never converges, so
+  "use `n_cycles >= 9`" does not hold everywhere.
 - **Found:** `NATIVE_REF` for the e2e check was undocumented, and without it
   the check compares nothing against native Python and still passes (9
   checks, not 11–12). How to produce it is under Tests below.
@@ -147,6 +151,7 @@ now-honestly-named `h_ring_tdc`), 1 tiny (`Pb_valvetrain`)**.
 | 010 | bug #2 overstated — the loop converges; real gap is missing p_max/T_exh limits | measured |
 | 011 | the real-time grid was the least accurate part — worst −10.06% | **fixed** — per-cell fresh engines at `n_cycles=9`; now exact vs reference |
 | 012 | `transient()` floor sat inside the solver's NaN region and could not catch NaN | **fixed** — stall detection; root cause as first recorded was wrong |
+| 013 | bug #3 understated: limiter fitted with EGR on, judged with it off; EGR valve opens 25% for any command; `crdi15` never converges at 1650 rpm | **measured, not fixed** — PR #19; three physics decisions |
 
 ### Still open inside those
 
@@ -167,7 +172,7 @@ now-honestly-named `h_ring_tdc`), 1 tiny (`Pb_valvetrain`)**.
 |---|---|---|
 | 1 | `n_cycles=6` not converged | **measured 10.8% drift**, worse than documented; test added |
 | 2 | Fuelling open-loop on rpm | **measured — loop converges, no instability.** Real gap is missing p_max/T_exh limits. FINDING-010 |
-| 3 | Torque limiter ±3% | partly addressed by the FINDING-007 cache fix; re-measure |
+| 3 | Torque limiter ±3% | **re-measured in session 4 — understated.** At n=9: `crdi15` −4.3…+6.8%, `crdi_1p5` −0.9…+5.5%. Not only "a symptom of #1": a systematic EGR-schedule bias. FINDING-013. *(Was: "partly addressed by the FINDING-007 cache fix; re-measure".)* |
 | 4 | Light-load fuel understated ~2× | **measured — does not reproduce at 2×; real gap ~29%.** FINDING-009 |
 | 5 | `operating_point` path-dependent | **root cause found** — `Turbocharger` keeps `n_rpm`/`vgt_pos` across calls; `warm_start=False` does not reset it. Grid now immune (FINDING-011); the API itself still leaks |
 | 6 | `l` key dead in DCT | **fixed** — now reports why instead of silently no-opping |
@@ -243,6 +248,7 @@ a dead branch.
 |---|---|---|---|
 | #15 | `docs/status-session-3` | this file; FINDING status lines | CI green; **merge first** |
 | #17 | `fix/dyno-axis-ticks` | nice-number dyno axes; `ng test` runs; tie-break test | CI 4/4 green |
+| #19 | `diag/bug-3-torque-limiter` | FINDING-013 + `tools/diag_torque_limiter.py`; diagnostic only | independent of the others |
 | #18 | `ci/web-app` | `web-app` CI job — **stacked on #17** | CI 5/5 green; new job ran 14 tests + Pages build in 32 s |
 
 Merge order: #15, then #17, then retarget #18 to `main` and merge it.
@@ -266,7 +272,11 @@ Session 3's list, with what has happened since. Items 1–3 are session 4's work
 4. **Listen to the audio** — the warm-vs-cold pair at load 0.6 matters most.
 5. **FINDING-005**: chase cam boundary friction, or state that roller cams
    genuinely barely wear. Test on `hd_i6` / `single` (mechanical lash).
-6. **Bug #3** re-measure after FINDING-007; **#10** still unmeasured;
+6. ~~**Bug #3** re-measure after FINDING-007~~ — done, FINDING-013 (PR #19).
+   **Decide its fixes, in order:** (a) map where `crdi15` oscillates and fix
+   convergence — no `n_cycles` is converged at 1650 rpm; (b) calibrate the
+   limiter under the evaluation's schedules; (c) the EGR valve's 25% start.
+   Each moves published numbers. **#10** still unmeasured;
    **#11** untouched.
 7. **FINDING-008** contract decision before any cycle page.
 8. **Reassess ADR-006** against the post-FINDING-001–004 numbers.
