@@ -1,14 +1,58 @@
 # Status
 
-**Updated:** 2026-09-24 (session 4)
+**Updated:** 2026-09-25 (session 4, part 2 — an autonomous stretch; see below)
 **Phase:** 2 — mostly done. Python runs in the browser, the SolverPort exists,
 grids are cached, CI runs, and the first web page (a dyno pull) works end to end.
-**Main:** everything through PR #16 is merged; CI on `main` is green. Open work
-is listed under Branches below.
+**Main:** everything through PR #19 is merged; CI on `main` is green (5 jobs).
+Open work is PRs #20–#25, listed under Branches below — **several need a
+decision from the owner**.
 
 Read this first in a new session, then `PLAN.md`, then `DECISIONS.md`, then
 `reviews/`. Those replace pasting a context document. `CLAUDE.md` says the same
 for Claude Code sessions.
+
+---
+
+## Session 4, part 2 — autonomous stretch (2026-09-25)
+
+The owner merged #15, #17, #18, #19, then asked for ~6 hours of independent
+work, pre-deciding: unsettled offline cells are period-averaged and flagged;
+goldens may be re-baselined on the PR branch with inline justification; the
+e2e-in-CI, bug #10, FINDING-005 and FINDING-008 items may be picked up
+(measurement and write-ups only for the physics ones). Nothing was merged —
+the permission check blocks merging without review.
+
+**What landed as PRs:**
+
+- **#21 — converged offline solves + FINDING-013 item 1** (the main work).
+  `DieselEngine.converged_mode`: real time, 200 cycles — validated on the
+  120-point map: ≤ 0.36% everywhere a steady state exists (95th pct 0.11%).
+  One point, `crdi_1p5` 1450/0.5, has no steady state even at real time (VGT
+  and EGR integral controllers fight; 21-cycle sawtooth, ±7.5%); unsettled
+  cells are period-averaged (all 5 within 0.20%) and flagged `settled = 0`.
+  Item 1 (calibrate the limiter under the evaluation's schedules): with
+  converged solves the plateau overshoot goes from **+3.0% to within ±0.3%**.
+  `CycleResult.converged` no longer claims convergence it never checked.
+  Goldens re-baselined for `crdi15` (1800/0.6 torque −10.2%: the old
+  calibration's fuel limit was inflated by EGR over-delivery). **Two guards
+  became KNOWN — see FINDING-016; a judgement to review.**
+- **#23 — e2e in CI** (headless Chrome on the runner; 13/13 there). The e2e
+  no longer passes silently without its native reference.
+- **#24 — FINDING-014, bug #10 measured**: `render_transient` restarts crank
+  phase at 0 every chunk (seam firing intervals off 13% median, 29% max) and
+  each cross-fade deletes 20 ms (2.00 s renders as 1.86 s). No fix applied.
+- **#25 — FINDING-015, FINDING-005 explained**: the cam film is ~780× too
+  thick — pressure-viscosity counted twice (`mu_cam` at 500 MPa *and*
+  Hamrock–Dowson's G) — plus two kinematic errors. Fixed, boundary power
+  becomes plausible (flat tappet 215 W, roller 28 W) but the 8 nm film floor
+  then binds. No fix applied.
+- **#22 — FINDING-008 options** for the crank-angle contract (docs).
+- **#20** stays a draft: the `steady_ctrl` experiment, kept as a record.
+
+**Found on the way:** FINDING-016 — at `crdi15` 1800/0.6 main ignition delay
+is pinned at 2.425° from 273 to 363 K (at 1.0° and 0.5° steps alike); the
+FINDING-001/002 guards had been passing on a regime switch. REVIEW-001's
+"quantised to the crank step" reading is corrected (pointer added).
 
 ---
 
@@ -146,7 +190,7 @@ a miscount, not a change.)*
 | 002 | `dp/dθ` peaks 10° *before* ignition, so it measures compression; clatter was driven by it | fixed |
 | 003 | clatter high-mode weight pinned at its ceiling; divisor 3 orders of magnitude out | fixed |
 | 004 | every physical amplitude discarded by two normalisation stages | fixed |
-| 005 | roller-follower branch never accumulated `Pb_vt`; cam wear structurally impossible | fixed, **but insufficient** |
+| 005 | roller-follower branch never accumulated `Pb_vt`; cam wear structurally impossible | fixed, **but insufficient** — the rest explained by FINDING-015 |
 | 006 | `h_min_ring` always its clamp, and exposed as a headline field | fixed |
 | 007 | bug #8 audit; `fuel_for_torque` returned 8.7% different fuel depending on cache warmth | fixed |
 | 008 | `theta` indexes two references — per-cylinder local vs global engine angle | documented; roll sign fixed |
@@ -154,7 +198,10 @@ a miscount, not a change.)*
 | 010 | bug #2 overstated — the loop converges; real gap is missing p_max/T_exh limits | measured |
 | 011 | the real-time grid was the least accurate part — worst −10.06% | **fixed** — per-cell fresh engines at `n_cycles=9`; now exact vs reference |
 | 012 | `transient()` floor sat inside the solver's NaN region and could not catch NaN | **fixed** — stall detection; root cause as first recorded was wrong |
-| 013 | bug #3 understated: limiter fitted with EGR on, judged with it off; EGR valve opens 25% for any command; `crdi15` never converges at 1650 rpm | **measured, not fixed** — PR #19; three physics decisions |
+| 013 | bug #3 understated: limiter fitted with EGR on, judged with it off; EGR valve opens 25% for any command; `crdi15` never converges at 1650 rpm | item 1 fixed and converged offline solves — **PR #21**; fast path stays unconverged (caveat online); item 2 open |
+| 014 | `render_transient`: crank phase restarts every chunk; each cross-fade deletes 20 ms (bug #10) | **measured, not fixed** — PR #24 |
+| 015 | cam film ~780× too thick (pressure-viscosity counted twice) + two kinematic errors — why cam wear is negligible | **measured, not fixed** — PR #25 |
+| 016 | main ignition delay pinned at 2.425° at `crdi15` 1800/0.6; FINDING-001/002 guards rode a regime switch | **measured; mechanism open** — in PR #21 |
 
 ### Still open inside those
 
@@ -162,7 +209,8 @@ a miscount, not a change.)*
   to 1e-8 of total. The flat-tappet case is *lowest* at 3.9e-7 W — the case
   that should wear most. Cam wear is still negligible and lash still does not
   grow at 8000 h. Suspects: `sigma_cam`, or entrainment velocity at nose
-  reversal. Untested.
+  reversal. Untested. *(Session 4: measured — neither suspect is the main
+  cause; the cam film is ~780× too thick. FINDING-015, PR #25.)*
 - **FINDING-004 has not been listened to.** Every judgement was band ratios and
   RMS. It changes the character of every rendered sound. Four WAVs were
   produced for A/B; the warm-vs-cold pair at load 0.6 is the one that matters.
@@ -182,7 +230,7 @@ a miscount, not a change.)*
 | 7 | No cold-temperature combustion | root-caused through FINDINGs 001–004 |
 | 8 | Unknown-provenance code in `engine.py` | **closed** — FINDING-007; found a real cache bug |
 | 9 | Worn-vs-new audio pair suspect | root-caused — FINDING-004 and 005 |
-| 10 | `render_transient` seams | **still unmeasured** — blocked by FINDING-012; code reading suggests crank-phase reset at every chunk |
+| 10 | `render_transient` seams | **measured (session 4)** — FINDING-014, PR #24: phase resets every chunk, and each cross-fade deletes 20 ms. *(Was: "still unmeasured — blocked by FINDING-012".)* |
 | 11 | Coast downshift calibration | deferred |
 | 12 | Grade small-angle form | **already correct** — `atan`/`sin`/`cos` all present; entry was stale |
 
@@ -192,7 +240,9 @@ a miscount, not a change.)*
 
 - **Trace arrays index two crank-angle references** — diagnosed as FINDING-008
   (per-cylinder local vs global engine angle). The fix is an API-contract
-  decision. **Resolve before the Angular cycle page consumes traces.**
+  decision. **Resolve before the Angular cycle page consumes traces.** Options
+  written up in PR #22 (recommended: keep storage, add a per-cylinder
+  `theta_global` axis, plus a firing-order guard test).
 - **ADR-006 is on hold** and should be reassessed now that FINDINGs 001–004
   have changed the numbers it was decided on.
 - **`SPL_CAL` and the 5.0e9 clatter divisor are chosen constants.** The package
@@ -204,8 +254,8 @@ a miscount, not a change.)*
 ## Tests
 
 ```
-python3 tests/test_physics.py                    # 18 passed, 0 failed, 2 known defects
-python3 tools/audit_dead_signals.py              # diagnostic; 0 dead, 1 frozen, 1 tiny
+python3 tests/test_physics.py                    # main: 18/0/2 known; with #21: 20 passed, 0 failed, 4 known
+python3 tools/audit_dead_signals.py              # diagnostic; 0 dead, 2 frozen (one clamp), 1 tiny
 cd tools/pyodide && npm ci && npm run suite      # the same suite under Pyodide
 cd web/solver && npm ci && npm run test:fast     # 20 cache tests, seconds
 cd web/solver && npm test                        # + the round trip through a real worker
@@ -214,6 +264,10 @@ cd web/app && npm test -- --watch=false          # 14 unit tests (vitest), once 
 cd web/app && npm run build:pages                # never plain `build`
 cd web/app && NATIVE_REF='...' CHROME_PATH=... npm run e2e   # 12 browser checks with 3 reference points
 ```
+
+*(With PR #23: `NATIVE_REF` is optional — the e2e computes it with
+`web/app/e2e/native_ref.py`, and fails if it cannot get one. The paragraph
+below describes `main` before #23.)*
 
 **e2e needs `NATIVE_REF`** or it silently skips the native comparison and
 passes on the other 9 checks. It is `{"<rpm>": torque}` for points on the page's
@@ -242,19 +296,22 @@ UNEXPECTED PASS, which is the signal to promote it to a real assertion.
 
 ## Branches
 
-The session-3 stack (#8–#14) merged on 2026-09-22/23, and `CLAUDE.md` (#16) on
-2026-09-23. Merged branches are **not** auto-deleted: after merging a parent,
-retarget its child PR to `main` (`gh pr edit <n> --base main`) or it merges into
-a dead branch.
+Merged in session 4: #15 (this file), #17 (dyno axes), #18 (`web/app` in CI),
+#19 (FINDING-013). Merged branches are **not** auto-deleted: after merging a
+parent, retarget its child PR to `main` (`gh pr edit <n> --base main`).
 
-| PR | branch | contents | state |
+| PR | branch | contents | needs |
 |---|---|---|---|
-| #15 | `docs/status-session-3` | this file; FINDING status lines | CI green; **merge first** |
-| #17 | `fix/dyno-axis-ticks` | nice-number dyno axes; `ng test` runs; tie-break test | CI 4/4 green |
-| #19 | `diag/bug-3-torque-limiter` | FINDING-013 + `tools/diag_torque_limiter.py`; diagnostic only | independent of the others |
-| #18 | `ci/web-app` | `web-app` CI job — **stacked on #17** | CI 5/5 green; new job ran 14 tests + Pages build in 32 s |
+| #21 | `fix/converged-solves` | converged offline solves, item 1, honest `converged`, re-baselined goldens, FINDING-016 | review — **the two guards turned KNOWN are a judgement**; moves `crdi15` numbers |
+| #23 | `ci/e2e` | e2e in headless Chrome in CI; e2e fails without its reference | review; independent |
+| #22 | `docs/finding-008-options` | FINDING-008 options | **decision** (contract) |
+| #24 | `diag/bug-10-render-seams` | FINDING-014 + tool | **decision** (fix option) |
+| #25 | `diag/finding-005-cam` | FINDING-015 + tool | **decision** (fix option, wear calibration) |
+| #20 | `fix/steady-state-controllers` | `steady_ctrl` experiment, off by default | nothing — a record; close or keep |
 
-Merge order: #15, then #17, then retarget #18 to `main` and merge it.
+All are independent of each other and target `main`; any order works. #21
+before #23 is slightly tidier (the e2e reference then reflects item 1 from its
+first run), but both run the same physics on both sides.
 
 Merged earlier: #5 `physics/verified-fixes`, #6 `audio/physical-levels`
 (**not yet listened to** — revert that merge if the mix is wrong), #7 the
@@ -264,46 +321,24 @@ bug-8 audit, #8–#14 the Phase 2 stack, #16 `CLAUDE.md`.
 
 ## Next actions
 
-Session 3's list, with what has happened since. Items 1–3 are session 4's work.
-
-1. ~~**Merge the stack** once #14 is green.~~ Done — #8–#14 merged, CI green.
-2. ~~**Chart axis scaling**~~ — verified in session 4 and opened as **#17**;
-   awaiting merge.
-3. ~~**Put `web/app` in CI**~~ — **#18**, stacked on #17; awaiting merge.
-   Follow-up: add the browser e2e check to CI (needs Chrome on the runner and
-   a `NATIVE_REF` step).
-4. **Listen to the audio** — the warm-vs-cold pair at load 0.6 matters most.
-5. **FINDING-005**: chase cam boundary friction, or state that roller cams
-   genuinely barely wear. Test on `hd_i6` / `single` (mechanical lash).
-6. ~~**Bug #3** re-measure after FINDING-007~~ — done, FINDING-013 (PR #19).
-   Fix order agreed: 3 → 1 → 2. **Item 3 measured (session 4) and it is
-   bigger than one engine:** neither the VGT loop (limit cycle caused by
-   `spool_accel` = 14) nor the EGR loop reaches steady state in 9 cycles.
-   21 of 120 mapped points oscillate; against a converged 1× reference the
-   shipped n=9 solve is off by up to −43.6% (RMS 16.2%), and the golden
-   points are 9-cycle solves. Four VGT-only fixes tried, none works.
-   Option A chosen. **Draft PR #20** (stacked on #19), behind
-   `steady_ctrl`, off by default — solver unchanged with it off. Full load
-   now converges (≤ 0.4% vs the 1× reference by n=12–16; limit cycle gone);
-   part load with EGR does not (−3.5 … −16.8%, RMS 8.5% at n=16): the intake
-   plenum's composition lags the EGR flow ~1.5 cycles. Missed the attempt's
-   stopping rule (RMS < 1% within 16 cycles). One more timeboxed try
-   (plenum burnt fraction held at equilibrium) measured **worse** (RMS
-   12.3%) and was reverted. The limit is convergence speed: a fresh
-   engine's shaft spends 3–4 cycles spinning up, and the solve is still
-   moving when the held cycles end. FINDING-013 corrects its own claim that
-   option A keeps the cost at ~9–12 cycles. Third attempt (adaptive cycle
-   count, conservative VGT gain; in #20): 5 of 9 points converge (3 within
-   0.3% in 11–15 cycles), 4 hit the 40-cycle cap — including `crdi15`
-   800/1.0 at +11% where the shipped solver is −1.4%. RMS 5.6% (shipped
-   16.2%). Missed its timebox. **Next step needs a decision.** Also found:
-   `CycleResult.converged` was `True` on every solve, unchecked. Item 1 must
-   be re-measured after. **#10** still unmeasured;
-   **#11** untouched.
-7. **FINDING-008** contract decision before any cycle page.
-8. **Reassess ADR-006** against the post-FINDING-001–004 numbers.
-9. Then **Phase 3** — real-time loop in TypeScript; manual gearbox needs a
-   clutch model that does not exist yet.
+1. **Review and merge** #21 and #23 (engineering), and decide #22, #24, #25.
+2. **Listen to the audio** — the warm-vs-cold pair at load 0.6 matters most.
+   Still never done; FINDING-004's changes are unheard.
+3. **FINDING-016** — why main ignition delay is pinned at 2.425° (pilot–main
+   interaction? accumulation window? SOI grid offset?). PHY1. It decides
+   whether cold-start combustion sensitivity exists at all, which is ADR-006's
+   premise.
+4. **FINDING-013 item 2** — the EGR valve's 25% start; with converged solves it
+   no longer matters offline, but the fast (browser) path still carries it.
+   And the VGT–EGR limit cycle at `crdi_1p5` 1450/0.5 (controller tuning).
+5. **An offline grid builder using `solve_cell(converged=True)`** for Enjoy
+   mode's roster (ADR-008), sharing one converged calibration per rpm row
+   (`seed_fuel_limit`). Estimated ~10 min per engine on 6 cores — measure it.
+6. **FINDING-015 / FINDING-014 fixes**, once decided.
+7. **Reassess ADR-006** against FINDING-016 and the post-001–004 numbers.
+8. Then **Phase 3** — real-time loop in TypeScript; manual gearbox needs a
+   clutch model that does not exist yet. The AudioWorklet must carry crank
+   phase across source swaps (FINDING-014).
 
 ---
 
@@ -318,6 +353,15 @@ Session 3's list, with what has happened since. Items 1–3 are session 4's work
   checksum-verified portable Node 22.23.3 in
   `~/.cache/dieselsim/node-v22.23.3-darwin-arm64/` (prepend its `bin` to PATH).
   System Node was left untouched; upgrading it is the owner's call.
+- **scipy on the Mac:** not installed in the system Python, though
+  `requirements.txt` lists it and `acoustics.py` renders with it. Session 4
+  used an isolated venv, `~/.cache/dieselsim/venv` (numpy 2.1.0, scipy 1.18.1).
+- **Git worktrees + Angular:** building `web/app` from a worktree creates an
+  empty `.angular/cache/<version>` at the *main* checkout's root. Harmless;
+  delete it (session 4 did, three times).
+- **macOS `multiprocessing` spawns fresh interpreters:** a pool in a script
+  piped on stdin respawns workers forever (they cannot re-import `<stdin>`).
+  Put pool code in a file.
 - **Dev-container notes (sessions 1–3; not re-measured on the Mac used from
   session 4).** The next two bullets were measured in that container.
 - **Background jobs in the dev container must be detached with
