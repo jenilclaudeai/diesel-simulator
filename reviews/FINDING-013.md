@@ -376,3 +376,81 @@ Also found: `CycleResult.converged` was set `True` unconditionally at the end
 of every solve, so every solve claimed convergence without checking; the
 dead-signal audit listed it as expected-constant. Nothing read it. It is now
 `False` unless a `steady_ctrl` solve met the convergence test.
+
+---
+
+## Converge offline, caveat online (session 4) — chosen after three attempts at option A
+
+The owner chose: solve offline builds (Enjoy mode's prebuilt grids, ADR-008)
+at real time until converged; keep the fast path in the browser with a stated
+accuracy. PR #21.
+
+### How many real-time cycles
+
+`tools/diag_convergence.py --validate-n`: all 120 `--map` points at real time
+for 400 cycles, fixed fuelling; gross work at cycle k against the mean of the
+last 10.
+
+| k | worst point | 95th percentile |
+|---|---|---|
+| 150 | 0.46% | 0.22% |
+| **200** | **0.36%** | **0.11%** |
+| 300 | 0.15% | 0.03% |
+
+(excluding the one point below). `CONVERGED_CYCLES = 200`.
+
+### One point has no steady state even at real time
+
+`crdi_1p5` 1450 rpm / 0.5 never settles: work swings 372–432 (±7.5%) in a
+21-cycle sawtooth, still 14.3% peak-to-peak over cycles 391–400. The per-cycle
+means show the mechanism: the VGT and EGR integral controllers fight through
+the exhaust-to-intake pressure difference. Boost falls below its
+EGR-adjusted target (≈1.89) → vanes close to their stop → exhaust pressure
+rises → EGR flow surges (11 g/s) and the burnt fraction overshoots to 0.29
+against 0.12 → the turbo spools (132k → 177k rpm), boost overshoots to 2.2 →
+vanes open → the pressure difference collapses, EGR flow falls to 1.2 g/s with
+the valve opening wide → repeat. A controller-tuning property of the model,
+not something a production calibration would do; changing it changes
+transient behaviour, so it is left for decision.
+
+### Cells that have not settled are period-averaged and flagged
+
+At 200 cycles, 115 of 120 cells settle (last cycle within 0.22% of the
+cycle-400 value). Five do not — all `crdi_1p5` part load: four are damped
+ringing that settles later, one is the limit cycle above. For those,
+`grid.settle_or_average()` averages torque (through IMEP), boost and bsfc over
+whole oscillation periods (autocorrelation after detrending; a period counts
+only after the autocorrelation first goes negative, so a settling series reads
+as none) and sets `settled = 0`, `osc_period`, `osc_spread` in the cell:
+
+| cell | period | last cycle alone | period average |
+|---|---|---|---|
+| `crdi_1p5` 1450 / 0.25 | 17 | −0.016% | +0.007% |
+| `crdi_1p5` 1450 / 0.5 | 21 | **−5.602%** | +0.203% |
+| `crdi_1p5` 2100 / 0.25 | 24 | +0.465% | −0.106% |
+| `crdi_1p5` 2100 / 0.5 | 33 | −0.115% | −0.024% |
+| `crdi_1p5` 2700 / 0.25 | 29 | −0.010% | −0.011% |
+
+So a converged offline cell is within ~0.2% everywhere, including the point
+with no steady state.
+
+### Item 1 with every solve converged
+
+`tools/diag_torque_limiter.py --converged` — the limiter's residual against its
+cap with converged calibration and evaluation, before and after calibrating
+under the evaluation's schedules:
+
+| preset | before | after |
+|---|---|---|
+| `crdi15` plateau, 1650–4000 rpm | +0.25 … **+3.03%** | −0.30 … +0.29% |
+| `crdi_1p5` plateau, 1650–4000 rpm | −1.00 … +0.77% | −0.74 … +0.35% |
+
+(1250 rpm is air-limited in both presets and both variants.) Most of the
++6.8% the fast path showed was non-convergence; the genuine limiter bias was
+≈3%, and item 1 removes it. `crdi_1p5` at 4000 rpm (−0.74%) is inside the
+calibration's own 1% tolerance.
+
+### Item 1 moved two regression guards
+
+See FINDING-016: they had been passing on a switch of the main ignition delay
+between two values, which the corrected fuelling no longer triggers.
