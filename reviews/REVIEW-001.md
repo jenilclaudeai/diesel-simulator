@@ -68,6 +68,12 @@ interpolation across it is interpolating an artifact.
 > step quantisation alone does not explain it — the 1.000° jump looks like a
 > switch between two regimes, and the delay is pinned within each. See
 > FINDING-016. The text above is kept as written.*
+>
+> *Correction to that correction (later the same session): it was wrong. At
+> dθ = 0.1° the delay moves smoothly, ~0.2° over 90 K; a shift that small
+> stays inside one bin at 0.5° as at 1°, so the 0.5° run proved nothing. The
+> original reading above — quantised to the crank step — stands. See
+> FINDING-016's correction.*
 
 **Consequence for ADR-006.** Linear two-grid interpolation error on ignition
 delay, cold and warm endpoints only:

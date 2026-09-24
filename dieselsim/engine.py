@@ -111,6 +111,7 @@ class DieselEngine:
         self._torque_cal = {}
         self._calibrating = False
         self.converged_mode = False
+        self._fuel_seed = {}
         # Cycles used when calibrating the torque limiter.
         #
         # BUG-8: this was assigned twice, 10 then 8, with comments arguing
@@ -252,8 +253,10 @@ class DieselEngine:
         """Make fuel_limit(rpm) return fuel_mg without calibrating. For
         builders that calibrate once per speed and share the result across a
         row of cells -- in converged mode a calibration costs several
-        200-cycle solves."""
-        self._torque_cal[int(round(rpm / 25.0))] = (1.0, 0.0, float(fuel_mg))
+        200-cycle solves. Kept apart from the calibration cache: seeding that
+        cache with a unit fit returned min(cap, fuel) -- right only while the
+        cap in N.m happened to exceed the fuel in mg."""
+        self._fuel_seed[int(round(rpm / 25.0))] = float(fuel_mg)
 
     # ------------------------------------------------------------------
     def fuel_limit_raw(self, rpm: float) -> float:
@@ -278,6 +281,9 @@ class DieselEngine:
     def fuel_limit(self, rpm: float) -> float:
         """Fuel at full demand: the lesser of what the air allows and what
         the rating allows."""
+        seeded = self._fuel_seed.get(int(round(rpm / 25.0)))
+        if seeded is not None:
+            return seeded
         f = self.fuel_limit_raw(rpm)
         if self._calibrating:
             return f

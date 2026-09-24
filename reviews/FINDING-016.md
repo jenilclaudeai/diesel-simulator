@@ -1,9 +1,9 @@
-# FINDING-016 — main ignition delay is pinned at 2.425° at `crdi15` 1800/0.6; the FINDING-001/002 guards rode a regime switch
+# FINDING-016 — the FINDING-001/002 guards rode a 1° ignition-delay step at `crdi15` 1800/0.6 (title as first written: "main ignition delay is pinned at 2.425° … rode a regime switch" — see the correction)
 
 **Opened by:** FINDING-013 item 1 (limiter calibrated under the evaluation's
 schedules), which made two regression guards fail
 **Lens:** PHY1 (lead), QA2
-**Status:** measured; mechanism open — for PHY1
+**Status:** measured; first reading corrected below (delay responds ~0.2°, quantised to the 1° step); fix direction for PHY1
 
 ---
 
@@ -74,3 +74,45 @@ fractional offset on the grid (0.425°).
 
 One preset, one operating point. Other speeds and loads may sit in the other
 regime; the two-regime structure itself is what needs explaining.
+
+---
+
+## Correction (later the same session) — ignition delay does respond; it is quantised to the crank step
+
+The two claims above are **wrong**, and are kept as written:
+
+- "Ignition delay does not respond at all here" — it does, weakly.
+- "At dθ = 0.5° the value is still exactly 2.425° … so step quantisation
+  alone does not explain it" — that reasoning does not hold. A response of
+  ~0.2° never leaves its bin on a 0.5° grid (2.425 = 0.425 + 4 × 0.5) any more
+  than on a 1° grid, so an unchanged value at 0.5° says nothing against
+  quantisation. REVIEW-001 B-1 was right.
+
+Measured at dθ = 0.1°, fuel held fixed at the default engine's calibrated
+42.59 mg so only temperature changes:
+
+| coolant | ign. delay | premix | SOC main | SOC pilot |
+|---|---|---|---|---|
+| 273 K | 2.225° | 0.1730 | 718.800° | 708.000° |
+| 318 K | 2.125° | 0.1652 | 718.700° | 707.700° |
+| 363 K | 2.025° | 0.1575 | 718.600° | 707.500° |
+
+The main ignition delay falls smoothly, ~0.2° over 90 K (~9%), and premix
+swings ~10% cold against warm. At the solver's 1° step that response is
+quantised: the reported delay sits in one bin, or jumps a whole degree when
+the true value crosses a bin edge. The guards' old > 20% margin was one such
+jump — an artifact, not the physics' sensitivity.
+
+**What this changes:**
+
+- The two guards stay KNOWN, but for this reason: the physical response at
+  this point is ~10% in premix, below their 20% threshold, and the solver's
+  1° step hides it anyway. Their notes are updated.
+- **Fix direction (not applied, for PHY1):** interpolate the start of
+  combustion within the step — the delay integral's crossing of 1 is known to
+  a fraction of a step from its two neighbouring values. Cheap, and it gives
+  the solver a smooth ignition delay at any resolution. The guards' thresholds
+  would then need re-deriving from the physics (≈10% premix over 90 K here),
+  not from a bin jump.
+- ADR-006's premise (cold rattle through a longer delay) holds in direction
+  but is weak at this point: ~0.2° over 90 K.

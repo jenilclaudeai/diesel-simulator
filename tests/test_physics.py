@@ -113,15 +113,16 @@ def test_premix_responds_to_temperature():
         vals.append(eng.operating_point(
             1800, load=0.6, n_cycles=9).cycle.premix_fraction)
     swing = abs(vals[0] - vals[1]) / max(vals[1], 1e-9)
-    # FINDING-016: the old >20% swing came from the warm point's ignition
-    # delay switching 2.425 -> 1.425 deg. With the limiter calibrated under
-    # the evaluation's schedules (FINDING-013 item 1) it no longer switches,
-    # and ignition delay is pinned at 2.425 deg from 273 to 363 K at both
-    # 1.0 and 0.5 deg resolution. Reported as a known defect until the
-    # mechanism is fixed; UNEXPECTED PASS means the response is back.
+    # FINDING-016: the old >20% swing was the warm point's ignition delay
+    # jumping a whole 1-deg crank step (2.425 -> 1.425). The real response
+    # at this point is ~0.2 deg / ~10% premix over 90 K (measured at
+    # dtheta 0.1), below this guard's 20%, and the 1-deg step quantises it
+    # away. After FINDING-013 item 1 the warm point no longer jumps. Known
+    # defect until ignition is resolved within the step; UNEXPECTED PASS
+    # means the response is back.
     known("premix responds to coolant T", swing <= 0.20,
           f"cold {vals[0]:.4f} vs warm {vals[1]:.4f}, swing {100 * swing:.0f}% "
-          f"(guard wants > 20%; ignition delay pinned, FINDING-016)")
+          f"(guard wants > 20%; delay quantised to the 1-deg step, FINDING-016)")
 
 
 def test_cold_start_sharpens_dpdtheta():
@@ -162,7 +163,7 @@ def test_combustion_dpdtheta_responds():
     # FINDING-016: see test_premix_responds_to_temperature.
     known("combustion dp/dtheta responds to coolant T", rise <= 0.08,
           f"cold is {100 * rise:+.1f}% sharper (guard wants > 8%; "
-          f"ignition delay pinned, FINDING-016)")
+          f"delay quantised to the 1-deg step, FINDING-016)")
 
 
 def test_sharp_not_clamped():
@@ -409,6 +410,16 @@ def test_unsettled_cell_is_period_averaged():
           ", ".join(bad) or f"{len(checks)} checks")
 
 
+def test_seeded_fuel_limit_is_exact():
+    """A seeded fuel limit (shared across a converged grid row) must come back
+    exactly, whatever the rating cap -- an earlier version routed it through
+    the calibration cache and returned min(cap in N.m, fuel in mg)."""
+    eng = DieselEngine(preset="single")
+    eng.spec.torque_limit = 10.0                 # a cap numerically below the fuel
+    eng.seed_fuel_limit(2000.0, 40.0)
+    check("seeded fuel limit returned exactly", eng.fuel_limit(2000.0), 40.0, 1e-12)
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -423,7 +434,8 @@ def main():
                test_runtime_info_describes_every_preset,
                test_limiter_calibrates_under_evaluation_schedules,
                test_converged_flag_is_honest,
-               test_unsettled_cell_is_period_averaged):
+               test_unsettled_cell_is_period_averaged,
+               test_seeded_fuel_limit_is_exact):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001
