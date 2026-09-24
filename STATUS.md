@@ -130,8 +130,11 @@ physics change, and port it alongside the solver** — the same failure in
 TypeScript would be far harder to find, and Phase 3 ports the whole real-time
 loop.
 
-Latest audit: 102 scalars over 8 operating points — **0 dead, 1 frozen (the
-now-honestly-named `h_ring_tdc`), 1 tiny (`Pb_valvetrain`)**.
+Latest audit: 102 scalars over 8 operating points — **0 dead, 2 frozen
+(`fric.h_ring` and `op.h_ring_tdc`: one 12 nm clamp exposed twice), 1 tiny
+(`Pb_valvetrain`)**. *(Session 4: this line said "1 frozen (the
+now-honestly-named `h_ring_tdc`)"; the audit on unmodified `main` reports 2 —
+a miscount, not a change.)*
 
 ---
 
@@ -279,9 +282,13 @@ Session 3's list, with what has happened since. Items 1–3 are session 4's work
    21 of 120 mapped points oscillate; against a converged 1× reference the
    shipped n=9 solve is off by up to −43.6% (RMS 16.2%), and the golden
    points are 9-cycle solves. Four VGT-only fixes tried, none works.
-   **Blocked on a design decision** — FINDING-013 options A–D; A (solve the
-   controllers' steady state per cycle) recommended. Item 1 must be
-   re-measured after. **#10** still unmeasured;
+   Option A chosen. **Draft PR #20** (stacked on #19), behind
+   `steady_ctrl`, off by default — solver unchanged with it off. Full load
+   now converges (≤ 0.4% vs the 1× reference by n=12–16; limit cycle gone);
+   part load with EGR does not (−3.5 … −16.8%, RMS 8.5% at n=16): the intake
+   plenum's composition lags the EGR flow ~1.5 cycles. Missed the attempt's
+   stopping rule (RMS < 1% within 16 cycles) — **next step needs a
+   decision**. Item 1 must be re-measured after. **#10** still unmeasured;
    **#11** untouched.
 7. **FINDING-008** contract decision before any cycle page.
 8. **Reassess ADR-006** against the post-FINDING-001–004 numbers.
