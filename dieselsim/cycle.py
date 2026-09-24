@@ -430,6 +430,7 @@ class CycleSolver:
         # settle to (zero cycle-mean error). The last two cycles, and every
         # run without steady_ctrl, use the continuous controllers unchanged.
         tsolve = _TurboSteady()
+        cycle_means = []
         steady_turbo = steady_ctrl and spec.turbo.enabled
         vgt_tgt = (bt_eff if bt_eff else spec.turbo.wastegate_pset)
         n_ref = spec.turbo.n_corr_ref
@@ -440,6 +441,7 @@ class CycleSolver:
             hold = steady_ctrl and cyc < n_cycles - 2
             sum_pint = sum_pnet = sum_pt = 0.0
             sum_megr = sum_mc = sum_ybx = 0.0
+            cm_yb = cm_megr = cm_mc = cm_pint = 0.0
 
             p_tr = np.zeros((nc, self.n))
             pm_tr = np.zeros((nc, self.n))
@@ -791,6 +793,10 @@ class CycleSolver:
                 if last:
                     pim_tr[k] = p_int
                     pem_tr[k] = p_exh
+                cm_yb += yb_int
+                cm_megr += mdot_egr
+                cm_mc += mdot_c
+                cm_pint += p_int
                 if hold:
                     sum_pint += p_int
                     sum_megr += mdot_egr
@@ -800,6 +806,11 @@ class CycleSolver:
                                  - tinfo.get("T_fric", 0.0))
                     sum_pt += tinfo.get("P_turb", 0.0)
 
+            cycle_means.append(dict(
+                yb_int=cm_yb / self.n, mdot_egr=cm_megr / self.n,
+                mdot_comp=cm_mc / self.n, boost=cm_pint / self.n / p_amb,
+                egr_valve=A_egr / A_egr_max if A_egr_max > 0 else 0.0,
+                vgt=turbo.vgt_pos, turbo_rpm=turbo.n_rpm, held=hold))
             if hold and steady_turbo:
                 boost = sum_pint / self.n / p_amb
                 net = (sum_pnet / self.n) / max(sum_pt / self.n, 50.0)
@@ -821,6 +832,8 @@ class CycleSolver:
 
         # ================= results =================
         r = CycleResult(rpm=rpm)
+        # per-cycle means (all cycles): a convergence diagnostic
+        r.cycle_means = cycle_means
         Vd = g.displacement_cyl
         r.imep_gross = float(np.mean(SN["Wg"])) / Vd
         r.pmep = float(np.mean(SN["Wp"])) / Vd

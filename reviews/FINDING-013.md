@@ -315,3 +315,32 @@ They cannot work at part load, because they leave the EGR loop as it is.
 Recommended: **A**, prototyped behind a flag first, judged against the 1×
 reference on the nine points above and on `--map`, and only then made the
 default. Then re-measure item 1.
+
+---
+
+## Option A, attempted (session 4) — full load converges, part load does not
+
+*Draft PR #20, behind `steady_ctrl` (off by default; with it off the solver is
+bit-identical, suite 18/0/2, audit identical to `main`). Scored with
+`python3 tools/diag_convergence.py --fix` against the 1× reference.*
+
+| variant | worst n=16 | RMS n=16 | kept? |
+|---|---|---|---|
+| shipped | −28.34% | 11.38% | — |
+| per-actuator secants, VGT held (shaft free) | — | 27.43% at n=9 | no: the shaft lags ~5 cycles at 14×, so per-cycle updates oscillate |
+| + shaft held; EGR secant on burnt fraction | — | — | no: fights the boost loop, 56% EGR at one point |
+| **Broyden on (speed, VGT) + flow-ratio EGR** | **−16.83%** | **8.51%** | **yes (in #20)** |
+| + plenum burnt fraction set to its equilibrium each held cycle | +35.96% | 12.26% | no: reverted |
+
+Full load converges with the kept variant — within 0.4% by n=12–16 at
+`crdi15` 1450 and 800 and `hd_i6` 1300 — and the limit cycle is gone. Part load
+with EGR does not. Per-cycle means (`CycleResult.cycle_means`, added for this)
+show why at `crdi15` 2100 / 0.75: the solve is still moving when the held
+cycles run out — the first 3–4 cycles are spent spinning the shaft up from a
+fresh engine's 12,000 rpm — so the last held step is large and uncorrected,
+and EGR flow collapses in the two free cycles (7.5 → 1.2 → 0.5 g/s).
+
+**Correction to the options table above:** option A was described as keeping
+the cost at ~9–12 cycles. That estimate was not supported: with shaft, VGT and
+EGR coupled, no variant tried reaches the stopping rule set for the attempt
+(RMS < 1% within 16 cycles).
