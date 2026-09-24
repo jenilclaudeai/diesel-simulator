@@ -292,8 +292,13 @@ Session 3's list, with what has happened since. Items 1–3 are session 4's work
    12.3%) and was reverted. The limit is convergence speed: a fresh
    engine's shaft spends 3–4 cycles spinning up, and the solve is still
    moving when the held cycles end. FINDING-013 corrects its own claim that
-   option A keeps the cost at ~9–12 cycles. **Next step needs a decision.**
-   Item 1 must be re-measured after. **#10** still unmeasured;
+   option A keeps the cost at ~9–12 cycles. Third attempt (adaptive cycle
+   count, conservative VGT gain; in #20): 5 of 9 points converge (3 within
+   0.3% in 11–15 cycles), 4 hit the 40-cycle cap — including `crdi15`
+   800/1.0 at +11% where the shipped solver is −1.4%. RMS 5.6% (shipped
+   16.2%). Missed its timebox. **Next step needs a decision.** Also found:
+   `CycleResult.converged` was `True` on every solve, unchecked. Item 1 must
+   be re-measured after. **#10** still unmeasured;
    **#11** untouched.
 7. **FINDING-008** contract decision before any cycle page.
 8. **Reassess ADR-006** against the post-FINDING-001–004 numbers.
