@@ -273,10 +273,15 @@ Session 3's list, with what has happened since. Items 1–3 are session 4's work
 5. **FINDING-005**: chase cam boundary friction, or state that roller cams
    genuinely barely wear. Test on `hd_i6` / `single` (mechanical lash).
 6. ~~**Bug #3** re-measure after FINDING-007~~ — done, FINDING-013 (PR #19).
-   **Decide its fixes, in order:** (a) map where `crdi15` oscillates and fix
-   convergence — no `n_cycles` is converged at 1650 rpm; (b) calibrate the
-   limiter under the evaluation's schedules; (c) the EGR valve's 25% start.
-   Each moves published numbers. **#10** still unmeasured;
+   Fix order agreed: 3 → 1 → 2. **Item 3 measured (session 4) and it is
+   bigger than one engine:** neither the VGT loop (limit cycle caused by
+   `spool_accel` = 14) nor the EGR loop reaches steady state in 9 cycles.
+   21 of 120 mapped points oscillate; against a converged 1× reference the
+   shipped n=9 solve is off by up to −43.6% (RMS 16.2%), and the golden
+   points are 9-cycle solves. Four VGT-only fixes tried, none works.
+   **Blocked on a design decision** — FINDING-013 options A–D; A (solve the
+   controllers' steady state per cycle) recommended. Item 1 must be
+   re-measured after. **#10** still unmeasured;
    **#11** untouched.
 7. **FINDING-008** contract decision before any cycle page.
 8. **Reassess ADR-006** against the post-FINDING-001–004 numbers.
