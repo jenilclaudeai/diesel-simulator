@@ -159,7 +159,7 @@ def apply_candidate(eng, name, n):
         st["i"], st["n"] = 0, k.get("n_cycles", n)
         return real_run(*a, **k)
 
-    def step(dt, p_amb, T_amb, p_int, *rest):
+    def step(dt, p_amb, T_amb, p_int, *rest, **kw):
         m = st["n"]
         c = st["i"] // steps
         st["i"] += 1
@@ -168,7 +168,7 @@ def apply_candidate(eng, name, n):
         sa = shaft_a(c, m) if c < m - 2 else 1.0
         ca = ctrl_a(c, m) if c < m - 2 else 1.0
         v0 = t.vgt_pos
-        r = real_step(dt0 * sa, p_amb, T_amb, p_int, *rest)
+        r = real_step(dt0 * sa, p_amb, T_amb, p_int, *rest, **kw)
         if t.s.vgt and ca != sa:
             bt = rest[-1] if rest else None
             tgt = bt if bt else t.s.wastegate_pset
@@ -191,6 +191,9 @@ def _cand_point(job):
         eng.cycle.run = partial(eng.cycle.run, spool_accel=1.0)
         op, b = boost_per_cycle(eng, n, rpm=rpm, fuel_mg=load * flim)
         return name, preset, rpm, load, n, op.torque, spread(b, n - 22, n - 2)
+    if name == "A":            # the in-solver fix: steady_ctrl=True
+        op, b = boost_per_cycle(eng, n, rpm=rpm, fuel_mg=load * flim, steady_ctrl=True)
+        return name, preset, rpm, load, n, op.torque, (op.egr_pct, op.boost_pr, eng.turbo.vgt_pos)
     apply_candidate(eng, name, n)
     op = eng.operating_point(rpm, fuel_mg=load * flim, n_cycles=n)
     return name, preset, rpm, load, n, op.torque, None
@@ -209,20 +212,38 @@ CAND_POINTS = (  # preset, rpm, load -- the worst limit cycles in --map, plus
 )
 
 
-def candidates():
+REF_CACHE = os.path.join(os.path.dirname(__file__), "..", "out", "diag_convergence_ref.json")
+
+
+def candidates(names=None, ns=(9, 12)):
+    """names: candidates to score (default all wrapper candidates). The 1x
+    references are slow (534 cycles each) and are cached in out/, keyed by
+    the physics source hash so a solver change recomputes them."""
+    import json
+    from dieselsim.bridge import source_hash
+    names = names or list(CANDIDATES)
     pts = [(p, r, ld, DieselEngine(preset=p).fuel_limit(r)) for p, r, ld in CAND_POINTS]
-    jobs = [("reference", p, r, ld, f, 534) for p, r, ld, f in pts]
-    jobs += [(c, p, r, ld, f, n) for c in CANDIDATES for p, r, ld, f in pts for n in (9, 12)]
+    cache = {}
+    if os.path.exists(REF_CACHE):
+        cache = json.load(open(REF_CACHE))
+    key = lambda p, r, ld: f"{source_hash()[:12]}|{p}|{r}|{ld}"
+    todo = [("reference", p, r, ld, f, 534) for p, r, ld, f in pts if key(p, r, ld) not in cache]
+    jobs = todo + [(c, p, r, ld, f, n) for c in names for p, r, ld, f in pts for n in ns]
     with Pool(max(1, (os.cpu_count() or 2) - 2)) as pool:
         res = pool.map(_cand_point, jobs)
-    ref = {(p, r, ld): (T, sp) for c, p, r, ld, n, T, sp in res if c == "reference"}
+    for c, p, r, ld, n, T, sp in res:
+        if c == "reference":
+            cache[key(p, r, ld)] = [T, sp]
+    os.makedirs(os.path.dirname(REF_CACHE), exist_ok=True)
+    json.dump(cache, open(REF_CACHE, "w"), indent=1)
+    ref = {(p, r, ld): tuple(cache[key(p, r, ld)]) for p, r, ld, _ in pts}
     print("torque error vs converged reference (spool_accel 1, 534 cycles), %")
     cols = [f"{p[:6]}@{r}/{ld}" for p, r, ld, _ in pts]
     print(f"{'':12} " + " ".join(f"{c:>15}" for c in cols) + f" {'worst':>7} {'rms':>6}")
     print(f"{'reference':12} " + " ".join(f"{ref[k[:3]][0]:15.2f}" for k in pts))
     print(f"{'ref spread%':12} " + " ".join(f"{ref[k[:3]][1]:15.3f}" for k in pts))
-    for c in CANDIDATES:
-        for n in (9, 12):
+    for c in names:
+        for n in ns:
             errs = []
             for p, r, ld, _ in pts:
                 T = next(T for cc, pp, rr, ll, nn, T, _ in res if (cc, pp, rr, ll, nn) == (c, p, r, ld, n))
@@ -235,6 +256,9 @@ def candidates():
 if __name__ == "__main__":
     if "--candidates" in sys.argv:
         candidates()
+        sys.exit()
+    if "--fix" in sys.argv:
+        candidates(["shipped", "A"], ns=(9, 12, 16))
         sys.exit()
     if "--accel" in sys.argv:
         accel_sweep()

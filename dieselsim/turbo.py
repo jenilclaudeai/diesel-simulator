@@ -142,10 +142,17 @@ class Turbocharger:
     def step(self, dt: float, p_amb: float, T_amb: float, p_intake: float,
              p_exh: float, T_exh: float, p_back: float,
              eff_c: float = 1.0, eff_t: float = 1.0,
-             fric_mult: float = 1.0, boost_target: float = None):
+             fric_mult: float = 1.0, boost_target: float = None,
+             hold_vgt: bool = False, hold_shaft: bool = False):
         """
         Advance the shaft by dt seconds.
         Returns dict with compressor flow/temperature and turbine flow.
+
+        hold_vgt: leave the VGT position where it is for this step. The
+        cycle solver's steady-state mode sets it and moves the vanes once per
+        cycle itself (FINDING-013); everything else leaves it False.
+        hold_shaft: likewise for the shaft speed. The net shaft power is still
+        computed and returned (P_turb - P_comp - T_fric).
         """
         if not self.s.enabled:
             self.last = dict(mdot_comp=0.0, T_comp_out=T_amb, mdot_turb=0.0,
@@ -166,10 +173,11 @@ class Turbocharger:
         # ---- boost control ------------------------------------------------
         pr_boost = p_intake / max(p_amb, 1e4)
         if self.s.vgt:
-            tgt = boost_target if boost_target else self.s.wastegate_pset
-            err = pr_boost - tgt
-            self.vgt_pos = min(1.0, max(self.s.vgt_min_frac,
-                                        self.vgt_pos + 2.5 * err * dt))
+            if not hold_vgt:
+                tgt = boost_target if boost_target else self.s.wastegate_pset
+                err = pr_boost - tgt
+                self.vgt_pos = min(1.0, max(self.s.vgt_min_frac,
+                                            self.vgt_pos + 2.5 * err * dt))
             self.wg_area = 0.0
         else:
             over = pr_boost - self.s.wastegate_pset
@@ -189,10 +197,11 @@ class Turbocharger:
         om = 2.0 * math.pi * self.n_rpm / 60.0
         T_fric = self.s.bearing_visc_k * fric_mult * om ** 2
         net = (P_t - P_c) / max(om, 50.0) - T_fric
-        om += net / self.s.shaft_inertia * dt
-        om = min(max(om, 2.0 * math.pi * 1000.0 / 60.0),
-                 2.0 * math.pi * 1.35 * self.s.n_corr_ref / 60.0)
-        self.n_rpm = om * 60.0 / (2.0 * math.pi)
+        if not hold_shaft:
+            om += net / self.s.shaft_inertia * dt
+            om = min(max(om, 2.0 * math.pi * 1000.0 / 60.0),
+                     2.0 * math.pi * 1.35 * self.s.n_corr_ref / 60.0)
+            self.n_rpm = om * 60.0 / (2.0 * math.pi)
 
         T_ic, dp_ic = self.intercooler(T2, mdot_c)
         self.last = dict(mdot_comp=mdot_c, T_comp_out=T2, T_charge=T_ic,

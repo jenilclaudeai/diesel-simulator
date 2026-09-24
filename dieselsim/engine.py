@@ -300,7 +300,8 @@ class DieselEngine:
                         n_cycles: int = 10, warm_start: bool = True,
                         update_oil: bool = False,
                         p_amb: float = 101325.0,
-                        T_amb: float = 298.0) -> OperatingPoint:
+                        T_amb: float = 298.0,
+                        steady_ctrl: bool = False) -> OperatingPoint:
         g = self.spec.geom
         if fuel_mg is None:
             load = 0.0 if load is None else load
@@ -313,7 +314,8 @@ class DieselEngine:
             rpm, fuel_mg, self.turbo, egr_cmd=egr, p_amb=p_amb, T_amb=T_amb,
             n_cycles=n_cycles, boost_target=self.boost_target(rpm, load_est),
             soi_shift=self.soi_schedule(rpm, load_est),
-            state0=self._state if warm_start else None)
+            state0=self._state if warm_start else None,
+            steady_ctrl=steady_ctrl)
         self._state = cyc.state
 
         fr = self.friction.evaluate(cyc.traces.theta, cyc.traces.p[0], rpm,

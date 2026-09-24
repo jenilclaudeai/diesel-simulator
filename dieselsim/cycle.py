@@ -150,6 +150,76 @@ class CycleResult:
     converged: bool = False
 
 
+def _egr_step(a, m_egr, need):
+    """Steady-state EGR valve update: scale the opening by the ratio of the
+    flow the target needs to the flow measured (orifice flow is
+    proportional to area at fixed pressures). Damped and ratio-limited."""
+    if m_egr > 1e-7:
+        a *= min(2.0, max(0.5, need / m_egr)) ** 0.7
+    else:
+        a = max(a, 0.1)      # no flow yet (dP <= 0): open a little
+    return min(1.0, max(0.0, a))
+
+
+class _TurboSteady:
+    """
+    Broyden solve of the turbo's steady state, one step per held cycle.
+
+    Unknowns x = (shaft speed / n_corr_ref, VGT position); residuals
+    f = (cycle-mean boost - target, cycle-mean net shaft power / turbine
+    power). Shaft speed moves net power hard (compressor power rises roughly
+    with the cube of speed), so the two cannot be updated independently.
+    The Jacobian starts from a physical estimate and is refined by Broyden's
+    rank-one update. Where the vanes sit on a stop and the step would push
+    them further, or there is no VGT, only the power balance is solved, with
+    the shaft speed: the boost target is then out of reach.
+    """
+    J0 = np.array([[2.0, 0.0],      # d boost / d (n, vgt)
+                   [-5.0, -3.5]])   # d net   / d (n, vgt)
+
+    def __init__(self, damping=0.8, max_step=(0.25, 0.25)):
+        self.J = self.J0.copy()
+        self.prev = None
+        self.damping = damping
+        self.max_step = np.array(max_step)
+
+    def step(self, x, f, lo, hi, use_boost=True):
+        if self.prev is not None:
+            xp, fp = self.prev
+            dx = x - xp
+            if float(dx @ dx) > 1e-12:
+                self.J += np.outer((f - fp) - self.J @ dx, dx) / float(dx @ dx)
+                # A cycle measured before the manifolds settle can flip a
+                # derivative's sign, and a Jacobian with the wrong sign walks
+                # away from the solution. The signs are known physics: boost
+                # rises with shaft speed and does not rise as the vanes open;
+                # net power falls with shaft speed and with vane opening.
+                J = self.J
+                J[0, 0] = max(J[0, 0], 0.3)
+                J[0, 1] = min(J[0, 1], 0.0)
+                J[1, 0] = min(J[1, 0], -0.5)
+                J[1, 1] = min(J[1, 1], -0.3)
+        self.prev = (x.copy(), f.copy())
+        dx = None
+        if use_boost:
+            try:
+                dx = -np.linalg.solve(self.J, f)
+            except np.linalg.LinAlgError:
+                dx = None
+            if dx is not None:
+                xn = x + self.damping * dx
+                pinned = (xn[1] < lo[1] and x[1] <= lo[1] + 1e-9) or \
+                         (xn[1] > hi[1] and x[1] >= hi[1] - 1e-9)
+                if pinned:
+                    dx = None
+        if dx is None:
+            # power balance with the shaft speed only
+            dnn = self.J[1, 0] if self.J[1, 0] < -1e-3 else self.J0[1, 0]
+            dx = np.array([-f[1] / dnn, 0.0])
+        dx = np.clip(self.damping * dx, -self.max_step, self.max_step)
+        return np.clip(x + dx, lo, hi)
+
+
 class CycleSolver:
     def __init__(self, spec: EngineSpec, wear, oil, dtheta: float = 0.5):
         self.spec = spec
@@ -253,7 +323,8 @@ class CycleSolver:
     # ------------------------------------------------------------------ #
     def run(self, rpm, fuel_mg_per_cycle, turbo, egr_cmd=0.0,
             p_amb=101325.0, T_amb=298.0, n_cycles=12, boost_target=None,
-            soi_shift=0.0, state0=None, spool_accel=14.0) -> CycleResult:
+            soi_shift=0.0, state0=None, spool_accel=14.0,
+            steady_ctrl=False) -> CycleResult:
         spec, g, thb = self.spec, self.spec.geom, self.spec.thermal
         nc = g.n_cyl
         om = 2.0 * math.pi * rpm / 60.0
@@ -330,9 +401,45 @@ class CycleSolver:
         h_int_wall = 12.0 * V_int ** 0.66
         h_exh_wall = 165.0 * V_exh ** 0.66
 
+        # Steady-state control (FINDING-013). The shaft runs spool_accel
+        # times faster than real time in all but the last two cycles, so a
+        # steady state is reached in a few cycles. The VGT's integral
+        # controller, run at the same rate against manifold pressures that
+        # still fill in real time, sees 14x its physical sensor lag and falls
+        # into a limit cycle; the EGR valve, trimmed in real time from a 25 %
+        # start, is nowhere near its target after 9 cycles.
+        #
+        # With steady_ctrl, the shaft speed, VGT position and EGR valve area
+        # are all HELD through each accelerated cycle, which makes each cycle
+        # an evaluation of the steady-state residuals at fixed unknowns, and
+        # moved once at its end by damped secant steps. Each unknown is paired
+        # with the residual it moves directly, within the same cycle:
+        #   shaft speed   <-> cycle-mean boost vs target (compressor at held speed)
+        #   VGT position  <-> cycle-mean net shaft power (turbine power)
+        #   EGR valve     <-> cycle-mean EGR mass flow vs the flow the target
+        #                     needs: at steady state the plenum's burnt
+        #                     fraction is mdot_egr*yb_exh/(mdot_egr+mdot_comp),
+        #                     so mdot_egr* = target*mdot_comp/(yb_exh-target).
+        #                     Flows respond within the cycle; the plenum's
+        #                     composition lags by ~1.5 cycles, and chasing it
+        #                     oscillates against the boost loop.
+        # If the vanes sit on a stop and still cannot balance the shaft, the
+        # boost target is out of reach and the shaft speed follows the power
+        # balance instead. Without a VGT the shaft always follows the power
+        # balance. The fixed point is the one the continuous controllers
+        # settle to (zero cycle-mean error). The last two cycles, and every
+        # run without steady_ctrl, use the continuous controllers unchanged.
+        tsolve = _TurboSteady()
+        steady_turbo = steady_ctrl and spec.turbo.enabled
+        vgt_tgt = (bt_eff if bt_eff else spec.turbo.wastegate_pset)
+        n_ref = spec.turbo.n_corr_ref
+
         for cyc in range(n_cycles):
             last = (cyc == n_cycles - 1)
             accel = 1.0 if cyc >= n_cycles - 2 else spool_accel
+            hold = steady_ctrl and cyc < n_cycles - 2
+            sum_pint = sum_pnet = sum_pt = 0.0
+            sum_megr = sum_mc = sum_ybx = 0.0
 
             p_tr = np.zeros((nc, self.n))
             pm_tr = np.zeros((nc, self.n))
@@ -354,7 +461,7 @@ class CycleSolver:
                 tinfo = turbo.step(dt * accel, p_amb, T_amb, p_int, p_exh,
                                    T_exh, p_back, ec, et,
                                    self.wear.turbo_friction_mult(),
-                                   bt_eff)
+                                   bt_eff, hold_vgt=hold, hold_shaft=hold)
                 mdot_c = tinfo["mdot_comp"]
                 T_charge = tinfo.get("T_charge", T_amb)
                 mdot_t = tinfo["mdot_turb"]
@@ -374,8 +481,9 @@ class CycleSolver:
                 # VGT is biased shut whenever EGR is demanded -- exactly the
                 # coupling that makes real EGR cost fuel.
                 if egr_target > 0.0:
-                    A_egr += 3.0e-3 * A_egr_max * (egr_target - yb_int) * dt \
-                        * 1000.0
+                    if not hold:
+                        A_egr += 3.0e-3 * A_egr_max * (egr_target - yb_int) \
+                            * dt * 1000.0
                     A_egr = min(A_egr_max, max(0.0, A_egr))
                 else:
                     A_egr = 0.0
@@ -683,6 +791,33 @@ class CycleSolver:
                 if last:
                     pim_tr[k] = p_int
                     pem_tr[k] = p_exh
+                if hold:
+                    sum_pint += p_int
+                    sum_megr += mdot_egr
+                    sum_mc += mdot_c
+                    sum_ybx += yb_exh
+                    sum_pnet += (tinfo.get("P_turb", 0.0) - tinfo.get("P_comp", 0.0)
+                                 - tinfo.get("T_fric", 0.0))
+                    sum_pt += tinfo.get("P_turb", 0.0)
+
+            if hold and steady_turbo:
+                boost = sum_pint / self.n / p_amb
+                net = (sum_pnet / self.n) / max(sum_pt / self.n, 50.0)
+                x = np.array([turbo.n_rpm / n_ref,
+                              turbo.vgt_pos if spec.turbo.vgt else 1.0])
+                lo = np.array([1000.0 / n_ref,
+                               spec.turbo.vgt_min_frac if spec.turbo.vgt else 1.0])
+                hi = np.array([1.35, 1.0])
+                x = tsolve.step(x, np.array([boost - vgt_tgt, net]), lo, hi,
+                                use_boost=spec.turbo.vgt)
+                turbo.n_rpm = float(x[0]) * n_ref
+                if spec.turbo.vgt:
+                    turbo.vgt_pos = float(x[1])
+            if hold and egr_target > 0.0:
+                m_egr = sum_megr / self.n
+                need = egr_target * (sum_mc / self.n) / max(
+                    sum_ybx / self.n - egr_target, 0.05)
+                A_egr = _egr_step(A_egr / A_egr_max, m_egr, need) * A_egr_max
 
         # ================= results =================
         r = CycleResult(rpm=rpm)
