@@ -147,7 +147,24 @@ class CycleResult:
     turbo: dict = field(default_factory=dict)
     traces: CycleTraces = None
     state: dict = field(default_factory=dict)
-    converged: bool = False
+    converged: bool = False       # set only by steady_ctrl solves (FINDING-013)
+    n_cycles_used: int = 0
+
+
+def _steady_converged(means, n_stable=2):
+    """True once the last n_stable held cycles each changed less than the
+    tolerances from the cycle before: gross work 0.1 %, boost 0.1 %, shaft
+    speed 0.2 %, intake burnt fraction 0.0005 absolute."""
+    held = [m for m in means if m["held"]]
+    if len(held) < n_stable + 1:
+        return False
+    for a, b in zip(held[-n_stable - 1:-1], held[-n_stable:]):
+        rel = lambda k: abs(b[k] - a[k]) / max(abs(a[k]), 1e-9)
+        if (rel("work") > 1e-3 or rel("boost") > 1e-3
+                or (a["turbo_rpm"] > 0 and rel("turbo_rpm") > 2e-3)
+                or abs(b["yb_int"] - a["yb_int"]) > 5e-4):
+            return False
+    return True
 
 
 def _egr_step(a, m_egr, need):
@@ -163,60 +180,58 @@ def _egr_step(a, m_egr, need):
 
 class _TurboSteady:
     """
-    Broyden solve of the turbo's steady state, one step per held cycle.
+    Steady state of the turbo, one step per held cycle.
 
-    Unknowns x = (shaft speed / n_corr_ref, VGT position); residuals
-    f = (cycle-mean boost - target, cycle-mean net shaft power / turbine
-    power). Shaft speed moves net power hard (compressor power rises roughly
-    with the cube of speed), so the two cannot be updated independently.
-    The Jacobian starts from a physical estimate and is refined by Broyden's
-    rank-one update. Where the vanes sit on a stop and the step would push
-    them further, or there is no VGT, only the power balance is solved, with
-    the shaft speed: the boost target is then out of reach.
+    Unknowns: shaft speed (as a fraction of n_corr_ref) and VGT position.
+    Residuals: cycle-mean boost minus target, and cycle-mean net shaft power
+    over turbine power.
+
+    - Shaft speed <-> boost: the compressor at a held speed sets boost within
+      the cycle, so a 1-D secant converges in a few cycles.
+    - VGT <-> net power: the response lags about a cycle while the exhaust
+      manifold refills, which makes a learned slope unreliable (a Broyden
+      version wandered between 0.32 and 0.60 and never settled). A fixed,
+      deliberately small gain -- steps as if the slope were ~6.7 against a
+      true 2-3.5 -- converges monotonically instead.
+    - Vanes on a stop, still unable to balance the shaft, or no VGT: the
+      boost target is out of reach and the shaft speed follows the power
+      balance, with an equally conservative gain.
+    Inside TOL on both residuals nothing moves, so a converged solve stays put.
     """
-    J0 = np.array([[2.0, 0.0],      # d boost / d (n, vgt)
-                   [-5.0, -3.5]])   # d net   / d (n, vgt)
+    TOL = np.array([0.002, 0.01])     # boost (pressure ratio), net / P_turb
+    MIN_DX = 1e-3                     # smaller steps carry no slope signal
+    G_VGT = 0.15                      # vane step per unit net residual
+    G_POWER = 0.10                    # speed step per unit net residual
+    S0_BOOST = 2.0                    # initial d boost / d speed
 
     def __init__(self, damping=0.8, max_step=(0.25, 0.25)):
-        self.J = self.J0.copy()
+        self.s_boost = self.S0_BOOST
         self.prev = None
         self.damping = damping
         self.max_step = np.array(max_step)
 
     def step(self, x, f, lo, hi, use_boost=True):
+        if abs(f[1]) <= self.TOL[1] and (not use_boost or abs(f[0]) <= self.TOL[0]):
+            return x
         if self.prev is not None:
             xp, fp = self.prev
-            dx = x - xp
-            if float(dx @ dx) > 1e-12:
-                self.J += np.outer((f - fp) - self.J @ dx, dx) / float(dx @ dx)
-                # A cycle measured before the manifolds settle can flip a
-                # derivative's sign, and a Jacobian with the wrong sign walks
-                # away from the solution. The signs are known physics: boost
-                # rises with shaft speed and does not rise as the vanes open;
-                # net power falls with shaft speed and with vane opening.
-                J = self.J
-                J[0, 0] = max(J[0, 0], 0.3)
-                J[0, 1] = min(J[0, 1], 0.0)
-                J[1, 0] = min(J[1, 0], -0.5)
-                J[1, 1] = min(J[1, 1], -0.3)
+            dxn = x[0] - xp[0]
+            if abs(dxn) > self.MIN_DX:
+                s = (f[0] - fp[0]) / dxn
+                if s > 0.3:                  # boost rises with shaft speed
+                    self.s_boost = s
         self.prev = (x.copy(), f.copy())
-        dx = None
-        if use_boost:
-            try:
-                dx = -np.linalg.solve(self.J, f)
-            except np.linalg.LinAlgError:
-                dx = None
-            if dx is not None:
-                xn = x + self.damping * dx
-                pinned = (xn[1] < lo[1] and x[1] <= lo[1] + 1e-9) or \
-                         (xn[1] > hi[1] and x[1] >= hi[1] - 1e-9)
-                if pinned:
-                    dx = None
-        if dx is None:
-            # power balance with the shaft speed only
-            dnn = self.J[1, 0] if self.J[1, 0] < -1e-3 else self.J0[1, 0]
-            dx = np.array([-f[1] / dnn, 0.0])
-        dx = np.clip(self.damping * dx, -self.max_step, self.max_step)
+        dx = np.zeros(2)
+        dv = self.G_VGT * f[1]               # surplus power -> open the vanes
+        pinned = (not use_boost
+                  or (x[1] <= lo[1] + 1e-9 and dv < 0.0)
+                  or (x[1] >= hi[1] - 1e-9 and dv > 0.0))
+        if pinned:
+            dx[0] = self.G_POWER * f[1]      # surplus power -> faster shaft
+        else:
+            dx[0] = -self.damping * f[0] / self.s_boost
+            dx[1] = dv
+        dx = np.clip(dx, -self.max_step, self.max_step)
         return np.clip(x + dx, lo, hi)
 
 
@@ -324,7 +339,7 @@ class CycleSolver:
     def run(self, rpm, fuel_mg_per_cycle, turbo, egr_cmd=0.0,
             p_amb=101325.0, T_amb=298.0, n_cycles=12, boost_target=None,
             soi_shift=0.0, state0=None, spool_accel=14.0,
-            steady_ctrl=False) -> CycleResult:
+            steady_ctrl=False, max_cycles=40) -> CycleResult:
         spec, g, thb = self.spec, self.spec.geom, self.spec.thermal
         nc = g.n_cyl
         om = 2.0 * math.pi * rpm / 60.0
@@ -434,11 +449,32 @@ class CycleSolver:
         steady_turbo = steady_ctrl and spec.turbo.enabled
         vgt_tgt = (bt_eff if bt_eff else spec.turbo.wastegate_pset)
         n_ref = spec.turbo.n_corr_ref
+        # With steady_ctrl, n_cycles is a minimum: held cycles are added
+        # until the cycle means stop changing (_steady_converged), up to
+        # max_cycles in all, then the two real-time cycles run as usual.
+        total = n_cycles
+        # only a steady_ctrl solve checks convergence; a fixed-count solve
+        # leaves CycleResult.converged False (not established)
+        converged = False
+        if steady_turbo:
+            # Start the shaft near its running speed rather than a fresh
+            # engine's 12,000 rpm, which cost 3-4 cycles of spin-up: the speed
+            # at which the compressor's peak pressure ratio is 10 % above the
+            # boost target. Left alone if the shaft is already faster than
+            # half of that (a warm start).
+            tgt = max(vgt_tgt, 1.05)
+            u0 = math.sqrt(max(1.1 * tgt - 1.0, 0.0) /
+                           max(spec.turbo.pr_max_ref - 1.0, 1e-6))
+            n0 = u0 * n_ref * math.sqrt(max(T_amb, 100.0) / 298.0)
+            if turbo.n_rpm < 0.5 * n0:
+                turbo.n_rpm = min(n0, 1.35 * n_ref)
 
-        for cyc in range(n_cycles):
-            last = (cyc == n_cycles - 1)
-            accel = 1.0 if cyc >= n_cycles - 2 else spool_accel
-            hold = steady_ctrl and cyc < n_cycles - 2
+        cyc = -1
+        while cyc + 1 < total:
+            cyc += 1
+            last = (cyc == total - 1)
+            accel = 1.0 if cyc >= total - 2 else spool_accel
+            hold = steady_ctrl and cyc < total - 2
             sum_pint = sum_pnet = sum_pt = 0.0
             sum_megr = sum_mc = sum_ybx = 0.0
             cm_yb = cm_megr = cm_mc = cm_pint = 0.0
@@ -810,7 +846,8 @@ class CycleSolver:
                 yb_int=cm_yb / self.n, mdot_egr=cm_megr / self.n,
                 mdot_comp=cm_mc / self.n, boost=cm_pint / self.n / p_amb,
                 egr_valve=A_egr / A_egr_max if A_egr_max > 0 else 0.0,
-                vgt=turbo.vgt_pos, turbo_rpm=turbo.n_rpm, held=hold))
+                vgt=turbo.vgt_pos, turbo_rpm=turbo.n_rpm, held=hold,
+                work=float(np.mean(SN["Wg"]))))
             if hold and steady_turbo:
                 boost = sum_pint / self.n / p_amb
                 net = (sum_pnet / self.n) / max(sum_pt / self.n, 50.0)
@@ -829,9 +866,15 @@ class CycleSolver:
                 need = egr_target * (sum_mc / self.n) / max(
                     sum_ybx / self.n - egr_target, 0.05)
                 A_egr = _egr_step(A_egr / A_egr_max, m_egr, need) * A_egr_max
+            if hold and not converged:
+                converged = _steady_converged(cycle_means)
+                if not converged and cyc == total - 3 and total < max_cycles:
+                    total += 1          # one more held cycle
 
         # ================= results =================
         r = CycleResult(rpm=rpm)
+        r.n_cycles_used = total
+        r.converged = converged
         # per-cycle means (all cycles): a convergence diagnostic
         r.cycle_means = cycle_means
         Vd = g.displacement_cyl
@@ -890,7 +933,10 @@ class CycleSolver:
             valve_lift_int=lift_i, valve_lift_exh=lift_e, soi_deg=soi_main,
             soc_pilot_deg=float(soc_p[0]), soc_main_deg=float(soc_m[0]),
             pilot_soi_deg=soi_pilot, inj_dur_main_deg=dur_main)
-        r.converged = True
+        # FINDING-013: this was `r.converged = True`, unconditionally -- every
+        # solve claimed convergence without checking (the dead-signal audit
+        # listed it as expected-constant). It is now set above, and only a
+        # steady_ctrl solve that met _steady_converged reports True.
         return r
 
     # ------------------------------------------------------------------ #

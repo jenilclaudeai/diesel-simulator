@@ -344,3 +344,35 @@ and EGR flow collapses in the two free cycles (7.5 → 1.2 → 0.5 g/s).
 the cost at ~9–12 cycles. That estimate was not supported: with shaft, VGT and
 EGR coupled, no variant tried reaches the stopping rule set for the attempt
 (RMS < 1% within 16 cycles).
+
+### Option A with an adaptive cycle count (session 4, third attempt)
+
+`n_cycles` becomes a minimum; held cycles are added until the cycle means stop
+changing (`_steady_converged`: work and boost 0.1%, shaft speed 0.2%, burnt
+fraction 0.0005), up to 40. The shaft starts near its running speed instead of
+12,000 rpm. The Broyden (speed, VGT) step was replaced: shaft speed ↔ boost by
+1-D secant; VGT ↔ net power by a fixed conservative gain, because net power
+responds to the vanes with a ~1-cycle lag and a learned slope made the vanes
+wander (0.32–0.60) without settling.
+
+| point | vs reference | cycles | converged |
+|---|---|---|---|
+| `crdi15` 1450 / 1.0 | +0.29% | 11 | yes |
+| `hd_i6` 1100 / 1.0 | −0.11% | 14 | yes |
+| `hd_i6` 1300 / 1.0 | −0.14% | 15 | yes |
+| `crdi15` 2100 / 0.75 | −0.71% | 26 | yes |
+| `crdi_1p5` 2100 / 0.5 | −1.34% | 38 | yes |
+| `ld_i4` 2100 / 0.5 | −2.86% | 40 | no |
+| `crdi15` 4000 / 0.25 | +4.63% | 40 | no |
+| `crdi15` 800 / 1.0 | **+10.99%** | 40 | no — shipped n=9 is −1.44% here |
+| `crdi_1p5` 3350 / 0.25 | +11.57% | 40 | no |
+
+RMS 5.6% (shipped n=9: 16.2%; Broyden n=16: 8.5%). The timebox set for this
+attempt — the nine points within 1% inside 40 cycles — is not met, so it stops
+here. Converged points still sit 0.1–1.3% from the reference, consistent with
+the EGR flow formula's fixed point ignoring manifold backflow.
+
+Also found: `CycleResult.converged` was set `True` unconditionally at the end
+of every solve, so every solve claimed convergence without checking; the
+dead-signal audit listed it as expected-constant. Nothing read it. It is now
+`False` unless a `steady_ctrl` solve met the convergence test.
