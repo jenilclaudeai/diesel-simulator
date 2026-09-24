@@ -459,7 +459,7 @@ between two values, which the corrected fuelling no longer triggers.
 
 `tools/diag_torque_limiter.py --pull` — every preset's 10-point full-load pull
 as the page solves it (fresh engine, load 1, n_cycles 9, item 1 applied)
-against converged solves. Physics build `64c825e675fc`.
+against converged solves. Physics build `64c825e675fc`; re-run on the final tree (`b11877338e84`, after the `seed_fuel_limit` change) gave identical rows.
 
 | preset | worst gap, positive torque | governed end (negative torque) |
 |---|---|---|
