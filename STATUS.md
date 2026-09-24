@@ -310,7 +310,7 @@ parent, retarget its child PR to `main` (`gh pr edit <n> --base main`).
 
 | PR | branch | contents | needs |
 |---|---|---|---|
-| #21 | `fix/converged-solves` | converged offline solves, item 1, honest `converged`, re-baselined goldens, FINDING-016 | review — **the two guards turned KNOWN are a judgement**; moves `crdi15` numbers |
+| #21 | `fix/converged-solves` | converged offline solves, item 1, honest `converged`, re-baselined goldens, FINDING-016, `--converged-grid`, dyno accuracy note | ready for review, CI 5/5 green — **three judgements listed in its description**; moves `crdi15` numbers |
 | #23 | `ci/e2e` | e2e in headless Chrome in CI; e2e fails without its reference | review; independent |
 | #22 | `docs/finding-008-options` | FINDING-008 options | **decision** (contract) |
 | #24 | `diag/bug-10-render-seams` | FINDING-014 + tool | **decision** (fix option) |
