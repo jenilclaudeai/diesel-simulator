@@ -35,7 +35,13 @@ the permission check blocks merging without review.
   `CycleResult.converged` no longer claims convergence it never checked.
   Goldens re-baselined for `crdi15` (1800/0.6 torque −10.2%: the old
   calibration's fuel limit was inflated by EGR over-delivery). **Two guards
-  became KNOWN — see FINDING-016; a judgement to review.**
+  became KNOWN — see FINDING-016; a judgement to review.** SolverPort
+  round-trip tolerance 1e-8 → 1e-5 (native vs Pyodide now 1.2e-6 here: the
+  calibration's warm-started solves amplify platform differences through the
+  VGT limit cycle — measured; ADR-001 addendum). `play.py --converged-grid`
+  builds a converged grid: `crdi15` 8×6 in **544 s** vs 55 s fast (6
+  workers). The dyno page states its own accuracy against converged solves,
+  tied to the physics build it was measured on.
 - **#23 — e2e in CI** (headless Chrome on the runner; 13/13 there). The e2e
   no longer passes silently without its native reference.
 - **#24 — FINDING-014, bug #10 measured**: `render_transient` restarts crank
@@ -49,10 +55,12 @@ the permission check blocks merging without review.
 - **#22 — FINDING-008 options** for the crank-angle contract (docs).
 - **#20** stays a draft: the `steady_ctrl` experiment, kept as a record.
 
-**Found on the way:** FINDING-016 — at `crdi15` 1800/0.6 main ignition delay
-is pinned at 2.425° from 273 to 363 K (at 1.0° and 0.5° steps alike); the
-FINDING-001/002 guards had been passing on a regime switch. REVIEW-001's
-"quantised to the crank step" reading is corrected (pointer added).
+**Found on the way:** FINDING-016 — the FINDING-001/002 guards had been
+passing on a single 1° jump of the main ignition delay. The real response at
+`crdi15` 1800/0.6 is ~0.2° / ~10% premix over 90 K (measured at dθ = 0.1°),
+quantised away by the solver's 1° step. *My first reading — "pinned, does not
+respond", and a "correction" of REVIEW-001 — was wrong and is corrected in
+place; REVIEW-001's "quantised to the crank step" was right.*
 
 ---
 
@@ -201,7 +209,7 @@ a miscount, not a change.)*
 | 013 | bug #3 understated: limiter fitted with EGR on, judged with it off; EGR valve opens 25% for any command; `crdi15` never converges at 1650 rpm | item 1 fixed and converged offline solves — **PR #21**; fast path stays unconverged (caveat online); item 2 open |
 | 014 | `render_transient`: crank phase restarts every chunk; each cross-fade deletes 20 ms (bug #10) | **measured, not fixed** — PR #24 |
 | 015 | cam film ~780× too thick (pressure-viscosity counted twice) + two kinematic errors — why cam wear is negligible | **measured, not fixed** — PR #25 |
-| 016 | main ignition delay pinned at 2.425° at `crdi15` 1800/0.6; FINDING-001/002 guards rode a regime switch | **measured; mechanism open** — in PR #21 |
+| 016 | FINDING-001/002 guards rode a 1° ignition-delay step; the real response (~0.2° over 90 K) is quantised by the 1° crank step | **measured; first reading corrected** — in PR #21; fix: resolve ignition within the step |
 
 ### Still open inside those
 
@@ -324,16 +332,17 @@ bug-8 audit, #8–#14 the Phase 2 stack, #16 `CLAUDE.md`.
 1. **Review and merge** #21 and #23 (engineering), and decide #22, #24, #25.
 2. **Listen to the audio** — the warm-vs-cold pair at load 0.6 matters most.
    Still never done; FINDING-004's changes are unheard.
-3. **FINDING-016** — why main ignition delay is pinned at 2.425° (pilot–main
-   interaction? accumulation window? SOI grid offset?). PHY1. It decides
-   whether cold-start combustion sensitivity exists at all, which is ADR-006's
-   premise.
+3. **FINDING-016** — resolve start of combustion within the crank step
+   (interpolate the delay integral's crossing). The response exists but is
+   weak (~0.2° over 90 K here) and the 1° step hides it; the two KNOWN guards'
+   thresholds then need re-deriving from the physics. PHY1; bears on ADR-006.
 4. **FINDING-013 item 2** — the EGR valve's 25% start; with converged solves it
    no longer matters offline, but the fast (browser) path still carries it.
    And the VGT–EGR limit cycle at `crdi_1p5` 1450/0.5 (controller tuning).
-5. **An offline grid builder using `solve_cell(converged=True)`** for Enjoy
-   mode's roster (ADR-008), sharing one converged calibration per rpm row
-   (`seed_fuel_limit`). Estimated ~10 min per engine on 6 cores — measure it.
+5. **Build Enjoy mode's roster grids** with `play.py --converged-grid` (in
+   #21; measured 9.1 min for `crdi15` on 6 workers). The roster itself is
+   OPEN-F. Note: grid cache files are not keyed on `--torque-limit` /
+   `--power-limit`, so a different rating loads an old grid — a design gap.
 6. **FINDING-015 / FINDING-014 fixes**, once decided.
 7. **Reassess ADR-006** against FINDING-016 and the post-001–004 numbers.
 8. Then **Phase 3** — real-time loop in TypeScript; manual gearbox needs a
@@ -359,6 +368,9 @@ bug-8 audit, #8–#14 the Phase 2 stack, #16 `CLAUDE.md`.
 - **Git worktrees + Angular:** building `web/app` from a worktree creates an
   empty `.angular/cache/<version>` at the *main* checkout's root. Harmless;
   delete it (session 4 did, three times).
+- **Waiting on a background job with `pgrep -f "<script>"`** matches the
+  waiting shell's own command line and never ends — session 4 lost two loops
+  to it. Match on something the waiter does not contain, or wait on the PID.
 - **macOS `multiprocessing` spawns fresh interpreters:** a pool in a script
   piped on stdin respawns workers forever (they cannot re-import `<stdin>`).
   Put pool code in a file.
