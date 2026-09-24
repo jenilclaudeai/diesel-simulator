@@ -1,10 +1,12 @@
 # Continuous integration for dieselsim.
 #
-# Four independent jobs, so a failure says where the problem is:
+# Five independent jobs, so a failure says where the problem is:
 #   physics          native CPython, the reference implementation
 #   physics-pyodide  the SAME suite under Pyodide - ADR-001's guarantee
 #   solver           the TypeScript SolverPort, end to end through a real worker
 #   web-app          the Angular app: unit tests and the GitHub Pages build
+#   web-e2e          the Pages build in real headless Chrome: Python boots in the
+#                    page's worker and a dyno pull matches native Python
 name: CI
 
 on:
@@ -104,3 +106,45 @@ jobs:
       - run: npm ci
       - run: npm test -- --watch=false
       - run: npm run build:pages
+
+  # The built app in a real browser. A dyno pull is solved by Python in the
+  # page's worker and checked against native Python at three points
+  # (e2e/native_ref.py), plus MIME types, the worker, the cache and the
+  # console. Chrome is preinstalled on GitHub's Ubuntu runners.
+  web-e2e:
+    name: web app in Chrome (e2e)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: web/app
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+        working-directory: .
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            web/app/package-lock.json
+            web/solver/package-lock.json
+      - run: npm ci
+        working-directory: web/solver
+      - run: npm ci
+      - run: npm run build:pages
+      - name: e2e in headless Chrome
+        run: npm run e2e
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+      - name: keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-screenshots
+          path: web/app/e2e/out/
+          if-no-files-found: ignore

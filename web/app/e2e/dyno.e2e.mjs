@@ -1,6 +1,11 @@
 // End-to-end: the built app in a real headless Chrome.
 //
-//   npm run build && CHROME_PATH=/path/to/chrome node e2e/dyno.e2e.mjs
+//   npm run build:pages && CHROME_PATH=/path/to/chrome npm run e2e
+//
+// The numbers are checked against native Python. NATIVE_REF='{"<rpm>": torque}'
+// supplies the reference; without it the script runs e2e/native_ref.py itself
+// (needs python3 with numpy), and fails -- rather than silently skipping the
+// comparison, as it once did -- if it cannot get one.
 //
 // Serves dist/ with the content types a real host uses (application/wasm
 // matters: browsers only stream-compile WebAssembly served as that), loads
@@ -10,6 +15,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 import puppeteer from "puppeteer-core";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -39,7 +45,15 @@ const check = (name, ok, note = "") => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${note ? "  -- " + note : ""}`);
 };
 
-const ref = JSON.parse(process.env.NATIVE_REF ?? "{}");
+let ref = {}, refNote = "";
+try {
+  ref = JSON.parse(process.env.NATIVE_REF || execFileSync("python3",
+    [path.join(here, "native_ref.py")], { encoding: "utf8", cwd: path.resolve(here, "..", "..", "..") }));
+  refNote = `${Object.keys(ref).length} points${process.env.NATIVE_REF ? " (NATIVE_REF)" : " (native_ref.py)"}`;
+} catch (e) {
+  refNote = `no native reference: ${String(e.message).split("\n")[0]}`;
+}
+check("native Python reference available", Object.keys(ref).length >= 3, refNote);
 const physics = fs.readFileSync(path.resolve(here, "..", "src", "app", "solver", "physics-version.ts"), "utf8")
   .match(/PHYSICS_VERSION = "([0-9a-f]+)"/)[1];
 
