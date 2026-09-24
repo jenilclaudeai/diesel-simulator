@@ -43,7 +43,8 @@ MATRIX = [
 # values that legitimately sit at a bound or are structurally constant
 EXPECTED_CONSTANT = {
     "egr_pct", "egr_fraction", "egr_valve_area",   # EGR off unless commanded
-    "converged",
+    "converged",          # False unless a converged-mode solve settled (FINDING-013)
+    "n_cycles_used",      # the requested count on the fast path (FINDING-013)
 }
 
 

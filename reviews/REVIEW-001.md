@@ -63,6 +63,12 @@ across 273–333 K, then steps to exactly 1.425° — a change of precisely 1.00
 That is a step function on the integration grid, not a physical response. Any
 interpolation across it is interpolating an artifact.
 
+> *Correction (2026-09-25, session 4): at dθ = 0.5° the delay is still exactly
+> 2.425° from 273 to 363 K, so it does not move with the integration step and
+> step quantisation alone does not explain it — the 1.000° jump looks like a
+> switch between two regimes, and the delay is pinned within each. See
+> FINDING-016. The text above is kept as written.*
+
 **Consequence for ADR-006.** Linear two-grid interpolation error on ignition
 delay, cold and warm endpoints only:
 
