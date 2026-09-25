@@ -146,3 +146,55 @@ assume a translating flat-faced follower with no offset; the roller variant
 keeps the branch's 6% sliding assumption. The 12 mm contact width
 (`w_line`) and the cam radius used as R (rather than the local radius of
 curvature at the contact) are further approximations, not measured here.
+
+---
+
+## Partly fixed (session 4, owner's decision: "unambiguous parts first")
+
+Items 1 and 3 are fixed in `friction.py`: `mu_cam` is the inlet
+(ambient-pressure) viscosity, and follower velocity and inertia use crank
+speed on the crank-angle derivatives. Item 2 (flat-tappet kinematics), a film
+floor and a wear calibration are left for the proposal below.
+
+**Effect** — before → after, 9-cycle solves, and an 8000 h
+`durability_run(step_h=400)`:
+
+| | boundary power | valvetrain friction | torque | lash growth 8000 h (int / exh) |
+|---|---|---|---|---|
+| `single` 2000/0.8 (flat tappet) | 5.0e-7 → **22.6 W** | 171.3 → 228.2 W | 23.964 → 23.692 (−1.13%) | ~0 → **0.83 / 1.02 µm** |
+| `hd_i6` 1400/0.6 (roller) | 4.3e-3 → **29.5 W** | 585.2 → 563.5 W | +0.011% | ~0 → **0.55 / 0.67 µm** |
+| `crdi15` 2000/0.6 (roller) | 1.4e-3 → **7.4 W** | 134.0 → 129.0 W | +0.012% | — |
+
+- The dead-signal audit's TINY list is now empty: `Pb_valvetrain` was the
+  last entry on it.
+- Wear is now non-zero but modest with the existing Archard coefficients —
+  about a micron of lash in 8000 h — so the fix does not make engines wear out
+  implausibly fast while the calibration is pending.
+- The flat tappet's valvetrain friction rises 33%: its film is now in the
+  mixed regime, as a flat tappet's should be. The goldens (crdi15, hd_i6)
+  move ~0.01%, inside tolerance, and are unchanged.
+
+Test: `test_cam_film_and_time_base` — boundary share material (> 1%) for
+`hd_i6` and `single`, and `hd_i6` valvetrain friction 563.5 W ± 1% (the time
+base's fingerprint; 585.2 W on the cam time base). Mutation: reverting either
+fix is caught by its own check.
+
+## Proposal — the remaining part, for decision
+
+1. **Flat-tappet kinematics (item 2).** With the shipped `|dL/dθ|·ω` speeds
+   the flat tappet's film sits on the 8 nm floor across the base circle (λ =
+   0.032 for 100% of the cycle with inlet viscosity alone) because that
+   "entrainment" speed is zero there. Use `u_s = ω_cam (R_b + L)` and
+   `u_e = ω_cam |R_b + L + 2L″| / 2`. Measured: flat-tappet boundary power
+   then ~215 W.
+2. **A physical film floor.** Near the nose the entrainment speed passes
+   through zero and the floor binds again (λ = 0.032). Replace the constant
+   8 nm with a mixed-lubrication treatment — e.g. a floor tied to composite
+   roughness, or a load-sharing (Greenwood–Tripp-style) asperity term — so the
+   boundary share saturates physically instead of at a clamp.
+3. **A wear-rate calibration target.** The Archard coefficient for the cam was
+   never exercised. Pick a target — for example "a flat-tappet single loses
+   ~X µm of lash in its first 5000 h" — and fit `K_ARCHARD["cam"]` to it, with
+   the target and its source recorded.
+
+These are physics judgements; nothing here is applied.
