@@ -74,7 +74,11 @@ def main():
     # boundaries as placed in the OUTPUT: each join overlaps xf samples
     xf = int(0.02 * fs)
     step = int(max(BLEND, 0.15) * fs)
-    bounds = [(k + 1) * step - (k + 1) * xf + xf // 2 for k in range(n_bound)]
+    # before FINDING-014's fix each join deleted xf samples; after it the
+    # chunks sit at their true times and the fade covers [i0, i0 + xf)
+    deleting = len(chunked) < len(single) - xf // 2
+    bounds = [(k + 1) * step - ((k + 1) * xf if deleting else 0) + xf // 2
+              for k in range(n_bound)]
 
     print(f"2. firing intervals (nominal {1000 * period:.2f} ms):")
     # the control is judged at the same boundary times: if it shows no

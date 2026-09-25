@@ -89,3 +89,36 @@ One preset, one speed, one `blend`. Mechanism 2 is exact by construction
 (20 ms per boundary). The firing-interval metric depends on envelope peak
 picking; the control at the same instants shows it discriminates (2.1% max
 there against 29% across seams).
+
+---
+
+## Fixed (session 4, owner's decision: carry phase + keep length)
+
+- `render()` takes `theta0` (crank angle before its first sample, unwrapped)
+  and `turbo_phase0`, and leaves its per-sample crank angle and turbo phases in
+  `self.last_phases`. Gear mesh phase now follows the crank angle (gears are
+  crank-locked), so it continues too. Defaults reproduce the old behaviour.
+- `render_transient()` integrates the global crank angle once over the log,
+  starts every chunk from it, carries the turbo phase from the previous
+  chunk's phase track, renders a discarded 50 ms pre-roll so each chunk's
+  filters are warm, and renders 20 ms extra for the cross-fade to overlap —
+  chunks are placed at their true sample index, so nothing is deleted.
+
+**Re-measured** with `tools/diag_render_seams.py`, same setup:
+
+| | length | firings | across seams: median / max |
+|---|---|---|---|
+| before | 1.860 s | 89 | 13.4% / 29.0% |
+| **after** | **2.000 s** | **94** | **0.2% / 0.5%** |
+| single render (control) | 2.000 s | 94 | 0.2% / 2.0% |
+
+Seams are now indistinguishable from an uninterrupted render.
+
+Test: `test_render_transient_has_no_seams` (length exact, worst firing
+interval across seams < 5%). It needs scipy, so under Pyodide it reports SKIP
+— and the suite's summary now counts skips separately; it had been counting
+them as passes. Mutation: a crank angle restarting each chunk (67%) and the
+old deleting join (1.860 s) are caught. A hard cut with no cross-fade is
+**not** caught: with continuous phase and warm filters it barely disturbs
+firing regularity. That is outside what this fix targets and is recorded, not
+hidden.

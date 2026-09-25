@@ -356,11 +356,18 @@ class EngineSound:
     # rendering
     # ------------------------------------------------------------------ #
     def render(self, op, duration: float = 3.0, mic: str = "exterior_7m",
-               rpm_traj=None, sources: dict = None, seed: int = None):
+               rpm_traj=None, sources: dict = None, seed: int = None,
+               theta0: float = 0.0, turbo_phase0=(0.0, 0.0)):
         """
         Render `duration` seconds.  `rpm_traj` may be a callable t -> rpm to
         sweep the engine; the crank phase is integrated from it so the pitch
         is exact.
+
+        theta0: crank angle [deg, unwrapped] just before the first sample, and
+        turbo_phase0: (shaft, blade-pass) phase [rad] -- so consecutive
+        renders continue the same engine instead of restarting it at crank
+        angle 0 (FINDING-014). Per-sample crank angle and turbo phases of
+        this render are left in self.last_phases for the caller.
         """
         fs = self.fs
         n = int(duration * fs)
@@ -374,7 +381,8 @@ class EngineSound:
             np.array([float(rpm_traj(x)) for x in t])
         rpm = np.maximum(rpm, 50.0)
         # crank phase [deg], 720 per 4-stroke cycle
-        theta = np.cumsum(6.0 * rpm / fs) % 720.0
+        theta_unwrapped = theta0 + np.cumsum(6.0 * rpm / fs)
+        theta = theta_unwrapped % 720.0
 
         def sample(name):
             return np.interp(theta, self.grid, src[name], period=720.0)
@@ -471,7 +479,7 @@ class EngineSound:
         if s.turbo.enabled and meta["turbo_rpm"] > 1000.0:
             n_t = meta["turbo_rpm"] * (0.35 + 0.65 * spd)
             f_shaft = n_t / 60.0
-            ph = 2 * math.pi * np.cumsum(f_shaft / fs)
+            ph = turbo_phase0[0] + 2 * math.pi * np.cumsum(f_shaft / fs)
             whine = np.zeros(n)
             for k, a in ((1, 1.0), (2, 0.45), (3, 0.22)):
                 if k * float(np.mean(f_shaft)) < 0.45 * fs:
@@ -479,8 +487,9 @@ class EngineSound:
             # blade passing is real but usually ultrasonic -- keep it only
             # if it lands below Nyquist
             f_bp = f_shaft * s.turbo.comp_blades
+            ph_bp = turbo_phase0[1] + 2 * math.pi * np.cumsum(f_bp / fs)
             if float(np.mean(f_bp)) < 0.42 * fs:
-                whine += 0.30 * np.sin(2 * math.pi * np.cumsum(f_bp / fs))
+                whine += 0.30 * np.sin(ph_bp)
             whoosh = _bandpass(self._rng.standard_normal(n), 1200.0, 9000.0,
                                fs, 2)
             amp = (meta["boost"] - 1.0) * spd ** 2
@@ -490,6 +499,7 @@ class EngineSound:
                 (meta["turbo_rpm"] / self._ref_turbo) ** 2
         else:
             out["turbo"] = np.zeros(n)
+            ph = ph_bp = np.zeros(n)
 
         # ---------------- gear train -----------------------------------
         gear = np.zeros(n)
@@ -499,8 +509,10 @@ class EngineSound:
                                   (s.injpump_gear_teeth, 0.5, 0.5)):
             f_mesh = teeth * f_crank * ratio
             if float(np.mean(f_mesh)) < 0.45 * fs:
-                ph = 2 * math.pi * np.cumsum(f_mesh / fs)
-                gear += amp * (np.sin(ph) + 0.35 * np.sin(2 * ph + 1.1))
+                # gears are locked to the crank: their phase follows the
+                # (unwrapped) crank angle, so it continues across renders
+                ph_g = 2 * math.pi * teeth * ratio * theta_unwrapped / 360.0
+                gear += amp * (np.sin(ph_g) + 0.35 * np.sin(2 * ph_g + 1.1))
         out["gear"] = gear / (np.std(gear) + 1e-12) * (0.3 + 0.7 * meta["load"])
 
         # ---------------- broadband mechanical rumble ------------------
@@ -529,6 +541,7 @@ class EngineSound:
         # levels, so the mix is scaled by a single calibration constant and
         # only limited for clipping.
         y = _softclip(y * SPL_CAL, 1.1)
+        self.last_phases = dict(theta=theta_unwrapped, turbo=ph, turbo_bp=ph_bp)
         return y, out
 
     def _cheap_reverb(self, x):
@@ -549,36 +562,59 @@ class EngineSound:
         Render a transient run produced by DieselEngine.transient().
         The source set is rebuilt every `blend` seconds and cross-faded, so
         turbo spool, smoke limit and load change are audible.
+
+        FINDING-014: every chunk used to be an independent render starting at
+        crank angle 0 with cold filters, and each 20 ms cross-fade overlapped
+        and deleted audio (a 2.00 s log rendered as 1.86 s). Now each chunk
+        continues the global crank angle and turbo phase, renders a discarded
+        50 ms pre-roll so its filters are warm, and renders 20 ms extra at the
+        end for the cross-fade to overlap -- so the output is as long as the
+        log and every chunk sits on its own rpm trajectory.
         """
         fs = self.fs
         times = np.array([r["t"] for r in log])
         rpms = np.array([r["rpm"] for r in log])
         dur = float(times[-1])
+        n_total = int(round(dur * fs))
         rpm_of_t = lambda x: float(np.interp(x, times, rpms))
+        # global crank angle, integrated once over the whole log
+        t_all = np.arange(n_total + 1) / fs
+        theta_all = np.concatenate(
+            [[0.0], np.cumsum(6.0 * np.maximum(np.interp(t_all[:-1], times, rpms), 50.0) / fs)])
         step = max(blend, 0.15)
-        chunks = []
-        t0 = 0.0
-        while t0 < dur:
-            t1 = min(dur, t0 + step)
-            k = int(np.searchsorted(times, 0.5 * (t0 + t1)))
-            k = min(k, len(log) - 1)
-            op = log[k]["op"]
-            y, _ = self.render(op, duration=(t1 - t0), mic=mic,
-                               rpm_traj=lambda x, o=t0: rpm_of_t(o + x))
-            chunks.append(y)
-            t0 = t1
-        # equal-power cross-fade between chunks
         xf = int(0.02 * fs)
-        out = chunks[0]
-        for c in chunks[1:]:
-            if len(out) > xf and len(c) > xf:
-                w = np.linspace(0, 1, xf)
-                tail = out[-xf:] * np.cos(w * math.pi / 2) + \
-                    c[:xf] * np.sin(w * math.pi / 2)
-                out = np.concatenate([out[:-xf], tail, c[xf:]])
+        pre = int(0.05 * fs)
+        out = np.zeros(0)
+        turbo_ph = (0.0, 0.0)
+        prev_ph = None          # (start sample, turbo phase tracks) of the previous chunk
+        i0 = 0
+        while i0 < n_total:
+            i1 = min(n_total, i0 + int(round(step * fs)))
+            p = pre if i0 > 0 else 0
+            a = i0 - p                              # first rendered sample
+            b = min(n_total, i1 + xf)               # one past the last
+            k = int(np.searchsorted(times, 0.5 * (i0 + i1) / fs))
+            op = log[min(k, len(log) - 1)]["op"]
+            if prev_ph is not None:
+                j = a - prev_ph[0]                  # our first sample in the previous chunk
+                if 0 < j <= len(prev_ph[1]):
+                    turbo_ph = (float(prev_ph[1][j - 1]), float(prev_ph[2][j - 1]))
+            y, _ = self.render(op, duration=(b - a) / fs, mic=mic,
+                               rpm_traj=lambda x, o=a / fs: rpm_of_t(o + x),
+                               theta0=float(theta_all[a]), turbo_phase0=turbo_ph)
+            y = y[p:]                               # drop the warm-up
+            prev_ph = (a, self.last_phases["turbo"], self.last_phases["turbo_bp"])
+            if len(out) == 0:
+                out = y
             else:
-                out = np.concatenate([out, c])
-        return out
+                ov = min(xf, len(out) - i0, len(y))
+                if ov > 0:
+                    w = np.linspace(0, 1, ov)
+                    out[i0:i0 + ov] = out[i0:i0 + ov] * np.cos(w * math.pi / 2) + \
+                        y[:ov] * np.sin(w * math.pi / 2)
+                out = np.concatenate([out[:i0 + ov], y[ov:]])
+            i0 = i1
+        return out[:n_total]
 
     # ------------------------------------------------------------------ #
     @staticmethod
