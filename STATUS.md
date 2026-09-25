@@ -3,13 +3,33 @@
 **Updated:** 2026-09-25 (session 4, part 2 — an autonomous stretch; see below)
 **Phase:** 2 — mostly done. Python runs in the browser, the SolverPort exists,
 grids are cached, CI runs, and the first web page (a dyno pull) works end to end.
-**Main:** everything through PR #19 is merged; CI on `main` is green (5 jobs).
-Open work is PRs #20–#25, listed under Branches below — **several need a
-decision from the owner**.
+**Main:** everything through PR #30 is merged; CI on `main` is green (6 jobs).
+#20 was closed (its record is FINDING-013; branch kept). Open: **#31**
+(FINDING-017) and **#32** (REVIEW-002, ADR-011 proposed) — both need a
+decision from the owner.
 
 Read this first in a new session, then `PLAN.md`, then `DECISIONS.md`, then
 `reviews/`. Those replace pasting a context document. `CLAUDE.md` says the same
 for Claude Code sessions.
+
+---
+
+## Session 4, part 3 (2026-09-25, later)
+
+- **The listening pairs were finally rendered and sent to the owner**
+  (`tools/render_ab.py`, WAVs in `out/listen/`): `crdi15` 1800/0.6 warm vs fully
+  cold is now **+28% brighter, +3.5% louder** (before FINDING-004: +1% / −11%).
+  **Awaiting the owner's ears.**
+- **FINDING-017 (#31):** piston slap and valve tick lose their physical scaling
+  inside the mechanical sub-mix (each divided by its own std — FINDING-004's
+  pattern again; doubling the slap input changes the output by 3.6e-11), and
+  `hd_i6` / `single` seat valves off the closing ramp (lash 550 / 250 µm above
+  ramps of 106 / 69 µm), so `hd_i6`'s valve clatter is ~45× its other sources.
+- **REVIEW-002 (#32):** ADR-006 reassessed with converged solves. The cold
+  engine is an **oil** effect (FMEP +224–375%, torque −21–78%); coolant drives a
+  small, linear combustion change. Two-grid linear interpolation in
+  temperature errs up to +108% FMEP. **ADR-011 proposed:** friction evaluated
+  live from oil viscosity; indicated performance from a cold/warm coolant pair.
 
 ---
 
@@ -227,7 +247,8 @@ a miscount, not a change.)*
 | 013 | bug #3 understated: limiter fitted with EGR on, judged with it off; EGR valve opens 25% for any command; `crdi15` never converges at 1650 rpm | item 1 fixed and converged offline solves — **PR #21**; fast path stays unconverged (caveat online); item 2 open |
 | 014 | `render_transient`: crank phase restarts every chunk; each cross-fade deletes 20 ms (bug #10) | **measured, not fixed** — PR #24 |
 | 015 | cam film ~780× too thick (pressure-viscosity counted twice) + two kinematic errors — why cam wear is negligible | **measured, not fixed** — PR #25 |
-| 016 | FINDING-001/002 guards rode a 1° ignition-delay step; the real response (~0.2° over 90 K) is quantised by the 1° crank step | **measured; first reading corrected** — in PR #21; fix: resolve ignition within the step |
+| 016 | FINDING-001/002 guards rode a 1° ignition-delay step; the real response (~0.2° over 90 K) is quantised by the 1° crank step | **fixed** — PR #27 (ignition resolved within the step) |
+| 017 | slap and tick normalised away in the mechanical sub-mix; mechanical-lash presets seat valves off the closing ramp | **measured, not fixed** — PR #31 |
 
 ### Still open inside those
 
@@ -357,26 +378,20 @@ bug-8 audit, #8–#14 the Phase 2 stack, #16 `CLAUDE.md`.
 
 ## Next actions
 
-1. **Review and merge** the stack #21 → #27 → #28 → #29 → #30, plus #23 and
-   this file (#26). #22/#24/#25 are superseded by the stack (merge or close).
-2. **Listen to the audio** — the warm-vs-cold pair at load 0.6 matters most.
-   Still never done; FINDING-004's changes are unheard.
-3. ~~**FINDING-016**~~ — fixed in #27. The response is real but weak
-   (~0.13° over 90 K at crdi15 1800/0.6); that is ADR-006's premise, and it
-   now needs reassessing on these numbers.
-4. **FINDING-013 item 2** — the EGR valve's 25% start; with converged solves it
-   no longer matters offline, but the fast (browser) path still carries it.
-   And the VGT–EGR limit cycle at `crdi_1p5` 1450/0.5 (controller tuning).
-5. **Build Enjoy mode's roster grids** with `play.py --converged-grid` (in
-   #21; measured 9.1 min for `crdi15` on 6 workers). The roster itself is
-   OPEN-F. Note: grid cache files are not keyed on `--torque-limit` /
-   `--power-limit`, so a different rating loads an old grid — a design gap.
-6. **FINDING-015's remaining part** — flat-tappet kinematics, a physical film
-   floor, a wear-rate calibration target (proposal in FINDING-015).
-7. **Reassess ADR-006** against FINDING-016 and the post-001–004 numbers.
-8. Then **Phase 3** — real-time loop in TypeScript; manual gearbox needs a
-   clutch model that does not exist yet. The AudioWorklet must carry crank
-   phase across source swaps (FINDING-014).
+1. **Listen** to the pairs in `out/listen/` (sent to the owner) — pair 1 first.
+2. **Decide #32 / ADR-011** — how the cold engine is modelled. It shapes the
+   Phase 3 real-time loop (friction per frame from oil viscosity).
+3. **Decide #31 / FINDING-017** — fixed-reference normalisation for tick and
+   slap; ramp height vs lash on `hd_i6` / `single`. A precondition for judging
+   cold or worn sound.
+4. **FINDING-015's remainder** — flat-tappet kinematics, a physical film
+   floor, a wear-rate calibration target.
+5. **FINDING-013 item 2** — the EGR valve's 25% start (fast path only now) and
+   the VGT–EGR limit cycle at `crdi_1p5` 1450/0.5 (controller tuning).
+6. **Enjoy mode's roster** (OPEN-F), then its grids with `--converged-grid`.
+7. Then **Phase 3** — the real-time loop in TypeScript; manual gearbox needs a
+   clutch model; the AudioWorklet must carry crank phase across source swaps
+   (FINDING-014).
 
 ---
 
