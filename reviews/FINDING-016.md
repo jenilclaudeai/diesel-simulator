@@ -116,3 +116,41 @@ jump — an artifact, not the physics' sensitivity.
   not from a bin jump.
 - ADR-006's premise (cold rattle through a longer delay) holds in direction
   but is weak at this point: ~0.2° over 90 K.
+
+---
+
+## Fixed (session 4, owner's decision): start of combustion resolved within the crank step
+
+`cycle.py`, ignition block (pilot and main):
+
+- the first increment of the delay integral covers only the part of the step
+  after SOI (it added a whole step even when injection began part-way through);
+- start of combustion is placed where the integral crosses 1 inside the step,
+  on the interval `(tl − w, tl]`, so it is never after the current sample and
+  the burn arithmetic (`(tl − soc) % 720`) never sees a start in the future.
+
+**Converged in resolution** — `crdi15` 1800/0.6, fuel fixed at 42.59 mg:
+
+| dθ | 273 K | 318 K | 363 K |
+|---|---|---|---|
+| 1.0° | 2.2241° | 2.1561° | 2.0896° |
+| 0.5° | 2.2178° | 2.1491° | 2.0851° |
+| 0.1° | 2.2189° | 2.1498° | 2.0852° |
+
+The 1° result now agrees with 0.1° to within 0.007° (it was off by up to a
+whole degree), and the response is smooth: −0.134° over 90 K at fixed fuel.
+Premix +6.5% and combustion dp/dθ +2.8% cold against warm at fixed fuel;
++2.9% and +2.4% when each engine runs on its own calibrated fuel (a cold
+engine gets more fuel, and the longer injection partly cancels the longer
+delay).
+
+**The guards, re-derived from that and made real assertions again:**
+
+| guard | window | measured | quantised: one bin | quantised: bin jump |
+|---|---|---|---|---|
+| ignition delay, cold − warm (new) | 0.05–0.5° | 0.112° | 0 → fails | 1.0° → fails |
+| premix swing, cold vs warm | > 0, < 15% | +2.9% | −2.5% → fails | +67% → fails |
+| combustion dp/dθ rise | > 0, < 8% | +2.4% | +1.5% → passes | +13.6% → fails |
+
+Goldens re-baselined with the justification inline (all within ≤ 0.6%;
+`hd_i6` still reproduces 2310 N·m). SolverPort's native reference likewise.

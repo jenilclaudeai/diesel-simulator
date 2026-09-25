@@ -70,10 +70,18 @@ def known(name, cond, note):
 #   torque 124.391 -> 111.718 (-10.2%), bsfc 265.40 -> 262.10, p_max 110.78 -> 104.72.
 # At 3000/1.0 the cap is 218.06 N.m (map): 219.675 (+0.74% over it) ->
 # 216.858 (-0.55%); bsfc 214.70 -> 214.64; p_max 151.98 -> 153.13.
+#
+# Re-baselined again 2026-09-25 for FINDING-016: start of combustion is now
+# resolved within the crank step instead of snapping to the end of it, so
+# ignition lands up to a step earlier. Everything moves a little:
+#   crdi15 1800/0.6  torque 111.718 -> 111.696, bsfc 262.10 -> 261.88, p_max 104.72 -> 104.78
+#   crdi15 3000/1.0  torque 216.858 -> 216.892, bsfc 214.64 -> 214.56, p_max 153.13 -> 152.23
+#   hd_i6  1700/1.0  torque 2313.331 -> 2313.401, bsfc 214.11 -> 214.10, p_max 178.53 -> 178.84
+# hd_i6 still reproduces the documented 2310 N.m and stays in the 160-200 bar band.
 GOLDEN = {
-    ("crdi15", 1800, 0.6): dict(torque=111.718, bsfc=262.10, pmax=104.72),
-    ("crdi15", 3000, 1.0): dict(torque=216.858, bsfc=214.64, pmax=153.13),
-    ("hd_i6", 1700, 1.0): dict(torque=2313.331, bsfc=214.11, pmax=178.53),
+    ("crdi15", 1800, 0.6): dict(torque=111.696, bsfc=261.88, pmax=104.78),
+    ("crdi15", 3000, 1.0): dict(torque=216.892, bsfc=214.56, pmax=152.23),
+    ("hd_i6", 1700, 1.0): dict(torque=2313.401, bsfc=214.10, pmax=178.84),
 }
 
 
@@ -112,17 +120,17 @@ def test_premix_responds_to_temperature():
         eng._apply_thermal_state()
         vals.append(eng.operating_point(
             1800, load=0.6, n_cycles=9).cycle.premix_fraction)
-    swing = abs(vals[0] - vals[1]) / max(vals[1], 1e-9)
-    # FINDING-016: the old >20% swing was the warm point's ignition delay
-    # jumping a whole 1-deg crank step (2.425 -> 1.425). The real response
-    # at this point is ~0.2 deg / ~10% premix over 90 K (measured at
-    # dtheta 0.1), below this guard's 20%, and the 1-deg step quantises it
-    # away. After FINDING-013 item 1 the warm point no longer jumps. Known
-    # defect until ignition is resolved within the step; UNEXPECTED PASS
-    # means the response is back.
-    known("premix responds to coolant T", swing <= 0.20,
-          f"cold {vals[0]:.4f} vs warm {vals[1]:.4f}, swing {100 * swing:.0f}% "
-          f"(guard wants > 20%; delay quantised to the 1-deg step, FINDING-016)")
+    swing = (vals[0] - vals[1]) / max(vals[1], 1e-9)
+    # FINDING-016: the old "> 20%" came from the ignition delay jumping a
+    # whole 1-deg crank step. With ignition resolved within the step the real
+    # response here is +2.9% (cold premix 0.1657 vs warm 0.1611, each engine
+    # on its own calibrated fuel; +6.5% at fixed fuel). The window catches
+    # both regressions: a delay stuck in one bin gave cold BELOW warm
+    # (0.1839 vs 0.1886), a whole-step jump gave +67%.
+    check("premix responds to coolant T",
+          1.0 if 0.0 < swing < 0.15 else 0.0, 1.0, 0.0,
+          f"cold {vals[0]:.4f} vs warm {vals[1]:.4f}, swing {100 * swing:+.1f}% "
+          f"(must be cold > warm, under 15%)")
 
 
 def test_cold_start_sharpens_dpdtheta():
@@ -160,10 +168,31 @@ def test_combustion_dpdtheta_responds():
         vals.append(eng.operating_point(
             1800, load=0.6, n_cycles=9).cycle.dpdtheta_comb)
     rise = (vals[0] - vals[1]) / vals[1]
-    # FINDING-016: see test_premix_responds_to_temperature.
-    known("combustion dp/dtheta responds to coolant T", rise <= 0.08,
-          f"cold is {100 * rise:+.1f}% sharper (guard wants > 8%; "
-          f"delay quantised to the 1-deg step, FINDING-016)")
+    # FINDING-016: the real response here is +2.4% (the old "> 8%" was a
+    # whole-step ignition jump, +13.6%). Cold must be sharper, by less than
+    # a step jump would make it; test_ignition_delay_resolved guards the
+    # delay itself.
+    check("combustion dp/dtheta responds to coolant T",
+          1.0 if 0.0 < rise < 0.08 else 0.0, 1.0, 0.0,
+          f"cold is {100 * rise:+.1f}% sharper (must be > 0, under 8%)")
+
+
+def test_ignition_delay_resolved():
+    """FINDING-016: the main ignition delay responds to coolant temperature
+    by a fraction of a crank step (0.112 deg, 273 vs 363 K, crdi15
+    1800/0.6). Quantised to the step it read either 0 (both in one bin) or
+    a whole degree (a bin jump); the window rejects both."""
+    d = []
+    for T in (273.0, 363.0):
+        eng = DieselEngine(preset="crdi15")
+        eng.T_coolant = T
+        eng._apply_thermal_state()
+        d.append(eng.operating_point(1800, load=0.6, n_cycles=9).cycle.ign_delay_deg)
+    diff = d[0] - d[1]
+    check("ignition delay resolved within the step",
+          1.0 if 0.05 < diff < 0.5 else 0.0, 1.0, 0.0,
+          f"cold {d[0]:.4f} vs warm {d[1]:.4f} deg, difference {diff:.4f} "
+          f"(must be 0.05-0.5 deg)")
 
 
 def test_sharp_not_clamped():
@@ -420,6 +449,22 @@ def test_seeded_fuel_limit_is_exact():
     check("seeded fuel limit returned exactly", eng.fuel_limit(2000.0), 40.0, 1e-12)
 
 
+def test_ignition_delay_converges_in_resolution():
+    """FINDING-016: resolved within the step, the main ignition delay at the
+    solver's 1-deg step agrees with a 0.25-deg solve (measured 0.007 deg
+    against 0.1 deg). The start clip -- the first increment covers only the
+    part of the step after SOI -- is what makes the absolute value agree;
+    without it the delay reads early by a fraction of a step."""
+    d = []
+    for dth in (1.0, 0.25):
+        eng = DieselEngine(preset="crdi15", dtheta=dth)
+        eng.seed_fuel_limit(1800.0, 42.59)      # same fuel at both resolutions
+        d.append(eng.operating_point(1800, load=0.6, n_cycles=9).cycle.ign_delay_deg)
+    check("ignition delay converges in crank resolution",
+          1.0 if abs(d[0] - d[1]) < 0.03 else 0.0, 1.0, 0.0,
+          f"1 deg {d[0]:.4f} vs 0.25 deg {d[1]:.4f} (must agree within 0.03 deg)")
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -435,7 +480,9 @@ def main():
                test_limiter_calibrates_under_evaluation_schedules,
                test_converged_flag_is_honest,
                test_unsettled_cell_is_period_averaged,
-               test_seeded_fuel_limit_is_exact):
+               test_seeded_fuel_limit_is_exact,
+               test_ignition_delay_resolved,
+               test_ignition_delay_converges_in_resolution):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001
