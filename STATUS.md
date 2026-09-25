@@ -4,9 +4,11 @@
 **Phase:** 2 — mostly done. Python runs in the browser, the SolverPort exists,
 grids are cached, CI runs, and the first web page (a dyno pull) works end to end.
 **Main:** everything through PR #30 is merged; CI on `main` is green (6 jobs).
-#20 was closed (its record is FINDING-013; branch kept). Open: **#31**
-(FINDING-017) and **#32** (REVIEW-002, ADR-011 proposed) — both need a
-decision from the owner.
+#20 was closed (its record is FINDING-013; branch kept). Open, all with the
+owner's decisions applied: **#32** (REVIEW-002; **ADR-011 accepted**, ADR-006
+superseded) and the stack **#31 → #34 → #35** (FINDING-017 and its fix,
+FINDING-015's remainder). Merge #31, #34, #35 in that order, retargeting each
+child to `main` after its parent merges.
 
 Read this first in a new session, then `PLAN.md`, then `DECISIONS.md`, then
 `reviews/`. Those replace pasting a context document. `CLAUDE.md` says the same
@@ -28,8 +30,23 @@ for Claude Code sessions.
 - **REVIEW-002 (#32):** ADR-006 reassessed with converged solves. The cold
   engine is an **oil** effect (FMEP +224–375%, torque −21–78%); coolant drives a
   small, linear combustion change. Two-grid linear interpolation in
-  temperature errs up to +108% FMEP. **ADR-011 proposed:** friction evaluated
-  live from oil viscosity; indicated performance from a cold/warm coolant pair.
+  temperature errs up to +108% FMEP. **ADR-011 accepted by the owner:**
+  friction computed live; indicated performance from a cold/warm coolant pair.
+  Then measured how friction reaches the loop: a fitted FMEP(viscosity)
+  surface needs ~6 viscosity nodes × a coolant axis for ~1%, while friction
+  evaluated from each cell's stored pressure trace with the live oil state is
+  **exact** (0.000% in 9/9; oil never touches the trace). Chosen:
+  trace-based. Cost 44 ms per call in Python (94% the bearing eccentricity
+  solve); ~ms as compiled JS — to confirm in the port.
+- **#34 — FINDING-017 item 1 fixed:** tick, injector and slap carry their own
+  physical levels. `crdi15`'s mechanical level ×2.3; warm/cold now +11%
+  brighter cold. **`hd_i6` gets far brighter** — item 2 (lash above the ramp)
+  now matters more. The updated pair 1 was re-sent to the owner.
+- **#35 — FINDING-015 item 2 fixed:** flat-tappet kinematics, rolling
+  entrainment, roughness-based film floor (measured inert). `single` cam
+  boundary power 22.6 → 215 W, 8000 h lash growth ~1 → ~9 µm; flat tappet ~46×
+  a roller per cylinder. **Wear-rate calibration target: owner to choose**
+  (options in FINDING-015).
 
 ---
 
@@ -379,17 +396,17 @@ bug-8 audit, #8–#14 the Phase 2 stack, #16 `CLAUDE.md`.
 ## Next actions
 
 1. **Listen** to the pairs in `out/listen/` (sent to the owner) — pair 1 first.
-2. **Decide #32 / ADR-011** — how the cold engine is modelled. It shapes the
-   Phase 3 real-time loop (friction per frame from oil viscosity).
-3. **Decide #31 / FINDING-017** — fixed-reference normalisation for tick and
-   slap; ramp height vs lash on `hd_i6` / `single`. A precondition for judging
-   cold or worn sound.
-4. **FINDING-015's remainder** — flat-tappet kinematics, a physical film
-   floor, a wear-rate calibration target.
-5. **FINDING-013 item 2** — the EGR valve's 25% start (fast path only now) and
+2. **Merge** #32, then the stack #31 → #34 → #35, and this file (#33).
+3. **FINDING-017 item 2** — `hd_i6` / `single` lash above the closing ramp;
+   `hd_i6` is now dominated by valve clatter (worse after #34). Raise the ramp
+   or saturate the seating factor.
+4. **Choose a cam wear calibration target** (FINDING-015, three options).
+5. **ADR-011 implementation** — store each grid cell's pressure trace; port
+   the friction model to TypeScript with ADR-004 fixtures (Phase 3).
+6. **FINDING-013 item 2** — the EGR valve's 25% start (fast path only now) and
    the VGT–EGR limit cycle at `crdi_1p5` 1450/0.5 (controller tuning).
-6. **Enjoy mode's roster** (OPEN-F), then its grids with `--converged-grid`.
-7. Then **Phase 3** — the real-time loop in TypeScript; manual gearbox needs a
+7. **Enjoy mode's roster** (OPEN-F), then its grids with `--converged-grid`.
+8. Then **Phase 3** — the real-time loop in TypeScript; manual gearbox needs a
    clutch model; the AudioWorklet must carry crank phase across source swaps
    (FINDING-014).
 
