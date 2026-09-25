@@ -484,6 +484,44 @@ def test_cam_film_and_time_base():
           ", ".join(f"{k} {v:.3f}" for k, v in shares.items()) + " (must exceed 0.01)")
 
 
+def test_render_transient_has_no_seams():
+    """FINDING-014: render_transient restarted crank angle at 0 in every
+    chunk (firing intervals across seams off 13% median, 29% max) and each
+    cross-fade deleted 20 ms (2.00 s rendered as 1.86 s). Same operating
+    point in every chunk, so any seam is the chunking's. Needs scipy, which
+    Pyodide does not have: reported SKIP there, not PASS."""
+    import importlib.util
+    if importlib.util.find_spec("scipy") is None:
+        RESULTS.append(("SKIP", "render_transient has no seams", None, None,
+                        "scipy unavailable (acoustics renders with it)"))
+        return
+    import numpy as np
+    from scipy.signal import find_peaks
+    from dieselsim.acoustics import EngineSound
+    eng = DieselEngine(preset="crdi15")
+    op = eng.operating_point(1400.0, load=0.6, n_cycles=9)
+    snd = EngineSound(eng.spec)
+    snd.wear = eng.wear
+    fs, dur, blend = snd.fs, 2.0, 0.25
+    log = [dict(t=float(t), rpm=1400.0, op=op) for t in np.arange(0.0, dur + 1e-9, 0.02)]
+    y = snd.render_transient(eng, log, blend=blend)
+    period = 120.0 / 1400.0 / eng.spec.geom.n_cyl
+    k = int(0.002 * fs)
+    env = np.sqrt(np.convolve(y * y, np.ones(k) / k, mode="same"))
+    pk, _ = find_peaks(env, distance=int(0.7 * period * fs),
+                       prominence=0.2 * float(np.percentile(env, 95)))
+    ft = pk / fs
+    xf = int(0.02 * fs)
+    bounds = [((i + 1) * int(round(blend * fs)) + xf // 2) / fs for i in range(int(dur / blend) - 1)]
+    dev = [abs(b - a - period) / period for a, b in zip(ft[:-1], ft[1:])
+           if any(a <= x + 0.01 and b >= x - 0.01 for x in bounds)]
+    ok_len = len(y) == int(round(dur * fs))
+    ok_seam = bool(dev) and max(dev) < 0.05
+    check("render_transient has no seams", 1.0 if ok_len and ok_seam else 0.0, 1.0, 0.0,
+          f"length {len(y) / fs:.3f} s of {dur:.3f}; worst firing interval across "
+          f"{len(dev)} seam intervals {100 * max(dev or [1]):.1f}% (must be < 5%)")
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -502,7 +540,8 @@ def main():
                test_seeded_fuel_limit_is_exact,
                test_ignition_delay_resolved,
                test_ignition_delay_converges_in_resolution,
-               test_cam_film_and_time_base):
+               test_cam_film_and_time_base,
+               test_render_transient_has_no_seams):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001
@@ -522,9 +561,13 @@ def main():
 
     n_known = sum(1 for r in RESULTS if r[0] == "KNOWN")
     n_unexp = sum(1 for r in RESULTS if r[0] == "UNEXPECTED PASS")
-    print(f"\n{len(RESULTS) - fails - n_known - n_unexp} passed, "
+    # a SKIP (a check that cannot run here, e.g. no scipy under Pyodide) is
+    # not a pass; it used to be counted as one
+    n_skip = sum(1 for r in RESULTS if r[0] == "SKIP")
+    print(f"\n{len(RESULTS) - fails - n_known - n_unexp - n_skip} passed, "
           f"{fails} failed, {n_known} known defects, "
-          f"{n_unexp} unexpected passes")
+          f"{n_unexp} unexpected passes"
+          + (f", {n_skip} skipped" if n_skip else ""))
     if n_unexp:
         print("An UNEXPECTED PASS means a known defect is fixed. "
               "Promote it to a real assertion.")
