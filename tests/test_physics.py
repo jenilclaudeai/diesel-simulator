@@ -465,6 +465,25 @@ def test_ignition_delay_converges_in_resolution():
           f"1 deg {d[0]:.4f} vs 0.25 deg {d[1]:.4f} (must agree within 0.03 deg)")
 
 
+def test_cam_film_and_time_base():
+    """FINDING-015: the cam film was ~780x too thick (pressure-viscosity
+    counted twice) so cam boundary friction -- the wear path -- was 1e-5 to
+    1e-8 of valvetrain friction; and follower velocity / inertia used cam
+    speed on crank-angle derivatives. Boundary share must now be material,
+    and hd_i6's valvetrain friction power sits where the crank time base
+    puts it (563.5 W; 585.2 W on the cam time base)."""
+    shares = {}
+    for preset, rpm, load in (("hd_i6", 1400, 0.6), ("single", 2000, 0.8)):
+        f = DieselEngine(preset=preset).operating_point(rpm, load=load, n_cycles=9).friction
+        shares[preset] = f["Pb_valvetrain"] / f["P_valvetrain"]
+        if preset == "hd_i6":
+            check("hd_i6 valvetrain friction power (crank time base)",
+                  f["P_valvetrain"], 563.5, 0.01)
+    check("cam boundary friction is a material share of valvetrain friction",
+          1.0 if min(shares.values()) > 1e-2 else 0.0, 1.0, 0.0,
+          ", ".join(f"{k} {v:.3f}" for k, v in shares.items()) + " (must exceed 0.01)")
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -482,7 +501,8 @@ def main():
                test_unsettled_cell_is_period_averaged,
                test_seeded_fuel_limit_is_exact,
                test_ignition_delay_resolved,
-               test_ignition_delay_converges_in_resolution):
+               test_ignition_delay_converges_in_resolution,
+               test_cam_film_and_time_base):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001

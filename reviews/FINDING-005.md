@@ -2,7 +2,7 @@
 
 **Opened by:** FINDING-004's fix, which made source levels physical and then
 showed a worn engine rendering *quieter* than a new one
-**Status:** roller `Pb_vt` fixed — PR #5. **Still open**: that fix is necessary but not sufficient (see the end of this file). *(Updated 2026-09-23: this line was not updated when the fix landed, and read "diagnosed, not fixed" until then.)*
+**Status:** roller `Pb_vt` fixed — PR #5. **Still open, now explained:** cam boundary friction is ~0 because the cam film is ~780× too thick (pressure-viscosity counted twice), plus two kinematic errors — see FINDING-015. *(Updated 2026-09-25; the line read: "roller `Pb_vt` fixed — PR #5. **Still open**: that fix is necessary but not sufficient (see the end of this file). *(Updated 2026-09-23: this line was not updated when the fix landed, and read "diagnosed, not fixed" until then.)*")*
 **Confirms:** the second half of known bug #9
 
 ## Measurement

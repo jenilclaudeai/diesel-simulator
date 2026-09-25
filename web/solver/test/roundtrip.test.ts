@@ -16,8 +16,9 @@ import { fileURLToPath } from "node:url";
 // judged under, which lowers crdi15's calibrated fuel at 1800 rpm ~11%, and
 // "load 0.6" is 60% of it. Same change as the golden in tests/test_physics.py.
 // Re-baselined again for FINDING-016 (ignition resolved within the crank
-// step; was 111.71833782635092).
-const NATIVE_TORQUE = 111.69609690984224;
+// step; was 111.71833782635092) and FINDING-015 (cam friction time base and
+// inlet viscosity; was 111.69609690984224).
+const NATIVE_TORQUE = 111.71143779402043;
 // Agreement with native was ~1e-10 and the tolerance 1e-8. After item 1 it is
 // 1.2e-6 here: the limiter's calibration is a chain of warm-started 9-cycle
 // solves, and without EGR the VGT limit cycle (FINDING-013 item 3) is active

@@ -85,7 +85,12 @@ class FrictionModel:
         mu_ring = oil.viscosity(T_ring, 5e6, 2.0e6)
         mu_skirt = oil.viscosity(T_liner - 20.0, 1e6, 5.0e5)
         mu_brg = oil.viscosity(T_oil + 12.0, 2.0e7, 1.0e6)
-        mu_cam = oil.viscosity(T_oil + 5.0, 5e8, 1.0e6)
+        # FINDING-015: inlet viscosity. This was evaluated at 5e8 Pa, which
+        # applies the Barus factor (x~13,000); hamrock_dowson_film() adds the
+        # pressure-viscosity effect again through G = alpha * E', and
+        # Dowson-Higginson expects the ambient-pressure viscosity. The film
+        # came out ~780x too thick and cam boundary friction ~0.
+        mu_cam = oil.viscosity(T_oil + 5.0, 1e5, 1.0e6)
         mu_b = oil.mu_boundary()
 
         # =================================================================
@@ -206,7 +211,10 @@ class FrictionModel:
         # 5. VALVETRAIN  (per cylinder, all valves)
         # =================================================================
         vt = spec.valves
-        om_cam = 0.5 * om
+        # FINDING-015: Cam.cam_lift() and its derivatives are per CRANK
+        # radian ("versus crank angle"), so follower velocity and acceleration
+        # take the crank speed. They used om / 2 here: velocity 2x low,
+        # inertia force 4x low. Cam-to-crank torque is still halved below.
         T_vt = np.zeros_like(th)
         Pb_vt = 0.0
         v_seat_max = 0.0
@@ -220,13 +228,13 @@ class FrictionModel:
             dL = cam.dlift_dtheta(theta_deg) * scale
             d2L = cam.d2lift_dtheta2(theta_deg) * scale
             F_spring = vt.valve_spring_preload + vt.valve_spring_rate * L
-            F_in = vt.valve_train_eq_mass * d2L * om_cam ** 2
+            F_in = vt.valve_train_eq_mass * d2L * om ** 2
             A_v = math.pi * dv_ ** 2 / 4.0
             F_gasv = np.maximum(p_cyl - 1.1e5, 0.0) * A_v if is_exh else 0.0
             F_cam = np.maximum(F_spring + F_in + F_gasv, 0.0) * nv
             if vt.follower_radius > 0.0:      # roller follower
-                mu_roll = 0.0035 + 0.010 * np.exp(-np.abs(dL) * om_cam / 0.35)
-                u_sl = 0.06 * np.abs(dL) * om_cam
+                mu_roll = 0.0035 + 0.010 * np.exp(-np.abs(dL) * om / 0.35)
+                u_sl = 0.06 * np.abs(dL) * om
                 T_lobe = mu_roll * F_cam * (vt.cam_base_radius + L)
                 # FINDING-005: this branch previously never accumulated
                 # Pb_vt, so any engine with a roller follower reported
@@ -249,7 +257,7 @@ class FrictionModel:
                 fb_r = 1.0 / (1.0 + (lam_r / lub.LAMBDA_0) ** lub.LAMBDA_K)
                 Pb_vt += float(np.mean(mu_b * fb_r * F_cam * u_sl))
             else:                              # flat tappet, high sliding
-                u_sl = np.abs(dL) * om_cam
+                u_sl = np.abs(dL) * om
                 R_eq = vt.cam_base_radius
                 w_line = np.maximum(F_cam, 1.0) / (nv * 0.012)
                 h_e = np.array([lub.hamrock_dowson_film(mu_cam, max(u, 1e-4),
