@@ -260,3 +260,21 @@ that passes, per the working rules.
 
 Decide before the Phase 3 port or the Phase 6 cycle page, whichever comes
 first.
+
+---
+
+## Decided and implemented: option D (session 4)
+
+`CycleTraces.theta_global`, shape `(n_cyl, n)`: the engine angle of each
+sample of cylinder c's local arrays, `(theta − phase_deg[c]) % 720`, built from
+the solver's own rounded `phase_idx` so it matches the storage exactly. No
+data moves; p–V stays correct for free; the `CycleTraces` docstring states
+which axis pairs with which array.
+
+Guard `test_theta_global_axis`, on `hd_i6` and `crdi15`: peak pressure read on
+`theta_global` is spread by the firing order (gaps within 2° of 720/n_cyl),
+and `theta_global` agrees with the storage convention sample for sample.
+Mutation: a flipped sign is caught — by the storage check only, as expected,
+since an even-fire engine's phase set is symmetric under negation and the
+peak spread cannot tell the signs apart; reading the local angle (no
+conversion) is caught by both checks.
