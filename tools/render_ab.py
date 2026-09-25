@@ -6,7 +6,8 @@ what to listen for.
   pair 1  crdi15 1800 rpm load 0.6, fully warm vs fully cold (oil AND
           coolant at 273 K -- cold coolant alone misses a 255% friction
           effect; CLAUDE.md). The pair that matters most.
-  pair 2  hd_i6 1250 rpm load 0.5, new vs 12,000 h (mechanical lash, 300 um,
+  pair 2  hd_i6 1250 rpm load 0.5, new vs 12,000 h (mechanical lash, 300 um
+          intake / 550 um exhaust,
           so lash-driven valve tick can age now that cam wear is real --
           FINDING-015).
 
