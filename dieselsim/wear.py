@@ -39,7 +39,13 @@ K_ARCHARD = {
     "skirt": 5.5e-10,
     "main_bearing": 1.1e-9,
     "rod_bearing": 1.4e-9,
-    "cam": 3.2e-9,
+    # FINDING-015: calibrated 2026-09-26 to the owner's service-interval
+    # target -- the flat-tappet `single`, default duty cycle, reaches 150 um of
+    # exhaust lash growth at 2000 h (the adjustment tolerance at the interval).
+    # A design choice, not a measurement. It was 3.2e-9, never exercised while
+    # cam boundary power was ~0; with the cam film fixed that gave 2.2 um at
+    # 2000 h.
+    "cam": 2.17e-7,
 }
 
 
