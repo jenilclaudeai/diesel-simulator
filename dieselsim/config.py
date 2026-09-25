@@ -382,6 +382,12 @@ def heavy_truck_i6() -> EngineSpec:
     spec = EngineSpec(name="HD-I6 12.7L", geom=geom,
                       idle_rpm=600, rated_rpm=1800, max_rpm=2100)
     spec.turbo.vgt = True
+    # FINDING-017 item 2: the closing ramp must be taller than the lash, or
+    # the valve lands on the steep flank. With the default 6 % ramp (106 um)
+    # under 550 um of exhaust lash, seating ran 12x the on-ramp speed and
+    # valve clatter drowned this engine's sound. 15.5 % gives ramps of
+    # >= 1.25 x the lash on both cams (exhaust 0.69 mm, intake 0.68 mm).
+    spec.valves.ramp_fraction = 0.155
     return spec
 
 
@@ -637,7 +643,10 @@ def industrial_single() -> EngineSpec:
         lash_intake=0.20e-3, lash_exhaust=0.25e-3,
         cam_base_radius=0.015, follower_radius=0.0,
         valve_spring_preload=150.0, valve_spring_rate=20e3,
-        valve_train_eq_mass=0.09)
+        valve_train_eq_mass=0.09,
+        # FINDING-017 item 2: ramps >= 1.25 x the lash on both cams
+        # (exhaust 0.32 mm over 0.25 mm lash; the default 6 % gave 69 um)
+        ramp_fraction=0.13)
     spec.air = AirPath(intake_plenum_vol=0.8e-3, exhaust_manifold_vol=0.4e-3,
                        runner_length_int=0.16, runner_length_exh=0.20,
                        intake_pipe_length=0.30, airbox_volume=2.5e-3,
