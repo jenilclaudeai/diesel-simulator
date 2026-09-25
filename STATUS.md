@@ -55,6 +55,24 @@ the permission check blocks merging without review.
 - **#22 — FINDING-008 options** for the crank-angle contract (docs).
 - **#20** stays a draft: the `steady_ctrl` experiment, kept as a record.
 
+**Then the owner decided four fixes, all the recommended options, now a
+stack on #21 (each PR shows only its own commits):**
+
+- **#27 — FINDING-016 fixed**: start of combustion resolved within the crank
+  step. Ignition delay at 1° agrees with 0.1° within 0.007° (was up to 1°);
+  the two guards are real assertions again, thresholds re-derived from the
+  physics; a direct delay guard and a resolution test added.
+- **#28 — FINDING-015 items 1 and 3 fixed**: cam film at inlet viscosity, cam
+  kinematics on crank speed. Cam boundary power single 5e-7 → 22.6 W, hd_i6
+  4e-3 → 29.5 W; 8000 h lash growth ~0 → ~1 µm (modest, no runaway). The
+  dead-signal audit's TINY list is now empty. Flat-tappet kinematics, a film
+  floor and a wear calibration await a decision (proposal in FINDING-015).
+- **#29 — FINDING-014 fixed**: `render_transient` continues crank phase and
+  keeps its length (2.000 s for 2.000 s; seams indistinguishable from an
+  uninterrupted render). The suite now counts SKIPs separately — it had been
+  counting them as passes.
+- **#30 — FINDING-008 option D**: `CycleTraces.theta_global`.
+
 **Found on the way:** FINDING-016 — the FINDING-001/002 guards had been
 passing on a single 1° jump of the main ignition delay. The real response at
 `crdi15` 1800/0.6 is ~0.2° / ~10% premix over 90 K (measured at dθ = 0.1°),
@@ -262,8 +280,8 @@ a miscount, not a change.)*
 ## Tests
 
 ```
-python3 tests/test_physics.py                    # main: 18/0/2 known; with #21: 20 passed, 0 failed, 4 known
-python3 tools/audit_dead_signals.py              # diagnostic; 0 dead, 2 frozen (one clamp), 1 tiny
+python3 tests/test_physics.py                    # main: 18/0/2 known; top of the stack (#30): 29 passed, 0 failed, 2 known with scipy; 28 + 1 skipped without
+python3 tools/audit_dead_signals.py              # diagnostic; main: 0 dead, 2 frozen (one clamp), 1 tiny; top of the stack: 0 tiny
 cd tools/pyodide && npm ci && npm run suite      # the same suite under Pyodide
 cd web/solver && npm ci && npm run test:fast     # 20 cache tests, seconds
 cd web/solver && npm test                        # + the round trip through a real worker
@@ -310,6 +328,10 @@ parent, retarget its child PR to `main` (`gh pr edit <n> --base main`).
 
 | PR | branch | contents | needs |
 |---|---|---|---|
+| #27 | `fix/ignition-substep` | FINDING-016 fix — **stacked on #21** | review |
+| #28 | `fix/cam-film` | FINDING-015 items 1, 3 — **stacked on #27**; includes #25's commit | review |
+| #29 | `fix/render-seams` | FINDING-014 fix — **stacked on #28**; includes #24's commit | review |
+| #30 | `feat/theta-global` | FINDING-008 D — **stacked on #29**; includes #22's commit | review; carries the regenerated dyno accuracy table |
 | #21 | `fix/converged-solves` | converged offline solves, item 1, honest `converged`, re-baselined goldens, FINDING-016, `--converged-grid`, dyno accuracy note | ready for review, CI 5/5 green — **three judgements listed in its description**; moves `crdi15` numbers |
 | #23 | `ci/e2e` | e2e in headless Chrome in CI; e2e fails without its reference | review; independent |
 | #22 | `docs/finding-008-options` | FINDING-008 options | **decision** (contract) |
@@ -317,7 +339,13 @@ parent, retarget its child PR to `main` (`gh pr edit <n> --base main`).
 | #25 | `diag/finding-005-cam` | FINDING-015 + tool | **decision** (fix option, wear calibration) |
 | #20 | `fix/steady-state-controllers` | `steady_ctrl` experiment, off by default | nothing — a record; close or keep |
 
-All are independent of each other and target `main`; any order works. #21
+**Merge order:** #21 → #27 → #28 → #29 → #30, retargeting each child to `main`
+after its parent merges (`gh pr edit <n> --base main`). #22, #24 and #25 are
+docs whose commits are also inside #30/#29/#28: merge them first (the stacked
+copies then add nothing) or close them as superseded. #23 and #26 are
+independent.
+
+Earlier note, for #21–#26 alone: all are independent of each other and target `main`; any order works. #21
 before #23 is slightly tidier (the e2e reference then reflects item 1 from its
 first run), but both run the same physics on both sides.
 
@@ -329,13 +357,13 @@ bug-8 audit, #8–#14 the Phase 2 stack, #16 `CLAUDE.md`.
 
 ## Next actions
 
-1. **Review and merge** #21 and #23 (engineering), and decide #22, #24, #25.
+1. **Review and merge** the stack #21 → #27 → #28 → #29 → #30, plus #23 and
+   this file (#26). #22/#24/#25 are superseded by the stack (merge or close).
 2. **Listen to the audio** — the warm-vs-cold pair at load 0.6 matters most.
    Still never done; FINDING-004's changes are unheard.
-3. **FINDING-016** — resolve start of combustion within the crank step
-   (interpolate the delay integral's crossing). The response exists but is
-   weak (~0.2° over 90 K here) and the 1° step hides it; the two KNOWN guards'
-   thresholds then need re-deriving from the physics. PHY1; bears on ADR-006.
+3. ~~**FINDING-016**~~ — fixed in #27. The response is real but weak
+   (~0.13° over 90 K at crdi15 1800/0.6); that is ADR-006's premise, and it
+   now needs reassessing on these numbers.
 4. **FINDING-013 item 2** — the EGR valve's 25% start; with converged solves it
    no longer matters offline, but the fast (browser) path still carries it.
    And the VGT–EGR limit cycle at `crdi_1p5` 1450/0.5 (controller tuning).
@@ -343,7 +371,8 @@ bug-8 audit, #8–#14 the Phase 2 stack, #16 `CLAUDE.md`.
    #21; measured 9.1 min for `crdi15` on 6 workers). The roster itself is
    OPEN-F. Note: grid cache files are not keyed on `--torque-limit` /
    `--power-limit`, so a different rating loads an old grid — a design gap.
-6. **FINDING-015 / FINDING-014 fixes**, once decided.
+6. **FINDING-015's remaining part** — flat-tappet kinematics, a physical film
+   floor, a wear-rate calibration target (proposal in FINDING-015).
 7. **Reassess ADR-006** against FINDING-016 and the post-001–004 numbers.
 8. Then **Phase 3** — real-time loop in TypeScript; manual gearbox needs a
    clutch model that does not exist yet. The AudioWorklet must carry crank
