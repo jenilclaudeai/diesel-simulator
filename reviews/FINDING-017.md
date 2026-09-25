@@ -85,3 +85,38 @@ opposite; the claim, not the physics, is wrong for cold.
 
 One operating point per pair; one microphone. Loudness and brightness are
 numbers, not listening — the WAVs are in `out/listen/` for that.
+
+---
+
+## Item 1 fixed (session 4, owner's decision: fixed-reference normalisation)
+
+Each mechanical component is normalised for shape only and carries its own
+physical level; the sub-mix is not renormalised:
+
+| component | level |
+|---|---|
+| valve tick | (v_seating / 0.10 m/s)² |
+| piston slap | (skirt input / 30 µm)^0.6 — the input is still the oil film (not changed) |
+| injector | fixed reference |
+
+**Re-measured:** doubling the slap input now changes the mechanical output by
+1.48 on an RMS of 1.01 (was 3.6e-11).
+
+**Consequences, stated plainly:**
+
+- `crdi15`'s mechanical level rises 2.3× (0.43 → 1.01): injector and slap were
+  being scaled down by the valve factor (0.43 for a hydraulic-lash engine).
+  The warm/cold pair is now +11% brighter cold (was +28%) because the
+  brighter baseline dilutes the relative change; loudness +2.8%.
+- `hd_i6` becomes far brighter (4.96 → 131): its tick keeps the 45× factor
+  from lash above the ramp (item 2, not fixed), while slap and injector no
+  longer ride on it. **Item 2 now matters more** — `hd_i6` sounds like
+  high-frequency valve clatter.
+
+Test `test_mech_levels_carry_physics` (slap input ×2 and seating ×2 must each
+raise the mechanical level by > 5%; measured +17% and +92%; SKIP without
+scipy). Mutation: the old renormalised sub-mix, a dropped slap level and a
+dropped tick level are each caught.
+
+Items 2 (ramp vs lash) and 3 (the rumble comment) are not applied — the
+owner chose item 1 only.

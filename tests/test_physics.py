@@ -550,6 +550,40 @@ def test_theta_global_axis():
           float(len(bad)), 0.0, 0.0, "; ".join(bad) or "hd_i6 and crdi15")
 
 
+def test_mech_levels_carry_physics():
+    """FINDING-017: tick and slap were each divided by their own std, so
+    their seating and clearance scaling never reached the output (doubling
+    the slap input changed it by 3.6e-11). Now each carries its own level.
+    Needs scipy; SKIP where it is missing (Pyodide)."""
+    import importlib.util
+    if importlib.util.find_spec("scipy") is None:
+        RESULTS.append(("SKIP", "mechanical sound levels carry physics", None, None,
+                        "scipy unavailable (acoustics renders with it)"))
+        return
+    import numpy as np
+    from dieselsim.acoustics import EngineSound
+    eng = DieselEngine(preset="crdi15")
+    op = eng.operating_point(1800.0, load=0.6, n_cycles=9)
+    snd = EngineSound(eng.spec)
+    snd.wear = eng.wear
+    src = snd.build_sources(op)
+
+    def mech_rms(key, k):
+        s2 = dict(src)
+        s2["_meta"] = dict(src["_meta"])
+        s2["_meta"][key] *= k
+        m = snd.render(op, duration=1.0, sources=s2, seed=5)[1]["mech"]
+        return float(np.sqrt(np.mean(m ** 2)))
+
+    base = mech_rms("skirt_clr", 1.0)
+    slap = mech_rms("skirt_clr", 2.0) / base - 1.0
+    tick = mech_rms("v_seating", 2.0) / base - 1.0
+    check("mechanical sound levels carry physics",
+          1.0 if slap > 0.05 and tick > 0.05 else 0.0, 1.0, 0.0,
+          f"slap input x2 -> mech {100 * slap:+.1f}%, seating x2 -> mech {100 * tick:+.1f}% "
+          f"(each must exceed +5%)")
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -570,7 +604,8 @@ def main():
                test_ignition_delay_converges_in_resolution,
                test_cam_film_and_time_base,
                test_render_transient_has_no_seams,
-               test_theta_global_axis):
+               test_theta_global_axis,
+               test_mech_levels_carry_physics):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001
