@@ -10,8 +10,20 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// native CPython 3.12 / numpy 2.4.4, crdi15 1800 rpm load 0.6, n_cycles 9
-const NATIVE_TORQUE = 124.39075523765574;
+// native CPython 3.12 / numpy 2.1.0, crdi15 1800 rpm load 0.6, n_cycles 9.
+// Re-baselined 2026-09-25 for FINDING-013 item 1 (was 124.39075523765574):
+// the torque limiter now calibrates under the full-load schedules it is
+// judged under, which lowers crdi15's calibrated fuel at 1800 rpm ~11%, and
+// "load 0.6" is 60% of it. Same change as the golden in tests/test_physics.py.
+const NATIVE_TORQUE = 111.71833782635092;
+// Agreement with native was ~1e-10 and the tolerance 1e-8. After item 1 it is
+// 1.2e-6 here: the limiter's calibration is a chain of warm-started 9-cycle
+// solves, and without EGR the VGT limit cycle (FINDING-013 item 3) is active
+// in it, amplifying a 1e-10 platform difference ~10x per solve (measured,
+// same iteration count on both: 1.3e-10, 7.6e-11, 1.8e-8, 7.5e-8, 3.7e-7,
+// 1.1e-6). 1e-5 still catches any transport error (wrong preset, lost
+// override, corrupt payload), which would be >= 1e-3.
+const REL_TOL = 1e-5;
 
 const results: [string, boolean, string][] = [];
 const check = (name: string, ok: boolean, note = "") => {
@@ -37,7 +49,7 @@ check("ready() is idempotent", (await solver.ready()) === info);
 
 const pt = await solver.solvePoint({ engine: { preset: "crdi15" }, rpm: 1800, load: 0.6 });
 const rel = Math.abs(pt.torque - NATIVE_TORQUE) / NATIVE_TORQUE;
-check("solvePoint matches native CPython", rel < 1e-8, `torque ${pt.torque}, rel diff ${rel.toExponential(2)}`);
+check("solvePoint matches native CPython", rel < REL_TOL, `torque ${pt.torque}, rel diff ${rel.toExponential(2)}`);
 
 let e = await expectError(solver.solvePoint(
   { engine: { preset: "crdi15", overrides: { "turbo.turbin_area_eff": 1 } }, rpm: 1800, load: 0.6 }));
@@ -58,7 +70,7 @@ const c0 = grid.cells.find(c => c.i === 0 && c.j === 0)!;
 const gridRel = Math.abs(c0.perf["torque"]! - NATIVE_TORQUE) / NATIVE_TORQUE;
 check("buildGrid returns every cell", grid.cells.length === 2);
 check("buildGrid reports progress per cell", progress.map(p => p.done).join(",") === "1,2");
-check("grid cell matches native", gridRel < 1e-8, `rel diff ${gridRel.toExponential(2)}`);
+check("grid cell matches native", gridRel < REL_TOL, `rel diff ${gridRel.toExponential(2)}`);
 const n = c0.src["dpdth"]?.length ?? 0;
 check("sources arrive as Float32Array", c0.src["dpdth"] instanceof Float32Array && n > 0
       && info.source_keys.every(k => c0.src[k]?.length === n), `${info.source_keys.length} sources x ${n} samples`);
@@ -73,7 +85,7 @@ check("cancellation lands at a cell boundary", seen.length >= 1 && seen.length <
       `stopped after ${seen.length}/6 cells`);
 
 const again = await solver.solvePoint({ engine: { preset: "crdi15" }, rpm: 1800, load: 0.6 });
-check("solver still usable after cancel", Math.abs(again.torque - NATIVE_TORQUE) / NATIVE_TORQUE < 1e-8);
+check("solver still usable after cancel", Math.abs(again.torque - NATIVE_TORQUE) / NATIVE_TORQUE < REL_TOL);
 
 const [a, b] = await Promise.all([
   solver.solvePoint({ engine: { preset: "crdi15" }, rpm: 1800, load: 0.6 }),

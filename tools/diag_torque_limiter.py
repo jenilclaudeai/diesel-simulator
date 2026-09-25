@@ -166,6 +166,121 @@ def trace(preset, rpm, F, n=40):
         print(f"{c:4d} {v[-1]:8.3f} {min(v):8.3f} {max(v):8.3f} {seg[-1][1]:10.0f} {seg[-1][2]:6.3f}")
 
 
+class _OldCalibration(DieselEngine):
+    """The limiter as it was before FINDING-013 item 1: calibration solves
+    see load_est = f / fuel_limit_raw instead of 1."""
+    def operating_point(self, *a, **k):
+        if self._calibrating and k.get("load_est") == 1.0:
+            k["load_est"] = None
+        return super().operating_point(*a, **k)
+
+
+def _conv_limiter(job):
+    variant, preset, rpm = job
+    cls = _OldCalibration if variant == "before" else DieselEngine
+    eng = cls(preset=preset)
+    eng.converged_mode = True
+    op = eng.operating_point(rpm, load=1.0)
+    return variant, preset, rpm, eng.torque_cap(rpm), op.torque, op.egr_pct
+
+
+def converged_limiter():
+    """--converged: the limiter's residual with every solve converged (real
+    time, CONVERGED_CYCLES), before and after calibrating under the
+    evaluation's schedules (FINDING-013 item 1)."""
+    rpms = (1250, 1650, 2050, 2500, 2900, 3350, 4000)
+    jobs = [(v, p, r) for v in ("before", "after") for p in PRESETS for r in rpms]
+    with Pool(max(1, (os.cpu_count() or 2) - 2)) as pool:
+        res = pool.map(_conv_limiter, jobs)
+    print(f"converged ({DieselEngine.CONVERGED_CYCLES} cycles, real time): torque vs cap, %")
+    print(f"{'preset':9} {'rpm':>5} {'cap':>6} {'before':>8} {'after':>8}")
+    for p in PRESETS:
+        for r in rpms:
+            b = next(x for x in res if x[:3] == ("before", p, r))
+            a = next(x for x in res if x[:3] == ("after", p, r))
+            c = b[3]
+            print(f"{p:9} {r:5d} {c:6.1f} {100 * (b[4] - c) / c:+8.2f} {100 * (a[4] - c) / c:+8.2f}")
+
+
+def _pull_point(job):
+    mode, preset, rpm = job
+    eng = DieselEngine(preset=preset)
+    eng.converged_mode = (mode == "converged")
+    return mode, preset, rpm, eng.operating_point(rpm, load=1.0, n_cycles=9).torque
+
+
+def dyno_pull():
+    """--pull: every preset's 10-point full-load pull as the web app runs it
+    (fresh engine, load 1, n_cycles 9) against converged mode."""
+    from dieselsim.config import PRESETS as ALL
+    jobs = []
+    for p in sorted(ALL):
+        s = DieselEngine(preset=p).spec
+        rpms = [round((s.idle_rpm + (s.max_rpm - s.idle_rpm) * i / 9) / 50) * 50 for i in range(10)]
+        jobs += [(m, p, r) for m in ("fast", "converged") for r in rpms]
+    with Pool(max(1, (os.cpu_count() or 2) - 2)) as pool:
+        res = pool.map(_pull_point, jobs)
+    from dieselsim.bridge import source_hash
+    print(f"physics {source_hash()}")
+    print("dyno pull, fast (web app) vs converged: torque N.m, error %")
+    for p in sorted(ALL):
+        rows = sorted({x[2] for x in res if x[1] == p})
+        errs = []
+        for r in rows:
+            f = next(x[3] for x in res if x[:3] == ("fast", p, r))
+            c = next(x[3] for x in res if x[:3] == ("converged", p, r))
+            e = 100 * (f - c) / abs(c) if abs(c) > 1.0 else float("nan")
+            errs.append((abs(e) if e == e else 0.0, r, f, c, e))
+            print(f"  {p:9} {r:5d}  fast {f:8.2f}  converged {c:8.2f}  {e:+7.2f}%")
+        w = max(errs)
+        print(f"  {p}: worst {w[4]:+.2f}% at {w[1]} rpm")
+
+
+def write_accuracy(pull_txt, out_ts):
+    """--write-accuracy <pull output> : turn a --pull run's output into the
+    dyno page's accuracy table (web/app/src/app/dyno/accuracy.ts), so the
+    numbers the page shows are generated from a measurement, not copied.
+    The physics hash comes from the run's own header; a run from before the
+    header existed falls back to the current tree, with a warning."""
+    import re
+    from dieselsim.bridge import source_hash
+    text = open(pull_txt).read()
+    m = re.search(r"^physics ([0-9a-f]{64})$", text, re.M)
+    if m:
+        physics = m.group(1)
+    else:
+        physics = source_hash()
+        print(f"warning: {pull_txt} has no physics header; using the current tree "
+              f"({physics[:12]}) -- valid only if dieselsim/ is unchanged since the run")
+    rows = re.findall(r"^\s+(\S+)\s+(\d+)\s+fast\s+(-?[\d.]+)\s+converged\s+(-?[\d.]+)", text, re.M)
+    table = {}
+    for preset, rpm, f, c in rows:
+        rpm, f, c = int(rpm), float(f), float(c)
+        t = table.setdefault(preset, dict(worstPct=0.0, worstRpm=0, governedNm=0.0))
+        if c > 1.0:                                     # positive torque: relative
+            e = 100.0 * (f - c) / c
+            if abs(e) > abs(t["worstPct"]):
+                t["worstPct"], t["worstRpm"] = round(e, 1), rpm
+        else:                                           # governed end: absolute
+            t["governedNm"] = round(max(t["governedNm"], abs(f - c)), 1)
+    lines = [f"  {k}: {{ worstPct: {v['worstPct']}, worstRpm: {v['worstRpm']}, governedNm: {v['governedNm']} }},"
+             for k, v in sorted(table.items())]
+    ts = (
+        "// GENERATED by `python3 tools/diag_torque_limiter.py --write-accuracy <pull output>`\n"
+        "// from a `--pull` run: each preset's full-load pull as this page solves it\n"
+        "// (fast path, n_cycles 9) against converged solves (real time, 200 cycles).\n"
+        "// Valid only for the physics build below; the page checks. FINDING-013.\n"
+        "export interface PresetAccuracy {\n"
+        "  /** worst relative torque error over positive-torque points, % (fast - converged) */\n"
+        "  worstPct: number;\n  worstRpm: number;\n"
+        "  /** largest absolute difference where torque is negative (governed end), N.m */\n"
+        "  governedNm: number;\n}\n\n"
+        f"export const ACCURACY_PHYSICS = '{physics}';\n\n"
+        "export const ACCURACY: Record<string, PresetAccuracy> = {\n" + "\n".join(lines) + "\n};\n")
+    open(out_ts, "w").write(ts)
+    print(f"wrote {out_ts}: {len(table)} presets, physics {physics[:12]}")
+
+
 def main():
     jobs = [(p, r) for p in PRESETS for r in RPMS]
     with Pool(max(1, (os.cpu_count() or 2) - 2)) as pool:
@@ -187,7 +302,15 @@ def main():
 
 if __name__ == "__main__":
     os.makedirs(os.path.join(os.path.dirname(__file__), "..", "out"), exist_ok=True)
-    if "--trace" in sys.argv:
+    if "--write-accuracy" in sys.argv:
+        src = sys.argv[sys.argv.index("--write-accuracy") + 1]
+        write_accuracy(src, os.path.join(os.path.dirname(__file__), "..", "web", "app",
+                                         "src", "app", "dyno", "accuracy.ts"))
+    elif "--converged" in sys.argv:
+        converged_limiter()
+    elif "--pull" in sys.argv:
+        dyno_pull()
+    elif "--trace" in sys.argv:
         rows = json.load(open(os.path.join(os.path.dirname(__file__), "..", "out",
                                            "diag_torque_limiter.json")))
         for preset in PRESETS:

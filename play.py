@@ -176,16 +176,31 @@ class SosStream:
 def _grid_cell(task):
     """Worker entry for EngineGrid.build. Module-level so spawn can pickle it.
     The cell itself lives in dieselsim.grid, shared with the browser."""
-    spec, i, j, rpm, ld, n_cycles = task
-    src, perf = solve_cell(spec, rpm, ld, n_cycles=n_cycles, fs=FS)
+    spec, i, j, rpm, ld, n_cycles, converged, flim = task
+    src, perf = solve_cell(spec, rpm, ld, n_cycles=n_cycles, fs=FS,
+                           converged=converged, fuel_limit=flim)
     return i, j, src, perf
+
+
+def _row_fuel_limit(task):
+    """Worker entry: the converged full-load fuel at one rpm, calibrated once
+    and shared by every cell in that row (FINDING-013)."""
+    spec, i, rpm = task
+    eng = DieselEngine(spec=spec)
+    eng.converged_mode = True
+    return i, eng.fuel_limit(float(rpm))
 
 
 class EngineGrid:
     """Crank-angle acoustic sources + scalar performance on an (rpm, load) grid."""
 
-    def __init__(self, preset: str, n_rpm: int = 8, n_load: int = 6):
+    def __init__(self, preset: str, n_rpm: int = 8, n_load: int = 6,
+                 converged: bool = False):
         self.preset = preset
+        # converged: solve every cell at real time until settled
+        # (DieselEngine.converged_mode, FINDING-013). For prebuilt grids;
+        # much slower than the default fast cells.
+        self.converged = converged
         self.n_rpm = n_rpm
         self.n_load = n_load
         self.rpms = None
@@ -199,7 +214,8 @@ class EngineGrid:
 
     # ------------------------------------------------------------------
     def path(self):
-        return f".dieselsim_grid_{self.preset}_v{CACHE_VERSION}.pkl"
+        conv = "_converged" if self.converged else ""
+        return f".dieselsim_grid_{self.preset}{conv}_v{CACHE_VERSION}.pkl"
 
     def build(self, verbose=True, torque_limit=0.0, power_limit=0.0,
               jobs=None):
@@ -215,12 +231,26 @@ class EngineGrid:
         self.grid_deg = EngineSound(s, fs=FS).grid
         self.src = [[None] * self.n_load for _ in range(self.n_rpm)]
         self.perf = [[None] * self.n_load for _ in range(self.n_rpm)]
-        tasks = [(s, i, j, rpm, ld, GRID_CYCLES)
-                 for i, rpm in enumerate(self.rpms)
-                 for j, ld in enumerate(self.loads)]
-        total = len(tasks)
+        flims = [None] * self.n_rpm
+        total = self.n_rpm * self.n_load
         jobs = max(1, min(jobs or os.cpu_count() or 1, total))
         t0 = time.time()
+        if self.converged:
+            # one converged limiter calibration per rpm row, shared by its cells
+            rows = [(s, i, rpm) for i, rpm in enumerate(self.rpms)]
+            if jobs == 1:
+                res = [_row_fuel_limit(r) for r in rows]
+            else:
+                with mp.get_context("spawn").Pool(min(jobs, len(rows))) as pool:
+                    res = pool.map(_row_fuel_limit, rows)
+            for i, f in res:
+                flims[i] = f
+            if verbose:
+                print(f"  converged fuel limits: {len(rows)} rows in "
+                      f"{time.time() - t0:.0f} s")
+        tasks = [(s, i, j, rpm, ld, GRID_CYCLES, self.converged, flims[i])
+                 for i, rpm in enumerate(self.rpms)
+                 for j, ld in enumerate(self.loads)]
         k = 0
 
         def _store(res):
@@ -1858,6 +1888,9 @@ def main():
     ap.add_argument("--audio-test", action="store_true")
     ap.add_argument("--rebuild", action="store_true")
     ap.add_argument("--rpm-points", type=int, default=8)
+    ap.add_argument("--converged-grid", action="store_true",
+                    help="solve the grid at real time until every cell settles "
+                         "(FINDING-013); much slower, for prebuilt grids")
     ap.add_argument("--load-points", type=int, default=6)
     ap.add_argument("--torque-limit", type=float, default=0.0,
                     metavar="NM", help="cap brake torque (0 = no cap)")
@@ -1914,7 +1947,8 @@ def main():
                           args.torque_limit, args.power_limit,
                           args.jobs or None)
 
-    grid = EngineGrid(args.preset, args.rpm_points, args.load_points)
+    grid = EngineGrid(args.preset, args.rpm_points, args.load_points,
+                      converged=args.converged_grid)
     if os.path.exists(grid.path()) and not args.rebuild:
         print(f"loading cached grid {grid.path()}")
         try:
@@ -1927,7 +1961,10 @@ def main():
         print(f"solving the physics grid for '{args.preset}' "
               f"({args.rpm_points} x {args.load_points} points).")
         print("this happens once; the result is cached next to this script.")
-        grid.build().save()
+        # --torque-limit, --power-limit and --jobs used to be dropped here and
+        # honoured only when an unreadable cache forced a rebuild
+        grid.build(True, args.torque_limit, args.power_limit,
+                   jobs=args.jobs or None).save()
 
     if args.torque_limit > 0.0:
         grid.spec.torque_limit = args.torque_limit

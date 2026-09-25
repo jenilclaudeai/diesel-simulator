@@ -315,3 +315,176 @@ They cannot work at part load, because they leave the EGR loop as it is.
 Recommended: **A**, prototyped behind a flag first, judged against the 1×
 reference on the nine points above and on `--map`, and only then made the
 default. Then re-measure item 1.
+
+---
+
+## Option A, attempted (session 4) — full load converges, part load does not
+
+*Draft PR #20, behind `steady_ctrl` (off by default; with it off the solver is
+bit-identical, suite 18/0/2, audit identical to `main`). Scored with
+`python3 tools/diag_convergence.py --fix` against the 1× reference.*
+
+| variant | worst n=16 | RMS n=16 | kept? |
+|---|---|---|---|
+| shipped | −28.34% | 11.38% | — |
+| per-actuator secants, VGT held (shaft free) | — | 27.43% at n=9 | no: the shaft lags ~5 cycles at 14×, so per-cycle updates oscillate |
+| + shaft held; EGR secant on burnt fraction | — | — | no: fights the boost loop, 56% EGR at one point |
+| **Broyden on (speed, VGT) + flow-ratio EGR** | **−16.83%** | **8.51%** | **yes (in #20)** |
+| + plenum burnt fraction set to its equilibrium each held cycle | +35.96% | 12.26% | no: reverted |
+
+Full load converges with the kept variant — within 0.4% by n=12–16 at
+`crdi15` 1450 and 800 and `hd_i6` 1300 — and the limit cycle is gone. Part load
+with EGR does not. Per-cycle means (`CycleResult.cycle_means`, added for this)
+show why at `crdi15` 2100 / 0.75: the solve is still moving when the held
+cycles run out — the first 3–4 cycles are spent spinning the shaft up from a
+fresh engine's 12,000 rpm — so the last held step is large and uncorrected,
+and EGR flow collapses in the two free cycles (7.5 → 1.2 → 0.5 g/s).
+
+**Correction to the options table above:** option A was described as keeping
+the cost at ~9–12 cycles. That estimate was not supported: with shaft, VGT and
+EGR coupled, no variant tried reaches the stopping rule set for the attempt
+(RMS < 1% within 16 cycles).
+
+### Option A with an adaptive cycle count (session 4, third attempt)
+
+`n_cycles` becomes a minimum; held cycles are added until the cycle means stop
+changing (`_steady_converged`: work and boost 0.1%, shaft speed 0.2%, burnt
+fraction 0.0005), up to 40. The shaft starts near its running speed instead of
+12,000 rpm. The Broyden (speed, VGT) step was replaced: shaft speed ↔ boost by
+1-D secant; VGT ↔ net power by a fixed conservative gain, because net power
+responds to the vanes with a ~1-cycle lag and a learned slope made the vanes
+wander (0.32–0.60) without settling.
+
+| point | vs reference | cycles | converged |
+|---|---|---|---|
+| `crdi15` 1450 / 1.0 | +0.29% | 11 | yes |
+| `hd_i6` 1100 / 1.0 | −0.11% | 14 | yes |
+| `hd_i6` 1300 / 1.0 | −0.14% | 15 | yes |
+| `crdi15` 2100 / 0.75 | −0.71% | 26 | yes |
+| `crdi_1p5` 2100 / 0.5 | −1.34% | 38 | yes |
+| `ld_i4` 2100 / 0.5 | −2.86% | 40 | no |
+| `crdi15` 4000 / 0.25 | +4.63% | 40 | no |
+| `crdi15` 800 / 1.0 | **+10.99%** | 40 | no — shipped n=9 is −1.44% here |
+| `crdi_1p5` 3350 / 0.25 | +11.57% | 40 | no |
+
+RMS 5.6% (shipped n=9: 16.2%; Broyden n=16: 8.5%). The timebox set for this
+attempt — the nine points within 1% inside 40 cycles — is not met, so it stops
+here. Converged points still sit 0.1–1.3% from the reference, consistent with
+the EGR flow formula's fixed point ignoring manifold backflow.
+
+Also found: `CycleResult.converged` was set `True` unconditionally at the end
+of every solve, so every solve claimed convergence without checking; the
+dead-signal audit listed it as expected-constant. Nothing read it. It is now
+`False` unless a `steady_ctrl` solve met the convergence test.
+
+---
+
+## Converge offline, caveat online (session 4) — chosen after three attempts at option A
+
+The owner chose: solve offline builds (Enjoy mode's prebuilt grids, ADR-008)
+at real time until converged; keep the fast path in the browser with a stated
+accuracy. PR #21.
+
+### How many real-time cycles
+
+`tools/diag_convergence.py --validate-n`: all 120 `--map` points at real time
+for 400 cycles, fixed fuelling; gross work at cycle k against the mean of the
+last 10.
+
+| k | worst point | 95th percentile |
+|---|---|---|
+| 150 | 0.46% | 0.22% |
+| **200** | **0.36%** | **0.11%** |
+| 300 | 0.15% | 0.03% |
+
+(excluding the one point below). `CONVERGED_CYCLES = 200`.
+
+### One point has no steady state even at real time
+
+`crdi_1p5` 1450 rpm / 0.5 never settles: work swings 372–432 (±7.5%) in a
+21-cycle sawtooth, still 14.3% peak-to-peak over cycles 391–400. The per-cycle
+means show the mechanism: the VGT and EGR integral controllers fight through
+the exhaust-to-intake pressure difference. Boost falls below its
+EGR-adjusted target (≈1.89) → vanes close to their stop → exhaust pressure
+rises → EGR flow surges (11 g/s) and the burnt fraction overshoots to 0.29
+against 0.12 → the turbo spools (132k → 177k rpm), boost overshoots to 2.2 →
+vanes open → the pressure difference collapses, EGR flow falls to 1.2 g/s with
+the valve opening wide → repeat. A controller-tuning property of the model,
+not something a production calibration would do; changing it changes
+transient behaviour, so it is left for decision.
+
+### Cells that have not settled are period-averaged and flagged
+
+At 200 cycles, 115 of 120 cells settle (last cycle within 0.22% of the
+cycle-400 value). Five do not — all `crdi_1p5` part load: four are damped
+ringing that settles later, one is the limit cycle above. For those,
+`grid.settle_or_average()` averages torque (through IMEP), boost and bsfc over
+whole oscillation periods (autocorrelation after detrending; a period counts
+only after the autocorrelation first goes negative, so a settling series reads
+as none) and sets `settled = 0`, `osc_period`, `osc_spread` in the cell:
+
+| cell | period | last cycle alone | period average |
+|---|---|---|---|
+| `crdi_1p5` 1450 / 0.25 | 17 | −0.016% | +0.007% |
+| `crdi_1p5` 1450 / 0.5 | 21 | **−5.602%** | +0.203% |
+| `crdi_1p5` 2100 / 0.25 | 24 | +0.465% | −0.106% |
+| `crdi_1p5` 2100 / 0.5 | 33 | −0.115% | −0.024% |
+| `crdi_1p5` 2700 / 0.25 | 29 | −0.010% | −0.011% |
+
+So a converged offline cell is within ~0.2% everywhere, including the point
+with no steady state.
+
+### Item 1 with every solve converged
+
+`tools/diag_torque_limiter.py --converged` — the limiter's residual against its
+cap with converged calibration and evaluation, before and after calibrating
+under the evaluation's schedules:
+
+| preset | before | after |
+|---|---|---|
+| `crdi15` plateau, 1650–4000 rpm | +0.25 … **+3.03%** | −0.30 … +0.29% |
+| `crdi_1p5` plateau, 1650–4000 rpm | −1.00 … +0.77% | −0.74 … +0.35% |
+
+(1250 rpm is air-limited in both presets and both variants.) Most of the
++6.8% the fast path showed was non-convergence; the genuine limiter bias was
+≈3%, and item 1 removes it. `crdi_1p5` at 4000 rpm (−0.74%) is inside the
+calibration's own 1% tolerance.
+
+### Item 1 moved two regression guards
+
+See FINDING-016: they had been passing on a switch of the main ignition delay
+between two values, which the corrected fuelling no longer triggers.
+
+### Caveat online: what the dyno page's fast solve is worth
+
+`tools/diag_torque_limiter.py --pull` — every preset's 10-point full-load pull
+as the page solves it (fresh engine, load 1, n_cycles 9, item 1 applied)
+against converged solves. Physics build `64c825e675fc`; re-run on the final tree (`b11877338e84`, after the `seed_fuel_limit` change) gave identical rows.
+
+| preset | worst gap, positive torque | governed end (negative torque) |
+|---|---|---|
+| `crdi15` | −5.9% at 1650 rpm | 2.0 N·m |
+| `crdi_1p5` | −8.5% at 1200 rpm | 20.1 N·m |
+| `hd_i6` | −3.3% at 1950 rpm | 14.2 N·m |
+| `ld_i4` | −3.8% at 2600 rpm | 5.1 N·m |
+| `single` (no turbo) | 0.0% | 0.0 N·m |
+
+The page now states its engine's figure under the table
+(`web/app/src/app/dyno/accuracy.ts`, generated from this run by
+`--write-accuracy`). The table carries the physics build it was measured on;
+on any other build the page says the accuracy has not been measured rather
+than showing a stale number.
+
+### Cost of a converged grid (measured)
+
+`play.py`'s `EngineGrid(converged=True)` (`--converged-grid`): one converged
+limiter calibration per rpm row, shared by its cells, then every cell at real
+time for 200 cycles. `crdi15`, 8 × 6 cells, 6 workers, this Mac:
+
+| build | time | unsettled cells | peak torque |
+|---|---|---|---|
+| fast (default) | 55 s | — | 224.2 N·m |
+| converged | **544 s (9.1 min)** | 4 of 48, period-averaged and flagged | 222.0 N·m |
+
+About 10× the fast build — affordable for Enjoy mode's prebuilt roster
+(ADR-008), out of the question in the browser.

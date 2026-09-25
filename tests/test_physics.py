@@ -60,9 +60,19 @@ def known(name, cond, note):
 # 173.7 -> 178.5 bar, still inside the 160-200 bar band in
 # PROJECT_CONTEXT.md section 1.5, and hd_i6 torque still reproduces the
 # documented 2310 N.m.
+#
+# Re-baselined 2026-09-25 for FINDING-013 item 1 (both crdi15 points; hd_i6
+# is uncapped and unchanged). The torque limiter's calibration now runs with
+# the full-load schedules it is judged under. The old calibration ran with
+# EGR on, and at 9 cycles the EGR loop delivers 2-3x its target, so it needed
+# ~11% more fuel to reach the rating cap: calibrated fuel at 1800 rpm, default
+# 361 K coolant, fell 48.02 -> 42.59 mg. "Load 0.6" is 60% of that, hence 1800/0.6:
+#   torque 124.391 -> 111.718 (-10.2%), bsfc 265.40 -> 262.10, p_max 110.78 -> 104.72.
+# At 3000/1.0 the cap is 218.06 N.m (map): 219.675 (+0.74% over it) ->
+# 216.858 (-0.55%); bsfc 214.70 -> 214.64; p_max 151.98 -> 153.13.
 GOLDEN = {
-    ("crdi15", 1800, 0.6): dict(torque=124.391, bsfc=265.40, pmax=110.78),
-    ("crdi15", 3000, 1.0): dict(torque=219.675, bsfc=214.70, pmax=151.98),
+    ("crdi15", 1800, 0.6): dict(torque=111.718, bsfc=262.10, pmax=104.72),
+    ("crdi15", 3000, 1.0): dict(torque=216.858, bsfc=214.64, pmax=153.13),
     ("hd_i6", 1700, 1.0): dict(torque=2313.331, bsfc=214.11, pmax=178.53),
 }
 
@@ -103,9 +113,16 @@ def test_premix_responds_to_temperature():
         vals.append(eng.operating_point(
             1800, load=0.6, n_cycles=9).cycle.premix_fraction)
     swing = abs(vals[0] - vals[1]) / max(vals[1], 1e-9)
-    check("premix responds to coolant T", 1.0 if swing > 0.20 else 0.0, 1.0,
-          0.0, f"cold {vals[0]:.4f} vs warm {vals[1]:.4f}, swing "
-               f"{100 * swing:.0f}% (must exceed 20%)")
+    # FINDING-016: the old >20% swing was the warm point's ignition delay
+    # jumping a whole 1-deg crank step (2.425 -> 1.425). The real response
+    # at this point is ~0.2 deg / ~10% premix over 90 K (measured at
+    # dtheta 0.1), below this guard's 20%, and the 1-deg step quantises it
+    # away. After FINDING-013 item 1 the warm point no longer jumps. Known
+    # defect until ignition is resolved within the step; UNEXPECTED PASS
+    # means the response is back.
+    known("premix responds to coolant T", swing <= 0.20,
+          f"cold {vals[0]:.4f} vs warm {vals[1]:.4f}, swing {100 * swing:.0f}% "
+          f"(guard wants > 20%; delay quantised to the 1-deg step, FINDING-016)")
 
 
 def test_cold_start_sharpens_dpdtheta():
@@ -143,9 +160,10 @@ def test_combustion_dpdtheta_responds():
         vals.append(eng.operating_point(
             1800, load=0.6, n_cycles=9).cycle.dpdtheta_comb)
     rise = (vals[0] - vals[1]) / vals[1]
-    check("combustion dp/dtheta responds to coolant T",
-          1.0 if rise > 0.08 else 0.0, 1.0, 0.0,
-          f"cold is {100 * rise:+.1f}% sharper (must exceed 8%)")
+    # FINDING-016: see test_premix_responds_to_temperature.
+    known("combustion dp/dtheta responds to coolant T", rise <= 0.08,
+          f"cold is {100 * rise:+.1f}% sharper (guard wants > 8%; "
+          f"delay quantised to the 1-deg step, FINDING-016)")
 
 
 def test_sharp_not_clamped():
@@ -311,6 +329,97 @@ def test_runtime_info_describes_every_preset():
           1.0, 0.0, "; ".join(problems) or f"{len(described)} presets")
 
 
+def test_limiter_calibrates_under_evaluation_schedules():
+    """FINDING-013 item 1: every torque-limiter calibration solve must run
+    with the full-load schedules (load_est=1) its result is judged under.
+    Before the fix they saw f / fuel_limit_raw -- EGR on across part of the
+    plateau -- and the limiter overshot its cap by up to +5.5%."""
+    eng = DieselEngine(preset="crdi15")
+    seen = []
+    real = eng.operating_point
+
+    def spy(*a, **k):
+        if eng._calibrating:
+            seen.append(k.get("load_est"))
+        return real(*a, **k)
+
+    eng.operating_point = spy
+    eng.fuel_limit(2500.0)                      # capped speed: calibrates
+    bad = [x for x in seen if x != 1.0]
+    check("limiter calibration uses load_est=1",
+          0.0 if (seen and not bad) else 1.0, 0.0, 0.0,
+          f"{len(seen)} calibration solves, load_est {sorted(set(map(str, seen)))}")
+
+
+def test_converged_flag_is_honest():
+    """FINDING-013: CycleResult.converged was set True on every solve without
+    checking. A fixed-count fast solve establishes nothing, so it must say
+    False; converged mode must run at real time for CONVERGED_CYCLES."""
+    op = DieselEngine(preset="single").operating_point(2000, load=0.8, n_cycles=6)
+    check("fast solve does not claim convergence", float(op.cycle.converged),
+          0.0, 0.0)
+    eng = DieselEngine(preset="single")
+    eng.converged_mode = True
+    seen = {}
+    real_run = eng.cycle.run
+
+    def run(*a, **k):
+        seen.update(k)
+        return real_run(*a, **k)
+
+    eng.cycle.run = run
+    eng.operating_point(2000, load=0.8, n_cycles=6)
+    check("converged mode runs CONVERGED_CYCLES at real time",
+          0.0 if (seen.get("n_cycles") == eng.CONVERGED_CYCLES
+                  and seen.get("spool_accel") == 1.0) else 1.0, 0.0, 0.0,
+          f"n_cycles {seen.get('n_cycles')}, spool_accel {seen.get('spool_accel')}")
+
+
+def test_unsettled_cell_is_period_averaged():
+    """FINDING-013: a converged-mode cell whose last cycles have not settled
+    is averaged over whole oscillation periods and flagged. Synthetic: a
+    21-cycle sawtooth in IMEP (the shape measured at crdi_1p5 1450/0.5),
+    ending mid-ramp, so the last cycle alone is well off the mean."""
+    import math
+    from types import SimpleNamespace
+    from dieselsim.grid import oscillation_period, settle_or_average
+    import random
+    random.seed(3)
+    checks = {
+        "constant": oscillation_period([5.0] * 120) == 0,
+        "noise": oscillation_period([random.gauss(0, 1) for _ in range(120)]) == 0,
+        "decay": oscillation_period([math.exp(-i / 30) for i in range(120)]) == 0,
+        "sine 17": oscillation_period([math.sin(2 * math.pi * i / 17) for i in range(120)]) == 17,
+        "sawtooth 21 on a ramp": oscillation_period([(i % 21) / 21 + 0.01 * i for i in range(120)]) == 21,
+    }
+    spec = DieselEngine(preset="crdi15").spec
+    imep = [1.0e6 * (1.0 + 0.1 * ((i % 21) / 21 - 0.5)) for i in range(200)][:-7]
+    means = [dict(imep_net=v, work=v, boost=2.0) for v in imep]
+    op = SimpleNamespace(cycle=SimpleNamespace(converged=False, cycle_means=means),
+                         torque=100.0, power=100.0 * 2 * math.pi * 2000 / 60,
+                         rpm=2000.0, bsfc=220.0)
+    over, flags = settle_or_average(op, spec)
+    true_mean = sum(imep[-21:]) / 21                    # mean over one whole period
+    dT_expected = (true_mean - imep[-1]) * spec.geom.displacement / (4 * math.pi)
+    checks["flagged unsettled, period 21"] = flags["settled"] == 0.0 and flags["osc_period"] == 21.0
+    checks["torque averaged over whole periods"] = abs(over["torque"] - (100.0 + dT_expected)) < 1e-6 * abs(dT_expected)
+    op.cycle.converged = True
+    checks["settled cell untouched"] = settle_or_average(op, spec) == ({}, dict(settled=1.0, osc_period=0.0, osc_spread=0.0))
+    bad = [k for k, v in checks.items() if not v]
+    check("unsettled cell period-averaged and flagged", float(len(bad)), 0.0, 0.0,
+          ", ".join(bad) or f"{len(checks)} checks")
+
+
+def test_seeded_fuel_limit_is_exact():
+    """A seeded fuel limit (shared across a converged grid row) must come back
+    exactly, whatever the rating cap -- an earlier version routed it through
+    the calibration cache and returned min(cap in N.m, fuel in mg)."""
+    eng = DieselEngine(preset="single")
+    eng.spec.torque_limit = 10.0                 # a cap numerically below the fuel
+    eng.seed_fuel_limit(2000.0, 40.0)
+    check("seeded fuel limit returned exactly", eng.fuel_limit(2000.0), 40.0, 1e-12)
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -322,7 +431,11 @@ def main():
                test_override_typo_rejected,
                test_registered_preset_not_aliased,
                test_no_pilot_double_count,
-               test_runtime_info_describes_every_preset):
+               test_runtime_info_describes_every_preset,
+               test_limiter_calibrates_under_evaluation_schedules,
+               test_converged_flag_is_honest,
+               test_unsettled_cell_is_period_averaged,
+               test_seeded_fuel_limit_is_exact):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001
