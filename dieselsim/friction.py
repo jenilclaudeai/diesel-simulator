@@ -249,20 +249,36 @@ class FrictionModel:
                 R_eq_r = 1.0 / (1.0 / max(vt.cam_base_radius, 1e-4)
                                 + 1.0 / max(vt.follower_radius, 1e-4))
                 w_line_r = np.maximum(F_cam, 1.0) / (nv * 0.012)
+                # FINDING-015 item 2: the film is entrained at the ROLLING
+                # speed, the cam surface speed om_cam * (R_b + L), not at the
+                # 6 % sliding speed (which still sets the boundary power)
+                u_roll = 0.5 * om * (vt.cam_base_radius + L)
                 h_er = np.array([lub.hamrock_dowson_film(mu_cam,
                                                          max(u, 1e-4),
-                                                         R_eq_r, w)
-                                 for u, w in zip(u_sl, w_line_r)])
+                                                         R_eq_r, w,
+                                                         h_floor=0.1 * self.sigma_cam)
+                                 for u, w in zip(u_roll, w_line_r)])
                 lam_r = h_er / self.sigma_cam
                 fb_r = 1.0 / (1.0 + (lam_r / lub.LAMBDA_0) ** lub.LAMBDA_K)
                 Pb_vt += float(np.mean(mu_b * fb_r * F_cam * u_sl))
             else:                              # flat tappet, high sliding
-                u_sl = np.abs(dL) * om
+                # FINDING-015 item 2: flat-faced follower kinematics (cam
+                # angle phi; L'' per cam radian = 4 x the crank-angle d2L):
+                #   sliding      u_s = om_cam * (R_b + L)
+                #   entrainment  u_e = om_cam * |R_b + L + 2 L''| / 2
+                # u_e passes through zero near the nose, where real flat
+                # tappets lose their film. The follower's lift velocity was
+                # used for both, which zeroed the sliding where the film was
+                # thin and cancelled the boundary power out.
+                om_c = 0.5 * om
+                u_sl = om_c * (vt.cam_base_radius + L)
+                u_ent = om_c * np.abs(vt.cam_base_radius + L + 8.0 * d2L) / 2.0
                 R_eq = vt.cam_base_radius
                 w_line = np.maximum(F_cam, 1.0) / (nv * 0.012)
                 h_e = np.array([lub.hamrock_dowson_film(mu_cam, max(u, 1e-4),
-                                                        R_eq, w)
-                                for u, w in zip(u_sl, w_line)])
+                                                        R_eq, w,
+                                                        h_floor=0.1 * self.sigma_cam)
+                                for u, w in zip(u_ent, w_line)])
                 lam_c = h_e / self.sigma_cam
                 fb_c = 1.0 / (1.0 + (lam_c / lub.LAMBDA_0) ** lub.LAMBDA_K)
                 mu_eff = mu_b * fb_c + (1.0 - fb_c) * 0.008

@@ -298,16 +298,21 @@ def skirt_film_thickness(mu: float, u: float, L: float, W: float,
 
 
 def hamrock_dowson_film(mu0: float, u_entrain: float, R_eq: float,
-                        load_per_len: float, E_eq: float = 2.2e11) -> float:
+                        load_per_len: float, E_eq: float = 2.2e11,
+                        h_floor: float = 8e-9) -> float:
     """
     Central EHL film thickness for a line contact (cam / roller follower).
     Dowson-Higginson:
         Hc = 2.65 * U^0.7 * G^0.54 * W^-0.13
+    h_floor: the film at vanishing entrainment. FINDING-015: callers pass a
+    floor tied to the composite roughness instead of a fixed 8 nm; below
+    lambda ~ 0.1 the Stribeck boundary share is 1 to ~4 decimals anyway, so
+    the floor only guards the zero-speed limit.
     """
     if u_entrain <= 1e-6 or load_per_len <= 1.0:
-        return 1e-8
+        return h_floor
     U = mu0 * u_entrain / (E_eq * R_eq)
     G = BARUS_ALPHA * E_eq
     W = load_per_len / (E_eq * R_eq)
     Hc = 2.65 * U ** 0.7 * G ** 0.54 * W ** -0.13
-    return max(Hc * R_eq, 8e-9)
+    return max(Hc * R_eq, h_floor)

@@ -584,6 +584,27 @@ def test_mech_levels_carry_physics():
           f"(each must exceed +5%)")
 
 
+def test_flat_tappet_wears_more_than_roller():
+    """FINDING-015 item 2: with the flat-faced follower's own sliding and
+    entrainment speeds, a flat tappet's cam boundary power per cylinder is
+    far above a roller's (measured: single 215 W vs hd_i6 4.6 W per
+    cylinder, ~46x). With the follower's lift velocity standing in for both
+    speeds it was ~4.6x."""
+    pb = {}
+    for preset, rpm, load in (("single", 2000, 0.8), ("hd_i6", 1400, 0.6)):
+        eng = DieselEngine(preset=preset)
+        f = eng.operating_point(rpm, load=load, n_cycles=9).friction
+        pb[preset] = f["Pb_valvetrain"] / eng.spec.geom.n_cyl
+    ratio = pb["single"] / max(pb["hd_i6"], 1e-12)
+    # the entrainment half of the fix moves single's boundary power ~6%
+    # (228 W with the old entrainment speed) but not the ratio: pin it
+    check("single cam boundary power (flat-tappet entrainment)", pb["single"], 215.1, 0.02)
+    check("flat tappet cam boundary power >> roller's (per cylinder)",
+          1.0 if ratio > 10.0 else 0.0, 1.0, 0.0,
+          f"single {pb['single']:.1f} W vs hd_i6 {pb['hd_i6']:.2f} W per cylinder, "
+          f"{ratio:.0f}x (must exceed 10x)")
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -605,7 +626,8 @@ def main():
                test_cam_film_and_time_base,
                test_render_transient_has_no_seams,
                test_theta_global_axis,
-               test_mech_levels_carry_physics):
+               test_mech_levels_carry_physics,
+               test_flat_tappet_wears_more_than_roller):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001
