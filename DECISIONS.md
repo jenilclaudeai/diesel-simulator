@@ -682,3 +682,19 @@ of it the journal-bearing eccentricity solve (~61 scalar iterations × 1440
 points, ~88k calls). As compiled JavaScript that is on the order of a
 millisecond — an estimate, not a measurement. Oil and coolant change on
 second timescales, so friction need not refresh every frame.
+
+### ADR-011 — step 1 implemented (2026-09-26)
+
+- Grid cells carry `p_cyl` (cylinder 1's pressure, on the 0.5° source grid,
+  float32 — +5.8 KB per cell) and `perf.p_rail`. `GRID_FORMAT` 1 → 2 and
+  `play.py`'s `CACHE_VERSION` 6 → 7, so grids built without them rebuild.
+- `dieselsim.grid.cell_friction(eng, rpm, p_cyl, grid_deg, fuel_mg, p_rail)`
+  evaluates friction from a cell's stored trace at the engine's live oil and
+  coolant state — the native reference for the TypeScript friction port.
+- Measured: friction from the stored trace matches the cell's own to
+  −0.008% (`crdi15` 1800/0.6) and −0.016% (`hd_i6` 1400/0.8); with cold oil it
+  matches a full cold solve to +0.070% and −0.004%.
+
+Next (Phase 3): port `FrictionModel.evaluate` to TypeScript with ADR-004
+fixtures generated from `cell_friction`, and wire it to the loop's live oil
+and coolant temperatures.

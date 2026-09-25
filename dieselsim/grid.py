@@ -20,7 +20,10 @@ from .engine import DieselEngine
 GRID_CYCLES = 9
 
 # crank-angle sources the runtime needs, kept as float32
-SOURCE_KEYS = ("exh_flow", "int_flow", "dpdth", "inj", "valve", "slap")
+# p_cyl: cylinder 1's pressure [Pa] on the same crank grid as the sound
+# sources. ADR-011: friction is evaluated live from it, with the running oil
+# and coolant state (see cell_friction), instead of being baked into the cell.
+SOURCE_KEYS = ("exh_flow", "int_flow", "dpdth", "inj", "valve", "slap", "p_cyl")
 
 
 # Averaging window for a converged cell whose tail has not settled in
@@ -90,6 +93,24 @@ def settle_or_average(op, spec):
     return over, flags
 
 
+def cell_friction(eng, rpm, p_cyl, grid_deg, fuel_mg, p_rail):
+    """
+    ADR-011: friction for a grid cell at the engine's LIVE oil and coolant
+    state, from the cell's stored cylinder-pressure trace.
+
+    Exact with respect to oil state -- oil temperature never touches the
+    pressure trace (REVIEW-002 / ADR-011 addendum: 0.000% in 9 of 9 cases).
+    `eng` carries the live state: eng.oil (temperature, condition), eng.wear,
+    and the coolant via eng.T_coolant / _apply_thermal_state(). Returns the
+    friction model's result dict (fmep, P_friction, ...). This is the native
+    reference the TypeScript port of the friction model is tested against.
+    """
+    return eng.friction.evaluate(np.asarray(grid_deg, dtype=float),
+                                 np.asarray(p_cyl, dtype=float), float(rpm),
+                                 eng.oil, eng.wear, fuel_mg=float(fuel_mg),
+                                 p_rail=float(p_rail))
+
+
 def solve_cell(spec, rpm, load, n_cycles=GRID_CYCLES, fs=44100,
                converged=False, fuel_limit=None):
     """
@@ -122,6 +143,8 @@ def solve_cell(spec, rpm, load, n_cycles=GRID_CYCLES, fs=44100,
     snd = EngineSound(eng.spec, fs=fs)
     snd.wear = eng.wear
     sd = snd.build_sources(op)
+    tr = op.cycle.traces
+    sd["p_cyl"] = np.interp(snd.grid, tr.theta, tr.p[0], period=720.0)
     src = {k: np.asarray(sd[k], dtype=np.float32) for k in SOURCE_KEYS}
     src["_meta"] = sd["_meta"]
     perf = dict(
@@ -131,6 +154,7 @@ def solve_cell(spec, rpm, load, n_cycles=GRID_CYCLES, fs=44100,
         egr=op.egr_pct, T_exh=op.T_exh, p_max=op.p_max,
         bsfc=op.bsfc, fmep=op.fmep, dpdt=op.cycle.dpdtheta_max,
         fuel_kg_h=op.fuel_kg_h,
+        p_rail=op.cycle.rail_pressure,       # ADR-011: cell_friction needs it
         # q_wall_frac is heat-to-wall divided by fuel energy, so at zero
         # fuelling it is 0/0 and the solver's 1e-9 floor turns it into a huge
         # number. Clamp it or the coolant node gets a nonsense heat input at

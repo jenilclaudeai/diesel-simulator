@@ -62,7 +62,9 @@ const REQ: GridRequest = { engine: { preset: "crdi15", overrides: { "turbo.turbi
   check("NaN cannot enter a key", threw);
   // Change detector: if this fails, every user's cache silently misses.
   // Update deliberately, and bump GRID_FORMAT if the stored shape changed.
-  check("key format is stable", k1 === "8a04d424e48c50e0b969575abda16e9bf231eea49be7fc7af3770b3c1fce4f28", k1);
+  // GRID_FORMAT 1 -> 2 (cells carry p_cyl, ADR-011) changes the key on purpose;
+  // it was 8a04d424e48c50e0b969575abda16e9bf231eea49be7fc7af3770b3c1fce4f28.
+  check("key format is stable", k1 === "647d08179d62ef0c080d8bf9a51c39b8cdf89e439e1dc70c6b22422db23b653f", k1);
 }
 
 // ------------------------------------------------------------------ memory
