@@ -473,18 +473,34 @@ class CycleSolver:
                     m_inj[c] += dm_f
 
                     # ---------- ignition delay ----------
+                    # FINDING-016: resolved within the crank step. The delay
+                    # integral used to add a whole step from the first sample
+                    # after SOI, and start combustion at the sample where it
+                    # passed 1 -- so the delay moved in whole-step jumps and
+                    # its real temperature response (~0.2 deg over 90 K at
+                    # crdi15 1800/0.6) was quantised away. Now the first
+                    # increment covers only the part of the step after SOI,
+                    # and SOC is placed where the integral crosses 1 inside
+                    # the step (interval (tl - w, tl], so SOC <= tl and the
+                    # burn arithmetic below never sees a start in the future).
                     if m_fuel > 0.0:
-                        if soc_p[c] < 0.0 and dur_pilot > 0.0 and \
-                                ((tl - soi_pilot) % 720.0) < 180.0:
-                            di_p[c] += self.ign_delay_rate(T, p, Sp, cn) * dth
+                        since_p = (tl - soi_pilot) % 720.0
+                        if soc_p[c] < 0.0 and dur_pilot > 0.0 and since_p < 180.0:
+                            w = min(dth, since_p)
+                            prev = di_p[c]
+                            di_p[c] += self.ign_delay_rate(T, p, Sp, cn) * w
                             if di_p[c] >= 1.0:
-                                soc_p[c] = tl
-                        if soc_m[c] < 0.0 and ((tl - soi_main) % 720.0) < 180.0:
+                                frac = (1.0 - prev) / max(di_p[c] - prev, 1e-12)
+                                soc_p[c] = (tl - (1.0 - frac) * w) % 720.0
+                        since_m = (tl - soi_main) % 720.0
+                        if soc_m[c] < 0.0 and since_m < 180.0:
                             boost = 1.0 if soc_p[c] < 0.0 else 2.1
-                            di_m[c] += self.ign_delay_rate(T, p, Sp, cn) * \
-                                dth * boost
+                            w = min(dth, since_m)
+                            prev = di_m[c]
+                            di_m[c] += self.ign_delay_rate(T, p, Sp, cn) * w * boost
                             if di_m[c] >= 1.0:
-                                soc_m[c] = tl
+                                frac = (1.0 - prev) / max(di_m[c] - prev, 1e-12)
+                                soc_m[c] = (tl - (1.0 - frac) * w) % 720.0
                                 tau = (soc_m[c] - soi_main) % 720.0
                                 m_air = max(m * (1.0 - yb), 1e-9)
                                 phi = m_fuel * Fuel.AFR_stoich / m_air
