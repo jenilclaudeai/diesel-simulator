@@ -236,7 +236,8 @@ not quoted from memory.
 
 ## ADR-006 — Cold-start combustion via two grids
 
-**Status:** ON HOLD (2026-09-08) — blocked by REVIEW-001 finding B-1
+**Status:** ON HOLD (2026-09-08) — blocked by REVIEW-001 finding B-1.
+*2026-09-25: REVIEW-002 recommends superseding it with ADR-011 (Proposed).*
 
 > **Do not implement.** Measurement shows the cold-start combustion sensitivity
 > this decision exists to capture is largely absent from the solver: `dp/dθ`
@@ -607,3 +608,43 @@ and the difference grows along it — 1.3e-10, 7.6e-11, 1.8e-8, 7.5e-8, 3.7e-7,
   and shown to still fail on a 0.1% error.
 - "Agrees to ~1e-10" is a property of converged or non-oscillating points,
   not of the fast path in general.
+
+---
+
+## ADR-011 — The cold engine: friction live on oil viscosity, combustion on a cold/warm pair
+
+**Status:** Proposed (2026-09-25) — would supersede ADR-006. See REVIEW-002.
+
+### Context
+
+REVIEW-002 measured the cold engine with converged solves: oil temperature
+drives 21–78% of the torque loss and 224–375% of the FMEP rise; coolant drives
+the combustion change (ignition delay +5–7%, combustion dp/dθ +1–2%) and a
+smaller friction share. Friction is strongly nonlinear in temperature
+(two-endpoint error up to +108%) and close to linear in oil viscosity
+(−12.5% worst); combustion is linear in coolant temperature (≤ 0.2%).
+
+### Proposal
+
+1. **Friction is not gridded.** The real-time loop evaluates FMEP each frame
+   from the live oil viscosity (and rpm, load). Either the friction model is
+   ported to TypeScript with ADR-004 fixtures, or an FMEP(rpm, load, μ)
+   surface is solved offline with enough viscosity points to meet the
+   tolerance (to be measured; two are not enough).
+2. **Indicated performance and sources come from two grids**, cold and warm
+   *coolant*, oil held warm, interpolated linearly on coolant temperature —
+   measured to within 0.2% for the combustion quantities.
+
+### Trade-offs
+
+| | positives | costs |
+|---|---|---|
+| This proposal | follows the physics; tracks oil warm-up lag; no friction axis | friction evaluated per frame (port or fitted surface); the brake/indicated split must be honoured everywhere |
+| ADR-006 as written | one mechanism, simple | wrong axis for the dominant effect; up to +108% FMEP error |
+| Third grid axis on viscosity | everything precomputed | 3–4× grid build; still an interpolation |
+| Warm only, stated in the UI | nothing to build | the cold engine is a headline behaviour |
+
+### Revisit when
+
+A fitted FMEP surface cannot meet the tolerance with a handful of viscosity
+points, or per-frame friction proves too costly on a phone.
