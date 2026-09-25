@@ -459,21 +459,30 @@ class EngineSound:
             (meta["dpdt_max"] / self._ref_dpdt)
 
         # ---------------- mechanical impulses --------------------------
-        tick = sample("valve") * (meta["v_seating"] / 1.2) ** 1.5
+        # FINDING-017: each component used to be divided by its own std and
+        # the sub-mix by its own std, which discarded the seating and
+        # clearance scaling applied to tick and slap; then the whole sub-mix
+        # was scaled by seating velocity, so slap and injector noise followed
+        # the VALVES. Now each component is normalised for shape only and
+        # carries its own physical level, and the sub-mix is not
+        # renormalised:
+        #   tick      (v_seating / ref)^2   impulse energy ~ seating velocity^2
+        #   slap      (skirt_clr / 30 um)^0.6
+        #   injector  fixed reference level
+        tick = sample("valve")
         tick = _resonator(tick, 3100.0, 26.0, fs, 1.0) + \
             0.6 * _resonator(tick, 5400.0, 30.0, fs, 1.0)
         inj = sample("inj")
         inj = _resonator(inj, 4200.0, 34.0, fs, 1.0) + \
             0.5 * _resonator(inj, 6800.0, 36.0, fs, 1.0)
-        slap = sample("slap") * (meta["skirt_clr"] / 30e-6) ** 0.6
+        slap = sample("slap")
         slap = _resonator(slap, 900.0, 9.0, fs, 1.0) + \
             0.7 * _resonator(slap, 1750.0, 12.0, fs, 1.0)
-        mech = (tick / (np.std(tick) + 1e-12)
-                + 0.75 * inj / (np.std(inj) + 1e-12)
-                + 0.9 * slap / (np.std(slap) + 1e-12))
-        # impulse energy goes as seating velocity squared
-        out["mech"] = mech / (np.std(mech) + 1e-12) * \
-            (max(meta["v_seating"], 1e-6) / self._ref_vseat) ** 2
+        a_tick = (max(meta["v_seating"], 1e-6) / self._ref_vseat) ** 2
+        a_slap = (max(meta["skirt_clr"], 1e-9) / 30e-6) ** 0.6
+        out["mech"] = (a_tick * tick / (np.std(tick) + 1e-12)
+                       + 0.75 * inj / (np.std(inj) + 1e-12)
+                       + 0.9 * a_slap * slap / (np.std(slap) + 1e-12))
 
         # ---------------- turbocharger ---------------------------------
         if s.turbo.enabled and meta["turbo_rpm"] > 1000.0:
