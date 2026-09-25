@@ -130,3 +130,14 @@ depends on oil warm-up, which ADR-006 would not have tracked.
 ## Dismissed
 
 None.
+
+---
+
+## Decision (2026-09-25)
+
+The owner accepted ADR-011; ADR-006 is superseded. Measured afterwards (see
+the ADR-011 addendum in DECISIONS.md): a fitted friction surface needs ~6
+viscosity nodes × a coolant axis for ~1%, while friction evaluated from each
+cell's stored pressure trace is **exact** with respect to oil state (0.000%
+in 9 of 9 cases; oil temperature does not touch the trace). The trace-based
+route is chosen.
