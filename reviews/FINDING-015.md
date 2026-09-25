@@ -198,3 +198,56 @@ fix is caught by its own check.
    the target and its source recorded.
 
 These are physics judgements; nothing here is applied.
+
+---
+
+## Item 2 fixed, floor replaced (session 4, owner's decision: "kinematics + floor, measure")
+
+- **Flat tappet:** sliding `u_s = ω_cam (R_b + L)`, entrainment
+  `u_e = ω_cam |R_b + L + 2L″| / 2` (L″ per cam radian = 4 × the crank-angle
+  second derivative).
+- **Roller:** film entrained at the rolling speed `ω_cam (R_b + L)`; the 6%
+  sliding speed still sets the boundary power.
+- **Film floor:** 0.1 × composite roughness (25 nm) instead of a fixed 8 nm.
+
+**The floor turned out to be inert.** Flat-tappet boundary power with the old
+8 nm floor, the new 25 nm floor and effectively no floor (1e-12 m): 215.056761,
+215.056672, 215.056761 W — 4e-7 relative. Where the film is that thin the
+Stribeck boundary share is already 1, so the "clamp binding" earlier in this
+finding was an audit-shaped flag with no physical consequence. The
+roughness-based floor is kept as the principled value.
+
+**Effect** — after items 1 and 3 → after item 2 too:
+
+| | boundary power | valvetrain friction | torque | lash growth 8000 h (exh / int) |
+|---|---|---|---|---|
+| `single` (flat tappet) | 22.6 → **215.1 W** | 228.2 → 216.3 W | +0.24% | 1.02 → **9.23** / 0.83 → **7.55 µm** |
+| `hd_i6` (roller) | 29.5 → 27.9 W | 563.5 W (same) | 0.000% | 0.67 → 0.62 / 0.55 → 0.51 µm |
+| `crdi15` (roller) | 7.4 → 7.2 W | 129.0 W (same) | 0.000% | — |
+
+Per cylinder, the flat tappet's cam boundary power is now ~46× the roller's
+(215 vs 4.65 W) — the ordering real engines show.
+
+Test `test_flat_tappet_wears_more_than_roller` (ratio > 10×, and `single`
+boundary power 215.1 W ± 2% as the entrainment fix's fingerprint). Mutation:
+the old kinematics (both speeds) and the old entrainment alone are each caught.
+
+## Calibration target — for the owner to choose
+
+`K_ARCHARD["cam"]` has never been fitted. The model now gives a flat-tappet
+single ~9 µm of exhaust lash growth in 8000 h of its default duty cycle, and a
+roller engine ~0.6 µm. Candidate targets (none chosen, no figure quoted from
+memory):
+
+1. **An oil-qualification valvetrain wear test** (the flat-tappet cam wear
+   tests used to qualify engine oils): reproduce its duty cycle with
+   `durability_run` and fit `K_ARCHARD["cam"]` to its wear limit. The limit and
+   duty cycle must be taken from the standard itself.
+2. **A published field measurement** of flat-tappet lobe wear or lash growth
+   over a stated number of hours or kilometres, with its source recorded.
+3. **A service-interval target:** choose the interval at which a
+   mechanical-lash engine needs its valves adjusted, and fit the coefficient so
+   lash growth reaches the adjustment tolerance at that interval.
+
+Option 1 is the most defensible if the standard is available; option 3 is the
+quickest and says plainly that it is a design choice.
