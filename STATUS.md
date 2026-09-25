@@ -5,13 +5,42 @@
 grids are cached, CI runs, and the first web page (a dyno pull) works end to end.
 **Main:** everything through PR #35 is merged; CI on `main` is green (6 of 6,
 run 36186508876). #20 was closed (its record is FINDING-013; branch kept).
-Open: **#36** — the dyno accuracy table for physics build `6912cc7545ef`
-(after #34/#35 the page correctly said "not measured"; the re-measured figures
-are identical, only the hash changes) plus this status update.
+Open, a stack: **#36** (accuracy table for `6912cc7545ef`; STATUS) → **#37**
+(closing ramps clear the lash, FINDING-017 item 2) → **#38** (cam wear
+calibrated to the owner's 2000 h / 150 µm service interval) → **#39**
+(ADR-011 step 1: cells carry the pressure trace; `cell_friction`). Merge in
+that order, retargeting each child to `main` after its parent merges.
 
 Read this first in a new session, then `PLAN.md`, then `DECISIONS.md`, then
 `reviews/`. Those replace pasting a context document. `CLAUDE.md` says the same
 for Claude Code sessions.
+
+---
+
+## Session 4, part 4 (2026-09-26)
+
+Owner's decisions, applied as the stack #36 → #39:
+
+- **#37 — ramps above lash** on `hd_i6` (ramp_fraction 0.155) and `single`
+  (0.13): seating 0.81 → 0.45 and 0.39 → 0.25 m/s at 1500 rpm. `hd_i6`'s valve
+  tick falls from ~41× to **13×** its loudest other source — still dominant;
+  the on-ramp lash penalty in `seating_velocity()` and the `_ref_vseat`
+  calibration are open judgements (FINDING-017).
+- **#38 — cam wear calibrated**: `K_ARCHARD["cam"]` 3.2e-9 → 2.17e-7 so the
+  flat-tappet `single` grows 150 µm of exhaust lash in 2000 h (the owner's
+  service interval). Rollers ~17× slower. *Observed, not investigated:*
+  `crdi15` gains 3.6% torque after 2000 h from the other (untouched) wear
+  mechanisms — recalls bug #9.
+- **#39 — ADR-011 step 1**: cells carry `p_cyl` and `perf.p_rail`;
+  `grid.cell_friction()` evaluates friction from the stored trace at live
+  oil/coolant state (matches the cell's own to −0.008%, a full cold solve to
+  +0.070%). `GRID_FORMAT` 2, `CACHE_VERSION` 7.
+- **Harness trap found:** Python's bytecode cache validates a source by its
+  mtime (whole seconds) and size, so a same-length mutation restored within a
+  second runs stale bytecode. Mutation runs now use
+  `PYTHONDONTWRITEBYTECODE=1`. Earlier results were re-checked: a stale cache
+  can make a mutant falsely *survive*, never falsely *caught*, and every
+  surviving mutant reported this session changed the line's length.
 
 ---
 
@@ -395,13 +424,14 @@ bug-8 audit, #8–#14 the Phase 2 stack, #16 `CLAUDE.md`.
 ## Next actions
 
 1. **Listen** to the pairs in `out/listen/` (sent to the owner) — pair 1 first.
-2. **Merge #36** (accuracy table for the current physics build).
-3. **FINDING-017 item 2** — `hd_i6` / `single` lash above the closing ramp;
-   `hd_i6` is now dominated by valve clatter (worse after #34). Raise the ramp
-   or saturate the seating factor.
-4. **Choose a cam wear calibration target** (FINDING-015, three options).
-5. **ADR-011 implementation** — store each grid cell's pressure trace; port
-   the friction model to TypeScript with ADR-004 fixtures (Phase 3).
+2. **Merge the stack** #36 → #37 → #38 → #39 (retarget each child to `main` after its parent).
+3. **After listening, decide the remaining tick question**: the on-ramp lash
+   penalty in `seating_velocity()` and the `_ref_vseat` level (`hd_i6` tick
+   still 13× its other sources).
+4. **Look at the aged-engine torque**: `crdi15` +3.6% after 2000 h (not the
+   cam) — the other wear mechanisms, bug #9's territory.
+5. **ADR-011 step 2** — port `FrictionModel.evaluate` to TypeScript with
+   ADR-004 fixtures from `cell_friction` (Phase 3).
 6. **FINDING-013 item 2** — the EGR valve's 25% start (fast path only now) and
    the VGT–EGR limit cycle at `crdi_1p5` 1450/0.5 (controller tuning).
 7. **Enjoy mode's roster** (OPEN-F), then its grids with `--converged-grid`.
@@ -428,6 +458,9 @@ bug-8 audit, #8–#14 the Phase 2 stack, #16 `CLAUDE.md`.
 - **Git worktrees + Angular:** building `web/app` from a worktree creates an
   empty `.angular/cache/<version>` at the *main* checkout's root. Harmless;
   delete it (session 4 did, three times).
+- **Mutation testing in Python: set `PYTHONDONTWRITEBYTECODE=1`.** Bytecode
+  is validated by source mtime (seconds) and size; a same-length edit within a
+  second otherwise runs stale code.
 - **Waiting on a background job with `pgrep -f "<script>"`** matches the
   waiting shell's own command line and never ends — session 4 lost two loops
   to it. Match on something the waiter does not contain, or wait on the PID.
