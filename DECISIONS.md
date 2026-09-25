@@ -236,7 +236,8 @@ not quoted from memory.
 
 ## ADR-006 — Cold-start combustion via two grids
 
-**Status:** ON HOLD (2026-09-08) — blocked by REVIEW-001 finding B-1
+**Status:** Superseded by ADR-011 (2026-09-25). *Was: ON HOLD (2026-09-08) —
+blocked by REVIEW-001 finding B-1; REVIEW-002 then recommended superseding it.*
 
 > **Do not implement.** Measurement shows the cold-start combustion sensitivity
 > this decision exists to capture is largely absent from the solver: `dp/dθ`
@@ -607,3 +608,77 @@ and the difference grows along it — 1.3e-10, 7.6e-11, 1.8e-8, 7.5e-8, 3.7e-7,
   and shown to still fail on a 0.1% error.
 - "Agrees to ~1e-10" is a property of converged or non-oscillating points,
   not of the fast path in general.
+
+---
+
+## ADR-011 — The cold engine: friction live on oil viscosity, combustion on a cold/warm pair
+
+**Status:** Accepted (2026-09-25) — supersedes ADR-006. See REVIEW-002.
+*Was: Proposed (2026-09-25).*
+
+### Context
+
+REVIEW-002 measured the cold engine with converged solves: oil temperature
+drives 21–78% of the torque loss and 224–375% of the FMEP rise; coolant drives
+the combustion change (ignition delay +5–7%, combustion dp/dθ +1–2%) and a
+smaller friction share. Friction is strongly nonlinear in temperature
+(two-endpoint error up to +108%) and close to linear in oil viscosity
+(−12.5% worst); combustion is linear in coolant temperature (≤ 0.2%).
+
+### Proposal
+
+1. **Friction is not gridded.** The real-time loop evaluates FMEP each frame
+   from the live oil viscosity (and rpm, load). Either the friction model is
+   ported to TypeScript with ADR-004 fixtures, or an FMEP(rpm, load, μ)
+   surface is solved offline with enough viscosity points to meet the
+   tolerance (to be measured; two are not enough).
+2. **Indicated performance and sources come from two grids**, cold and warm
+   *coolant*, oil held warm, interpolated linearly on coolant temperature —
+   measured to within 0.2% for the combustion quantities.
+
+### Trade-offs
+
+| | positives | costs |
+|---|---|---|
+| This proposal | follows the physics; tracks oil warm-up lag; no friction axis | friction evaluated per frame (port or fitted surface); the brake/indicated split must be honoured everywhere |
+| ADR-006 as written | one mechanism, simple | wrong axis for the dominant effect; up to +108% FMEP error |
+| Third grid axis on viscosity | everything precomputed | 3–4× grid build; still an interpolation |
+| Warm only, stated in the UI | nothing to build | the cold engine is a headline behaviour |
+
+### Revisit when
+
+A fitted FMEP surface cannot meet the tolerance with a handful of viscosity
+points, or per-frame friction proves too costly on a phone.
+
+### ADR-011 — Accepted: how friction reaches the real-time loop (measured)
+
+Two ways to give the loop friction at the live oil and coolant state were
+measured (`tools/diag_friction_adr011.py`):
+
+**A fitted surface FMEP(rpm, load, viscosity)** — piecewise linear in oil
+viscosity (nodes even in log viscosity), 273–363 K:
+
+| viscosity nodes | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|
+| worst FMEP error | 12.6% | 4.3% | 2.5% | 1.6% |
+
+and coolant does not separate additively (up to 4.6%), so a surface needs a
+coolant axis as well — roughly 6 × 3 friction solves per cell for ~1%.
+
+**Friction evaluated from the cell's pressure trace** with the live oil state:
+oil temperature never touches the pressure trace (IMEP identical to 0.000%
+across 273–363 K oil), and friction evaluated on a trace solved at a different
+oil temperature matches a full solve to **0.000%** in all 9 cases tried (three
+points, three oil-temperature pairs).
+
+**Chosen: trace-based.** Grid cells store the cylinder-pressure trace
+(`p[0]`, 720 float32 ≈ 2.9 KB per cell); the real-time loop interpolates the
+trace and evaluates the friction model with the live oil and coolant state.
+Exact with respect to oil, no friction axis, no build multiplier. It needs the
+friction model ported to TypeScript (ADR-004 fixtures).
+
+**Cost, to confirm in the port:** 44 ms per evaluation in native Python, 94%
+of it the journal-bearing eccentricity solve (~61 scalar iterations × 1440
+points, ~88k calls). As compiled JavaScript that is on the order of a
+millisecond — an estimate, not a measurement. Oil and coolant change on
+second timescales, so friction need not refresh every frame.
