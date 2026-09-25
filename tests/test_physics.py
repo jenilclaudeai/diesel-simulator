@@ -522,6 +522,34 @@ def test_render_transient_has_no_seams():
           f"{len(dev)} seam intervals {100 * max(dev or [1]):.1f}% (must be < 5%)")
 
 
+def test_theta_global_axis():
+    """FINDING-008 option D: CycleTraces.theta_global[c] gives the engine
+    angle of cylinder c's local samples. (1) Peak pressure read on it is
+    spread by the firing order (every cylinder peaks at the same LOCAL
+    angle). (2) It matches the solver's storage: cylinder c's sample at local
+    index (k + phase_idx[c]) % n carries global step k -- which pins the
+    sign; an even-fire engine's peak spread alone cannot, since its phase
+    set is symmetric under negation."""
+    import numpy as np
+    bad = []
+    for preset, rpm in (("hd_i6", 1400), ("crdi15", 1800)):
+        eng = DieselEngine(preset=preset)
+        tr = eng.operating_point(rpm, load=1.0, n_cycles=9).cycle.traces
+        nc, n = tr.p.shape
+        peaks = sorted(float(tr.theta_global[c][int(np.argmax(tr.p[c]))]) for c in range(nc))
+        gaps = np.diff(peaks + [peaks[0] + 720.0])
+        if np.max(np.abs(gaps - 720.0 / nc)) > 2.0:
+            bad.append(f"{preset} peak gaps {np.round(gaps, 1).tolist()}")
+        k = np.arange(n)
+        for c in range(nc):
+            kk = (k + eng.cycle.phase_idx[c]) % n
+            if np.max(np.abs(((tr.theta_global[c][kk] - tr.theta[k] + 360.0) % 720.0) - 360.0)) > 1e-9:
+                bad.append(f"{preset} cyl {c} disagrees with the storage convention")
+                break
+    check("theta_global spreads cylinders by firing order and matches storage",
+          float(len(bad)), 0.0, 0.0, "; ".join(bad) or "hd_i6 and crdi15")
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -541,7 +569,8 @@ def main():
                test_ignition_delay_resolved,
                test_ignition_delay_converges_in_resolution,
                test_cam_film_and_time_base,
-               test_render_transient_has_no_seams):
+               test_render_transient_has_no_seams,
+               test_theta_global_axis):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001

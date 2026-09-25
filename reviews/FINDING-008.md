@@ -216,3 +216,65 @@ a measurement error and added a `CycleTraces` docstring. That docstring covered
 only the 1D/2D split and **would have been misleading**, because it implied a
 single shared `theta`. It has been rewritten here to state both references and
 their consequences. FINDING-002's retraction is kept.
+
+---
+
+## Options for the contract (session 4, for decision)
+
+*Added 2026-09-25. Nothing above is changed. The decision is the owner's; this
+section lays it out.*
+
+### What constrains it, measured from the code
+
+- **Every consumer today reads cylinder 0 or handles the phase itself.**
+  `friction.evaluate`, `acoustics.build_sources`, `demo.py` and the engine's
+  own friction call use `p[0]` / `mdot_*[0]` / `T[0]`; only
+  `DieselEngine.crank_torque` reads `p[c]` for `c > 0`, and it rolls each
+  cylinder to global itself. Cylinder 0's phase is 0, so for it local and
+  global coincide. **No option below moves a shipped number.**
+- **Traces are not exposed to the browser.** `dieselsim/bridge.py` and
+  `web/solver/src` never touch `traces` or `theta`. The contract can still be
+  chosen freely — but it has to be chosen before the Phase 6 cycle page, the
+  Phase 3 port or any fixture (ADR-004) freezes one.
+- **p–V is correct for every cylinder today, for free** (`V` is local too).
+  Any option should keep that.
+
+### Options
+
+| option | what changes | positives | trade-offs |
+|---|---|---|---|
+| **A. Document and add helpers.** Keep storage; add `phase_deg` (per cylinder) to `CycleTraces` and a `to_global(c, arr)` helper. | a field and a helper | smallest change; zero risk to existing consumers; p–V stays free | two conventions remain in one dataclass; correctness depends on every consumer remembering the helper — the failure mode this finding is about |
+| **B. Store everything in global angle.** Roll per-cylinder arrays to global at the end of `run()`; `V` becomes per-cylinder `(n_cyl, n)`. | array layout, `crank_torque` (drop its roll) | one convention; p–θ overlays and manifold-vs-cylinder overlays are right by construction | `V` changes shape (1-D → 2-D), a breaking change for any p–V code; per-cylinder event analysis (e.g. "peak pressure at 10° ATDC") needs a shift back; the TS port and fixtures must follow |
+| **C. Store everything local.** Add per-cylinder manifold traces `(n_cyl, n)`, each as seen from that cylinder's frame. | two arrays duplicated per cylinder | everything a single cylinder experiences lines up with its own TDC, which is how engine analysts usually read a cycle | manifold data stored `n_cyl` times; a firing-order view (all cylinders on one axis) still needs conversion; bigger payload for the browser |
+| **D. Keep storage, add a per-cylinder axis.** Add `theta_global` `(n_cyl, n)` = `(theta + phase_deg[c]) % 720`, and document the pairing: `p[c]` against `theta` (own TDC) or against `theta_global[c]` (engine angle); manifold arrays against `theta` (engine angle). | one array, docs | no data moves; p–V stays free; every array has an axis that is correct for it by name; firing-order and manifold overlays become plain plots; cheapest to carry into the TS port | the consumer still has to pick the right axis (but the names now say which); `theta_global[c]` wraps at 720°, so a plot must split or sort at the wrap |
+
+### Recommendation: D, plus a guard
+
+D fixes the misleading pairing without moving data or breaking p–V, and costs
+one array. Whatever is chosen, add the second audit dimension this finding
+proposed: **assert that per-cylinder peak-pressure angles, read on the
+engine-angle axis, are spread by the firing order** (120° apart on `hd_i6`,
+180° on `crdi15`). It is one line and would catch a regression in either
+direction — and it is the kind of test to mutation-check against a baseline
+that passes, per the working rules.
+
+Decide before the Phase 3 port or the Phase 6 cycle page, whichever comes
+first.
+
+---
+
+## Decided and implemented: option D (session 4)
+
+`CycleTraces.theta_global`, shape `(n_cyl, n)`: the engine angle of each
+sample of cylinder c's local arrays, `(theta − phase_deg[c]) % 720`, built from
+the solver's own rounded `phase_idx` so it matches the storage exactly. No
+data moves; p–V stays correct for free; the `CycleTraces` docstring states
+which axis pairs with which array.
+
+Guard `test_theta_global_axis`, on `hd_i6` and `crdi15`: peak pressure read on
+`theta_global` is spread by the firing order (gaps within 2° of 720/n_cyl),
+and `theta_global` agrees with the storage convention sample for sample.
+Mutation: a flipped sign is caught — by the storage check only, as expected,
+since an even-fire engine's phase set is symmetric under negation and the
+peak spread cannot tell the signs apart; reading the local angle (no
+conversion) is caught by both checks.

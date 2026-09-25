@@ -79,6 +79,16 @@ class CycleTraces:
         cylinder 0, and wrong by that cylinder's phase offset otherwise.
       - Geometry.phase_deg(i) gives the offset needed to convert.
 
+    theta_global, shape (n_cyl, n) -- FINDING-008 option D:
+      theta_global[c] is the ENGINE angle of each sample of cylinder c's
+      local arrays, (theta - phase_deg[c]) % 720. Pair each array with the
+      axis that is right for it:
+          p[c], hrr[c], T[c] ...  vs theta            -> cylinder c's own TDC
+          p[c], hrr[c], T[c] ...  vs theta_global[c]  -> engine angle
+          p_int/exh_manifold      vs theta            -> engine angle
+      theta_global[c] wraps at 720; sort by it (or split at the wrap) before
+      drawing a line through it.
+
     Nothing raises an error in any of those cases.
 
     Separately: do not ravel a 2D field and index theta with the result.
@@ -104,6 +114,7 @@ class CycleTraces:
     soc_main_deg: float = -1.0
     pilot_soi_deg: float = 0.0
     inj_dur_main_deg: float = 0.0
+    theta_global: np.ndarray = None     # (n_cyl, n); see the docstring
 
 
 @dataclass
@@ -802,7 +813,11 @@ class CycleSolver:
             p_int_manifold=pim_tr, p_exh_manifold=pem_tr, mdot_blowby=bb_tr,
             valve_lift_int=lift_i, valve_lift_exh=lift_e, soi_deg=soi_main,
             soc_pilot_deg=float(soc_p[0]), soc_main_deg=float(soc_m[0]),
-            pilot_soi_deg=soi_pilot, inj_dur_main_deg=dur_main)
+            pilot_soi_deg=soi_pilot, inj_dur_main_deg=dur_main,
+            # local sample kk of cylinder c holds global step
+            # kk - phase_idx[c] (see the storage in the step loop)
+            theta_global=(self.theta[None, :]
+                          - dth * np.asarray(self.phase_idx, dtype=float)[:, None]) % 720.0)
         return r
 
     # ------------------------------------------------------------------ #

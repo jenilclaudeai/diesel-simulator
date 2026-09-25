@@ -488,3 +488,8 @@ time for 200 cycles. `crdi15`, 8 × 6 cells, 6 workers, this Mac:
 
 About 10× the fast build — affordable for Enjoy mode's prebuilt roster
 (ADR-008), out of the question in the browser.
+
+Re-measured at the top of the session-4 fix stack (#30, physics build
+`9dc8f30ea5ad`, after the ignition and cam fixes): `crdi15` −5.8%,
+`crdi_1p5` −8.3%, `hd_i6` −3.3%, `ld_i4` −3.8%, `single` 0.0%; governed end
+unchanged. The page's table carries this build.
