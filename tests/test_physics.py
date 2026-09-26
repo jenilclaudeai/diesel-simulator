@@ -681,6 +681,22 @@ def test_cell_friction_from_trace():
     check("cell friction from stored trace (cold oil vs full cold solve)", cold, full_cold, 0.002)
 
 
+def test_cold_solve_is_path_independent():
+    """Bug #5: warm_start=False reset only the gas state; the turbo kept its
+    shaft speed and VGT position (+0.54% at 2000 rpm after a 4000 rpm solve,
+    seeded fuel), and the limiter's calibration chain warm-started from
+    whatever came before (-0.16% more, unseeded). A cold solve after any
+    history must now equal a fresh engine's, bit for bit."""
+    def solve(history):
+        e = DieselEngine(preset="crdi15")
+        if history:
+            e.operating_point(4000.0, load=1.0, n_cycles=9)
+        return e.operating_point(2000.0, load=0.6, n_cycles=9, warm_start=False).torque
+    fresh, after = solve(False), solve(True)
+    check("cold solve after history equals a fresh engine", after, fresh, 1e-12,
+          f"fresh {fresh:.9f} vs after 4000 rpm {after:.9f}")
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -706,7 +722,8 @@ def main():
                test_flat_tappet_wears_more_than_roller,
                test_closing_ramps_clear_the_lash,
                test_cam_wear_calibration,
-               test_cell_friction_from_trace):
+               test_cell_friction_from_trace,
+               test_cold_solve_is_path_independent):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001

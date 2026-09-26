@@ -207,8 +207,11 @@ class DieselEngine:
             # later judged under. They used to see f / fuel_limit_raw -- EGR
             # on across part of the plateau -- and the limiter overshot its
             # cap by up to +5.5% where EGR switched on.
+            # The chain starts cold (gas state and turbo, bug #5) so the
+            # calibrated fuel is a function of rpm alone, not of whatever
+            # was solved before; on a fresh engine this changes nothing.
             op0 = self.operating_point(rpm, fuel_mg=f_max, n_cycles=self.cal_cycles,
-                                       load_est=1.0)
+                                       load_est=1.0, warm_start=False)
             headroom = float(np.clip(op0.cycle.afr / max(self.spec.afr_limit,
                                                          1e-6), 1.0, 2.2))
             f_ceiling = f_max * headroom
@@ -351,6 +354,8 @@ class DieselEngine:
             load_est = fuel_mg / max(self.fuel_limit(rpm), 1e-9)
         if egr is None:
             egr = self.egr_schedule(rpm, load_est)
+        if not warm_start:
+            self.turbo.reset()
 
         cyc = self.cycle.run(
             rpm, fuel_mg, self.turbo, egr_cmd=egr, p_amb=p_amb, T_amb=T_amb,
