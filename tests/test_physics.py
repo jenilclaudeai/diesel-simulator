@@ -740,6 +740,27 @@ def test_cam_lift_is_continuous():
           cam.seating_velocity(1.0), float(np.median(v[on_ramp])), 0.01)
 
 
+def test_seating_on_ramp_is_ramp_speed():
+    """FINDING-017 follow-up (task #27): with the lash inside the closing ramp
+    the valve seats at the ramp's own speed. The lash penalty
+    (1 + 2.2 lash / h_ramp) applied there too -- x2.74 on hd_i6's exhaust
+    (550 um lash, 697 um ramp). Off the ramp (lash taller than the ramp) the
+    penalty stays, by the owner's decision."""
+    import math
+    import numpy as np
+    from dieselsim.kinematics import Cam
+    cam = DieselEngine(preset="hd_i6").cycle.cam_exh
+    th = np.arange(0.0, 720.0, 0.01)
+    L, v = cam.cam_lift(th), np.abs(cam.dlift_dtheta(th))
+    ramp_speed = float(np.median(v[(L > 1e-9) & (L < 0.9 * cam.h_ramp)]))
+    check("hd_i6 exhaust seats at its ramp speed (lash within the ramp)",
+          cam.seating_velocity(1.0), ramp_speed, 0.01,
+          f"lash {cam.lash * 1e6:.0f} um, ramp {cam.h_ramp * 1e6:.0f} um")
+    off = Cam(cam.open_deg, cam.close_deg, cam.lift_max, lash=2.0 * cam.h_ramp, ramp=cam.ramp)
+    check("lash above the ramp keeps the penalty", off.seating_velocity(1.0),
+          ramp_speed * (1.0 + 2.2 * 2.0), 0.01)
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -767,7 +788,8 @@ def main():
                test_cam_wear_calibration,
                test_cell_friction_from_trace,
                test_cold_solve_is_path_independent,
-               test_cam_lift_is_continuous):
+               test_cam_lift_is_continuous,
+               test_seating_on_ramp_is_ramp_speed):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001

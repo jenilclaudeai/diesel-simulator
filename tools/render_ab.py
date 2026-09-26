@@ -102,7 +102,7 @@ def levels():
     for p in ("crdi15", "crdi_1p5", "hd_i6", "ld_i4", "single"):
         cam = DieselEngine(preset=p).cycle.cam_exh
         print(f"   {p:9} lash {cam.lash * 1e6:5.0f} um  ramp {cam.h_ramp * 1e6:5.0f} um  "
-              f"factor {1 + 2.2 * cam.lash / max(cam.h_ramp, 1e-9):5.2f}  "
+              f"factor {1.0 if cam.lash <= cam.h_ramp else 1 + 2.2 * cam.lash / max(cam.h_ramp, 1e-9):5.2f}  "
               f"v_seat at 1500 rpm {cam.seating_velocity(2 * math.pi * 1500 / 60):.3f} m/s")
 
 

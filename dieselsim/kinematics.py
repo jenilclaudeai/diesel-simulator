@@ -167,9 +167,17 @@ class Cam:
                 + self.cam_lift(theta_deg - dth)) / h ** 2
 
     def seating_velocity(self, omega):
-        """Valve closing velocity at seat contact [m/s] -- the tick source."""
+        """Valve closing velocity at seat contact [m/s] -- the tick source.
+
+        With the lash inside the closing ramp the valve seats on the ramp, at
+        the ramp's own constant speed. It used to carry the lash penalty
+        (1 + 2.2 lash / h_ramp) there too -- x2.7 on hd_i6 (550 um lash, 697 um
+        ramp). Only lash taller than the ramp lands on the flank and keeps it.
+        """
         # the ramp spans ramp/2 of the event (FINDING-018)
         v_ramp = self.h_ramp / (math.radians(0.5 * self.ramp * self.dur))
+        if self.lash <= self.h_ramp:
+            return v_ramp * omega
         return v_ramp * omega * (1.0 + 2.2 * self.lash / max(self.h_ramp, 1e-9))
 
     def opening_event_deg(self):

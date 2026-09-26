@@ -151,3 +151,42 @@ stale bytecode. Rerun with `PYTHONDONTWRITEBYTECODE=1`, it passed.)
 
 `builder.py` engines with mechanical lash still get the default 6 % ramp and
 could land off-ramp too; not changed here.
+
+## Item 2 follow-up (session 5, owner's decision: seat at ramp speed)
+
+`Cam.seating_velocity()` no longer applies the lash penalty
+`(1 + 2.2 · lash / h_ramp)` when the lash is inside the closing ramp. There,
+the valve seats at the ramp's own constant speed. Lash taller than the ramp
+keeps the penalty, by the owner's decision. That leaves a jump of ×3.2 at
+lash = h_ramp. The honest off-ramp value would be the flank's slope at the
+lash height, which is a separate change.
+
+Built on FINDING-018 (PR #42), which doubled every ramp speed. Mechanical
+source levels as the mix weights them (`out/tick_dom.py`, not committed):
+tick `(v_seat/0.10)²`, injector 0.75, slap `0.9·(clr/30 µm)^0.6`, each at
+unit std.
+
+| point | `main` (old profile) | after #42 | after this change |
+|---|---|---|---|
+| `hd_i6` 1250/0.5, tick ÷ loudest other | 18.9× | 75.7× | **13.0×** |
+| `single` 2000/0.8 | 15.3× | 61.3× | **10.6×** |
+| `crdi15` 1800/0.6 (lash 0, no change) | 0.57× | 2.30× | 2.30× |
+
+**Correction:** item 2 above says `hd_i6`'s tick fell "from ~41× to 13×" and
+that `crdi15`'s is 0.9×. On the same tree, the measure written out here gives
+18.9× and 0.57×. That text used a different measure, which it did not record,
+so the two sets of numbers are not comparable. The table here is the one to
+use from now on.
+
+`hd_i6` and `single` stay tick-dominant, because their ramps are steep. With
+this profile, ramp speed scales with `ramp_fraction × lift`, so raising the
+ramp to clear large lash (item 2) also sped it up (0.074 mm per cam degree
+on `hd_i6`). A real cam clears lash with a long, gentle ramp: its height and
+speed are independent. That needs a ramp-height parameter separate from
+`ramp_fraction`, which is a sound-design change for Phase 4, judged by ear.
+
+Test `test_seating_on_ramp_is_ramp_speed`: `hd_i6`'s exhaust seats at its
+numerical ramp slope, and a cam with lash twice its ramp keeps the penalty.
+Mutations: putting the penalty back on the ramp fails the first check;
+removing it everywhere fails the second. The unmutated baseline passes.
+Suite 42 passed, 0 failed, 2 known.
