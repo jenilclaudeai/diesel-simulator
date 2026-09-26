@@ -10,7 +10,9 @@
 import type { EngineRef } from "./solver-port.js";
 
 /** Bump when the stored Grid shape changes, to orphan old entries. */
-export const GRID_FORMAT = 1;
+// 2: cells carry p_cyl, cylinder 1's pressure trace (ADR-011), and
+//    perf.p_rail; grids cached in format 1 lack them and must rebuild.
+export const GRID_FORMAT = 2;
 
 export function canonicalJson(value: unknown): string {
   if (value === null) return "null";

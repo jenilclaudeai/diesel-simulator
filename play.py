@@ -75,7 +75,7 @@ from dieselsim.grid import GRID_CYCLES, solve_cell
 
 FS = 44100
 BLOCK = 1024
-CACHE_VERSION = 6   # 6: grid solved per-cell on fresh engines at GRID_CYCLES
+CACHE_VERSION = 7   # 7: cells carry p_cyl and p_rail (ADR-011); 6: per-cell fresh engines at GRID_CYCLES
 
 # GRID_CYCLES and the cell solve live in dieselsim.grid (FINDING-011).
 

@@ -10,12 +10,12 @@ export interface PresetAccuracy {
   governedNm: number;
 }
 
-export const ACCURACY_PHYSICS = '6912cc7545ef8b992fe43c7b4ef90e318f4d628fdc53f47894c886f74d649a4c';
+export const ACCURACY_PHYSICS = 'dd652e959dd31d1a5aa584428d4cc01533023611c9eb034822967f0dc1a2b0fd';
 
 export const ACCURACY: Record<string, PresetAccuracy> = {
   crdi15: { worstPct: -5.8, worstRpm: 1650, governedNm: 2.0 },
   crdi_1p5: { worstPct: -8.3, worstRpm: 1200, governedNm: 20.1 },
-  hd_i6: { worstPct: -3.3, worstRpm: 1950, governedNm: 14.2 },
+  hd_i6: { worstPct: -2.8, worstRpm: 1950, governedNm: 10.5 },
   ld_i4: { worstPct: -3.8, worstRpm: 2600, governedNm: 5.1 },
   single: { worstPct: 0.0, worstRpm: 0, governedNm: 0.0 },
 };

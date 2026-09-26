@@ -631,6 +631,31 @@ def test_cam_wear_calibration():
           eng.wear.state.lash_growth_exh * 1e6, 150.0, 0.05)
 
 
+def test_cell_friction_from_trace():
+    """ADR-011: grid cells store cylinder 1's pressure trace (p_cyl) and the
+    real-time loop evaluates friction from it at the live oil state. From the
+    stored trace (resampled to the 0.5-deg source grid, float32) friction
+    must match the cell's own (measured -0.008%) and, with cold oil, a full
+    cold solve (+0.070%) -- oil never touches the trace."""
+    from dieselsim.acoustics import EngineSound
+    from dieselsim.grid import solve_cell, cell_friction
+    spec = DieselEngine(preset="crdi15").spec
+    src, perf = solve_cell(spec, 1800.0, 0.6)
+    grid = EngineSound(spec).grid
+    own = DieselEngine(preset="crdi15").operating_point(1800, load=0.6, n_cycles=9).fmep
+    same = cell_friction(DieselEngine(preset="crdi15"), 1800.0, src["p_cyl"], grid,
+                         perf["fuel_mg"], perf["p_rail"])["fmep"]
+    cold_eng = DieselEngine(preset="crdi15")
+    cold_eng.oil.cond.T_oil = 273.0
+    cold = cell_friction(cold_eng, 1800.0, src["p_cyl"], grid, perf["fuel_mg"], perf["p_rail"])["fmep"]
+    ref = DieselEngine(preset="crdi15")
+    ref.oil.cond.T_oil = 273.0
+    ref.seed_fuel_limit(1800.0, perf["fuel_mg"] / 0.6)
+    full_cold = ref.operating_point(1800, fuel_mg=perf["fuel_mg"], n_cycles=9).fmep
+    check("cell friction from stored trace (same state)", same, own, 0.002)
+    check("cell friction from stored trace (cold oil vs full cold solve)", cold, full_cold, 0.002)
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -655,7 +680,8 @@ def main():
                test_mech_levels_carry_physics,
                test_flat_tappet_wears_more_than_roller,
                test_closing_ramps_clear_the_lash,
-               test_cam_wear_calibration):
+               test_cam_wear_calibration,
+               test_cell_friction_from_trace):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001
