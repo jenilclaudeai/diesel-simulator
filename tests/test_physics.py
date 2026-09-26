@@ -78,10 +78,23 @@ def known(name, cond, note):
 #   crdi15 3000/1.0  torque 216.858 -> 216.892, bsfc 214.64 -> 214.56, p_max 153.13 -> 152.23
 #   hd_i6  1700/1.0  torque 2313.331 -> 2313.401, bsfc 214.11 -> 214.10, p_max 178.53 -> 178.84
 # hd_i6 still reproduces the documented 2310 N.m and stays in the 160-200 bar band.
+#
+# Correction (session 5): hd_i6 1700/1.0 had already moved on main before the
+# next change -- PR #37 raised hd_i6's closing ramps (FINDING-017 item 2) and
+# the golden was not re-baselined, because the move sat inside the 0.5%
+# tolerance: torque 2313.401 -> 2311.359 (-0.09%), bsfc 214.10 -> 214.29,
+# p_max 178.84 -> 178.17. Measured on clean main 16f37cd; my miss in #37.
+#
+# Re-baselined 2026-09-26 for FINDING-013 item 2: the EGR valve starts at
+# 0.14 x command instead of 25 % open. crdi15 1800/0.6 only (the other two
+# are full load, EGR off, bit-identical). Against a converged solve at the
+# same fuel (torque 125.278, bsfc 233.46, p_max 144.19, EGR 9.08 %):
+#   torque 111.696 -> 122.628 (error -10.8% -> -2.1%), bsfc 261.88 -> 238.51,
+#   p_max 104.78 -> 129.99, delivered EGR 16.64% -> 9.96% (target 9.20%).
 GOLDEN = {
-    ("crdi15", 1800, 0.6): dict(torque=111.696, bsfc=261.88, pmax=104.78),
+    ("crdi15", 1800, 0.6): dict(torque=122.628, bsfc=238.51, pmax=129.99),
     ("crdi15", 3000, 1.0): dict(torque=216.892, bsfc=214.56, pmax=152.23),
-    ("hd_i6", 1700, 1.0): dict(torque=2313.401, bsfc=214.10, pmax=178.84),
+    ("hd_i6", 1700, 1.0): dict(torque=2311.359, bsfc=214.29, pmax=178.17),
 }
 
 
@@ -93,6 +106,13 @@ def test_golden_points():
         check(f"{tag} torque", op.torque, exp["torque"], 0.005)
         check(f"{tag} bsfc", op.bsfc, exp["bsfc"], 0.005)
         check(f"{tag} p_max", op.p_max / 1e5, exp["pmax"], 0.005)
+        if (preset, rpm, load) == ("crdi15", 1800, 0.6):
+            # FINDING-013 item 2: with the valve starting 25 % open for any
+            # command a 9-cycle solve delivered 16.6 % against a 9.2 % target
+            target = 100.0 * eng.egr_schedule(rpm, load) * eng.spec.air.egr_max_fraction
+            check(f"{tag} delivered EGR within 25% of target ({target:.2f}%)",
+                  1.0 if abs(op.egr_pct / target - 1.0) < 0.25 else 0.0, 1.0, 0.0,
+                  f"delivered {op.egr_pct:.2f}% vs target {target:.2f}%")
 
 
 def test_n_cycles_convergence():
@@ -471,14 +491,19 @@ def test_cam_film_and_time_base():
     1e-8 of valvetrain friction; and follower velocity / inertia used cam
     speed on crank-angle derivatives. Boundary share must now be material,
     and hd_i6's valvetrain friction power sits where the crank time base
-    puts it (563.5 W; 585.2 W on the cam time base)."""
+    puts it (563.5 W; 585.2 W on the cam time base).
+
+    Re-pinned 2026-09-26 for FINDING-013 item 2: 1400/0.6 runs with EGR, and
+    the EGR valve's new start changes the cylinder pressure the exhaust valve
+    opens against: 577.8 W crank time base, 597.2 W with the cam time base
+    mutated back (velocity, roller slip and inertia), still 3.4% apart."""
     shares = {}
     for preset, rpm, load in (("hd_i6", 1400, 0.6), ("single", 2000, 0.8)):
         f = DieselEngine(preset=preset).operating_point(rpm, load=load, n_cycles=9).friction
         shares[preset] = f["Pb_valvetrain"] / f["P_valvetrain"]
         if preset == "hd_i6":
             check("hd_i6 valvetrain friction power (crank time base)",
-                  f["P_valvetrain"], 563.5, 0.01)
+                  f["P_valvetrain"], 577.8, 0.01)
     check("cam boundary friction is a material share of valvetrain friction",
           1.0 if min(shares.values()) > 1e-2 else 0.0, 1.0, 0.0,
           ", ".join(f"{k} {v:.3f}" for k, v in shares.items()) + " (must exceed 0.01)")
