@@ -3,12 +3,11 @@
 **Updated:** 2026-09-25 (session 4, part 2 — an autonomous stretch; see below)
 **Phase:** 2 — mostly done. Python runs in the browser, the SolverPort exists,
 grids are cached, CI runs, and the first web page (a dyno pull) works end to end.
-**Main:** everything through PR #30 is merged; CI on `main` is green (6 jobs).
-#20 was closed (its record is FINDING-013; branch kept). Open, all with the
-owner's decisions applied: **#32** (REVIEW-002; **ADR-011 accepted**, ADR-006
-superseded) and the stack **#31 → #34 → #35** (FINDING-017 and its fix,
-FINDING-015's remainder). Merge #31, #34, #35 in that order, retargeting each
-child to `main` after its parent merges.
+**Main:** everything through PR #35 is merged; CI on `main` is green (6 of 6,
+run 36186508876). #20 was closed (its record is FINDING-013; branch kept).
+Open: **#36** — the dyno accuracy table for physics build `6912cc7545ef`
+(after #34/#35 the page correctly said "not measured"; the re-measured figures
+are identical, only the hash changes) plus this status update.
 
 Read this first in a new session, then `PLAN.md`, then `DECISIONS.md`, then
 `reviews/`. Those replace pasting a context document. `CLAUDE.md` says the same
@@ -396,7 +395,7 @@ bug-8 audit, #8–#14 the Phase 2 stack, #16 `CLAUDE.md`.
 ## Next actions
 
 1. **Listen** to the pairs in `out/listen/` (sent to the owner) — pair 1 first.
-2. **Merge** #32, then the stack #31 → #34 → #35, and this file (#33).
+2. **Merge #36** (accuracy table for the current physics build).
 3. **FINDING-017 item 2** — `hd_i6` / `single` lash above the closing ramp;
    `hd_i6` is now dominated by valve clatter (worse after #34). Raise the ramp
    or saturate the seating factor.
