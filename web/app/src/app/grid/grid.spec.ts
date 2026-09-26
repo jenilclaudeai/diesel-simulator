@@ -1,4 +1,4 @@
-import { gridAxes, N_LOAD, N_RPM } from './grid';
+import { gridAxes, N_LOAD, N_RPM } from './grid-axes';
 
 describe('gridAxes', () => {
   it('spans idle to maximum speed and no load to full load', () => {

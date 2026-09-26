@@ -2,16 +2,8 @@ import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } 
 import { RouterLink } from '@angular/router';
 import type { Grid, GridProgress, PresetInfo } from '@dieselsim/solver';
 import { describe, SolverService } from '../solver/solver.service';
+import { gridAxes, N_LOAD, N_RPM } from './grid-axes';
 
-/** The grid the real-time loop reads: play.py's default, 8 speeds x 6 loads. */
-export const N_RPM = 8;
-export const N_LOAD = 6;
-
-/** Evenly spaced from idle to maximum speed, and from no load to full load. */
-export function gridAxes(s: Pick<PresetInfo, 'idle_rpm' | 'max_rpm'>): { rpms: number[]; loads: number[] } {
-  const lin = (a: number, b: number, n: number) => Array.from({ length: n }, (_, i) => a + (b - a) * i / (n - 1));
-  return { rpms: lin(s.idle_rpm, s.max_rpm, N_RPM), loads: lin(0, 1, N_LOAD) };
-}
 
 const fmt0 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 const fmt1 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
