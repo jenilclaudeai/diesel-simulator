@@ -44,8 +44,9 @@ K_ARCHARD = {
     # exhaust lash growth at 2000 h (the adjustment tolerance at the interval).
     # A design choice, not a measurement. It was 3.2e-9, never exercised while
     # cam boundary power was ~0; with the cam film fixed that gave 2.2 um at
-    # 2000 h.
-    "cam": 2.17e-7,
+    # 2000 h. Re-fitted 2.17e-7 -> 2.20e-7 for FINDING-018 (the continuous
+    # cam profile gave 147.8 um; now 149.8 um).
+    "cam": 2.20e-7,
 }
 
 
