@@ -102,6 +102,26 @@ def source_hash():
     return h.hexdigest()
 
 
+# The real-time loop consumes grids and does not shape them, so a change to
+# it must not make every prebuilt grid stale (Phase 3, prebuilt converged
+# grids). Everything else in the package can change a cell.
+GRID_HASH_EXCLUDES = ("live.py",)
+
+
+def grid_hash():
+    """
+    SHA-256 over the package files that can change a grid cell: the same
+    algorithm as source_hash(), without GRID_HASH_EXCLUDES. Prebuilt grids
+    carry it; the app uses one only if it matches its own build.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    h = hashlib.sha256()
+    for name in sorted(f for f in os.listdir(here) if f.endswith(".py") and f not in GRID_HASH_EXCLUDES):
+        with open(os.path.join(here, name), "rb") as fh:
+            h.update(name.encode() + b"\0" + fh.read() + b"\0")
+    return h.hexdigest()
+
+
 def _preset_info(key):
     s = PRESETS[key]()
     return {"name": s.name, "idle_rpm": float(s.idle_rpm),

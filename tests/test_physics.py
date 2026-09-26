@@ -1103,6 +1103,42 @@ def test_adr011_live_friction():
           f"cold endpoint diff {cold_ok:.1e}")
 
 
+def test_grid_hash_ignores_the_live_loop():
+    """Prebuilt grids are keyed on bridge.grid_hash(): the package sources
+    without the real-time loop (live.py), which consumes grids but cannot
+    change a cell. Editing live.py must leave it unchanged; editing any other
+    file must change it. Checked on a copy of the package, so nothing on disk
+    is touched."""
+    import hashlib
+    import shutil
+    import tempfile
+    from dieselsim import bridge
+    pkg = os.path.join(os.path.dirname(__file__), "..", "dieselsim")
+
+    def gh(folder):
+        h = hashlib.sha256()
+        for name in sorted(f for f in os.listdir(folder)
+                           if f.endswith(".py") and f not in bridge.GRID_HASH_EXCLUDES):
+            with open(os.path.join(folder, name), "rb") as fh:
+                h.update(name.encode() + b"\0" + fh.read() + b"\0")
+        return h.hexdigest()
+    with tempfile.TemporaryDirectory() as tmp:
+        cp = os.path.join(tmp, "dieselsim")
+        shutil.copytree(pkg, cp, ignore=shutil.ignore_patterns("__pycache__"))
+        base = gh(cp)
+        same_as_bridge = base == bridge.grid_hash()
+        with open(os.path.join(cp, "live.py"), "a") as fh:
+            fh.write("\n# edit\n")
+        live_edit = gh(cp)
+        with open(os.path.join(cp, "engine.py"), "a") as fh:
+            fh.write("\n# edit\n")
+        engine_edit = gh(cp)
+    ok = same_as_bridge and live_edit == base and engine_edit != base
+    check("grid hash: live.py edits keep it, solver edits change it", 1.0 if ok else 0.0, 1.0, 0.0,
+          f"matches bridge {same_as_bridge}, live.py edit keeps {live_edit == base}, "
+          f"engine.py edit changes {engine_edit != base}")
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -1140,7 +1176,8 @@ def main():
                test_lockup_key_by_transmission,
                test_manual_gearbox,
                test_lockup_and_coast_downshifts,
-               test_adr011_live_friction):
+               test_adr011_live_friction,
+               test_grid_hash_ignores_the_live_loop):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001
