@@ -13,7 +13,8 @@
     "build:pages": "ng build --base-href /diesel-simulator/",
     "prebuild:pages": "npm run prepare-assets",
     "e2e": "node e2e/dyno.e2e.mjs",
-    "e2e:grid": "node e2e/grid.e2e.mjs"
+    "e2e:grid": "node e2e/grid.e2e.mjs",
+    "e2e:drive": "node e2e/drive.e2e.mjs"
   },
   "private": true,
   "packageManager": "npm@10.9.7",

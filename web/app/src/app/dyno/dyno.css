@@ -110,3 +110,10 @@ polyline { fill: none; stroke-linejoin: round; stroke-linecap: round; }
   .data { font-size: 0.85rem; }
   .data th, .data td { padding: 0.3rem 0.35rem; }
 }
+
+.gauges { grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); }
+.gauges .rpm, .gauges .kmh, .gauges .gear { font-size: 2rem; }
+.meter { display: block; height: 0.35rem; margin-top: 0.3rem; border-radius: 0.2rem;
+  background: linear-gradient(to right, var(--slate) calc(var(--f, 0) * 100%), var(--slate-faint) 0); }
+.data.keys th[scope="row"] { font-family: ui-monospace, monospace; white-space: nowrap; }
+.data.keys td { text-align: left; }

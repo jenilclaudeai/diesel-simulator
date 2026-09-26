@@ -18,6 +18,9 @@
       ],
       "@dieselsim/solver/worker": [
         "../solver/src/worker-main.ts"
+      ],
+      "@dieselsim/physics": [
+        "../physics/src/index.ts"
       ]
     }
   },
