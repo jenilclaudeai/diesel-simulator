@@ -18,7 +18,9 @@ import { fileURLToPath } from "node:url";
 // Re-baselined again for FINDING-016 (ignition resolved within the crank
 // step; was 111.71833782635092) and FINDING-015 (cam friction time base and
 // inlet viscosity; was 111.69609690984224).
-const NATIVE_TORQUE = 111.71143779402043;
+// Re-baselined for FINDING-013 item 2 (EGR valve starts at 0.14 x command,
+// not 25 % open; was 111.71143779402043).
+const NATIVE_TORQUE = 122.62764269929146;
 // Agreement with native was ~1e-10 and the tolerance 1e-8. After item 1 it is
 // 1.2e-6 here: the limiter's calibration is a chain of warm-started 9-cycle
 // solves, and without EGR the VGT limit cycle (FINDING-013 item 3) is active

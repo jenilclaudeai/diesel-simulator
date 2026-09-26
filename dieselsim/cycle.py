@@ -163,6 +163,11 @@ class CycleResult:
     cycle_means: list = field(default_factory=list)
 
 
+# EGR valve starting opening, as a fraction of full area per unit command
+# (FINDING-013 item 2; median converged opening / command over 12 points).
+EGR_VALVE_START_PER_CMD = 0.14
+EGR_VALVE_MIN_START = 0.005
+
 TAIL_CYCLES = 10       # cycles judged by _tail_converged
 TAIL_TOL = 1e-3        # relative spread allowed over them
 
@@ -300,7 +305,14 @@ class CycleSolver:
         tau_mix = TAU_MIX_REV * (60.0 / 1800.0) * (1800.0 / max(rpm, 1.0)) ** 0.55
         egr_target = max(0.0, min(1.0, egr_cmd)) * spec.air.egr_max_fraction
         A_egr_max = 4.5e-3 * (g.displacement / 12.7e-3)
-        A_egr = 0.25 * A_egr_max if egr_target > 0 else 0.0
+        # FINDING-013 item 2: the valve used to start 25 % open for ANY
+        # command and was trimmed in real time, so a 9-cycle solve delivered
+        # 2-3x its target EGR at part load. Converged openings measured over
+        # 12 part-load points run 0.03-0.11 of full area -- 0.07-0.24 of the
+        # command, median 0.14 (one outlier 0.65) -- so start there.
+        egr_cmd_c = max(0.0, min(1.0, egr_cmd))
+        A_egr = (min(1.0, max(EGR_VALVE_MIN_START, EGR_VALVE_START_PER_CMD * egr_cmd_c))
+                 * A_egr_max if egr_target > 0 else 0.0)
         bt_eff = None
         if boost_target:
             bt_eff = boost_target * (1.0 + 0.42 * (egr_target /

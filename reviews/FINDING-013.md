@@ -493,3 +493,69 @@ Re-measured at the top of the session-4 fix stack (#30, physics build
 `9dc8f30ea5ad`, after the ignition and cam fixes): `crdi15` −5.8%,
 `crdi_1p5` −8.3%, `hd_i6` −3.3%, `ld_i4` −3.8%, `single` 0.0%; governed end
 unchanged. The page's table carries this build.
+
+---
+
+## Item 2 applied (session 5): the EGR valve starts near its steady state
+
+Owner's decision: start from a target estimate. The valve used to start 25 %
+open for any command and trim in real time; at 9 cycles it never got there.
+
+**Measured first:** the converged valve opening is *not* a fixed fraction of
+full area and not a clean fraction of the command either. Converged
+openings over 12 part-load points on four presets run 0.03–0.34 of full area,
+0.069–0.647 × the command, median 0.14 (one outlier, `ld_i4` 2100/0.5, at
+0.647). A flow-based estimate would need ṁ_air and the valve ΔP before the
+first cycle has run; the median ratio is what the data supports. So
+`cycle.py` starts at `0.14 × command` of full area (floor 0.005), constants
+`EGR_VALVE_START_PER_CMD` / `EGR_VALVE_MIN_START`.
+
+Fast path (fresh engine, n_cycles 9) against converged solves at the same
+fuel (`out/egr_fast.py`, not committed; per-point converged fuel limit):
+
+| point | target | EGR old | EGR new | converged | torque err old | new |
+|---|---|---|---|---|---|---|
+| `crdi15` 1800/0.6 | 9.20% | 16.11% | 10.55% | 9.08% | −12.10% | −3.25% |
+| `crdi15` 2100/0.75 | 4.71% | 12.77% | 5.90% | 4.56% | −12.14% | −4.52% |
+| `crdi15` 3350/0.5 | 8.87% | 25.68% | 4.20% | 8.86% | −13.04% | +6.02% |
+| `crdi15` 4000/0.25 | 10.10% | 29.76% | 15.38% | 10.11% | −0.99% | **−38.81%** |
+| `crdi_1p5` 2100/0.5 | 11.49% | 11.90% | 4.82% | 11.69% | −18.16% | +0.45% |
+| `crdi_1p5` 2700/0.5 | 10.44% | 16.21% | 2.78% | 10.37% | −30.53% | +3.09% |
+| `crdi_1p5` 3350/0.25 | 13.12% | 27.93% | 13.37% | 13.13% | −43.84% | −23.90% |
+| `ld_i4` 2100/0.5 | 11.49% | 10.63% | 7.02% | 10.55% | −2.91% | +2.95% |
+| `ld_i4` 3350/0.25 | 13.12% | 19.20% | 14.15% | 13.14% | −0.08% | +0.06% |
+| `hd_i6` 1300/0.5 | 10.51% | 12.77% | 10.48% | 11.18% | −4.33% | −1.13% |
+| `hd_i6` 1550/0.25 | 13.19% | 15.96% | 13.55% | 13.53% | −1.59% | −0.66% |
+| `crdi15` 2500/0.3 | 15.11% | 25.30% | 19.21% | 15.07% | +6.03% | +4.68% |
+
+- Delivered EGR vs converged: mean absolute error **7.75 → 3.07 points**.
+- Torque vs converged: RMS **17.59% → 13.50%**, worst −43.84% → −38.81%.
+- **One point got much worse:** `crdi15` 4000/0.25, −0.99% → −38.81%. Per-cycle
+  means show why, and it is not the EGR valve: with less exhaust bled into
+  EGR, more reaches the turbine while the vanes sit shut on their 0.32 clamp
+  (biased shut whenever EGR is demanded). Boost overshoots to 2.60 bar at
+  load 0.25 (old 1.92), the back pressure raises pumping work, and net IMEP
+  falls 3.86 → 2.77 bar with gross work nearly equal (196 vs 190 J). The old
+  −0.99% there was two errors cancelling: an over-open EGR valve relieving
+  an unconverged VGT loop. That loop is item 3, deferred to Phase 3 with the
+  limit cycle.
+
+At the golden point (`crdi15` 1800/0.6, fast-mode fuel limit 42.539 mg)
+against a converged solve at the same fuel: torque 111.71 → 122.63
+(converged 125.28, error −10.8% → −2.1%), p_max 104.8 → 130.0 bar (144.2),
+delivered EGR 16.64% → 9.96% (9.08%).
+
+Full load is untouched (EGR is off at load 1, and the limiter calibrates at
+`load_est = 1`): `crdi15` 3000/1.0 and `hd_i6` 1700/1.0 are bit-identical, so
+the dyno pull and its accuracy table do not move.
+
+Test: the golden check now also requires delivered EGR within 25 % of target
+at `crdi15` 1800/0.6. Mutation: restoring the 25 % start fails it (16.64% vs
+9.20%) along with the three golden values; unmutated baseline 37 passed, 0
+failed, 2 known.
+
+A measurement slip, corrected before any number above was used: my first
+run of the comparison set the "old" constants inside reused pool workers, so
+later "new" and converged jobs in the same worker ran with the old start (8
+of 12 rows showed identical old and new). The table above is the rerun with
+every job setting its own constants, one task per worker.
