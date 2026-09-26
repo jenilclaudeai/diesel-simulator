@@ -761,6 +761,36 @@ def test_seating_on_ramp_is_ramp_speed():
           ramp_speed * (1.0 + 2.2 * 2.0), 0.01)
 
 
+def test_pressure_and_temperature_limits():
+    """FINDING-010 / known bug #2: the fuel limiter had no peak-pressure or
+    exhaust-temperature bound. With each limit set below hd_i6's full-load
+    point at 1700 rpm (179 bar, 895 K), full demand must come back within
+    2% of it (the limit is found at the calibration's 8 cycles, judged at
+    9) with less torque; and limits that do not bind must leave a solve
+    bit-identical (the check solve restores gas and turbo state)."""
+    free = DieselEngine(preset="hd_i6")
+    free.spec.p_max_limit = free.spec.T_exh_limit = 0.0
+    ref = free.operating_point(1700.0, load=1.0, n_cycles=9)
+    for field, value, attr, scale, unit in (("p_max_limit", 160e5, "p_max", 1e-5, "bar"),
+                                            ("T_exh_limit", 850.0, "T_exh", 1.0, "K")):
+        e = DieselEngine(preset="hd_i6")
+        e.spec.p_max_limit = e.spec.T_exh_limit = 0.0
+        setattr(e.spec, field, value)
+        op = e.operating_point(1700.0, load=1.0, n_cycles=9)
+        got, lim = getattr(op, attr) * scale, value * scale
+        check(f"{field} bounds full demand (hd_i6 1700 rpm)",
+              1.0 if got <= 1.02 * lim and op.torque < ref.torque else 0.0, 1.0, 0.0,
+              f"{attr} {getattr(ref, attr) * scale:.1f} -> {got:.1f} {unit} (limit {lim:.0f}), "
+              f"torque {ref.torque:.0f} -> {op.torque:.0f} N.m, "
+              f"reason {e.pressure_temperature_limit(1700.0, e.fuel_limit_raw(1700.0))[1]}")
+    on = DieselEngine(preset="crdi15").operating_point(1800.0, load=0.6, n_cycles=9).torque
+    off_eng = DieselEngine(preset="crdi15")
+    off_eng.spec.p_max_limit = off_eng.spec.T_exh_limit = 0.0
+    off = off_eng.operating_point(1800.0, load=0.6, n_cycles=9).torque
+    check("limits that do not bind leave the solve bit-identical (crdi15 1800/0.6)",
+          on, off, 1e-12)
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -789,7 +819,8 @@ def main():
                test_cell_friction_from_trace,
                test_cold_solve_is_path_independent,
                test_cam_lift_is_continuous,
-               test_seating_on_ramp_is_ramp_speed):
+               test_seating_on_ramp_is_ramp_speed,
+               test_pressure_and_temperature_limits):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001
