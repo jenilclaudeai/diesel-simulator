@@ -560,3 +560,8 @@ run of the comparison set the "old" constants inside reused pool workers, so
 later "new" and converged jobs in the same worker ran with the old start (8
 of 12 rows showed identical old and new). The table above is the rerun with
 every job setting its own constants, one task per worker.
+
+Re-measured at the top of the session-5 stack (physics build `0cc90542b137`,
+after #40–#45): `crdi15` −5.84%, `crdi_1p5` −8.48%, `hd_i6` −3.35%,
+`ld_i4` −3.74%, `single` 0.00%. Governed end: 1.8 / 23.9 / 14.2 / 5.1 / 0.0
+N·m. The page's table carries this build (REVIEW-004).

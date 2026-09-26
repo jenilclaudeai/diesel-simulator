@@ -114,14 +114,21 @@ Exit criteria, checked:
 
 ## Phase 2 — Solver port and fixture harness
 
-- `SolverPort` interface — one seam, Pyodide behind it (ADR-001)
-- Pyodide in a Web Worker; **verify scipy submodule availability first**
-- Grid build with real progress reporting, cached in IndexedDB, keyed by
-  preset **and** spec hash
-- Golden-fixture generator (ADR-004) + CI
+- [x] `SolverPort` interface — one seam, Pyodide behind it (ADR-001, ADR-010; #11)
+- [x] Pyodide in a Web Worker; **verify scipy submodule availability first**
+  (not needed: the solver is numpy-only, and scipy is never imported; #9)
+- [x] Grid build with real progress reporting, cached in IndexedDB, keyed by
+  preset **and** spec hash (cache #12; the `/grid` page with per-cell
+  progress, #48)
+- [x] Golden-fixture generator (ADR-004) + CI (#47: kinematics and thermo
+  ported, the friction fixture ready for Phase 3)
 
 **Exit criteria:** a grid built in-browser matches one built by native Python
 within tolerance.
+
+- [x] Met (REVIEW-004): `crdi15`'s full 8 × 6 grid built in headless Chrome
+  through the app's worker matches native in 816 of 816 values, worst 8.7e-7
+  against a 1e-5 tolerance. CI job `web-grid-e2e` checks it on every PR.
 
 ---
 
