@@ -5,6 +5,9 @@
 import { clip, type LiveSpec, type Perf } from "./common.js";
 import { Driveline, Gearbox, type ManualClutch } from "./driveline.js";
 import type { PerfGrid } from "./grid.js";
+import { Adr011Grid } from "./adr011.js";
+import { FrictionModel, type EngineView, type FrictionSpec, type WearState } from "../friction.js";
+import { Oil } from "../lubrication.js";
 import { finishVehicle, vehicleFor, type Transmission, type Vehicle } from "./vehicle.js";
 
 export class LiveEngine {
@@ -52,8 +55,23 @@ export class LiveEngine {
   tank_L: number;
   out_of_fuel = false;
   perf: Perf;
+  // ADR-011: friction live, from the cells' pressure traces
+  adr011: boolean;
+  T_oil: number;
+  T_fric = 0.0;     // mean friction torque [N.m], held between evaluations
+  fmep_live = 0.0;
+  P_mech = 0.0;     // friction heat into the oil [W]
+  _frame = 0;
+  private fric?: FrictionModel;
+  private fspec?: FrictionSpec;       // private copy: its walls follow the live coolant
+  private oil?: Oil;
+  private wear?: WearState;
+  private th0?: { liner_T_top: number; liner_T_bot: number };
 
-  constructor(readonly g: PerfGrid, preset = "hd_i6", trans: Transmission = "dct") {
+  /** frames between live friction evaluations (10 Hz at 60 Hz) */
+  static readonly FRICTION_EVERY = 6;
+
+  constructor(readonly g: PerfGrid, preset = "hd_i6", trans: Transmission = "dct", view?: EngineView) {
     this.spec = g.spec;
     this.veh = finishVehicle(vehicleFor(preset, trans));
     this.dl = new Driveline(this.spec, this.veh);
@@ -68,6 +86,47 @@ export class LiveEngine {
       this.dl.gb.neutral = true;
       this.dl.gb.auto = false;
     }
+    this.adr011 = g instanceof Adr011Grid;
+    this.T_oil = this.spec.thermal.ambient_T; // cold start, like the coolant
+    if (this.adr011) {
+      if (!view) throw new Error("an ADR-011 grid needs the engine view (spec, cams, oil, wear) for live friction");
+      this.fspec = structuredClone(view.spec);
+      this.th0 = { liner_T_top: view.spec.thermal.liner_T_top, liner_T_bot: view.spec.thermal.liner_T_bot };
+      this.fric = new FrictionModel(this.fspec, view.cams);
+      this.oil = new Oil(this.fspec.oil, { ...view.oil });
+      this.wear = { ...view.wear };
+      this.update_friction();
+    }
+  }
+
+  /**
+   * ADR-011: friction at the live oil and coolant state, from the pressure
+   * trace blended at the live operating point (live.py _update_friction).
+   */
+  update_friction(): void {
+    const g = this.g as Adr011Grid, fs = this.fspec!;
+    // _apply_thermal_state: the walls follow the coolant (only the liner is read here)
+    const f = this.T_coolant - 361.0;
+    fs.thermal.liner_T_top = this.th0!.liner_T_top + 0.88 * f;
+    fs.thermal.liner_T_bot = this.th0!.liner_T_bot + 0.95 * f;
+    this.oil!.cond.T_oil = this.T_oil;
+    const rpm = Math.max(this.rpm, 0.25 * this.spec.idle_rpm);
+    const p = g.blendPerfT(rpm, this.load_eff, this.T_coolant);
+    const r = this.fric!.evaluate(g.grid_deg, g.blendPCyl(rpm, this.load_eff, this.T_coolant), rpm, this.oil!,
+      this.wear!, 1.05e5, p["fuel_mg"]!, p["p_rail"]!);
+    this.fmep_live = r["fmep"]!;
+    this.P_mech = r["P_mech"]!;
+    this.T_fric = this.fmep_live * g.k_torque;
+  }
+
+  /** Grid performance at the live state; torque is BRAKE torque either way. */
+  private perfAt(rpm: number, load: number): Perf {
+    if (this.adr011) {
+      const p = (this.g as Adr011Grid).blendPerfT(rpm, load, this.T_coolant);
+      p["torque"] = p["torque_ind"]! - this.T_fric;
+      return p;
+    }
+    return this.g.blendPerf(rpm, load);
   }
 
   /** a manual engine stalls when the clutch drags it below this fraction of idle */
@@ -157,7 +216,16 @@ export class LiveEngine {
     const C = t.coolant_volume * rho_cool * cp_cool + t.metal_mass * cp_metal;
     const P_fuel = (this.fuel_kg_h / 3600.0) * 42.7e6;
     const q_wall = clip(this.perf["q_wall"] ?? 0.2, 0.05, 0.45);
-    const Q_in = (q_wall + 0.02) * P_fuel;
+    let Q_in = (q_wall + 0.02) * P_fuel;
+    if (this.adr011) {
+      // ADR-011: an oil node, as engine.py's two-node warm-up
+      const UA_o = this.fspec!.oil.cooler_UA * (0.35 + 0.65 * Math.min(1.0, this.rpm / 1800.0));
+      const Q_oc = UA_o * (this.T_oil - this.T_coolant);
+      Q_in += Q_oc;
+      const m_oil = this.fspec!.oil.sump_volume * this.oil!.density(this.T_oil);
+      this.T_oil += ((this.P_mech + 0.055 * P_fuel - Q_oc) * dt) / (m_oil * 1900.0);
+      this.T_oil = Math.min(Math.max(this.T_oil, 240.0), 430.0);
+    }
     this.T_coolant += ((Q_in - Q_out) * dt) / C;
     this.T_coolant = Math.min(Math.max(this.T_coolant, 240.0), 420.0);
     this.protect();
@@ -239,6 +307,10 @@ export class LiveEngine {
       this.throttle = 0.0;
       this.cruise_on = false;
     }
+    if (this.adr011) {
+      if (this._frame % LiveEngine.FRICTION_EVERY === 0) this.update_friction();
+      this._frame += 1;
+    }
     for (let k = 0; k < n_sub; k++) this.sub(dt / n_sub);
     this.totals(dt);
     this.thermal(dt);
@@ -264,7 +336,7 @@ export class LiveEngine {
     }
 
     // ---- turbo lag ----
-    const target = g.blendPerf(rpm, demand);
+    const target = this.perfAt(rpm, demand);
     const tau = target["boost"]! > this.boost ? 0.55 : 0.32;
     this.boost += (target["boost"]! - this.boost) * Math.min(1.0, h / tau);
     this.turbo_rpm += (target["turbo_rpm"]! - this.turbo_rpm) * Math.min(1.0, h / tau);
@@ -277,17 +349,17 @@ export class LiveEngine {
     }
     this.load_eff = demand * (0.35 + 0.65 * boost_frac);
 
-    const p = g.blendPerf(rpm, this.load_eff);
+    const p = this.perfAt(rpm, this.load_eff);
     this.perf = p;
     this.torque = p["torque"]!;
     this.fuel_kg_h = p["fuel_kg_h"]!;
     if (this.engine_stopped) {
-      this.torque = Math.min(this.torque, g.blendPerf(rpm, 0.0)["torque"]!);
+      this.torque = Math.min(this.torque, this.perfAt(rpm, 0.0)["torque"]!);
       this.fuel_kg_h = 0.0;
     }
     if (this.stalled) {
       // no fuel, and friction fades to nothing as it stops
-      this.torque = Math.min(0.0, g.blendPerf(rpm, 0.0)["torque"]!) * Math.min(1.0, rpm / s.idle_rpm);
+      this.torque = Math.min(0.0, this.perfAt(rpm, 0.0)["torque"]!) * Math.min(1.0, rpm / s.idle_rpm);
       this.fuel_kg_h = 0.0;
     }
     if (this.engine_brake && this.throttle < 0.02) this.torque -= 0.3 * s.rated_rpm * 0.55;

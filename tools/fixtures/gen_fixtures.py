@@ -152,21 +152,63 @@ def thermo_outputs(inp):
 
 
 # ------------------------------------------------------------------ friction
-FRICTION_KEYS = ("fmep", "P_friction", "P_rings", "P_skirt", "P_mains", "P_rods", "P_valvetrain",
-                 "Pb_valvetrain", "h_ring_mid", "v_seating")
+FRICTION_KEYS = ("fmep", "P_friction", "P_mech", "P_rings", "P_skirt", "P_mains", "P_rods", "P_pin",
+                 "P_valvetrain", "P_windage", "P_accessories", "P_oilpump", "P_fuelpump",
+                 "Pb_rings", "Pb_skirt", "Pb_rods", "Pb_mains", "Pb_pin", "Pb_valvetrain",
+                 "h_ring", "h_rod", "h_main", "h_skirt", "h_ring_mid", "lambda_ring",
+                 "gallery_pressure", "v_seating")
+
+
+def friction_engine_view(eng):
+    """Everything FrictionModel.evaluate reads, as plain data: the spec (with
+    its derived geometry and the wall temperatures the engine's coolant has
+    set), the oil condition, the wear state and both cams. The TypeScript
+    port takes exactly this."""
+    import dataclasses
+    spec = eng.spec
+    d = json.loads(json.dumps(dataclasses.asdict(spec), default=float))
+    g = spec.geom
+    d["geom"].update(crank_radius=g.crank_radius, piston_area=g.piston_area, displacement=g.displacement,
+                     clearance_volume=g.clearance_volume,
+                     phase_deg=[g.phase_deg(i) for i in range(g.n_cyl)])
+    cams = {}
+    for name, cam in (("intake", eng.cycle.cam_int), ("exhaust", eng.cycle.cam_exh)):
+        cams[name] = dict(open_deg=cam.open_deg, close_deg=cam.close_deg, lift_max=cam.lift_max,
+                          lash=cam.lash, ramp=cam.ramp)
+    return {"spec": d, "cams": cams,
+            "oil": {k: float(v) for k, v in dataclasses.asdict(eng.oil.cond).items()},
+            "wear": {k: float(v) for k, v in dataclasses.asdict(eng.wear.state).items()}}
+
+
+FRICTION_CASES = (("crdi15", 1800.0, 0.6, 373.0, None), ("crdi15", 1800.0, 0.6, 273.0, None),
+                  ("hd_i6", 1300.0, 1.0, 373.0, None), ("hd_i6", 1300.0, 1.0, 273.0, None),
+                  ("crdi15", 1800.0, 0.6, 300.0, 300.0),           # cold coolant moves the walls
+                  ("single", 2000.0, 0.8, 373.0, None))            # flat tappet
+
+
+def _friction_engine(preset, T_oil, T_coolant):
+    eng = DieselEngine(preset=preset)
+    eng.oil.cond.T_oil = T_oil
+    if T_coolant is not None:
+        eng.T_coolant = T_coolant
+        eng._apply_thermal_state()
+    return eng
 
 
 def friction_inputs():
     from dieselsim.acoustics import EngineSound
     from dieselsim.grid import solve_cell
-    cases = []
-    for preset, rpm, load in (("crdi15", 1800.0, 0.6), ("hd_i6", 1300.0, 1.0)):
+    cases, solved = [], {}
+    for preset, rpm, load, T_oil, T_cool in FRICTION_CASES:
         spec = DieselEngine(preset=preset).spec
-        src, perf = solve_cell(spec, rpm, load)
-        grid = EngineSound(spec).grid
-        for T_oil in (373.0, 273.0):
-            cases.append(dict(preset=preset, rpm=rpm, T_oil=T_oil, fuel_mg=float(perf["fuel_mg"]),
-                              p_rail=float(perf["p_rail"]), grid_deg=lst(grid), p_cyl=lst(src["p_cyl"])))
+        if (preset, rpm, load) not in solved:
+            src, perf = solve_cell(spec, rpm, load)
+            solved[(preset, rpm, load)] = (src, perf, EngineSound(spec).grid)
+        src, perf, grid = solved[(preset, rpm, load)]
+        eng = _friction_engine(preset, T_oil, T_cool)
+        cases.append(dict(preset=preset, rpm=rpm, T_oil=T_oil, T_coolant=T_cool, fuel_mg=float(perf["fuel_mg"]),
+                          p_rail=float(perf["p_rail"]), grid_deg=lst(grid), p_cyl=lst(src["p_cyl"]),
+                          engine=friction_engine_view(eng)))
     return dict(cases=cases)
 
 
@@ -174,8 +216,7 @@ def friction_outputs(inp):
     from dieselsim.grid import cell_friction
     out = []
     for c in inp["cases"]:
-        eng = DieselEngine(preset=c["preset"])
-        eng.oil.cond.T_oil = c["T_oil"]
+        eng = _friction_engine(c["preset"], c["T_oil"], c.get("T_coolant"))
         r = cell_friction(eng, c["rpm"], c["p_cyl"], c["grid_deg"], c["fuel_mg"], c["p_rail"])
         out.append({k: float(r[k]) for k in FRICTION_KEYS if k in r})
     return out
@@ -191,6 +232,68 @@ def _grid_cell(task):
     key, rpm, load = task
     spec = DieselEngine(preset=key).spec
     return solve_cell(spec, rpm, load)[1]
+
+
+def _row_limit(task):
+    key, rpm = task
+    return DieselEngine(preset=key).fuel_limit(rpm)
+
+
+def _adr011_cell(task):
+    """One ADR-011 cell: perf and the cylinder-1 trace, at a coolant
+    temperature, on the row's shared full-load fuel."""
+    from dieselsim.grid import solve_cell
+    key, rpm, load, flim, T_cool = task
+    spec = DieselEngine(preset=key).spec
+    src, perf = solve_cell(spec, rpm, load, fuel_limit=flim, T_coolant=T_cool)
+    return {k: float(v) for k, v in perf.items()}, np.asarray(src["p_cyl"], dtype="<f4").tobytes()
+
+
+LIVE_GRID = os.path.join(OUT, "live_grid.json")
+ADR011_T_COLD = 273.0
+
+
+def live_grid_adr011(key="crdi15"):
+    """The ADR-011 grid for the live fixture: warm and cold cells with their
+    pressure traces (base64 float32, as grids store them). Built once into
+    fixtures/live_grid.json and reused; --regrid rebuilds it."""
+    import base64
+    from multiprocessing import get_context
+    from dieselsim.acoustics import EngineSound
+    if os.path.exists(LIVE_GRID) and "--regrid" not in sys.argv:
+        with open(LIVE_GRID) as fh:
+            return json.load(fh)
+    spec = DieselEngine(preset=key).spec
+    rpms = [float(x) for x in np.linspace(spec.idle_rpm, spec.max_rpm, 8)]
+    loads = [float(x) for x in np.linspace(0.0, 1.0, 6)]
+    with get_context("spawn").Pool(min(6, os.cpu_count() or 1)) as pool:
+        flims = pool.map(_row_limit, [(key, r) for r in rpms])
+        out = {}
+        for tag, T in (("warm", None), ("cold", ADR011_T_COLD)):
+            cells = pool.map(_adr011_cell, [(key, r, l, f, T) for r, f in zip(rpms, flims) for l in loads])
+            out[tag] = cells
+    shape = lambda cells, k: [[cells[i * len(loads) + j][k] for j in range(len(loads))]  # noqa: E731
+                              for i in range(len(rpms))]
+    b64 = lambda cells: [[base64.b64encode(c).decode() for c in row] for row in shape(cells, 1)]  # noqa: E731
+    grid = {"preset": key, "rpms": rpms, "loads": loads, "fuel_limits": flims,
+            "T_warm": spec.thermal.coolant_T, "T_cold": ADR011_T_COLD,
+            "grid_deg": lst(EngineSound(spec).grid),
+            "perf": shape(out["warm"], 0), "perf_cold": shape(out["cold"], 0),
+            "p_cyl_f32": b64(out["warm"]), "p_cyl_cold_f32": b64(out["cold"]),
+            "physics_hash": source_hash()}
+    with open(LIVE_GRID, "w") as fh:
+        json.dump(grid, fh, separators=(",", ":"))
+        fh.write("\n")
+    return grid
+
+
+def adr011_grid_object(gj):
+    import base64
+    from dieselsim.live import Adr011Grid
+    spec = DieselEngine(preset=gj["preset"]).spec
+    dec = lambda rows: [[np.frombuffer(base64.b64decode(c), dtype="<f4") for c in row] for row in rows]  # noqa: E731
+    return Adr011Grid(spec, gj["rpms"], gj["loads"], gj["perf"], dec(gj["p_cyl_f32"]), gj["grid_deg"],
+                      gj["perf_cold"], dec(gj["p_cyl_cold_f32"]), gj["T_warm"], gj["T_cold"])
 
 
 def live_state(live):
@@ -278,13 +381,16 @@ def live_inputs():
     spec_json = json.loads(json.dumps(dataclasses.asdict(spec), default=float))
     # properties, not fields, so asdict() leaves them out; the loop reads them
     spec_json["geom"]["displacement"] = spec.geom.displacement
-    return {"preset": key, "spec": spec_json,
+    return {"preset": key, "spec": spec_json, "engine_view": friction_engine_view(DieselEngine(preset=key)),
             "grid": {"rpms": rpms, "loads": loads, "perf": perf},
             "drives": [{"name": "tc", "trans": "tc", "script": live_script(), "init": {}},
                        {"name": "dct", "trans": "dct", "script": live_script(), "init": {}},
                        {"name": "dct_hot", "trans": "dct", "script": live_script_hot(),
                         "init": {"T_coolant": 368.0}},
                        {"name": "manual", "trans": "manual", "script": live_script_manual(), "init": {}},
+                       {"name": "adr011_cold", "trans": "tc", "grid": "adr011", "script": live_script(), "init": {}},
+                       {"name": "adr011_warm", "trans": "dct", "grid": "adr011", "script": live_script(),
+                        "init": {"T_coolant": 361.0, "T_oil": 373.0}},
                        {"name": "tc_kickdown", "trans": "tc", "script": live_script_kickdown(),
                         "init": {"dl.v": 20.0, "dl.gb.gear": 5, "dl.gb.gear_from": 5,
                                  "dl.w_in": 20.0 / 0.315 * 0.67 * 4.30, "rpm": 20.0 / 0.315 * 0.67 * 4.30 * 60.0 / (2.0 * math.pi)}}],
@@ -295,13 +401,17 @@ def live_run(inp, drv):
     from dieselsim.live import LiveEngine, PerfGrid, handle_key, pedal_return
     spec = DieselEngine(preset=inp["preset"]).spec
     g = inp["grid"]
-    live = LiveEngine(PerfGrid(spec, g["rpms"], g["loads"], g["perf"]), inp["preset"], trans=drv["trans"])
+    grid = (adr011_grid_object(live_grid_adr011(inp["preset"])) if drv.get("grid") == "adr011"
+            else PerfGrid(spec, g["rpms"], g["loads"], g["perf"]))
+    live = LiveEngine(grid, inp["preset"], trans=drv["trans"])
     for k, v in drv["init"].items():      # dotted paths: "dl.gb.gear"
         *path, last = k.split(".")
         obj = live
         for p in path:
             obj = getattr(obj, p)
         setattr(obj, last, v)
+    if live.adr011 and drv["init"]:
+        live._update_friction()           # at the initial state just set
     sc = drv["script"]
     keys = {k: c for k, c in sc["keys"]}
     grade = {k: v for k, v in sc["grade"]}
@@ -339,7 +449,7 @@ def live_run(inp, drv):
             trace.append([n, float(live.rpm), float(live.dl.v), float(live.T_coolant), float(live.trip_L)])
     final = {k: float(getattr(live, k)) for k in ("rpm", "odo_m", "trip_m", "fuel_L", "trip_L", "T_coolant",
                                                   "boost", "turbo_rpm", "tank_L", "inst_kmpl", "fan_frac",
-                                                  "fan_power", "derate")}
+                                                  "fan_power", "derate", "T_oil", "fmep_live")}
     final["v"] = float(live.dl.v)
     veh = {k: v for k, v in vars(live.dl.veh).items()}
     return {"veh": veh, "snapshots": snaps, "events": events, "hints": hints, "trace": trace, "final": final}

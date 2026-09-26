@@ -14,15 +14,17 @@ import { fileURLToPath } from "node:url";
 import type { LiveSpec, Perf } from "../src/live/common.js";
 import { handleKey, LiveEngine, pedalReturn, type LiveState } from "../src/live/engine.js";
 import { PerfGrid } from "../src/live/grid.js";
+import { Adr011Grid, type Adr011GridData } from "../src/live/adr011.js";
+import type { EngineView } from "../src/friction.js";
 import { finishVehicle, vehicleFor, type Transmission } from "../src/live/vehicle.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fx = JSON.parse(readFileSync(path.resolve(here, "..", "..", "fixtures", "live.json"), "utf8")) as {
   meta: { physics_hash: string };
   inputs: {
-    preset: string; spec: LiveSpec; sample_every: number;
+    preset: string; spec: LiveSpec; sample_every: number; engine_view: EngineView;
     grid: { rpms: number[]; loads: number[]; perf: Perf[][] };
-    drives: { name: string; trans: Transmission; script: Script; init: Record<string, number> }[];
+    drives: { name: string; trans: Transmission; script: Script; init: Record<string, number>; grid?: string }[];
   };
   outputs: Record<string, {
     veh: Record<string, unknown>;
@@ -47,7 +49,11 @@ const check = (name: string, ok: boolean, note = "") => {
 
 const PER_STEP = 1e-12, TERMINAL = 1e-6;
 const grid = new PerfGrid(fx.inputs.spec, fx.inputs.grid.rpms, fx.inputs.grid.loads, fx.inputs.grid.perf);
-const fresh = (tr: Transmission) => new LiveEngine(grid, fx.inputs.preset, tr);
+const adrGrid = new Adr011Grid(fx.inputs.spec,
+  JSON.parse(readFileSync(path.resolve(here, "..", "..", "fixtures", "live_grid.json"), "utf8")) as Adr011GridData);
+const fresh = (tr: Transmission, g?: string) => g === "adr011"
+  ? new LiveEngine(adrGrid, fx.inputs.preset, tr, fx.inputs.engine_view)
+  : new LiveEngine(grid, fx.inputs.preset, tr);
 
 /** Worst relative difference between two states; Infinity on a structural or exact mismatch. */
 function diffState(got: LiveState, want: LiveState): { worst: number; where: string } {
@@ -77,13 +83,14 @@ function diffState(got: LiveState, want: LiveState): { worst: number; where: str
 
 /** The fixture generator's live_run(), in TypeScript. */
 function drive(d: (typeof fx.inputs.drives)[number]) {
-  const live = fresh(d.trans), sc = d.script;
+  const live = fresh(d.trans, d.grid), sc = d.script;
   for (const [k, v] of Object.entries(d.init)) {  // dotted paths: "dl.gb.gear"
     const path = k.split("."), last = path.pop()!;
     let obj = live as unknown as Record<string, unknown>;
     for (const p of path) obj = obj[p] as Record<string, unknown>;
     obj[last] = v;
   }
+  if (live.adr011 && Object.keys(d.init).length) live.update_friction(); // at the initial state just set
   const keys = new Map(sc.keys), grade = new Map(sc.grade);
   const events: number[][] = [], hints: [number, string][] = [];
   let prev = "", prevHint = "";
@@ -118,7 +125,7 @@ for (const drv of fx.inputs.drives) {
   // ---- per-step ----
   let worst = 0, where = "";
   for (const s of out.snapshots) {
-    const e = fresh(drv.trans);
+    const e = fresh(drv.trans, drv.grid);
     e.setState(s.before);
     e.step(drv.script.dt);
     const d = diffState(e.getState(), s.after);
@@ -139,6 +146,7 @@ for (const drv of fx.inputs.drives) {
     rpm: live.rpm, odo_m: live.odo_m, trip_m: live.trip_m, fuel_L: live.fuel_L, trip_L: live.trip_L,
     T_coolant: live.T_coolant, boost: live.boost, turbo_rpm: live.turbo_rpm, tank_L: live.tank_L,
     inst_kmpl: live.inst_kmpl, v: live.dl.v, fan_frac: live.fan_frac, fan_power: live.fan_power, derate: live.derate,
+    T_oil: live.T_oil, fmep_live: live.fmep_live,
   };
   let tw = 0, tk = "";
   for (const [k, want] of Object.entries(out.final)) {

@@ -112,7 +112,7 @@ def cell_friction(eng, rpm, p_cyl, grid_deg, fuel_mg, p_rail):
 
 
 def solve_cell(spec, rpm, load, n_cycles=GRID_CYCLES, fs=44100,
-               converged=False, fuel_limit=None):
+               converged=False, fuel_limit=None, T_coolant=None):
     """
     Solve one grid cell on a FRESH engine and return (sources, perf).
 
@@ -134,8 +134,13 @@ def solve_cell(spec, rpm, load, n_cycles=GRID_CYCLES, fs=44100,
     of the oscillation.
     fuel_limit: the calibrated full-load fuel at this rpm, if the builder has
     already found it (shared across a row, see seed_fuel_limit).
+    T_coolant: solve with the walls at this coolant temperature (ADR-011's
+    cold grid); None keeps the spec's own (warm) walls.
     """
     eng = DieselEngine(spec=spec)
+    if T_coolant is not None:
+        eng.T_coolant = float(T_coolant)
+        eng._apply_thermal_state()
     eng.converged_mode = bool(converged)
     if fuel_limit is not None:
         eng.seed_fuel_limit(float(rpm), fuel_limit)

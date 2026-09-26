@@ -753,3 +753,30 @@ second timescales, so friction need not refresh every frame.
 Next (Phase 3): port `FrictionModel.evaluate` to TypeScript with ADR-004
 fixtures generated from `cell_friction`, and wire it to the loop's live oil
 and coolant temperatures.
+
+### Addendum (2026-09-26, Phase 3): step 2 done -- friction live in the real-time loop
+
+- `web/physics/src/friction.ts` and `lubrication.ts` port `FrictionModel.evaluate`.
+  Against `fixtures/friction.json` they agree to **3.5e-13** (6 cases × 27
+  quantities: warm and cold oil, a cold-coolant case, and the flat-tappet
+  `single`), at **8.2 ms** per 1,440-sample evaluation in Node.
+- `dieselsim/live.py` `Adr011Grid` holds warm (spec coolant, 361 K) and cold
+  (273 K) cells on a shared per-row fuel limit, each with its cylinder-1
+  trace. `grid.solve_cell` takes `T_coolant` for the cold cells. Indicated
+  torque is each cell's brake torque plus the friction torque it was solved
+  with, and it is interpolated linearly on coolant temperature.
+- `LiveEngine` evaluates friction every 6th frame (10 Hz) from the blended
+  trace at the live oil temperature, with walls set by the live coolant (the
+  same path as `grid.cell_friction`). It adds engine.py's oil node to its
+  cooling stack. Grids without traces keep the old behaviour; play.py still
+  uses them.
+- Measured:
+  - At the warm state on a cell, live friction from the float32 trace is the
+    cell's own to within 0.02–0.09% (the traces are stored float32), and
+    brake torque matches to 0.01 N·m.
+  - A 298 K engine has ×1.74 the friction at 1800 rpm / 0.6.
+  - Over a 60 s drive from cold, the oil warms 298 → 328 K. The cold drive ends
+    slower (63.2 vs 64.8 km/h on the old warm-baked grid), which is bug #7
+    closed in real time.
+- The TypeScript loop matches Python on the two ADR-011 fixture drives:
+  per step 1.0e-14, every event on the same step, final values within 2e-15.

@@ -1024,6 +1024,85 @@ def test_lockup_and_coast_downshifts():
           f"locked {len(locked)} frames, {at_clamp} at the clamp; worst overshoot tc {o_tc:.2f}, dct {o_dct:.2f} m/s^2")
 
 
+def _toy_adr011_grid():
+    """A 2 x 2 ADR-011 grid with synthetic pressure traces (polytropic
+    compression/expansion, a pressure rise that grows with load and falls
+    when cold) and perf built through grid.cell_friction at the engine's
+    default warm state (oil 373 K, coolant 361 K) -- small enough for the
+    suite, faithful enough to test the plumbing."""
+    import numpy as np
+    from dieselsim.grid import cell_friction
+    from dieselsim.kinematics import SliderCrank
+    from dieselsim.live import Adr011Grid
+    spec = DieselEngine(preset="crdi15").spec
+    sc = SliderCrank(spec.geom)
+    deg = np.arange(0.0, 720.0, 0.5)
+    V = sc.volume(np.radians(deg - 360.0))
+    Vmax = float(V.max())
+    def trace(load, cold):
+        p = 1.4e5 * (Vmax / V) ** 1.35
+        burn = np.exp(-((deg - 372.0) / 18.0) ** 2) * (35e5 * load) * (0.94 if cold else 1.0)
+        return np.where((deg > 180) & (deg < 540), p + burn, 1.2e5).astype("<f4")
+    rpms, loads = [spec.idle_rpm, spec.max_rpm], [0.0, 1.0]
+    def cells(cold):
+        perf, traces = [], []
+        for r in rpms:
+            prow, trow = [], []
+            for l in loads:
+                tr = trace(l, cold)
+                fr = cell_friction(DieselEngine(preset="crdi15"), r, tr.astype(float), deg, 30.0 * l, 1.2e8)
+                ind = 30.0 + 190.0 * l - (8.0 if cold else 0.0)
+                k = spec.geom.displacement / (4.0 * np.pi)
+                prow.append(dict(torque=ind - fr["fmep"] * k, fmep=fr["fmep"], fuel_mg=30.0 * l, p_rail=1.2e8,
+                                 boost=1.0 + 1.2 * l, turbo_rpm=9e4, fuel_kg_h=0.3 + 12.0 * l, afr=25.0,
+                                 q_wall=0.2))
+                trow.append(tr)
+            perf.append(prow)
+            traces.append(trow)
+        return perf, traces
+    pw, tw = cells(False)
+    pc, tc = cells(True)
+    return Adr011Grid(spec, rpms, loads, pw, tw, deg, pc, tc, 361.0, 273.0)
+
+
+def test_adr011_live_friction():
+    """ADR-011 in the live loop (Phase 3): friction is evaluated live from
+    the cells' pressure traces at the live oil and coolant state.
+    - at the warm state on a cell, the live friction is the cell's own
+      (the plumbing -- blending, walls, oil, torque conversion -- adds nothing)
+    - cold coolant alone raises it through the walls (x > 1.05), and cold oil
+      on top of that raises it again (x > 1.3 beyond the walls, at 298 K)
+    - the oil node warms the oil while the engine runs
+    - at the cold endpoint the grid's performance is the cold cells'."""
+    from dieselsim.live import LiveEngine
+    g = _toy_adr011_grid()
+    live = LiveEngine(g, "crdi15", trans="tc")
+    live.T_coolant, live.T_oil, live.rpm, live.load_eff = 361.0, 373.0, g.rpms[1], g.loads[1]
+    live._update_friction()
+    own = abs(live.fmep_live / g.perf[1][1]["fmep"] - 1.0)
+    warm = live.T_fric
+    live.T_coolant, live.T_oil = 298.0, 373.0           # cold coolant only: the walls
+    live._update_friction()
+    walls = live.T_fric / warm
+    live.T_coolant, live.T_oil = 298.0, 298.0
+    live._update_friction()
+    ratio = live.T_fric / warm
+    cold_ok = abs(g.blend_perf_T(g.rpms[0], g.loads[1], 273.0)["torque"] / g.perf_cold[0][1]["torque"] - 1.0)
+    run = LiveEngine(g, "crdi15", trans="tc")
+    T0 = run.T_oil
+    for _ in range(1800):
+        run.throttle = 0.6
+        run.step(1 / 60)
+    warmed = run.T_oil - T0
+    oil_extra = ratio / walls                             # what the oil adds beyond the walls
+    ok = own < 1e-9 and walls > 1.05 and oil_extra > 1.3 and warmed > 2.0 and cold_ok < 1e-12
+    check("ADR-011 live friction: own cell exact warm, higher cold, oil warms, cold endpoint",
+          1.0 if ok else 0.0, 1.0, 0.0,
+          f"own-cell diff {own:.1e}; cold coolant only x{walls:.2f}, cold oil on top x{oil_extra:.2f}; "
+          f"oil +{warmed:.1f} K in 30 s; "
+          f"cold endpoint diff {cold_ok:.1e}")
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -1060,7 +1139,8 @@ def main():
                test_source_levels_carry_physics,
                test_lockup_key_by_transmission,
                test_manual_gearbox,
-               test_lockup_and_coast_downshifts):
+               test_lockup_and_coast_downshifts,
+               test_adr011_live_friction):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001

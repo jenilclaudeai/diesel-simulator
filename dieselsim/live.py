@@ -9,6 +9,7 @@ scipy: it is the Python reference the TypeScript port is tested against
 """
 from __future__ import annotations
 
+import copy
 import math
 import threading
 
@@ -46,6 +47,58 @@ class PerfGrid:
              self.perf[i + 1][j], self.perf[i + 1][j + 1])
         return {k: sum(wi * qi[k] for wi, qi in zip(w, q)) for k in q[0]}
 
+
+
+class Adr011Grid(PerfGrid):
+    """
+    ADR-011: the grid the live loop reads when friction is computed live.
+
+    Two sets of cells, solved with the walls at a warm and a cold coolant
+    temperature (the combustion change with coolant is small and linear --
+    REVIEW-002 -- so indicated performance is interpolated linearly between
+    them). Every cell carries its cylinder-1 pressure trace, from which the
+    live loop evaluates friction at the live oil and coolant state
+    (grid.cell_friction). Indicated torque is the cell's brake torque plus
+    the friction torque it was solved with, fmep * Vd / (4 pi).
+    """
+
+    def __init__(self, spec, rpms, loads, perf, p_cyl, grid_deg, perf_cold, p_cyl_cold,
+                 T_warm, T_cold):
+        super().__init__(spec, rpms, loads, perf)
+        f64 = lambda cells: [[np.asarray(c, dtype=float) for c in row] for row in cells]  # noqa: E731
+        self.p_cyl = f64(p_cyl)
+        self.p_cyl_cold = f64(p_cyl_cold)
+        self.grid_deg = np.asarray(grid_deg, dtype=float)
+        self.perf_cold = perf_cold
+        self.T_warm, self.T_cold = float(T_warm), float(T_cold)
+        self.k_torque = spec.geom.displacement / (4.0 * math.pi)   # fmep [Pa] -> N.m
+
+    def cold_weight(self, T_coolant):
+        return float(np.clip((self.T_warm - T_coolant) / (self.T_warm - self.T_cold), 0.0, 1.0))
+
+    def blend_perf_T(self, rpm, load, T_coolant):
+        i, j, fr, fl = self.weights(rpm, load)
+        w = ((1 - fr) * (1 - fl), (1 - fr) * fl, fr * (1 - fl), fr * fl)
+        c = self.cold_weight(T_coolant)
+        qw = (self.perf[i][j], self.perf[i][j + 1], self.perf[i + 1][j], self.perf[i + 1][j + 1])
+        qc = (self.perf_cold[i][j], self.perf_cold[i][j + 1], self.perf_cold[i + 1][j],
+              self.perf_cold[i + 1][j + 1])
+        out = {}
+        for k in qw[0]:
+            warm = sum(wi * qi[k] for wi, qi in zip(w, qw))
+            cold = sum(wi * qi[k] for wi, qi in zip(w, qc))
+            out[k] = (1.0 - c) * warm + c * cold
+        out["torque_ind"] = out["torque"] + out["fmep"] * self.k_torque
+        return out
+
+    def blend_p_cyl(self, rpm, load, T_coolant):
+        i, j, fr, fl = self.weights(rpm, load)
+        w = ((1 - fr) * (1 - fl), (1 - fr) * fl, fr * (1 - fl), fr * fl)
+        c = self.cold_weight(T_coolant)
+        P, Q = self.p_cyl, self.p_cyl_cold
+        warm = w[0] * P[i][j] + w[1] * P[i][j + 1] + w[2] * P[i + 1][j] + w[3] * P[i + 1][j + 1]
+        cold = w[0] * Q[i][j] + w[1] * Q[i][j + 1] + w[2] * Q[i + 1][j] + w[3] * Q[i + 1][j + 1]
+        return (1.0 - c) * warm + c * cold
 
 
 # ==========================================================================
@@ -970,10 +1023,53 @@ class LiveEngine:
             # a manual car is left in neutral; the driver picks a gear
             self.dl.gb.neutral = True
             self.dl.gb.auto = False
+        # ---- ADR-011: friction live, from the cells' pressure traces -------
+        self.adr011 = isinstance(grid, Adr011Grid)
+        self.T_oil = self.spec.thermal.ambient_T     # cold start, like the coolant
+        self.T_fric = 0.0          # mean friction torque [N.m], held between evaluations
+        self.fmep_live = 0.0
+        self.P_mech = 0.0          # friction heat into the oil [W]
+        self._frame = 0
+        if self.adr011:
+            # a private engine for the friction model: walls follow the live
+            # coolant through _apply_thermal_state, oil state is ours
+            from .engine import DieselEngine
+            self._eng = DieselEngine(spec=copy.deepcopy(self.spec))
+            self._update_friction()
 
     # a manual engine stalls when the clutch drags it below this fraction
     # of idle (the governor cannot hold it); an automatic cannot stall
     STALL_FRAC = 0.45
+    FRICTION_EVERY = 6         # frames between live friction evaluations (10 Hz at 60 Hz)
+
+    def _update_friction(self):
+        """
+        ADR-011: friction at the live oil and coolant state, from the
+        pressure trace blended at the live operating point. Evaluated at no
+        less than a quarter of idle: the model divides by speed, and a
+        stopped engine's friction is handled where it is used.
+        """
+        from .grid import cell_friction
+        g, e = self.g, self._eng
+        e.T_coolant = self.T_coolant
+        e._apply_thermal_state()
+        e.oil.cond.T_oil = self.T_oil
+        rpm = max(self.rpm, 0.25 * self.spec.idle_rpm)
+        p = g.blend_perf_T(rpm, self.load_eff, self.T_coolant)
+        fr = cell_friction(e, rpm, g.blend_p_cyl(rpm, self.load_eff, self.T_coolant), g.grid_deg,
+                           p["fuel_mg"], p["p_rail"])
+        self.fmep_live = float(fr["fmep"])
+        self.P_mech = float(fr["P_mech"])
+        self.T_fric = self.fmep_live * g.k_torque
+
+    def _perf(self, rpm, load):
+        """Grid performance at the live state; torque is BRAKE torque either way."""
+        g = self.g
+        if self.adr011:
+            p = g.blend_perf_T(rpm, load, self.T_coolant)
+            p["torque"] = p["torque_ind"] - self.T_fric
+            return p
+        return g.blend_perf(rpm, load)
 
     # ------------------------------------------------------------------
     # ------------------------------------------------------------------
@@ -1091,6 +1187,16 @@ class LiveEngine:
         P_fuel = self.fuel_kg_h / 3600.0 * 42.7e6
         q_wall = float(np.clip(self.perf.get("q_wall", 0.20), 0.05, 0.45))
         Q_in = (q_wall + 0.02) * P_fuel
+        if self.adr011:
+            # ADR-011: an oil node, as engine.py's two-node warm-up --
+            # friction heat and piston-cooling jets in, the oil cooler out to
+            # the coolant. Oil temperature is what makes a cold engine cold.
+            UA_o = self.spec.oil.cooler_UA * (0.35 + 0.65 * min(1.0, self.rpm / 1800.0))
+            Q_oc = UA_o * (self.T_oil - self.T_coolant)
+            Q_in += Q_oc
+            m_oil = self.spec.oil.sump_volume * self._eng.oil.density(self.T_oil)
+            self.T_oil += (self.P_mech + 0.055 * P_fuel - Q_oc) * dt / (m_oil * 1900.0)
+            self.T_oil = min(max(self.T_oil, 240.0), 430.0)
         self.T_coolant += (Q_in - Q_out) * dt / C
         self.T_coolant = min(max(self.T_coolant, 240.0), 420.0)
         self._protect()
@@ -1187,6 +1293,10 @@ class LiveEngine:
         if self.out_of_fuel or self.engine_stopped:
             self.throttle = 0.0
             self.cruise_on = False
+        if self.adr011:
+            if self._frame % self.FRICTION_EVERY == 0:
+                self._update_friction()
+            self._frame += 1
         for _ in range(n_sub):
             self._sub(dt / n_sub)
         self._totals(dt)
@@ -1213,7 +1323,7 @@ class LiveEngine:
             demand *= max(0.02, 1.0 - 0.98 * x ** 1.4)
 
         # ---- turbo lag --------------------------------------------------
-        target = g.blend_perf(rpm, demand)
+        target = self._perf(rpm, demand)
         tau = 0.55 if target["boost"] > self.boost else 0.32
         self.boost += (target["boost"] - self.boost) * min(1.0, h / tau)
         self.turbo_rpm += (target["turbo_rpm"] - self.turbo_rpm) * \
@@ -1227,18 +1337,18 @@ class LiveEngine:
             boost_frac = 1.0
         self.load_eff = float(demand * (0.35 + 0.65 * boost_frac))
 
-        p = g.blend_perf(rpm, self.load_eff)
+        p = self._perf(rpm, self.load_eff)
         self.perf = p
         self.torque = p["torque"]
         self.fuel_kg_h = p["fuel_kg_h"]
         if self.engine_stopped:
             # no fuel at all: what is left is motoring friction
-            self.torque = min(self.torque, g.blend_perf(rpm, 0.0)["torque"])
+            self.torque = min(self.torque, self._perf(rpm, 0.0)["torque"])
             self.fuel_kg_h = 0.0
         if self.stalled:
             # stalled: no fuel, and friction fades to nothing as it stops
             # (the grid's lowest row is idle, so scale it down to 0 rpm)
-            self.torque = min(0.0, g.blend_perf(rpm, 0.0)["torque"]) * \
+            self.torque = min(0.0, self._perf(rpm, 0.0)["torque"]) * \
                 min(1.0, rpm / s.idle_rpm)
             self.fuel_kg_h = 0.0
         if self.engine_brake and self.throttle < 0.02:
