@@ -3,7 +3,7 @@
 // line with the Python; held to it by fixtures/live.json at the ADR-004
 // per-step (1e-12) and terminal (1e-6, event-aligned) bounds.
 import { clip, type LiveSpec, type Perf } from "./common.js";
-import { Driveline, Gearbox } from "./driveline.js";
+import { Driveline, Gearbox, type ManualClutch } from "./driveline.js";
 import type { PerfGrid } from "./grid.js";
 import { finishVehicle, vehicleFor, type Transmission, type Vehicle } from "./vehicle.js";
 
@@ -63,7 +63,15 @@ export class LiveEngine {
     this.T_charge_ref = this.spec.thermal.ambient_T;
     this.tank_L = this.veh.fuel_tank_L;
     this.perf = g.blendPerf(this.rpm, 0.0);
+    if (this.veh.trans === "manual") {
+      // a manual car is left in neutral; the driver picks a gear
+      this.dl.gb.neutral = true;
+      this.dl.gb.auto = false;
+    }
   }
+
+  /** a manual engine stalls when the clutch drags it below this fraction of idle */
+  static readonly STALL_FRAC = 0.45;
 
   cruise_toggle(): void {
     if (this.cruise_on) {
@@ -239,10 +247,17 @@ export class LiveEngine {
   private sub(h: number): void {
     const s = this.spec, g = this.g;
     const rpm = this.rpm;
+    const manual = this.veh.trans === "manual";
+    if (manual && !this.stalled && rpm < LiveEngine.STALL_FRAC * s.idle_rpm
+        && !this.dl.gb.neutral && (this.dl.tc as ManualClutch).cap > 0.0) {
+      this.stalled = true;
+      this.hint = "stalled -- clutch down (z) and press i to restart";
+      this.hint_t = 4.0;
+    }
 
     // ---- governor: idle hold, droop above rated ----
-    let demand = this.throttle;
-    if (rpm < s.idle_rpm) demand = Math.max(demand, Math.min(0.75, 0.01 * (s.idle_rpm - rpm)));
+    let demand = this.stalled ? 0.0 : this.throttle;
+    if (rpm < s.idle_rpm && !this.stalled) demand = Math.max(demand, Math.min(0.75, 0.01 * (s.idle_rpm - rpm)));
     if (rpm > s.rated_rpm) {
       const x = (rpm - s.rated_rpm) / Math.max(s.max_rpm - s.rated_rpm, 1.0);
       demand *= Math.max(0.02, 1.0 - 0.98 * x ** 1.4);
@@ -270,6 +285,11 @@ export class LiveEngine {
       this.torque = Math.min(this.torque, g.blendPerf(rpm, 0.0)["torque"]!);
       this.fuel_kg_h = 0.0;
     }
+    if (this.stalled) {
+      // no fuel, and friction fades to nothing as it stops
+      this.torque = Math.min(0.0, g.blendPerf(rpm, 0.0)["torque"]!) * Math.min(1.0, rpm / s.idle_rpm);
+      this.fuel_kg_h = 0.0;
+    }
     if (this.engine_brake && this.throttle < 0.02) this.torque -= 0.3 * s.rated_rpm * 0.55;
 
     // ---- driveline takes torque, gives back the pump load ----
@@ -283,17 +303,19 @@ export class LiveEngine {
     }
 
     // ---- flywheel + converter pump ----
+    // an automatic's crank never drops below 60 rpm (it cannot stall); a manual's can stop
+    const om_min = manual ? 0.0 : (2.0 * Math.PI * 60.0) / 60.0;
     if (this.dl.snap_w_e !== null) {
-      om = Math.max(this.dl.snap_w_e, (2.0 * Math.PI * 60.0) / 60.0);
+      om = Math.max(this.dl.snap_w_e, om_min);
       this.dl.snap_w_e = null;
     } else {
       const J = s.geom.flywheel_inertia + J_add;
       om += ((this.torque - this.T_load) / J) * h;
-      om = Math.max(om, (2.0 * Math.PI * 60.0) / 60.0);
+      om = Math.max(om, om_min);
     }
     this.dl.sync(om);
-    const rpm_new = Math.max((om * 60.0) / (2.0 * Math.PI), 60.0);
-    this.stalled = false;
+    const rpm_new = Math.max((om * 60.0) / (2.0 * Math.PI), manual ? 0.0 : 60.0);
+    if (!manual) this.stalled = false;
     this.rpm = Math.min(rpm_new, s.max_rpm * 1.06);
   }
 
@@ -340,8 +362,14 @@ export interface LiveState {
 
 // ================================================================ driver input
 /** Apply one driver key -- the same map as play.py's terminal (dieselsim.live.handle_key). */
+function say(live: LiveEngine, msg: string, t = 2.5): void {
+  live.hint = msg;
+  live.hint_t = t;
+}
+
 export function handleKey(live: LiveEngine, c: string): void {
   const gb = live.dl.gb;
+  const manual = live.veh.trans === "manual";
   switch (c) {
     case "w": live.cruise_on = false; live.throttle = Math.min(1.0, live.throttle + 0.08); break;
     case "s": live.throttle = Math.max(0.0, live.throttle - 0.08); break;
@@ -349,10 +377,47 @@ export function handleKey(live: LiveEngine, c: string): void {
     case "x": live.cruise_on = false; live.throttle = 0.0; break;
     case "b": live.dl.brake = Math.min(1.0, live.dl.brake + 0.35); break;
     case "e": live.engine_brake = !live.engine_brake; break;
-    case "n": gb.neutral = !gb.neutral; break;
-    case "m": gb.auto = !gb.auto; break;
-    case ".": gb.auto = false; gb.request(+1); break;
-    case ",": gb.auto = false; gb.request(-1); break;
+    case "n":
+      if (manual) gb.neutral = true; // out of gear any time; into gear with . ,
+      else gb.neutral = !gb.neutral;
+      break;
+    case "m":
+      if (manual) say(live, "manual box: . and , shift, z is the clutch, a is auto-clutch");
+      else gb.auto = !gb.auto;
+      break;
+    case ".": case ",": {
+      const delta = c === "." ? +1 : -1;
+      if (manual) {
+        const msg = live.dl.manual_shift(delta);
+        if (msg) say(live, msg);
+      } else {
+        gb.auto = false;
+        gb.request(delta);
+      }
+      break;
+    }
+    case "z":
+      if (manual) live.dl.clutch_pedal = Math.min(1.0, live.dl.clutch_pedal + 0.5);
+      else say(live, "no clutch pedal -- this box is automatic");
+      break;
+    case "a":
+      if (manual) {
+        live.dl.assist = !live.dl.assist;
+        say(live, live.dl.assist ? "auto-clutch on" : "auto-clutch off");
+      } else {
+        say(live, "auto-clutch is for the manual box");
+      }
+      break;
+    case "i":
+      if (!live.stalled) say(live, "engine is running");
+      else if (live.dl.clutch_pedal >= 0.9 || gb.neutral || live.dl.assist) {
+        live.stalled = false;
+        live.rpm = live.spec.idle_rpm;
+        say(live, "started");
+      } else {
+        say(live, "clutch down (z) or neutral to start");
+      }
+      break;
     case "]": live.dl.grade = Math.min(0.2, live.dl.grade + 0.01); break;
     case "[": live.dl.grade = Math.max(-0.2, live.dl.grade - 0.01); break;
     case "l":
@@ -384,9 +449,10 @@ export function handleKey(live: LiveEngine, c: string): void {
   }
 }
 
-/** The brake pedal returns by itself. */
+/** The pedals return by themselves; the clutch over 1.4 s, slowly enough to slip a launch. */
 export function pedalReturn(live: LiveEngine, dt: number): void {
   live.dl.brake = Math.max(0.0, live.dl.brake - dt / 0.45);
+  live.dl.clutch_pedal = Math.max(0.0, live.dl.clutch_pedal - dt / 1.4);
 }
 
 export { Gearbox };

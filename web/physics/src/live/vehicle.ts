@@ -1,7 +1,7 @@
 // Port of dieselsim/live.py Vehicle: everything downstream of the flywheel,
 // per preset. The live fixture checks every field against Python's.
 
-export type Transmission = "tc" | "dct";
+export type Transmission = "tc" | "dct" | "manual";
 
 export interface Vehicle {
   trans: Transmission;
@@ -50,5 +50,6 @@ export function vehicleFor(preset: string, trans: Transmission = "dct"): Vehicle
 /** _finish_vehicle: a dual clutch has no converter slip to pay for. */
 export function finishVehicle(v: Vehicle): Vehicle {
   if (v.trans === "dct") v.eta = Math.min(0.975, v.eta + 0.035);
+  else if (v.trans === "manual") v.eta = Math.min(0.975, v.eta + 0.04); // dry clutch
   return v;
 }

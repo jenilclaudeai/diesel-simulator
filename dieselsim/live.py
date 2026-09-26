@@ -136,6 +136,8 @@ class Vehicle:
 def _finish_vehicle(v: "Vehicle"):
     if v.trans == "dct":
         v.eta = min(0.975, v.eta + 0.035)   # no converter slip to pay for
+    elif v.trans == "manual":
+        v.eta = min(0.975, v.eta + 0.04)    # dry clutch: no converter, no wet-pack drag
     return v
 
 
@@ -198,6 +200,64 @@ class LaunchClutch:
         return self.cap, False
 
     # dashboard parity with the converter
+    def report(self, w_e, w_in):
+        self.SR = w_in / max(w_e, 1.0)
+        self.TR = 1.0
+        self.eff = min(1.0, self.SR) if not self.engaged else 1.0
+
+
+class ManualClutch:
+    """
+    A dry, driver-operated clutch (Phase 3; play.py never had one).
+
+    The pedal sets the clamp load: capacity = cap_max * (1 - pedal)^1.6, so
+    the first travel off the floor does little and the bite comes in the
+    last third, as on a real car. Slipping, it passes exactly its capacity
+    in the direction of the slip -- so dumping the pedal at a standstill
+    hands the whole capacity to a stationary car and drags the engine down,
+    which is how a real one stalls. Once the slip closes with enough
+    capacity it clamps, and the driveline is rigid from crank to wheels
+    (solved as the DCT's clamped state is).
+
+    The auto-clutch assist replaces the pedal with the DCT's launch law
+    (hold the engine at a throttle-dependent target speed while the car
+    catches up), sequences the pedal on a shift, and opens before a stall.
+    """
+
+    BITE_K = 1.6
+
+    def __init__(self, spec, veh):
+        T_pk = max(50.0, spec.geom.displacement * 1.9e6 / (4 * math.pi))
+        self.cap_max = veh.clutch_cap_max or 1.8 * T_pk
+        self.veh = veh
+        self.spec = spec
+        self.engaged = False
+        self.cap = 0.0
+        self.slip = 0.0
+        self.SR = 0.0
+        self.TR = 1.0
+        self.eff = 0.0
+
+    def capacity(self, pedal):
+        return self.cap_max * max(0.0, 1.0 - pedal) ** self.BITE_K
+
+    def target_speed(self, throttle):
+        idle = 2.0 * math.pi * self.spec.idle_rpm / 60.0
+        launch = 2.0 * math.pi * self.veh.launch_rpm / 60.0
+        return idle + min(1.0, max(0.0, throttle)) * (launch - idle)
+
+    def assist_capacity(self, w_e, w_sync, T_eng, throttle):
+        """What the auto-clutch commands when it is not mid-shift."""
+        idle = 2.0 * math.pi * self.spec.idle_rpm / 60.0
+        if w_e <= 0.85 * idle:
+            self.engaged = False              # open before the engine stalls
+        if w_sync < 0.80 * idle and throttle < 0.03:
+            return 0.0                        # stopped, no throttle: no creep
+        if self.engaged:
+            return self.cap_max
+        cap = T_eng + 9.0 * (w_e - self.target_speed(throttle))
+        return float(np.clip(cap, 0.0, self.cap_max))
+
     def report(self, w_e, w_in):
         self.SR = w_in / max(w_e, 1.0)
         self.TR = 1.0
@@ -392,6 +452,7 @@ class Driveline:
         self.veh = veh
         self.kind = veh.trans
         self.tc = (LaunchClutch(spec, veh) if self.kind == "dct"
+                   else ManualClutch(spec, veh) if self.kind == "manual"
                    else TorqueConverter(spec, veh))
         self.gb = Gearbox(spec, veh)
         self.rigid = False          # DCT clamped: crank to wheels is solid
@@ -414,6 +475,15 @@ class Driveline:
         self.F_res = 0.0
         self.torque_cut = 0.0
         self._thr_prev = 0.0
+        # manual box (Phase 3): the pedal, the auto-clutch assist, and the
+        # assist's shift sequence (timer < 0: none in progress)
+        self.clutch_pedal = 0.0      # 0 = foot off (engaged), 1 = floored
+        self.assist = False
+        self.shift_t = -1.0
+        self.shift_to = 0
+
+    SHIFT_DOWN_S = 0.12              # assisted shift: pedal to the floor
+    SHIFT_UP_S = 0.35                # ... and back up, slipping
 
     # ------------------------------------------------------------------
     def w_out_at_input(self, g=None):
@@ -459,7 +529,119 @@ class Driveline:
     def step(self, dt, w_e, T_eng, throttle):
         if self.kind == "dct":
             return self._step_dct(dt, w_e, T_eng, throttle)
+        if self.kind == "manual":
+            return self._step_manual(dt, w_e, T_eng, throttle)
         return self._step_tc(dt, w_e, T_eng, throttle)
+
+    # ------------------------------------------------------------------
+    def _select(self, delta):
+        """Move the lever: out of neutral into 1st, or one gear up/down."""
+        gb = self.gb
+        if gb.neutral:
+            gb.neutral = False
+            gb.gear = gb.gear_from = 0
+            return
+        g = int(np.clip(gb.gear + delta, 0, gb.n - 1))
+        gb.gear = gb.gear_from = g
+
+    def manual_shift(self, delta):
+        """
+        A shift request on the manual box. Returns the message for the
+        driver, or "" if it went through. Without the assist the clutch has
+        to be down -- no grinding is modelled, the lever simply will not go.
+        """
+        if self.assist:
+            if self.shift_t < 0.0:
+                self.shift_t = 0.0
+                self.shift_to = delta
+            return ""
+        if self.clutch_pedal < 0.9:
+            return "clutch down (z) to change gear"
+        self._select(delta)
+        self.tc.engaged = False
+        return ""
+
+    def _step_manual(self, dt, w_e, T_eng, throttle):
+        """
+        The dry clutch. Slipping: it passes its capacity in the direction of
+        the slip and the engine and car move independently. Clamped: rigid,
+        solved exactly as the DCT's clamped state (vehicle inertia reflected
+        onto the crank, residual slip snapped into the engine).
+        """
+        veh, gb, cl = self.veh, self.gb, self.tc
+        f_res, f_brake = self.resistance()
+
+        # ---- the assist's shift: pedal down, lever across, pedal up ----
+        if self.assist and self.shift_t >= 0.0:
+            self.shift_t += dt
+            if self.shift_t < self.SHIFT_DOWN_S:
+                pedal = self.shift_t / self.SHIFT_DOWN_S
+            else:
+                if self.shift_to != 0:
+                    self._select(self.shift_to)
+                    self.shift_to = 0
+                    cl.engaged = False
+                up = (self.shift_t - self.SHIFT_DOWN_S) / self.SHIFT_UP_S
+                pedal = max(0.0, 1.0 - up)
+                if up >= 1.0:
+                    self.shift_t = -1.0
+            self.clutch_pedal = pedal
+
+        i = gb.ratio()
+        w_sync = self.v / veh.r_wheel * i
+        if gb.neutral:
+            cap = 0.0
+            cl.engaged = False
+        elif self.assist and self.shift_t < 0.0:
+            cap = cl.assist_capacity(w_e, w_sync, T_eng, throttle)
+        else:
+            cap = cl.capacity(self.clutch_pedal)
+        cl.cap = cap
+        cl.slip = w_e - w_sync
+
+        # ---- clamp and release ----
+        if cl.engaged:
+            if cap <= 0.0 or abs(T_eng) > cap:
+                cl.engaged = False
+        elif cap > 0.0 and abs(cl.slip) < 3.0 and abs(T_eng) <= cap:
+            cl.engaged = True
+            # the first instant of clamping: the residual slip goes into the
+            # engine, not the car (see _step_dct)
+            self.i_eff = i
+            self.snap_w_e = w_sync
+        self.rigid = cl.engaged
+        if self.rigid:
+            T_cl = T_eng
+        elif gb.neutral or cap <= 0.0:
+            T_cl = 0.0
+        else:
+            T_cl = math.copysign(cap, 1.0 if w_e >= w_sync else -1.0)
+
+        cl.report(w_e, w_sync)
+        self._sync_dt = dt
+        self.i_eff = i
+        self.w_in = w_sync
+        self.T_pump = T_cl
+        self.T_turb = T_cl
+        self.T_clutch = T_cl
+        gb.torque_cut = 0.0
+        self.torque_cut = 0.0
+
+        F_trac = T_cl * i * veh.eta / veh.r_wheel
+        self.F_trac, self.F_res = F_trac, f_res + f_brake
+        m_eff = veh.mass + (veh.J_wheel + veh.J_trans * i ** 2) \
+            / veh.r_wheel ** 2
+        if self.rigid:
+            k = veh.r_wheel / max(i, 1e-6)
+            J_add = m_eff * k * k / max(veh.eta, 0.5)
+            T_react = (f_res + f_brake * np.sign(max(self.v, 0.0) + 1e-9)) \
+                * k / max(veh.eta, 0.5)
+            return T_react, J_add
+        F_net = F_trac - f_res
+        if self.v > 0.05 or F_net > f_brake:
+            F_net -= f_brake * np.sign(max(self.v, 0.0) + 1e-9)
+        self.v = max(0.0, self.v + F_net / m_eff * dt)
+        return T_cl, 0.0
 
     # ------------------------------------------------------------------
     def _step_dct(self, dt, w_e, T_eng, throttle):
@@ -727,6 +909,14 @@ class LiveEngine:
         self.out_of_fuel = False
         self.perf = grid.blend_perf(self.rpm, 0.0)
         self.lock = threading.Lock()
+        if self.veh.trans == "manual":
+            # a manual car is left in neutral; the driver picks a gear
+            self.dl.gb.neutral = True
+            self.dl.gb.auto = False
+
+    # a manual engine stalls when the clutch drags it below this fraction
+    # of idle (the governor cannot hold it); an automatic cannot stall
+    STALL_FRAC = 0.45
 
     # ------------------------------------------------------------------
     # ------------------------------------------------------------------
@@ -950,10 +1140,16 @@ class LiveEngine:
         s = self.spec
         g = self.g
         rpm = self.rpm
+        manual = self.veh.trans == "manual"
+        if (manual and not self.stalled and rpm < self.STALL_FRAC * s.idle_rpm
+                and not self.dl.gb.neutral and self.dl.tc.cap > 0.0):
+            self.stalled = True
+            self.hint = "stalled -- clutch down (z) and press i to restart"
+            self.hint_t = 4.0
 
         # ---- governor: idle hold, droop above rated --------------------
-        demand = self.throttle
-        if rpm < s.idle_rpm:
+        demand = 0.0 if self.stalled else self.throttle
+        if rpm < s.idle_rpm and not self.stalled:
             demand = max(demand, min(0.75, 0.010 * (s.idle_rpm - rpm)))
         if rpm > s.rated_rpm:
             x = (rpm - s.rated_rpm) / max(s.max_rpm - s.rated_rpm, 1.0)
@@ -982,6 +1178,12 @@ class LiveEngine:
             # no fuel at all: what is left is motoring friction
             self.torque = min(self.torque, g.blend_perf(rpm, 0.0)["torque"])
             self.fuel_kg_h = 0.0
+        if self.stalled:
+            # stalled: no fuel, and friction fades to nothing as it stops
+            # (the grid's lowest row is idle, so scale it down to 0 rpm)
+            self.torque = min(0.0, g.blend_perf(rpm, 0.0)["torque"]) * \
+                min(1.0, rpm / s.idle_rpm)
+            self.fuel_kg_h = 0.0
         if self.engine_brake and self.throttle < 0.02:
             self.torque -= 0.30 * s.rated_rpm * 0.55
 
@@ -999,30 +1201,43 @@ class LiveEngine:
             self.torque -= self.fan_power / max(om, 1.0)
 
         # ---- flywheel + converter pump ----------------------------------
+        # an automatic's crank never drops below 60 rpm (it cannot stall);
+        # a manual's can stop
+        om_min = 0.0 if manual else 2.0 * math.pi * 60.0 / 60.0
         if self.dl.snap_w_e is not None:
-            om = max(self.dl.snap_w_e, 2.0 * math.pi * 60.0 / 60.0)
+            om = max(self.dl.snap_w_e, om_min)
             self.dl.snap_w_e = None
         else:
             J = s.geom.flywheel_inertia + J_add
             om += (self.torque - self.T_load) / J * h
-            om = max(om, 2.0 * math.pi * 60.0 / 60.0)
+            om = max(om, om_min)
         self.dl.sync(om)
-        rpm_new = max(om * 60.0 / (2.0 * math.pi), 60.0)
+        rpm_new = max(om * 60.0 / (2.0 * math.pi), 0.0 if manual else 60.0)
         # a converter slips, so a torque-converter automatic does not stall
-        self.stalled = False
+        if not manual:
+            self.stalled = False
         self.rpm = min(rpm_new, s.max_rpm * 1.06)
 
 
 # ==========================================================================
 # driver input: one key at a time, as play.py's terminal loop reads them
 # ==========================================================================
+def _say(live, msg, t=2.5):
+    live.hint = msg
+    live.hint_t = t
+
+
 def handle_key(live: LiveEngine, c: str) -> None:
     """
     Apply one driver key to the live engine -- the controls play.py maps
     onto its keyboard, moved here so they are testable (bug #6) and so the
     TypeScript drive page maps the same keys to the same actions. Keys that
     are not engine controls (quit, microphone) are the caller's.
+
+    Manual box (Phase 3): z clutch (hold), . and , shift (clutch down, or
+    the assist does it), n neutral, a auto-clutch, i restart after a stall.
     """
+    manual = live.veh.trans == "manual"
     if c == "w":
         live.cruise_on = False
         live.throttle = min(1.0, live.throttle + 0.08)
@@ -1039,15 +1254,45 @@ def handle_key(live: LiveEngine, c: str) -> None:
     elif c == "e":
         live.engine_brake = not live.engine_brake
     elif c == "n":
-        live.dl.gb.neutral = not live.dl.gb.neutral
+        if manual:
+            live.dl.gb.neutral = True     # out of gear any time; into gear with . ,
+        else:
+            live.dl.gb.neutral = not live.dl.gb.neutral
     elif c == "m":
-        live.dl.gb.auto = not live.dl.gb.auto
-    elif c == ".":
-        live.dl.gb.auto = False
-        live.dl.gb.request(+1)
-    elif c == ",":
-        live.dl.gb.auto = False
-        live.dl.gb.request(-1)
+        if manual:
+            _say(live, "manual box: . and , shift, z is the clutch, a is auto-clutch")
+        else:
+            live.dl.gb.auto = not live.dl.gb.auto
+    elif c in ".,":
+        delta = +1 if c == "." else -1
+        if manual:
+            msg = live.dl.manual_shift(delta)
+            if msg:
+                _say(live, msg)
+        else:
+            live.dl.gb.auto = False
+            live.dl.gb.request(delta)
+    elif c == "z":
+        if manual:
+            # key auto-repeat holds it down; it returns in pedal_return()
+            live.dl.clutch_pedal = min(1.0, live.dl.clutch_pedal + 0.5)
+        else:
+            _say(live, "no clutch pedal -- this box is automatic")
+    elif c == "a":
+        if manual:
+            live.dl.assist = not live.dl.assist
+            _say(live, "auto-clutch on" if live.dl.assist else "auto-clutch off")
+        else:
+            _say(live, "auto-clutch is for the manual box")
+    elif c == "i":
+        if not live.stalled:
+            _say(live, "engine is running")
+        elif live.dl.clutch_pedal >= 0.9 or live.dl.gb.neutral or live.dl.assist:
+            live.stalled = False
+            live.rpm = live.spec.idle_rpm
+            _say(live, "started")
+        else:
+            _say(live, "clutch down (z) or neutral to start")
     elif c == "]":
         live.dl.grade = min(0.20, live.dl.grade + 0.01)
     elif c == "[":
@@ -1086,6 +1331,10 @@ def handle_key(live: LiveEngine, c: str) -> None:
 
 
 def pedal_return(live: LiveEngine, dt: float) -> None:
-    """The brake pedal returns by itself, so holding "b" (key auto-repeat)
-    keeps it on and letting go releases it."""
+    """The pedals return by themselves, so holding "b" or "z" (key
+    auto-repeat) keeps one down and letting go releases it. The clutch comes
+    up over 1.4 s -- slowly enough to slip a launch on a keyboard (at 0.9 s a
+    launch at 0.4 throttle stalled when the clutch left the floor with the
+    throttle; measured, session 5)."""
     live.dl.brake = max(0.0, live.dl.brake - dt / 0.45)
+    live.dl.clutch_pedal = max(0.0, live.dl.clutch_pedal - dt / 1.4)

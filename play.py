@@ -929,8 +929,9 @@ def main():
     ap.add_argument("--curve-png", metavar="PNG",
                     help="also write the curve as a figure")
     ap.add_argument("--transmission", "--trans", default=None,
-                    choices=["tc", "dct"],
-                    help="tc = torque-converter auto, dct = dual clutch "
+                    choices=["tc", "dct", "manual"],
+                    help="tc = torque-converter auto, dct = dual clutch, "
+                         "manual = clutch pedal (z) and lever (. ,) "
                          "(default: the TRANSMISSION constant in this file)")
     ap.add_argument("--load", type=float, default=0.0, metavar="FRAC",
                     help="throttle the interactive sim starts at, 0-1 "

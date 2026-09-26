@@ -233,6 +233,23 @@ def live_script_kickdown():
             "brake": [], "grade": [], "keys": []}
 
 
+def live_script_manual():
+    """The manual box, 60 s: clutch held while 1st is selected, a slipping
+    launch, shifts with the clutch, a shift refused without it, braking to a
+    stop in 3rd (a stall), a refused and a proper restart, two downshifts,
+    a second launch, then the auto-clutch: a launch, two assisted shifts
+    and braking to a stop without stalling."""
+    def thr(t):
+        return (0.0 if t < 1.8 else 0.35 if t < 8 else 0.5 if t < 20 else 0.0 if t < 36 else
+                0.4 if t < 41 else 0.0 if t < 42.5 else 0.6 if t < 52 else 0.0)
+    taps = ((1.0, "."), (8.2, "."), (14.0, "."), (14.7, "."), (33.0, "i"), (34.5, "i"), (35.0, ","),
+            (35.3, ","), (40.3, "i"), (41.0, "x"), (42.0, "a"), (44.0, "."), (48.0, "."), (59.0, "n"))
+    return {"dt": LIVE_DT, "n": LIVE_N, "throttle": [thr(n * LIVE_DT) for n in range(LIVE_N)],
+            "brake": [[24.0, 32.0, 0.8], [41.0, 42.5, 0.8], [52.0, 58.0, 0.5]], "grade": [],
+            "keys": [[int(round(t / LIVE_DT)), k] for t, k in taps],
+            "holds": [[0.0, 2.0, "z"], [8.0, 8.4, "z"], [14.5, 14.9, "z"], [34.0, 36.0, "z"], [40.0, 40.6, "z"]]}
+
+
 def live_script():
     """The scripted drive: throttle per step (applied only while cruise is
     off), a brake window, a grade step and key presses -- the drive P3-1
@@ -267,6 +284,7 @@ def live_inputs():
                        {"name": "dct", "trans": "dct", "script": live_script(), "init": {}},
                        {"name": "dct_hot", "trans": "dct", "script": live_script_hot(),
                         "init": {"T_coolant": 368.0}},
+                       {"name": "manual", "trans": "manual", "script": live_script_manual(), "init": {}},
                        {"name": "tc_kickdown", "trans": "tc", "script": live_script_kickdown(),
                         "init": {"dl.v": 20.0, "dl.gb.gear": 5, "dl.gb.gear_from": 5,
                                  "dl.w_in": 20.0 / 0.315 * 0.67 * 4.30, "rpm": 20.0 / 0.315 * 0.67 * 4.30 * 60.0 / (2.0 * math.pi)}}],
@@ -299,13 +317,16 @@ def live_run(inp, drv):
                 live.dl.brake = b
         if n in grade:
             live.dl.grade = grade[n]
+        for t0, t1, k in sc.get("holds", []):      # a held key repeats every frame
+            if t0 <= t < t1:
+                handle_key(live, k)
         if n in keys:
             handle_key(live, keys[n])
         pedal_return(live, dt)
         before = live_state(live) if n % inp["sample_every"] == 0 else None
         live.step(dt)
         ev = (live.dl.gb.gear, live.dl.gb.phase, bool(live.dl.lockup), bool(live.dl.rigid), bool(live.dl.gb.neutral),
-              bool(live.dl.lock_allowed), bool(live.fan_on))
+              bool(live.dl.lock_allowed), bool(live.fan_on), bool(live.stalled), bool(live.dl.assist))
         if live.hint != prev_hint:
             hints.append([n, live.hint])
             prev_hint = live.hint

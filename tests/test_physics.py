@@ -903,6 +903,65 @@ def test_lockup_key_by_transmission():
           1.0 if ok else 0.0, 1.0, 0.0, f"tc: {tc.hint!r}; dct: {dct.hint!r}")
 
 
+def _manual_moving(assist=False):
+    """A manual crdi15 on the toy grid, launched in 1st and rolling with the
+    clutch clamped: pedal floored, lever into 1st, pedal released, throttle."""
+    from dieselsim.live import handle_key, pedal_return
+    live = _toy_live("manual")
+    handle_key(live, "z"); handle_key(live, "z")          # pedal to the floor
+    handle_key(live, ".")                                 # neutral -> 1st
+    if assist:
+        handle_key(live, "a")
+    live.throttle = 0.5
+    for _ in range(360):                                  # 6 s: pedal returns, car moves
+        pedal_return(live, 1 / 60)
+        live.step(1 / 60)
+    return live
+
+
+def test_manual_gearbox():
+    """Phase 3 manual box: the lever will not move without the clutch; braking
+    to a stop in gear with the clutch up stalls the engine; it restarts only
+    with the clutch down (or in neutral); with the auto-clutch the same stop
+    -- even braking with the throttle feathered -- does not stall."""
+    from dieselsim.live import handle_key, pedal_return
+    live = _manual_moving()
+    moving = live.dl.v > 1.0 and live.dl.tc.engaged and not live.dl.gb.neutral
+    g0 = live.dl.gb.gear
+    handle_key(live, ".")                                 # no clutch: refused
+    refused = live.dl.gb.gear == g0 and "clutch" in live.hint
+    live.dl.clutch_pedal = 1.0
+    handle_key(live, ".")
+    accepted = live.dl.gb.gear == g0 + 1
+    handle_key(live, ",")
+    live.dl.clutch_pedal = 0.0
+    live.throttle = 0.0
+    for _ in range(600):                                  # brake hard to a stop, clutch up
+        live.dl.brake = 1.0
+        live.step(1 / 60)
+    stalled = live.stalled and live.rpm == 0.0 and live.fuel_kg_h == 0.0
+    handle_key(live, "i")
+    still = live.stalled
+    live.dl.clutch_pedal = 1.0
+    handle_key(live, "i")
+    restarted = not live.stalled and live.rpm == live.spec.idle_rpm
+    a = _manual_moving(assist=True)
+    # braking with the throttle feathered (0.1): the stopped-car rule that
+    # opens the clutch needs the throttle off, so only the anti-stall rule
+    # (open below 0.85 x idle) can save the engine here
+    a.throttle = 0.1
+    for _ in range(600):
+        a.dl.brake = 1.0
+        a.step(1 / 60)
+    assisted = not a.stalled and a.rpm > 0.8 * a.spec.idle_rpm
+    ok = moving and refused and accepted and stalled and still and restarted and assisted
+    check("manual box: clutch to shift, stall on a stop in gear, clutch to restart, assist does not stall",
+          1.0 if ok else 0.0, 1.0, 0.0,
+          f"moving {moving}, refused {refused}, accepted {accepted}, stalled {stalled}, "
+          f"restart refused {still}, restarted {restarted}, assist no stall {assisted} "
+          f"(assisted rpm {a.rpm:.0f})")
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -937,7 +996,8 @@ def main():
                test_calibration_cache_is_consistent,
                test_ring_film_field_responds,
                test_source_levels_carry_physics,
-               test_lockup_key_by_transmission):
+               test_lockup_key_by_transmission,
+               test_manual_gearbox):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001

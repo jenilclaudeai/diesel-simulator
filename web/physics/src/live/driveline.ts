@@ -62,6 +62,49 @@ export class LaunchClutch {
   }
 }
 
+/** A dry, driver-operated clutch (see ManualClutch in live.py for the physics). */
+export class ManualClutch {
+  static readonly BITE_K = 1.6;
+  cap_max: number;
+  engaged = false;
+  cap = 0.0;
+  slip = 0.0;
+  SR = 0.0;
+  TR = 1.0;
+  eff = 0.0;
+
+  constructor(readonly spec: LiveSpec, readonly veh: Vehicle) {
+    const T_pk = Math.max(50.0, (spec.geom.displacement * 1.9e6) / (4 * Math.PI));
+    this.cap_max = veh.clutch_cap_max || 1.8 * T_pk;
+  }
+
+  capacity(pedal: number): number {
+    return this.cap_max * Math.max(0.0, 1.0 - pedal) ** ManualClutch.BITE_K;
+  }
+
+  target_speed(throttle: number): number {
+    const idle = (2.0 * Math.PI * this.spec.idle_rpm) / 60.0;
+    const launch = (2.0 * Math.PI * this.veh.launch_rpm) / 60.0;
+    return idle + Math.min(1.0, Math.max(0.0, throttle)) * (launch - idle);
+  }
+
+  /** What the auto-clutch commands when it is not mid-shift. */
+  assist_capacity(w_e: number, w_sync: number, T_eng: number, throttle: number): number {
+    const idle = (2.0 * Math.PI * this.spec.idle_rpm) / 60.0;
+    if (w_e <= 0.85 * idle) this.engaged = false;
+    if (w_sync < 0.8 * idle && throttle < 0.03) return 0.0;
+    if (this.engaged) return this.cap_max;
+    const cap = T_eng + 9.0 * (w_e - this.target_speed(throttle));
+    return clip(cap, 0.0, this.cap_max);
+  }
+
+  report(w_e: number, w_in: number): void {
+    this.SR = w_in / Math.max(w_e, 1.0);
+    this.TR = 1.0;
+    this.eff = !this.engaged ? Math.min(1.0, this.SR) : 1.0;
+  }
+}
+
 /** Fluid coupling with a stator. */
 export class TorqueConverter {
   k_cap: number;
@@ -205,7 +248,7 @@ export class Driveline {
   static readonly T_LOCK_MAX = 4500.0;
 
   readonly kind: string;
-  readonly tc: LaunchClutch | TorqueConverter;
+  readonly tc: LaunchClutch | TorqueConverter | ManualClutch;
   readonly gb: Gearbox;
   rigid = false;
   i_eff: number;
@@ -227,10 +270,19 @@ export class Driveline {
   F_res = 0.0;
   torque_cut = 0.0;
   _thr_prev = 0.0;
+  // manual box: the pedal, the auto-clutch assist and its shift sequence
+  clutch_pedal = 0.0; // 0 = foot off (engaged), 1 = floored
+  assist = false;
+  shift_t = -1.0;     // < 0: no assisted shift in progress
+  shift_to = 0;
+  static readonly SHIFT_DOWN_S = 0.12;
+  static readonly SHIFT_UP_S = 0.35;
 
   constructor(readonly spec: LiveSpec, readonly veh: Vehicle) {
     this.kind = veh.trans;
-    this.tc = this.kind === "dct" ? new LaunchClutch(spec, veh) : new TorqueConverter(spec, veh);
+    this.tc = this.kind === "dct" ? new LaunchClutch(spec, veh)
+      : this.kind === "manual" ? new ManualClutch(spec, veh)
+      : new TorqueConverter(spec, veh);
     this.gb = new Gearbox(spec, veh);
     this.i_eff = veh.gears[0]! * veh.final;
     this.J_in = (0.055 * veh.mass) / 1750.0 + 0.02;
@@ -271,7 +323,110 @@ export class Driveline {
 
   step(dt: number, w_e: number, T_eng: number, throttle: number): [number, number] {
     if (this.kind === "dct") return this.step_dct(dt, w_e, T_eng, throttle);
+    if (this.kind === "manual") return this.step_manual(dt, w_e, T_eng, throttle);
     return this.step_tc(dt, w_e, T_eng, throttle);
+  }
+
+  /** Move the lever: out of neutral into 1st, or one gear up/down. */
+  private select(delta: number): void {
+    const gb = this.gb;
+    if (gb.neutral) {
+      gb.neutral = false;
+      gb.gear = gb.gear_from = 0;
+      return;
+    }
+    const g = Math.trunc(clip(gb.gear + delta, 0, gb.n - 1));
+    gb.gear = gb.gear_from = g;
+  }
+
+  /** A shift on the manual box; returns the driver message, or "" if it went through. */
+  manual_shift(delta: number): string {
+    if (this.assist) {
+      if (this.shift_t < 0.0) {
+        this.shift_t = 0.0;
+        this.shift_to = delta;
+      }
+      return "";
+    }
+    if (this.clutch_pedal < 0.9) return "clutch down (z) to change gear";
+    this.select(delta);
+    (this.tc as ManualClutch).engaged = false;
+    return "";
+  }
+
+  private step_manual(dt: number, w_e: number, T_eng: number, throttle: number): [number, number] {
+    const veh = this.veh, gb = this.gb, cl = this.tc as ManualClutch;
+    const [f_res, f_brake] = this.resistance();
+
+    if (this.assist && this.shift_t >= 0.0) {
+      this.shift_t += dt;
+      let pedal: number;
+      if (this.shift_t < Driveline.SHIFT_DOWN_S) {
+        pedal = this.shift_t / Driveline.SHIFT_DOWN_S;
+      } else {
+        if (this.shift_to !== 0) {
+          this.select(this.shift_to);
+          this.shift_to = 0;
+          cl.engaged = false;
+        }
+        const up = (this.shift_t - Driveline.SHIFT_DOWN_S) / Driveline.SHIFT_UP_S;
+        pedal = Math.max(0.0, 1.0 - up);
+        if (up >= 1.0) this.shift_t = -1.0;
+      }
+      this.clutch_pedal = pedal;
+    }
+
+    const i = gb.ratio();
+    const w_sync = (this.v / veh.r_wheel) * i;
+    let cap: number;
+    if (gb.neutral) {
+      cap = 0.0;
+      cl.engaged = false;
+    } else if (this.assist && this.shift_t < 0.0) {
+      cap = cl.assist_capacity(w_e, w_sync, T_eng, throttle);
+    } else {
+      cap = cl.capacity(this.clutch_pedal);
+    }
+    cl.cap = cap;
+    cl.slip = w_e - w_sync;
+
+    if (cl.engaged) {
+      if (cap <= 0.0 || Math.abs(T_eng) > cap) cl.engaged = false;
+    } else if (cap > 0.0 && Math.abs(cl.slip) < 3.0 && Math.abs(T_eng) <= cap) {
+      cl.engaged = true;
+      this.i_eff = i;
+      this.snap_w_e = w_sync;
+    }
+    this.rigid = cl.engaged;
+    let T_cl: number;
+    if (this.rigid) T_cl = T_eng;
+    else if (gb.neutral || cap <= 0.0) T_cl = 0.0;
+    else T_cl = copysign(cap, w_e >= w_sync ? 1.0 : -1.0);
+
+    cl.report(w_e, w_sync);
+    this._sync_dt = dt;
+    this.i_eff = i;
+    this.w_in = w_sync;
+    this.T_pump = T_cl;
+    this.T_turb = T_cl;
+    this.T_clutch = T_cl;
+    gb.torque_cut = 0.0;
+    this.torque_cut = 0.0;
+
+    const F_trac = (T_cl * i * veh.eta) / veh.r_wheel;
+    this.F_trac = F_trac;
+    this.F_res = f_res + f_brake;
+    const m_eff = veh.mass + (veh.J_wheel + veh.J_trans * i ** 2) / veh.r_wheel ** 2;
+    if (this.rigid) {
+      const k = veh.r_wheel / Math.max(i, 1e-6);
+      const J_add = (m_eff * k * k) / Math.max(veh.eta, 0.5);
+      const T_react = ((f_res + f_brake * sign(Math.max(this.v, 0.0) + 1e-9)) * k) / Math.max(veh.eta, 0.5);
+      return [T_react, J_add];
+    }
+    let F_net = F_trac - f_res;
+    if (this.v > 0.05 || F_net > f_brake) F_net -= f_brake * sign(Math.max(this.v, 0.0) + 1e-9);
+    this.v = Math.max(0.0, this.v + (F_net / m_eff) * dt);
+    return [T_cl, 0.0];
   }
 
   private step_dct(dt: number, w_e: number, T_eng: number, throttle: number): [number, number] {

@@ -36,7 +36,7 @@ const fx = JSON.parse(readFileSync(path.resolve(here, "..", "..", "fixtures", "l
 
 interface Script {
   dt: number; n: number; throttle: number[]; brake: [number, number, number][];
-  grade: [number, number][]; keys: [number, string][];
+  grade: [number, number][]; keys: [number, string][]; holds?: [number, number, string][];
 }
 
 const results: [string, boolean][] = [];
@@ -92,11 +92,13 @@ function drive(d: (typeof fx.inputs.drives)[number]) {
     if (!live.cruise_on) live.throttle = sc.throttle[n]!;
     for (const [t0, t1, b] of sc.brake) if (t0 <= t && t < t1) live.dl.brake = b;
     if (grade.has(n)) live.dl.grade = grade.get(n)!;
+    for (const [t0, t1, k] of sc.holds ?? []) if (t0 <= t && t < t1) handleKey(live, k); // held keys repeat
     if (keys.has(n)) handleKey(live, keys.get(n)!);
     pedalReturn(live, sc.dt);
     live.step(sc.dt);
     const gb = live.dl.gb;
-    const ev = [gb.gear, gb.phase, +live.dl.lockup, +live.dl.rigid, +gb.neutral, +live.dl.lock_allowed, +live.fan_on];
+    const ev = [gb.gear, gb.phase, +live.dl.lockup, +live.dl.rigid, +gb.neutral, +live.dl.lock_allowed, +live.fan_on,
+      +live.stalled, +live.dl.assist];
     if (ev.join() !== prev) { events.push([n, ...ev]); prev = ev.join(); }
     if (live.hint !== prevHint) { hints.push([n, live.hint]); prevHint = live.hint; }
   }
