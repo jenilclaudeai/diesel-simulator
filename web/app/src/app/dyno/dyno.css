@@ -5,6 +5,12 @@
   border-bottom: 1px solid var(--slate-faint);
 }
 .wordmark { font-weight: 700; letter-spacing: 0.01em; }
+.bar { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem 1.5rem; }
+.nav { color: var(--slate-muted); font-size: 0.95rem; }
+.nav a { color: inherit; }
+.nav [aria-current] { color: var(--slate); }
+.data.grid { display: block; overflow-x: auto; max-width: 100%; }
+.data.grid th[scope="row"] { text-align: left; }
 
 .page {
   max-width: 60rem;

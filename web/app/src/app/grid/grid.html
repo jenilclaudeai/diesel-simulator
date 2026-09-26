@@ -1,0 +1,74 @@
+<header class="bar">
+  <span class="wordmark">Diesel Sim</span>
+  <nav class="nav"><a routerLink="/">Dyno pull</a> · <span aria-current="page">Operating grid</span></nav>
+</header>
+
+<main class="page">
+  <h1>{{ spec()?.name ?? 'Operating grid' }}</h1>
+  <p class="lead">
+    The table the real-time engine reads: {{ N_RPM }} speeds by {{ N_LOAD }} loads, each cell a full
+    combustion-cycle solve run by Python in your browser, then kept on this device for next time.
+  </p>
+
+  <div class="controls">
+    <label class="field">
+      <span>Engine</span>
+      <select [disabled]="solver.status() !== 'ready' || running()"
+              (change)="selectEngine($any($event.target).value)">
+        @for (p of presets(); track p.key) {
+          <option [value]="p.key" [selected]="p.key === engine()">{{ p.name }}</option>
+        }
+      </select>
+    </label>
+    <button type="button" class="run" (click)="build()"
+            [disabled]="solver.status() !== 'ready' || running()">
+      {{ running() ? 'Building' : grid() ? 'Build again' : 'Build grid' }}
+    </button>
+  </div>
+
+  <p class="status" role="status" aria-live="polite">
+    @switch (solver.status()) {
+      @case ('loading') { Loading Python and numpy into your browser. About 9 MB the first time. }
+      @case ('error') { <span class="err">{{ solver.error() }}</span> }
+      @case ('ready') {
+        @if (progress(); as p) {
+          Solving cell {{ p.done + 1 > p.total ? p.total : p.done + 1 }} of {{ p.total }}:
+          {{ fmt0.format(p.rpm) }} rpm, load {{ fmt2.format(p.load) }}.
+        } @else if (runError()) {
+          <span class="err">{{ runError() }}</span>
+        } @else if (elapsedS() !== undefined) {
+          Grid complete: {{ grid()!.cells.length }} cells in {{ fmt1.format(elapsedS()!) }} s.
+        } @else {
+          Ready. A first build takes a few minutes; after that it comes from this device's cache.
+        }
+      }
+    }
+  </p>
+
+  @if (table(); as t) {
+    <table class="data grid">
+      <caption>Brake torque, N·m, by load (rows) and speed (columns)</caption>
+      <thead>
+        <tr><th scope="col">load</th>
+          @for (r of t.rpms; track $index) { <th scope="col">{{ fmt0.format(r) }} rpm</th> }
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of t.rows; track row.load) {
+          <tr>
+            <th scope="row">{{ fmt2.format(row.load) }}</th>
+            @for (c of row.cells; track $index) {
+              <td [attr.data-perf]="json(c.perf)" [attr.data-rpm]="c.rpm" [attr.data-load]="row.load">{{ fmt1.format(c.torque) }}</td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+    <p class="note">Negative torque is the engine being driven: at no load there is no fuel, and at maximum
+      speed the governor has cut it, so friction and pumping are all that is left.</p>
+    <p class="note accuracy">These are fast solves. At full load they are within a few percent of a fully
+      converged solve; at part load, where the turbo's vanes and the EGR valve are still settling, cells
+      can differ from one by around 13%, and by more at light load and high speed (FINDING-013; being
+      fixed in the real-time phase).</p>
+  }
+</main>
