@@ -120,3 +120,34 @@ dropped tick level are each caught.
 
 Items 2 (ramp vs lash) and 3 (the rumble comment) are not applied — the
 owner chose item 1 only.
+
+---
+
+## Item 2 fixed (session 4, owner's decision: raise the ramps)
+
+`hd_i6` and `single` now set `ramp_fraction` so both closing ramps are at
+least 1.25 × their lash (the dataclass default, shared by every preset and by
+`builder.py`, is unchanged):
+
+| preset | ramp_fraction | exhaust ramp vs lash | seating at 1500 rpm | reference-point effect |
+|---|---|---|---|---|
+| `hd_i6` | 0.06 → 0.155 | 106 → **697 µm** (lash 550) | 0.806 → 0.452 m/s | 1700/1.0: torque −0.09%, p_max −0.37% (inside the 0.5% golden tolerance) |
+| `single` | 0.06 → 0.13 | 69 → **321 µm** (lash 250) | 0.392 → 0.254 m/s | 2000/0.8: torque +0.08% |
+
+**`hd_i6`'s valve tick falls from ~41× to 13× its loudest other source** —
+3.2× quieter, but still dominant (`crdi15`'s is 0.9×). Two things keep it
+high, both judgements best made by ear:
+
+- `Cam.seating_velocity()` keeps its lash penalty `(1 + 2.2 · lash / h_ramp)`
+  even when the valve lands on the ramp; on a true constant-velocity ramp the
+  seating speed is the ramp speed.
+- The absolute tick level is set by `_ref_vseat = 0.10 m/s` — a calibration
+  choice, not a measurement.
+
+Test `test_closing_ramps_clear_the_lash` (every preset, both cams). Mutation:
+reverting either preset's ramp is caught. (A first run showed a spurious
+failure after restoring the file: a same-length edit within one second reused
+stale bytecode. Rerun with `PYTHONDONTWRITEBYTECODE=1`, it passed.)
+
+`builder.py` engines with mechanical lash still get the default 6 % ramp and
+could land off-ramp too; not changed here.

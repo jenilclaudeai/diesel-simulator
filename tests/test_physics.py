@@ -605,6 +605,21 @@ def test_flat_tappet_wears_more_than_roller():
           f"{ratio:.0f}x (must exceed 10x)")
 
 
+def test_closing_ramps_clear_the_lash():
+    """FINDING-017 item 2: a closing ramp shorter than the lash lands the
+    valve on the steep flank (hd_i6 seated at 0.91 m/s with a 106 um ramp
+    under 550 um lash). Every preset's ramps must clear its lash."""
+    from dieselsim.config import PRESETS
+    bad = []
+    for key in sorted(PRESETS):
+        cyc = DieselEngine(preset=key).cycle
+        for cam, which in ((cyc.cam_int, "intake"), (cyc.cam_exh, "exhaust")):
+            if cam.lash > 0.0 and cam.h_ramp < cam.lash:
+                bad.append(f"{key} {which}: ramp {cam.h_ramp * 1e6:.0f} um < lash {cam.lash * 1e6:.0f} um")
+    check("closing ramps clear the lash on every preset", float(len(bad)), 0.0, 0.0,
+          "; ".join(bad) or f"{len(PRESETS)} presets")
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -627,7 +642,8 @@ def main():
                test_render_transient_has_no_seams,
                test_theta_global_axis,
                test_mech_levels_carry_physics,
-               test_flat_tappet_wears_more_than_roller):
+               test_flat_tappet_wears_more_than_roller,
+               test_closing_ramps_clear_the_lash):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001
