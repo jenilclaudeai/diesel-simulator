@@ -404,7 +404,7 @@ a miscount, not a change.)*
 | 8 | Unknown-provenance code in `engine.py` | **closed** — FINDING-007; found a real cache bug |
 | 9 | Worn-vs-new audio pair suspect | root-caused — FINDING-004 and 005 |
 | 10 | `render_transient` seams | **measured (session 4)** — FINDING-014, PR #24: phase resets every chunk, and each cross-fade deletes 20 ms. *(Was: "still unmeasured — blocked by FINDING-012".)* |
-| 11 | Coast downshift calibration | **deferred to Phase 3** (owner's decision) |
+| 11 | Coast downshift calibration | **fixed in Phase 3** — root cause was the lock-up clutch's numerical instability (FINDING-020); coast downshifts also stretch both phases. *(Was: "deferred to Phase 3".)* |
 | 12 | Grade small-angle form | **already correct** — `atan`/`sin`/`cos` all present; entry was stale |
 
 ---

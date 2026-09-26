@@ -375,6 +375,21 @@ class Gearbox:
         self.torque_cut = 0.0         # fraction the TCU asks the engine for
         self.blend = 0.0
         self.err0 = 0.0               # slip to be removed, latched at entry
+        self.coast = False            # this shift is an off-throttle downshift (bug #11)
+
+    # Bug #11: coast downshifts used the power-on calibration. Off throttle a
+    # TCU has no hurry and nothing to hide the shift behind, so it stretches
+    # both phases; the inertia phase then spins the input up with less
+    # clutch capacity. Measured on crdi15 coasting from 100 km/h (FINDING-020):
+    # the DCT's worst coast-downshift overshoot 6.49 -> 1.74 m/s^2 at x2 / x4.
+    COAST_TORQUE_K = 2.0
+    COAST_INERTIA_K = 4.0
+
+    def t_torque(self):
+        return self.T_TORQUE * (self.COAST_TORQUE_K if self.coast else 1.0)
+
+    def t_inertia(self):
+        return self.T_INERTIA * (self.COAST_INERTIA_K if self.coast else 1.0)
 
     # ------------------------------------------------------------------
     def ratio(self, g=None):
@@ -384,10 +399,11 @@ class Gearbox:
     def shifting(self):
         return self.phase != self.IDLE
 
-    def request(self, delta, kickdown=False):
+    def request(self, delta, kickdown=False, coast=False):
         g = int(np.clip(self.gear + delta, 0, self.n - 1))
         if g == self.gear or self.shifting():
             return False
+        self.coast = coast
         self.gear_from = self.gear
         self.gear = g
         self.phase = self.TORQUE
@@ -425,13 +441,13 @@ class Gearbox:
         if n_turbine > up and self.gear < self.n - 1:
             self.request(+1)
         elif n_turbine < dn and self.gear > 0:
-            self.request(-1)
+            self.request(-1, coast=throttle < 0.05)
 
 
 def s_inertia(dl, gb):
     """Extra clutch capacity that clears the latched slip on schedule."""
     J = dl.spec_J
-    return J * gb.err0 / max(gb.T_INERTIA, 0.03)
+    return J * gb.err0 / max(gb.t_inertia(), 0.03)
 
 
 class Driveline:
@@ -444,8 +460,9 @@ class Driveline:
     speed ramps instead of teleporting, and the engine gets dragged with it.
     """
 
-    C_LOCK = 900.0
+    C_LOCK = 900.0          # retired: the lock-up spring (FINDING-020); kept for the record
     T_LOCK_MAX = 4500.0
+    LOCK_ENGAGE_S = 0.5     # lock-up engagement: engine pulled onto input speed in this time
 
     def __init__(self, spec, veh):
         self.spec = spec
@@ -481,6 +498,10 @@ class Driveline:
         self.assist = False
         self.shift_t = -1.0
         self.shift_to = 0
+        # converter lock-up clutch (FINDING-020): slip latched when an
+        # engagement starts, and whether one is in progress
+        self.lock_slip0 = 0.0
+        self.lock_latched = False
 
     SHIFT_DOWN_S = 0.12              # assisted shift: pedal to the floor
     SHIFT_UP_S = 0.35                # ... and back up, slipping
@@ -672,12 +693,12 @@ class Driveline:
 
         if gb.phase == gb.TORQUE:
             gb.phase_t += dt
-            x = min(1.0, gb.phase_t / gb.T_TORQUE)
+            x = min(1.0, gb.phase_t / gb.t_torque())
             gb.blend = x
             i_use = (1.0 - x) * i_old + x * i_new
             T_cl = T_eng
             self.rigid = False
-            if gb.phase_t >= gb.T_TORQUE:
+            if gb.phase_t >= gb.t_torque():
                 gb.phase, gb.phase_t = gb.INERTIA, 0.0
                 gb.err0 = abs(w_e - self.v / veh.r_wheel * i_new)
         elif gb.phase == gb.INERTIA:
@@ -689,7 +710,7 @@ class Driveline:
             gb.torque_cut = 0.25 if err > 0 else 0.0
             self.rigid = False
             i_use = i_new
-            if abs(err) < 2.0 or gb.phase_t > 2.5 * gb.T_INERTIA:
+            if abs(err) < 2.0 or gb.phase_t > 2.5 * gb.t_inertia():
                 gb.phase, gb.phase_t, gb.blend = gb.IDLE, 0.0, 0.0
                 gb.gear_from = gb.gear
                 self.tc.engaged = True
@@ -769,12 +790,37 @@ class Driveline:
         else:
             self.lockup = False
 
+        # ---- the lock-up clutch: a clutch, not a spring (FINDING-020) ----
+        # It was T = C_LOCK * slip, C_LOCK = 900 N.m per rad/s, integrated
+        # explicitly against the flywheel: h*C/J = 17 at 240 Hz (explicit
+        # Euler is stable below 2), so every locked frame sat on the
+        # +-4500 N.m clamp with the sign flipping each sub-step, and a coast
+        # downshift re-locked as a 1 g jolt (bug #11). Now it engages like the
+        # other clutches: slipping at the capacity that pulls the engine onto
+        # input speed in LOCK_ENGAGE_S (slip latched when engagement starts
+        # -- recomputing it from the live slip is the shift trap in PLAN.md),
+        # then clamped rigid once the slip closes or crosses zero.
+        slip = w_e - self.w_in
+        if not self.lockup:
+            self.rigid = False
+            self.lock_latched = False
+        elif not self.lock_latched:
+            self.lock_slip0 = slip
+            self.lock_latched = True
         T_p, T_t = self.tc.torques(w_e, self.w_in)
         T_lock = 0.0
-        if self.lockup:
-            T_lock = float(np.clip(self.C_LOCK * (w_e - self.w_in),
-                                   -self.T_LOCK_MAX, self.T_LOCK_MAX))
-        T_in = T_t + T_lock                      # torque into the gearbox
+        if self.lockup and not self.rigid:
+            cap = min(self.T_LOCK_MAX, abs(T_eng) + self.spec.geom.flywheel_inertia
+                      * abs(self.lock_slip0) / self.LOCK_ENGAGE_S)
+            if abs(slip) < 3.0 or slip * self.lock_slip0 <= 0.0:
+                self.rigid = True
+                self.snap_w_e = self.w_in     # the residual slip goes into the engine
+            else:
+                T_lock = math.copysign(cap, slip)
+        if self.rigid and abs(T_eng) > self.T_LOCK_MAX:
+            self.rigid = False                # beyond its capacity it slips
+            self.lock_latched = False
+        T_in = T_eng if self.rigid else T_t + T_lock   # torque into the gearbox
         self.slip_rpm = (w_e - self.w_in) * 60.0 / (2 * math.pi)
 
         gb.torque_cut = 0.0
@@ -787,12 +833,12 @@ class Driveline:
             # over the load.  Output torque slides from old-gear to new-gear
             # for the same input torque, which IS the torque hole.
             gb.phase_t += dt
-            x = min(1.0, gb.phase_t / gb.T_TORQUE)
+            x = min(1.0, gb.phase_t / gb.t_torque())
             gb.blend = x
             self.w_in = self.w_out_at_input(gb.gear_from)
             i_use = (1.0 - x) * i_old + x * i_new
             T_out_i = T_in
-            if gb.phase_t >= gb.T_TORQUE:
+            if gb.phase_t >= gb.t_torque():
                 gb.phase, gb.phase_t = gb.INERTIA, 0.0
                 gb.err0 = abs(self.w_in - self.w_out_at_input())
 
@@ -805,7 +851,7 @@ class Driveline:
             # exponentially and the shift never actually finishes -- it just
             # asymptotes and hits the abort timer.  A real TCU commands a
             # pressure profile, which gives a near-linear ramp.
-            cap = abs(T_in) + self.J_in * gb.err0 / max(gb.T_INERTIA, 0.05)
+            cap = abs(T_in) + self.J_in * gb.err0 / max(gb.t_inertia(), 0.05)
             cap = min(cap, 8.0 * max(abs(T_in), 50.0))
             T_cl = math.copysign(cap, err) if abs(err) > 1e-3 else T_in
             # ask the engine to back off while the clutch does the work --
@@ -815,7 +861,7 @@ class Driveline:
             T_out_i, i_use = T_cl, i_new
             done = abs(err) < 2.0 or \
                    (gb.err0 > 0 and err * math.copysign(1.0, gb.err0) < 0) or \
-                   gb.phase_t > 2.5 * gb.T_INERTIA
+                   gb.phase_t > 2.5 * gb.t_inertia()
             if done:
                 self.w_in = w_sync
                 gb.phase, gb.phase_t, gb.blend = gb.IDLE, 0.0, 0.0
@@ -826,7 +872,7 @@ class Driveline:
             T_out_i, i_use = T_in, i_new
 
         self.torque_cut = gb.torque_cut
-        self.T_pump = T_p * (0.06 if gb.neutral else 1.0) + T_lock
+        self.T_pump = T_in if self.rigid else T_p * (0.06 if gb.neutral else 1.0) + T_lock
         self.T_turb = T_out_i
         self.T_clutch = T_out_i
 
@@ -835,6 +881,17 @@ class Driveline:
         f_res, f_brake = self.resistance()
         m_eff = veh.mass + (veh.J_wheel + (veh.J_trans + self.J_in)
                             * i_use ** 2) / veh.r_wheel ** 2
+        self._sync_dt = dt
+        self.i_eff = i_use
+        if self.rigid:
+            # locked up: crank to wheels is one body, solved as the DCT's
+            # clamped state -- the car's inertia reflected onto the crank
+            self.F_trac, self.F_res = F_trac, f_res + f_brake
+            k = veh.r_wheel / max(i_use, 1e-6)
+            J_add = m_eff * k * k / max(veh.eta, 0.5)
+            T_react = (f_res + f_brake * np.sign(max(self.v, 0.0) + 1e-9)) \
+                * k / max(veh.eta, 0.5)
+            return T_react, J_add
         F_net = F_trac - f_res
         if self.v > 0.05 or F_net > f_brake:
             F_net -= f_brake * np.sign(max(self.v, 0.0) + 1e-9)

@@ -171,6 +171,10 @@ export class Gearbox {
   torque_cut = 0.0;
   blend = 0.0;
   err0 = 0.0;
+  coast = false; // this shift is an off-throttle downshift (bug #11)
+  /** bug #11: coast downshifts stretch both phases (FINDING-020) */
+  static readonly COAST_TORQUE_K = 2.0;
+  static readonly COAST_INERTIA_K = 4.0;
 
   constructor(readonly spec: LiveSpec, readonly veh: Vehicle) {
     this.n = veh.gears.length;
@@ -195,9 +199,18 @@ export class Gearbox {
     return this.phase !== Gearbox.IDLE;
   }
 
-  request(delta: number, kickdown = false): boolean {
+  t_torque(): number {
+    return this.T_TORQUE * (this.coast ? Gearbox.COAST_TORQUE_K : 1.0);
+  }
+
+  t_inertia(): number {
+    return this.T_INERTIA * (this.coast ? Gearbox.COAST_INERTIA_K : 1.0);
+  }
+
+  request(delta: number, kickdown = false, coast = false): boolean {
     const g = Math.trunc(clip(this.gear + delta, 0, this.n - 1));
     if (g === this.gear || this.shifting()) return false;
+    this.coast = coast;
     this.gear_from = this.gear;
     this.gear = g;
     this.phase = Gearbox.TORQUE;
@@ -232,20 +245,21 @@ export class Gearbox {
       }
     }
     if (n_turbine > up && this.gear < this.n - 1) this.request(+1);
-    else if (n_turbine < dn && this.gear > 0) this.request(-1);
+    else if (n_turbine < dn && this.gear > 0) this.request(-1, false, throttle < 0.05);
   }
 }
 
 /** Extra clutch capacity that clears the latched slip on schedule. */
 export function s_inertia(dl: Driveline, gb: Gearbox): number {
   const J = dl.spec_J;
-  return (J * gb.err0) / Math.max(gb.T_INERTIA, 0.03);
+  return (J * gb.err0) / Math.max(gb.t_inertia(), 0.03);
 }
 
 /** Converter or launch clutch + clutch-to-clutch gearbox + vehicle. */
 export class Driveline {
-  static readonly C_LOCK = 900.0;
+  static readonly C_LOCK = 900.0; // retired lock-up spring (FINDING-020)
   static readonly T_LOCK_MAX = 4500.0;
+  static readonly LOCK_ENGAGE_S = 0.5;
 
   readonly kind: string;
   readonly tc: LaunchClutch | TorqueConverter | ManualClutch;
@@ -275,6 +289,9 @@ export class Driveline {
   assist = false;
   shift_t = -1.0;     // < 0: no assisted shift in progress
   shift_to = 0;
+  // converter lock-up clutch (FINDING-020)
+  lock_slip0 = 0.0;
+  lock_latched = false;
   static readonly SHIFT_DOWN_S = 0.12;
   static readonly SHIFT_UP_S = 0.35;
 
@@ -445,12 +462,12 @@ export class Driveline {
 
     if (gb.phase === Gearbox.TORQUE) {
       gb.phase_t += dt;
-      const x = Math.min(1.0, gb.phase_t / gb.T_TORQUE);
+      const x = Math.min(1.0, gb.phase_t / gb.t_torque());
       gb.blend = x;
       i_use = (1.0 - x) * i_old + x * i_new;
       T_cl = T_eng;
       this.rigid = false;
-      if (gb.phase_t >= gb.T_TORQUE) {
+      if (gb.phase_t >= gb.t_torque()) {
         gb.phase = Gearbox.INERTIA;
         gb.phase_t = 0.0;
         gb.err0 = Math.abs(w_e - (this.v / veh.r_wheel) * i_new);
@@ -463,7 +480,7 @@ export class Driveline {
       gb.torque_cut = err > 0 ? 0.25 : 0.0;
       this.rigid = false;
       i_use = i_new;
-      if (Math.abs(err) < 2.0 || gb.phase_t > 2.5 * gb.T_INERTIA) {
+      if (Math.abs(err) < 2.0 || gb.phase_t > 2.5 * gb.t_inertia()) {
         gb.phase = Gearbox.IDLE;
         gb.phase_t = 0.0;
         gb.blend = 0.0;
@@ -535,12 +552,32 @@ export class Driveline {
       this.lockup = false;
     }
 
+    // ---- the lock-up clutch: a clutch, not a spring (FINDING-020) ----
+    const slip = w_e - this.w_in;
+    if (!this.lockup) {
+      this.rigid = false;
+      this.lock_latched = false;
+    } else if (!this.lock_latched) {
+      this.lock_slip0 = slip;
+      this.lock_latched = true;
+    }
     const [T_p, T_t] = tc.torques(w_e, this.w_in);
     let T_lock = 0.0;
-    if (this.lockup) {
-      T_lock = clip(Driveline.C_LOCK * (w_e - this.w_in), -Driveline.T_LOCK_MAX, Driveline.T_LOCK_MAX);
+    if (this.lockup && !this.rigid) {
+      const cap = Math.min(Driveline.T_LOCK_MAX,
+        Math.abs(T_eng) + (this.spec.geom.flywheel_inertia * Math.abs(this.lock_slip0)) / Driveline.LOCK_ENGAGE_S);
+      if (Math.abs(slip) < 3.0 || slip * this.lock_slip0 <= 0.0) {
+        this.rigid = true;
+        this.snap_w_e = this.w_in;
+      } else {
+        T_lock = copysign(cap, slip);
+      }
     }
-    const T_in = T_t + T_lock;
+    if (this.rigid && Math.abs(T_eng) > Driveline.T_LOCK_MAX) {
+      this.rigid = false;
+      this.lock_latched = false;
+    }
+    const T_in = this.rigid ? T_eng : T_t + T_lock;
     this.slip_rpm = ((w_e - this.w_in) * 60.0) / (2 * Math.PI);
 
     gb.torque_cut = 0.0;
@@ -551,12 +588,12 @@ export class Driveline {
       i_use = i_new;
     } else if (gb.phase === Gearbox.TORQUE) {
       gb.phase_t += dt;
-      const x = Math.min(1.0, gb.phase_t / gb.T_TORQUE);
+      const x = Math.min(1.0, gb.phase_t / gb.t_torque());
       gb.blend = x;
       this.w_in = this.w_out_at_input(gb.gear_from);
       i_use = (1.0 - x) * i_old + x * i_new;
       T_out_i = T_in;
-      if (gb.phase_t >= gb.T_TORQUE) {
+      if (gb.phase_t >= gb.t_torque()) {
         gb.phase = Gearbox.INERTIA;
         gb.phase_t = 0.0;
         gb.err0 = Math.abs(this.w_in - this.w_out_at_input());
@@ -564,7 +601,7 @@ export class Driveline {
     } else if (gb.phase === Gearbox.INERTIA) {
       gb.phase_t += dt;
       const err = this.w_in - w_sync;
-      let cap = Math.abs(T_in) + (this.J_in * gb.err0) / Math.max(gb.T_INERTIA, 0.05);
+      let cap = Math.abs(T_in) + (this.J_in * gb.err0) / Math.max(gb.t_inertia(), 0.05);
       cap = Math.min(cap, 8.0 * Math.max(Math.abs(T_in), 50.0));
       const T_cl = Math.abs(err) > 1e-3 ? copysign(cap, err) : T_in;
       gb.torque_cut = err > 0 ? 0.35 : 0.0;
@@ -573,7 +610,7 @@ export class Driveline {
       i_use = i_new;
       const done = Math.abs(err) < 2.0
         || (gb.err0 > 0 && err * copysign(1.0, gb.err0) < 0)
-        || gb.phase_t > 2.5 * gb.T_INERTIA;
+        || gb.phase_t > 2.5 * gb.t_inertia();
       if (done) {
         this.w_in = w_sync;
         gb.phase = Gearbox.IDLE;
@@ -588,7 +625,7 @@ export class Driveline {
     }
 
     this.torque_cut = gb.torque_cut;
-    this.T_pump = T_p * (gb.neutral ? 0.06 : 1.0) + T_lock;
+    this.T_pump = this.rigid ? T_in : T_p * (gb.neutral ? 0.06 : 1.0) + T_lock;
     this.T_turb = T_out_i;
     this.T_clutch = T_out_i;
 
@@ -596,6 +633,17 @@ export class Driveline {
     const F_trac = (T_out_i * i_use * veh.eta) / veh.r_wheel;
     const [f_res, f_brake] = this.resistance();
     const m_eff = veh.mass + (veh.J_wheel + (veh.J_trans + this.J_in) * i_use ** 2) / veh.r_wheel ** 2;
+    this._sync_dt = dt;
+    this.i_eff = i_use;
+    if (this.rigid) {
+      // locked up: one body, solved as the DCT's clamped state
+      this.F_trac = F_trac;
+      this.F_res = f_res + f_brake;
+      const k = veh.r_wheel / Math.max(i_use, 1e-6);
+      const J_add = (m_eff * k * k) / Math.max(veh.eta, 0.5);
+      const T_react = ((f_res + f_brake * sign(Math.max(this.v, 0.0) + 1e-9)) * k) / Math.max(veh.eta, 0.5);
+      return [T_react, J_add];
+    }
     let F_net = F_trac - f_res;
     if (this.v > 0.05 || F_net > f_brake) F_net -= f_brake * sign(Math.max(this.v, 0.0) + 1e-9);
     this.F_trac = F_trac;

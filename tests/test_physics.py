@@ -878,12 +878,17 @@ def test_source_levels_carry_physics():
           rms("dpdt_max", 2.0, "combustion") / rms("dpdt_max", 1.0, "combustion"), 2.0, 1e-6)
 
 
-def _toy_live(trans):
-    """A LiveEngine on a synthetic 2 x 2 grid -- enough for controls, no solve."""
+def _toy_live(trans, motoring=False):
+    """A LiveEngine on a synthetic 2 x 2 grid -- enough for controls, no solve.
+    motoring=True gives torque = -15 + 230 x load N.m, so an engine off the
+    throttle brakes the car as a real one does."""
     from dieselsim.live import LiveEngine, PerfGrid
     spec = DieselEngine(preset="crdi15").spec
-    cell = dict(torque=100.0, power=20e3, fuel_kg_h=5.0, boost=1.5, turbo_rpm=9e4, afr=25.0, q_wall=0.2)
-    perf = [[dict(cell), dict(cell)], [dict(cell), dict(cell)]]
+    def cell(load):
+        tq = -15.0 + 230.0 * load if motoring else 100.0
+        return dict(torque=tq, power=20e3, fuel_kg_h=0.3 + 12.0 * load, boost=1.0 + 1.2 * load,
+                    turbo_rpm=9e4, afr=25.0, q_wall=0.2)
+    perf = [[cell(0.0), cell(1.0)], [cell(0.0), cell(1.0)]]
     return LiveEngine(PerfGrid(spec, [spec.idle_rpm, spec.max_rpm], [0.0, 1.0], perf), "crdi15", trans=trans)
 
 
@@ -962,6 +967,63 @@ def test_manual_gearbox():
           f"(assisted rpm {a.rpm:.0f})")
 
 
+def _coast_down(trans):
+    """Coast from 100 km/h in top gear with a light brake to 5 km/h; returns
+    per-frame (accel m/s^2, gear) and the lock-up torque into the box."""
+    import math
+    live = _toy_live(trans, motoring=True)
+    gb, dl = live.dl.gb, live.dl
+    dl.v = 100 / 3.6
+    for k in range(gb.n - 1, -1, -1):
+        gb.gear = gb.gear_from = k
+        if dl.w_out_at_input() * 60 / (2 * math.pi) > 1.05 * live.spec.idle_rpm:
+            break
+    dl.w_in = dl.w_out_at_input()
+    live.rpm = dl.w_in * 60 / (2 * math.pi)
+    rows, locked_T, vp = [], [], dl.v
+    for _ in range(3600):
+        live.throttle, dl.brake = 0.0, 0.08
+        live.step(1 / 60)
+        rows.append(((dl.v - vp) * 60, gb.gear))
+        vp = dl.v
+        if dl.lockup:
+            locked_T.append(abs(dl.T_turb))
+        if dl.v < 5 / 3.6:
+            break
+    return rows, locked_T
+
+
+def _worst_overshoot(rows):
+    """Largest excursion of the deceleration, within 1 s of a shift, beyond
+    both the steady value before and the steady value after it."""
+    import statistics
+    worst = 0.0
+    for i in range(1, len(rows)):
+        if rows[i][1] != rows[i - 1][1] and i + 120 < len(rows):
+            before = statistics.median(r[0] for r in rows[max(0, i - 60):max(1, i - 5)])
+            after = statistics.median(r[0] for r in rows[i + 60:i + 120])
+            lo, hi = min(before, after), max(before, after)
+            worst = max(worst, max(max(lo - r[0], r[0] - hi, 0.0) for r in rows[i:i + 60]))
+    return worst
+
+
+def test_lockup_and_coast_downshifts():
+    """FINDING-020 / bug #11: the converter's lock-up was a spring integrated
+    explicitly at h*C/J = 17 (stable below 2) -- every locked frame sat on its
+    4500 N.m clamp, and coast downshifts re-locked as 1 g jolts. Now a clutch
+    (slip-engaged, then rigid), and coast downshifts stretch both shift
+    phases. On a coast-down from 100 km/h no locked frame may reach the
+    clamp, and no downshift may overshoot the steady deceleration by more
+    than 2 m/s^2 (converter or dual clutch)."""
+    rows_tc, locked = _coast_down("tc")
+    rows_dct, _ = _coast_down("dct")
+    at_clamp = sum(1 for t in locked if t > 4400.0)
+    o_tc, o_dct = _worst_overshoot(rows_tc), _worst_overshoot(rows_dct)
+    check("lock-up never at its clamp; coast downshifts within 2 m/s^2 (FINDING-020, bug #11)",
+          1.0 if locked and at_clamp == 0 and o_tc < 2.0 and o_dct < 2.0 else 0.0, 1.0, 0.0,
+          f"locked {len(locked)} frames, {at_clamp} at the clamp; worst overshoot tc {o_tc:.2f}, dct {o_dct:.2f} m/s^2")
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -997,7 +1059,8 @@ def main():
                test_ring_film_field_responds,
                test_source_levels_carry_physics,
                test_lockup_key_by_transmission,
-               test_manual_gearbox):
+               test_manual_gearbox,
+               test_lockup_and_coast_downshifts):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001
