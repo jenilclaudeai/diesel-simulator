@@ -620,6 +620,17 @@ def test_closing_ramps_clear_the_lash():
           "; ".join(bad) or f"{len(PRESETS)} presets")
 
 
+def test_cam_wear_calibration():
+    """FINDING-015: K_ARCHARD["cam"] is calibrated to the owner's
+    service-interval target -- the flat-tappet single, default duty cycle,
+    grows 150 um of exhaust lash in 2000 h (measured 149.8 um). A design
+    choice, stated as one; this pins it."""
+    eng = DieselEngine(preset="single")
+    eng.durability_run(2000.0, verbose=False)
+    check("single exhaust lash growth at 2000 h (calibration target 150 um)",
+          eng.wear.state.lash_growth_exh * 1e6, 150.0, 0.05)
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -643,7 +654,8 @@ def main():
                test_theta_global_axis,
                test_mech_levels_carry_physics,
                test_flat_tappet_wears_more_than_roller,
-               test_closing_ramps_clear_the_lash):
+               test_closing_ramps_clear_the_lash,
+               test_cam_wear_calibration):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001

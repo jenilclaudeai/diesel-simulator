@@ -251,3 +251,33 @@ memory):
 
 Option 1 is the most defensible if the standard is available; option 3 is the
 quickest and says plainly that it is a design choice.
+
+---
+
+## Wear calibrated (session 4, owner's target: service interval)
+
+**Target, chosen by the owner:** a mechanical-lash engine needs its valves
+adjusted every **2000 h**, at **150 µm** of lash growth. Fitted on the
+flat-tappet `single` (default duty cycle, exhaust lash — the faster-growing
+side), after FINDING-017's ramp fix. A design choice, not a measurement.
+
+`K_ARCHARD["cam"]`: 3.2e-9 → **2.17e-7** (×67.8; the relation is linear —
+the first proportional step landed at 149.89 µm).
+
+| engine | lash growth 2000 h | 8000 h | 12,000 h (cam lift lost) |
+|---|---|---|---|
+| `single` (flat tappet) | **149.8 µm** | 625 µm | 934 µm (12% of lift) |
+| `hd_i6` (roller) | 8.5 µm | 37 µm | 55 µm (0.5%) |
+| `crdi15` (roller, hydraulic) | 1.7 µm | 7.5 µm | 11 µm (0.1%) |
+
+Rollers wear ~17× slower than the flat tappet. An unadjusted flat tappet keeps
+losing lobe linearly (Archard, no run-in modelled): −1.4% torque at 12,000 h.
+
+**Observed, not investigated:** after 2000 h `crdi15` makes **+3.6%** torque
+(and `hd_i6` −1.9%) relative to new. That is not the cam (1.7 µm of lift) — it
+comes from the other wear mechanisms, whose coefficients were not touched, and
+recalls known bug #9 (a worn engine with *less* blow-by than new). Worth its
+own look.
+
+Test `test_cam_wear_calibration` (150 µm ± 5% at 2000 h); the old coefficient
+fails it (2.21 µm).
