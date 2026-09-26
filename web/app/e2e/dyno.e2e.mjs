@@ -64,6 +64,10 @@ const browser = await puppeteer.launch({
   // --disable-web-security or similar: they would hide the MIME, CORS and
   // secure-context problems this test exists to catch.
   headless: process.env.CHROME_HEADLESS === "shell" ? "shell" : true,
+  // waitForFunction holds one protocol call open until it resolves; the
+  // default 180 s cut off a dyno pull once the p_max / T_exh limit check
+  // (PR #44) made it longer than that on CI's two cores
+  protocolTimeout: 45 * 60_000,
 });
 const page = await browser.newPage();
 await page.setViewport({ width: 1100, height: 900 });
