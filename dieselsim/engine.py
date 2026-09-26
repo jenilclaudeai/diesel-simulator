@@ -714,7 +714,10 @@ class DieselEngine:
                 # at fine time resolution while the cycle is refreshed less
                 # often; the friction powers driving wear are reused.
                 if prev is None or i_block % max(resolve_every, 1) == 0:
-                    op = self.operating_point(rpm, load=load, n_cycles=6)
+                    # FINDING-019: was n_cycles=6, which known bug #1 says
+                    # is unconverged; over 2000 h it moved crdi15's logged
+                    # rated torque 3.8% and wear by up to 3% (single: none)
+                    op = self.operating_point(rpm, load=load, n_cycles=9)
                     self._mode_cache[k_mode] = op
                 else:
                     op = prev

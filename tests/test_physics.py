@@ -791,6 +791,27 @@ def test_pressure_and_temperature_limits():
           on, off, 1e-12)
 
 
+def test_durability_solves_are_converged_enough():
+    """FINDING-019: durability_run solved every mode at n_cycles=6, which
+    known bug #1 measured as unconverged; over 2000 h that moved crdi15's
+    logged rated torque 3.8%. No solve it makes may use fewer than 9."""
+    eng = DieselEngine(preset="single")
+    seen = []
+    orig = eng.operating_point
+
+    def spy(*a, **kw):
+        # the limiter's own calibration runs at cal_cycles (8, a recorded
+        # decision -- see engine.py); only durability_run's solves count
+        if not eng._calibrating:
+            seen.append(kw.get("n_cycles", 10))
+        return orig(*a, **kw)
+    eng.operating_point = spy
+    eng.durability_run(50.0, verbose=False)
+    check("durability_run solves at n_cycles >= 9",
+          1.0 if seen and min(seen) >= 9 else 0.0, 1.0, 0.0,
+          f"{len(seen)} solves, n_cycles {sorted(set(seen))}")
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -820,7 +841,8 @@ def main():
                test_cold_solve_is_path_independent,
                test_cam_lift_is_continuous,
                test_seating_on_ramp_is_ramp_speed,
-               test_pressure_and_temperature_limits):
+               test_pressure_and_temperature_limits,
+               test_durability_solves_are_converged_enough):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001
