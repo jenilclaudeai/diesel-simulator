@@ -47,6 +47,8 @@ truth. A stale STATUS.md is the failure this setup exists to prevent.
 ```bash
 python3 tests/test_physics.py          # regression suite; see STATUS.md for expected counts
 python3 tools/audit_dead_signals.py    # run after ANY physics change
+python3 tools/fixtures/gen_fixtures.py --check   # golden fixtures current? (regenerate without --check)
+cd web/physics && npm ci && npm test            # TypeScript ports vs fixtures (ADR-004)
 cd tools/pyodide && npm ci && npm run suite     # the same suite under Pyodide
 cd web/solver  && npm ci && npm run test:fast   # cache tests, seconds
 cd web/solver  && npm test                      # + round trip through a real worker
