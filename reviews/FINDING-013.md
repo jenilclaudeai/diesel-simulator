@@ -7,6 +7,7 @@ FINDING-007, listed as next action 6 in `STATUS.md`
 **Status:** measured, not fixed. Item 3 measured further in session 4 — it is
 **not** local to `crdi15`, and at part load it merges with item 2; see
 *Item 3, measured* at the end. The fix needs a design decision.
+*(Updated 2026-09-26: the status above is stale. Item 1 is fixed (PR #21), item 2 is fixed (PR #40), and item 3 is deferred to Phase 3 by the owner. Converged mode and the dyno accuracy note are the interim answer.)*
 **Reproduce:** `python3 tools/diag_torque_limiter.py` (≈2 min on 6 cores), then
 `--egr-sweep` and `--converge`
 

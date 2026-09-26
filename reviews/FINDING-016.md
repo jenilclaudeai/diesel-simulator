@@ -4,6 +4,7 @@
 schedules), which made two regression guards fail
 **Lens:** PHY1 (lead), QA2
 **Status:** measured; first reading corrected below (delay responds ~0.2°, quantised to the 1° step); fix direction for PHY1
+*(Updated 2026-09-26: fixed in PR #27 (ignition resolved within the crank step); tests `test_ignition_delay_resolved`, `test_ignition_delay_converges_in_resolution`.)*
 
 ---
 

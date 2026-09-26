@@ -4,6 +4,7 @@
 on (`tools/render_ab.py`)
 **Lens:** QA2 (lead), PHY2
 **Status:** measured, not fixed — fixes are decisions, see Options
+*(Updated 2026-09-26: the line above is stale. Item 1 is fixed (PR #34), item 2 is fixed by raising the ramps (PR #37), and seating at ramp speed is PR #43. Item 3 was not applied. By-ear sign-off is a Phase 4 exit criterion.)*
 **Reproduce:** `python3 tools/render_ab.py --levels` (needs scipy)
 
 ---

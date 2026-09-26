@@ -350,8 +350,11 @@ Rules of thumb: 20–24 bar BMEP is a modern heavy-duty diesel at full load,
   revolutions, scaled `(1800/rpm)^0.55`. Mixing is driven by injection
   turbulence as well as piston motion, so it does not scale as 1/rpm.
 - `TAU_WALL = 0.11` — burned-zone wall loss timescale.
-- `NOX_CAL = 0.030`, `SOOT_CAL = 0.28` — the two calibration constants in the
-  package. Emissions are the one place with fitted scalars.
+- `NOX_CAL = 0.030`, `SOOT_CAL = 0.28` — the two constants fitted to data.
+  ~~Emissions are the one place with fitted scalars.~~ *Corrected 2026-09-26:*
+  other constants are chosen rather than fitted (acoustic references and
+  `SPL_CAL`, the cam wear coefficient, limiter trims and limits, the EGR
+  valve's starting opening). The list is in PROJECT_CONTEXT.md §1.3.
 - `GAMMA_B = 1.27` — burned-gas ratio used in the two-zone pressure response.
 
 `wear.py` — `K_ARCHARD` dimensionless wear coefficients:

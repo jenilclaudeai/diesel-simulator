@@ -5,6 +5,7 @@ where the source operating point switches" — unmeasured until now (FINDING-012
 unblocked it)
 **Lens:** QA2 (lead), PHY2
 **Status:** measured, not fixed — fix options below, for decision
+*(Updated 2026-09-26: the line above is stale. Fixed in PR #29 (carry phase, keep length); test `test_render_transient_has_no_seams`.)*
 **Reproduce:** `python3 tools/diag_render_seams.py` (needs scipy)
 
 ---

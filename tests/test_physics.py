@@ -46,8 +46,8 @@ def known(name, cond, note):
 #
 # Captured 2026-09-08 on the pre-fix tree and confirmed bit-identical after
 # removing the double-counted pilot multiplier (FINDING-001 P-1). Tolerance
-# is 0.5% -- these come from a deterministic solver, so anything larger
-# means a real change.
+# was 0.5% -- these come from a deterministic solver, so anything larger
+# means a real change. (Now GOLDEN_TOL = 1e-5; see the end of this block.)
 #
 # hd_i6 @ 1700 rpm reproduces the 2310 N.m peak torque in
 # PROJECT_CONTEXT.md section 1.5.
@@ -99,10 +99,18 @@ def known(name, cond, note):
 #   crdi15 3000/1.0  torque 216.892 -> 216.888, bsfc 214.56 -> 214.55, p_max 152.23 -> 152.27
 #   hd_i6  1700/1.0  torque 2311.359 -> 2313.377, bsfc 214.29 -> 214.10, p_max 178.17 -> 178.84
 # hd_i6 still reproduces the documented 2310 N.m and stays in the 160-200 bar band.
+#
+# Tolerance tightened 0.5% -> 1e-5 at the Phase 1 exit (REVIEW-003), values
+# now stored to 9 significant figures. 0.5% let PR #37's -0.09% move pass
+# unrecorded. 1e-5 is the SolverPort's bound for the same reason: the
+# limiter's warm-started calibration chain amplifies a ~1e-10 platform
+# difference to ~1e-6 (Pyodide/numpy 2.4.6 vs native/numpy 2.1.0: 4.9e-8 at
+# crdi15 1800/0.6).
+GOLDEN_TOL = 1e-5
 GOLDEN = {
-    ("crdi15", 1800, 0.6): dict(torque=122.580, bsfc=238.52, pmax=130.05),
-    ("crdi15", 3000, 1.0): dict(torque=216.888, bsfc=214.55, pmax=152.27),
-    ("hd_i6", 1700, 1.0): dict(torque=2313.377, bsfc=214.10, pmax=178.84),
+    ("crdi15", 1800, 0.6): dict(torque=122.580341, bsfc=238.524968, pmax=130.046491),
+    ("crdi15", 3000, 1.0): dict(torque=216.888323, bsfc=214.552248, pmax=152.273735),
+    ("hd_i6", 1700, 1.0): dict(torque=2313.377013, bsfc=214.100932, pmax=178.836788),
 }
 
 
@@ -111,9 +119,9 @@ def test_golden_points():
         eng = DieselEngine(preset=preset)
         op = eng.operating_point(rpm, load=load, n_cycles=9)
         tag = f"{preset}@{rpm}/{load}"
-        check(f"{tag} torque", op.torque, exp["torque"], 0.005)
-        check(f"{tag} bsfc", op.bsfc, exp["bsfc"], 0.005)
-        check(f"{tag} p_max", op.p_max / 1e5, exp["pmax"], 0.005)
+        check(f"{tag} torque", op.torque, exp["torque"], GOLDEN_TOL)
+        check(f"{tag} bsfc", op.bsfc, exp["bsfc"], GOLDEN_TOL)
+        check(f"{tag} p_max", op.p_max / 1e5, exp["pmax"], GOLDEN_TOL)
         if (preset, rpm, load) == ("crdi15", 1800, 0.6):
             # FINDING-013 item 2: with the valve starting 25 % open for any
             # command a 9-cycle solve delivered 16.6 % against a 9.2 % target
@@ -695,6 +703,10 @@ def test_cell_friction_from_trace():
     ref.seed_fuel_limit(1800.0, perf["fuel_mg"] / 0.6)
     full_cold = ref.operating_point(1800, fuel_mg=perf["fuel_mg"], n_cycles=9).fmep
     check("cell friction from stored trace (same state)", same, own, 0.002)
+    # FINDING-011: a grid cell is a fresh-engine n_cycles=9 solve; the old
+    # shared-engine build was off by up to -10.06%
+    check("grid cell torque equals a fresh-engine solve (FINDING-011)", perf["torque"],
+          DieselEngine(preset="crdi15").operating_point(1800, load=0.6, n_cycles=9).torque, 1e-12)
     check("cell friction from stored trace (cold oil vs full cold solve)", cold, full_cold, 0.002)
 
 
@@ -812,6 +824,60 @@ def test_durability_solves_are_converged_enough():
           f"{len(seen)} solves, n_cycles {sorted(set(seen))}")
 
 
+def test_calibration_cache_is_consistent():
+    """FINDING-007 (BUG-8): fuel_for_torque's cache clipped against a lower
+    ceiling than its calibration, so the same call returned 61.31 mg cold and
+    55.97 mg warm (-8.71%). A warm call must return the cold call's fuel."""
+    eng = DieselEngine(preset="crdi15")
+    cold = eng.fuel_for_torque(1800.0, 286.6)
+    warm = eng.fuel_for_torque(1800.0, 286.6)
+    check("fuel_for_torque: warm cache returns the cold calibration (BUG-8)", warm, cold, 1e-12,
+          f"{cold:.4f} mg cold, {warm:.4f} mg warm")
+
+
+def test_ring_film_field_responds():
+    """FINDING-006: the ring film minimum sits on its 12 nm clamp at the
+    reversals in every condition, so it is exposed as h_ring_tdc; the
+    mid-stroke film h_ring_mid is the one that responds. It must move with
+    load, and h_ring_tdc stays the clamp."""
+    lo = DieselEngine(preset="crdi15").operating_point(1800.0, load=0.2, n_cycles=9)
+    hi = DieselEngine(preset="crdi15").operating_point(1800.0, load=0.9, n_cycles=9)
+    moved = abs(hi.h_ring_mid / lo.h_ring_mid - 1.0)
+    check("h_ring_mid responds to load (FINDING-006)", 1.0 if moved > 0.01 else 0.0, 1.0, 0.0,
+          f"load 0.2 {lo.h_ring_mid * 1e9:.1f} nm vs 0.9 {hi.h_ring_mid * 1e9:.1f} nm ({100 * moved:.1f}%); "
+          f"h_ring_tdc {lo.h_ring_tdc * 1e9:.1f} / {hi.h_ring_tdc * 1e9:.1f} nm")
+
+
+def test_source_levels_carry_physics():
+    """FINDING-004: every source was normalised to unit level, so load and
+    temperature changed timbre but not loudness. Exhaust now scales as
+    (mass flow)^1.5 and combustion as dp/dt: doubling each input must scale
+    its source exactly 2^1.5 and 2. Needs scipy; SKIP without."""
+    import importlib.util
+    if importlib.util.find_spec("scipy") is None:
+        RESULTS.append(("SKIP", "exhaust and combustion levels carry physics", None, None,
+                        "scipy unavailable (acoustics renders with it)"))
+        return
+    import numpy as np
+    from dieselsim.acoustics import EngineSound
+    eng = DieselEngine(preset="crdi15")
+    op = eng.operating_point(1800.0, load=0.6, n_cycles=9)
+    snd = EngineSound(eng.spec)
+    snd.wear = eng.wear
+    src = snd.build_sources(op)
+
+    def rms(key, k, part):
+        s2 = dict(src)
+        s2["_meta"] = dict(src["_meta"])
+        s2["_meta"][key] *= k
+        y = snd.render(op, duration=0.5, sources=s2, seed=5)[1][part]
+        return float(np.sqrt(np.mean(y ** 2)))
+    check("exhaust level x mass flow^1.5 (FINDING-004)",
+          rms("mdot_air", 2.0, "exhaust") / rms("mdot_air", 1.0, "exhaust"), 2.0 ** 1.5, 1e-6)
+    check("combustion level x dp/dt (FINDING-004)",
+          rms("dpdt_max", 2.0, "combustion") / rms("dpdt_max", 1.0, "combustion"), 2.0, 1e-6)
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -842,7 +908,10 @@ def main():
                test_cam_lift_is_continuous,
                test_seating_on_ramp_is_ramp_speed,
                test_pressure_and_temperature_limits,
-               test_durability_solves_are_converged_enough):
+               test_durability_solves_are_converged_enough,
+               test_calibration_cache_is_consistent,
+               test_ring_film_field_responds,
+               test_source_levels_carry_physics):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001
