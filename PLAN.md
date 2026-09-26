@@ -161,6 +161,26 @@ handling once the loop is ported.
 **Exit criteria:** differential tests green; a 60-second drive in TS matches
 the same drive in Python within tolerance.
 
+### Outcome (session 5, 2026-09-27) — see REVIEW-005
+
+- [x] The loop ported: `play.py`'s real-time classes were moved into
+  `dieselsim/live.py` bit-identically, then ported to `web/physics/src/live`
+  with Python's field names (#51, #52).
+- [x] Fixed 60 Hz in a Web Worker, decoupled from rendering: the `/drive`
+  page (#57).
+- [x] Manual gearbox with a clutch pedal and an auto-clutch assist (#53).
+- [x] Carried items:
+  - FINDING-013 item 3: prebuilt converged grids for the presets (#56);
+  - bug #11: root cause FINDING-020, the lock-up's numerical instability (#54);
+  - bug #6: tested (#51);
+  - ADR-011 step 2: friction live in the loop (#55).
+- [x] Exit criterion 1: `web/physics` has 41 checks, all passing, with
+  per-step agreement at worst 1.0e-14 and every event at the same step in 7
+  fixture drives.
+- [x] Exit criterion 2: the 60 s script through the drive page's worker in
+  Chrome, on a prebuilt converged grid, matches native Python: 53 of 53
+  events at the same frame, final values within 1.7e-16. Checked in CI.
+
 ---
 
 ## Phase 4 — Audio

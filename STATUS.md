@@ -1,25 +1,71 @@
 # Status
 
-**Updated:** 2026-09-26 (session 5: "complete Phases 1 and 2")
-**Phase:** 1 and 2 **exit-ready** (REVIEW-003, REVIEW-004). Waiting on two things:
-the owner merging the stack, and one decision (FINDING-018's fix option).
-After that, Phase 3.
-**Main:** everything through PR #39 is merged. Open, **one stack, merge in
-order**, retargeting each child to `main` after its parent merges
-(`gh pr edit <n> --base main`):
+**Updated:** 2026-09-27 (session 5, part 2: "complete Phase 3")
+**Phase:** 1, 2 and 3 **exit-ready** (REVIEW-003, -004, -005). Nothing is
+waiting on a decision; the stack below only needs merging. Next is Phase 4
+(audio).
+**Main:** only #40 of the Phase 1–2 stack reached `main`. #41–#49 merged into
+their parent branches instead, so **#50 lands them all in one merge**: its
+content was verified identical to the top of that stack. Then Phase 3, one
+stack, **merge in order**. After each merge, retarget the next PR to `main`
+(`gh pr edit <n> --base main`), or it merges into a dead branch again.
 
-| PR | branch | what | needs |
-|---|---|---|---|
-| #40 | `fix/egr-start` | EGR valve starts at 0.14 × command (FINDING-013 item 2) | review |
-| #41 | `fix/turbo-reset` | `warm_start=False` isolates a solve (bug #5) | review |
-| #42 | `fix/cam-profile` | cam lift no longer steps 4× at the ramp junctions (FINDING-018), option C′ | **decision: confirm C′** (A/B/C measured in the finding) |
-| #43 | `fix/seat-ramp` | valves seat at ramp speed when the lash is inside the ramp | review |
-| #44 | `feat/pmax-texh-limits` | p_max and T_exh limits in the fuel limiter (bug #2) | review |
-| #45 | `fix/aged-torque` | `durability_run` at 9 cycles; the aged-engine torque gain explained (FINDING-019) | review |
-| #46 | `docs/phase1-exit` | Phase 1 exit: regression-test gaps closed, validation re-checked, goldens at 1e-5 (REVIEW-003) | review |
-| #47 | `feat/golden-fixtures` | golden-fixture harness and first TypeScript ports (ADR-004) | review |
-| #48 | `feat/browser-grid-e2e` | `/grid` page; a full grid built in Chrome matches native, cell for cell | review |
-| #49 | `docs/phase2-exit` | accuracy table regenerated on the final tree; REVIEW-004; this file | review |
+| PR | branch | what |
+|---|---|---|
+| #50 | `docs/phase2-exit` → `main` | lands #41–#49 (Phases 1 and 2) |
+| #51 | `feat/live-module` | the real-time loop moves to `dieselsim/live.py`, bit-identical; bug #6 tested |
+| #52 | `feat/live-port` | the live loop in TypeScript, held to Python per step and end to end |
+| #53 | `feat/manual-gearbox` | manual gearbox, clutch pedal, auto-clutch assist |
+| #54 | `fix/coast-downshift` | lock-up is a clutch, not an unstable spring; gentle coast downshifts (FINDING-020, bug #11) |
+| #55 | `feat/live-friction` | friction computed live in the loop (ADR-011 step 2) |
+| #56 | `feat/prebuilt-grids` | prebuilt converged grids for the five presets |
+| #57 | `feat/drive-page` | `/drive`: the TypeScript loop at 60 Hz in a worker |
+| #58 | `docs/phase3-exit` | REVIEW-005, accuracy table, PLAN, this file |
+
+The repository is **public** now: Actions minutes are free, and the history
+was scanned for tokens before it went public (none found).
+
+---
+
+## Session 5, part 2 (2026-09-27) — Phase 3 completed
+
+The owner confirmed FINDING-018's C′ and took four more decisions, all as
+recommended:
+- prebuilt converged grids for the presets;
+- ADR-011 in Phase 3;
+- a clutch pedal with an auto-clutch assist;
+- a minimal drive page.
+
+- **#51:** `play.py`'s loop moved to `dieselsim/live.py`. 0 of 180,000 values
+  differ against the original.
+- **#52:** TypeScript port; Python snapshots load field for field. Per step
+  1.0e-14, every event aligned.
+- **#53:** manual box, built in Python first as the reference. The clutch
+  return (1.4 s) was chosen by measurement.
+- **#54 — FINDING-020.** Measuring bug #11 found the converter's lock-up
+  unstable (h·C/J = 17): every locked frame sat on its ±4,500 N·m clamp, and
+  coast downshifts jolted at up to 1.3 g. It is now a clutch; coast shifts
+  stretch.
+- **#55 — ADR-011 live.** A friction port agreeing to 3.5e-13, an oil node,
+  and a cold/warm pair. A cold engine drives cold (×1.74 friction at 298 K).
+- **#56:** five converged grids, 32 of 480 cells unsettled and flagged, keyed on
+  `grid_hash()`, which excludes the live loop.
+- **#57:** `/drive`, running 60 Hz in a worker. In Chrome it matches native
+  Python on a 60 s drive to 1.7e-16.
+
+Mistakes of mine this part, corrected where they happened:
+- a suite count written early (54 vs 53);
+- two false alarms (m/s read as km/h; a check without the script's brake);
+- a checkout that removed committed grid files from the working tree
+  (restored);
+- an e2e race;
+- three test gaps found by their own mutants.
+
+**Owner, please:**
+1. Merge #50, then #51 → #58 in order, retargeting each to `main`.
+2. Try `/drive`.
+
+---
 
 Read this first in a new session, then `PLAN.md`, then `DECISIONS.md`, then
 `reviews/`. Those replace pasting a context document. `CLAUDE.md` says the same
@@ -442,6 +488,10 @@ cd web/app && npm test -- --watch=false          # 22 unit tests (vitest)
 cd web/app && npm run build:pages                # never plain `build`
 cd web/app && CHROME_PATH=... npm run e2e        # dyno pull in Chrome vs native (computes its own reference)
 cd web/app && CHROME_PATH=... npm run e2e:grid   # full 8 x 6 grid in Chrome vs native, cell for cell (~9 min)
+cd web/app && CHROME_PATH=... npm run e2e:drive  # /drive: prebuilt grid, 60 Hz, 60 s script vs native Python
+cd web/physics && npm test                       # 41 checks: fixture ports + 7 live drives (per step + terminal)
+python3 tools/fixtures/gen_fixtures.py --only live   # regenerate live drives after a live.py change (~4 min)
+python3 tools/build_live_grids.py                # rebuild the prebuilt converged grids after a SOLVER change (~57 min)
 ```
 
 On macOS, `CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"`.
@@ -464,32 +514,24 @@ The open stack is in the table at the top of this file. Merged branches are
 
 ## Next actions
 
-1. **Owner:** confirm FINDING-018's option C′ (or choose A/B/C), then merge
-   #40 → #49 in order. If a different option is chosen:
-   - regenerate the fixtures (`gen_fixtures.py`);
-   - re-baseline the goldens and `NATIVE_TORQUE` in that PR;
-   - re-run the accuracy pull;
-   - check #43 (it builds on C′'s ramp speed).
-2. **Phase 3 — the real-time loop in TypeScript.** It opens with these
-   carried items:
-   - FINDING-013 item 3: the fast path doesn't converge at part load
-     (13.5% RMS, worst −39%) and has the `crdi15` limit cycle;
-   - bug #11 (coast downshift);
-   - a test for bug #6's key once `play.py`'s loop is ported;
-   - ADR-011 step 2: port `FrictionModel.evaluate` against
-     `web/physics/fixtures/friction.json`;
-   - the manual gearbox's clutch;
-   - integrator ports with ADR-004's per-step and terminal bounds.
-3. **Enjoy mode's roster** (OPEN-F) and its prebuilt grids
-   (`--converged-grid`). A browser build takes about 8 minutes (REVIEW-004 m-1).
-4. **Phase 4:** the owner's by-ear sign-off, which is now its exit criterion.
-   Also `hd_i6`'s tick dominance (13×) and a ramp-height parameter separate
-   from `ramp_fraction`.
-5. Follow-ups:
-   - Row-share the p_max / T_exh check in fast grids. This recovers its cost
-     but moves grid numbers.
-   - A timing-based p_max limiter, if a preset ever binds.
-   - Label durability's `health` as "life used".
+1. **Owner:** merge #50, then #51 → #58, retargeting each child to `main`.
+2. **Phase 4 — audio:** a TypeScript AudioWorklet port of `acoustics.py`
+   (ADR-003), and the owner's by-ear sign-off, which is now its exit criterion.
+   Its inputs:
+   - the grids need their acoustic sources, since the prebuilt files carry only
+     perf and pressure traces today, so add them to `build_live_grids.py`;
+   - `hd_i6`'s tick dominance (13×);
+   - a ramp-height parameter separate from `ramp_fraction`;
+   - crank phase carried across source swaps (FINDING-014).
+3. **Phase 5 — Enjoy mode:** the roster (OPEN-F), the dashboard, and the
+   steady-state economy label. Check live friction's cost on a mid-range phone
+   (REVIEW-005 m-5).
+4. Follow-ups:
+   - a TCU engine-speed match on converter downshifts (REVIEW-005 m-3);
+   - `play.py` on `Adr011Grid` (m-6);
+   - row-sharing the p_max / T_exh check;
+   - a timing-based p_max limiter;
+   - "life used" labelling.
 
 ---
 
