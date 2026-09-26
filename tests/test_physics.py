@@ -878,6 +878,31 @@ def test_source_levels_carry_physics():
           rms("dpdt_max", 2.0, "combustion") / rms("dpdt_max", 1.0, "combustion"), 2.0, 1e-6)
 
 
+def _toy_live(trans):
+    """A LiveEngine on a synthetic 2 x 2 grid -- enough for controls, no solve."""
+    from dieselsim.live import LiveEngine, PerfGrid
+    spec = DieselEngine(preset="crdi15").spec
+    cell = dict(torque=100.0, power=20e3, fuel_kg_h=5.0, boost=1.5, turbo_rpm=9e4, afr=25.0, q_wall=0.2)
+    perf = [[dict(cell), dict(cell)], [dict(cell), dict(cell)]]
+    return LiveEngine(PerfGrid(spec, [spec.idle_rpm, spec.max_rpm], [0.0, 1.0], perf), "crdi15", trans=trans)
+
+
+def test_lockup_key_by_transmission():
+    """Bug #6: the "l" key toggled a lock-up flag a DCT never reads, silently.
+    Now in dieselsim.live.handle_key (moved from play.py's terminal loop so it
+    can be tested): on a torque converter it toggles lock-up; on a DCT it
+    changes nothing and says why."""
+    from dieselsim.live import handle_key
+    tc, dct = _toy_live("tc"), _toy_live("dct")
+    handle_key(tc, "l")
+    before = dct.dl.lock_allowed
+    handle_key(dct, "l")
+    ok = (tc.dl.lock_allowed is False and tc.hint == "lockup blocked"
+          and dct.dl.lock_allowed == before and "DCT" in dct.hint and dct.hint_t > 0)
+    check("lock-up key: toggles on a converter, explains itself on a DCT (bug #6)",
+          1.0 if ok else 0.0, 1.0, 0.0, f"tc: {tc.hint!r}; dct: {dct.hint!r}")
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -911,7 +936,8 @@ def main():
                test_durability_solves_are_converged_enough,
                test_calibration_cache_is_consistent,
                test_ring_film_field_responds,
-               test_source_levels_carry_physics):
+               test_source_levels_carry_physics,
+               test_lockup_key_by_transmission):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001

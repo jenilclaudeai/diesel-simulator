@@ -83,6 +83,9 @@ raising no error.** `tools/audit_dead_signals.py` exists to catch the next.
 - `CycleTraces.theta`: per-cylinder arrays are in that cylinder's own crank
   angle, manifold traces in global engine angle. Don't overlay naively;
   never `ravel()` a 2D field and index `theta` with the result.
+- The real-time loop (vehicle, gearbox, driveline, `LiveEngine`, driver
+  keys) lives in `dieselsim/live.py`, not `play.py`: it is the Python
+  reference for the TypeScript port. `play.py` is the terminal front end.
 - The solver needs **numpy only**. Never import `scipy` at module level in
   `dieselsim/` (a test enforces it). `batch.py` imports `multiprocessing`,
   which Pyodide lacks.
