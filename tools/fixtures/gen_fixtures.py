@@ -9,6 +9,11 @@ the Python original, which every port is tested against.
   friction.json    grid.cell_friction() from stored pressure traces at warm
                    and cold oil (ADR-011): the reference for the Phase 3
                    port of the friction model            tolerance 1e-6 rel
+  live.json        the real-time loop (dieselsim/live.py): scripted 60 s
+                   drives on a stored grid. Per-step snapshots (state
+                   before and after sampled steps) for the per-step bound,
+                   events and final integrated quantities for the terminal
+                   bound (ADR-004 addendum)                 --check 1e-6 rel
 
 Each file records the physics source hash (bridge.source_hash) and the
 generator's numpy version.
@@ -39,7 +44,7 @@ from dieselsim.engine import DieselEngine  # noqa: E402
 from dieselsim.kinematics import Cam, SliderCrank  # noqa: E402
 
 OUT = os.path.join(ROOT, "web", "physics", "fixtures")
-TOL = {"kinematics": 1e-12, "thermo": 1e-10, "friction": 1e-6}
+TOL = {"kinematics": 1e-12, "thermo": 1e-10, "friction": 1e-6, "live": 1e-6}
 EPS = float(np.finfo(float).eps)
 # Finite-difference outputs are compared at the rounding bound propagated
 # through their stencil, not at the module tolerance. A lift sample may
@@ -176,9 +181,157 @@ def friction_outputs(inp):
     return out
 
 
+# ---------------------------------------------------------------------- live
+LIVE_DT, LIVE_N = 1.0 / 60.0, 3600
+LIVE_SKIP = {"g", "spec", "veh", "lock", "dl", "tc", "gb"}     # structure, not state
+
+
+def _grid_cell(task):
+    from dieselsim.grid import solve_cell
+    key, rpm, load = task
+    spec = DieselEngine(preset=key).spec
+    return solve_cell(spec, rpm, load)[1]
+
+
+def live_state(live):
+    """Every scalar the loop carries, nested as the Python objects are."""
+    def pick(o):
+        out = {}
+        for k, v in vars(o).items():
+            if k in LIVE_SKIP:
+                continue
+            if isinstance(v, (bool, np.bool_, str)) or v is None:
+                # numpy.bool_ too: `tank_L <= 0.0` on a numpy float yields one
+                out[k] = bool(v) if isinstance(v, np.bool_) else v
+            elif isinstance(v, (int, float, np.integer, np.floating)):
+                out[k] = float(v) if isinstance(v, (float, np.floating)) else int(v)
+            elif isinstance(v, dict):
+                out[k] = {kk: float(vv) for kk, vv in v.items()}
+        return out
+    return {"live": pick(live), "dl": pick(live.dl), "gb": pick(live.dl.gb), "tc": pick(live.dl.tc)}
+
+
+def live_script_hot():
+    """A second drive, for what the first never reaches: a warm engine
+    (coolant starts at 368 K, just above the fan-on point of 367 K, so the fan engages and later drops out as the radiator pulls the coolant under 362 K), a light-throttle cruise that
+    upshifts early into a high gear, a full-throttle stab there (a kickdown
+    that may skip two gears), then a long full-throttle 10 % climb that heats
+    the coolant through the fan's switching band."""
+    def thr(t):
+        return 0.0 if t < 1 else 0.35 if t < 25 else 1.0
+    return {"dt": LIVE_DT, "n": LIVE_N, "throttle": [thr(n * LIVE_DT) for n in range(LIVE_N)],
+            "brake": [], "grade": [[int(round(26.0 / LIVE_DT)), 0.10]], "keys": [[int(round(40.0 / LIVE_DT)), "l"]]}
+
+
+def live_script_kickdown():
+    """A 10 s case for the kickdown's skip order: a converter car in 6th at
+    72 km/h (turbine ~1750 rpm, inside both shift thresholds at zero
+    throttle), throttle off for 1 s, then a full stab. Two gears down (4th,
+    ~2610 rpm) is under the 0.95 x rated guard, so it must skip two."""
+    n = 600
+    return {"dt": LIVE_DT, "n": n, "throttle": [0.0 if k * LIVE_DT < 1.0 else 1.0 for k in range(n)],
+            "brake": [], "grade": [], "keys": []}
+
+
+def live_script():
+    """The scripted drive: throttle per step (applied only while cruise is
+    off), a brake window, a grade step and key presses -- the drive P3-1
+    proved bit-identical across the move out of play.py."""
+    def thr(t):
+        return 0.0 if t < 1 else 1.0 if t < 12 else 0.3 if t < 20 else 1.0 if t < 26 else 0.0 if t < 34 else 0.7
+    keys = [[int(round(t / LIVE_DT)), k] for t, k in ((27.0, "e"), (33.0, "e"), (40.0, "l"), (45.0, "c"),
+                                                   (48.0, "+"), (52.0, "."), (55.0, ","), (57.0, "n"),
+                                                   (58.5, "n"), (59.0, "m"))]
+    return {"dt": LIVE_DT, "n": LIVE_N, "throttle": [thr(n * LIVE_DT) for n in range(LIVE_N)],
+            "brake": [[30.0, 34.0, 0.6]], "grade": [[int(round(34.0 / LIVE_DT)), 0.06]], "keys": keys}
+
+
+def live_inputs():
+    import dataclasses
+    from multiprocessing import get_context
+    key = "crdi15"
+    spec = DieselEngine(preset=key).spec
+    rpms = [float(x) for x in np.linspace(spec.idle_rpm, spec.max_rpm, 8)]
+    loads = [float(x) for x in np.linspace(0.0, 1.0, 6)]
+    tasks = [(key, r, l) for r in rpms for l in loads]
+    with get_context("spawn").Pool(min(6, os.cpu_count() or 1)) as pool:
+        cells = pool.map(_grid_cell, tasks)
+    perf = [[{k: float(v) for k, v in cells[i * len(loads) + j].items()} for j in range(len(loads))]
+            for i in range(len(rpms))]
+    spec_json = json.loads(json.dumps(dataclasses.asdict(spec), default=float))
+    # properties, not fields, so asdict() leaves them out; the loop reads them
+    spec_json["geom"]["displacement"] = spec.geom.displacement
+    return {"preset": key, "spec": spec_json,
+            "grid": {"rpms": rpms, "loads": loads, "perf": perf},
+            "drives": [{"name": "tc", "trans": "tc", "script": live_script(), "init": {}},
+                       {"name": "dct", "trans": "dct", "script": live_script(), "init": {}},
+                       {"name": "dct_hot", "trans": "dct", "script": live_script_hot(),
+                        "init": {"T_coolant": 368.0}},
+                       {"name": "tc_kickdown", "trans": "tc", "script": live_script_kickdown(),
+                        "init": {"dl.v": 20.0, "dl.gb.gear": 5, "dl.gb.gear_from": 5,
+                                 "dl.w_in": 20.0 / 0.315 * 0.67 * 4.30, "rpm": 20.0 / 0.315 * 0.67 * 4.30 * 60.0 / (2.0 * math.pi)}}],
+            "sample_every": 45}
+
+
+def live_run(inp, drv):
+    from dieselsim.live import LiveEngine, PerfGrid, handle_key, pedal_return
+    spec = DieselEngine(preset=inp["preset"]).spec
+    g = inp["grid"]
+    live = LiveEngine(PerfGrid(spec, g["rpms"], g["loads"], g["perf"]), inp["preset"], trans=drv["trans"])
+    for k, v in drv["init"].items():      # dotted paths: "dl.gb.gear"
+        *path, last = k.split(".")
+        obj = live
+        for p in path:
+            obj = getattr(obj, p)
+        setattr(obj, last, v)
+    sc = drv["script"]
+    keys = {k: c for k, c in sc["keys"]}
+    grade = {k: v for k, v in sc["grade"]}
+    dt = sc["dt"]
+    snaps, events, trace, hints = [], [], [], []
+    prev, prev_hint = None, ""
+    for n in range(sc["n"]):
+        t = n * dt
+        if not live.cruise_on:
+            live.throttle = sc["throttle"][n]
+        for t0, t1, b in sc["brake"]:
+            if t0 <= t < t1:
+                live.dl.brake = b
+        if n in grade:
+            live.dl.grade = grade[n]
+        if n in keys:
+            handle_key(live, keys[n])
+        pedal_return(live, dt)
+        before = live_state(live) if n % inp["sample_every"] == 0 else None
+        live.step(dt)
+        ev = (live.dl.gb.gear, live.dl.gb.phase, bool(live.dl.lockup), bool(live.dl.rigid), bool(live.dl.gb.neutral),
+              bool(live.dl.lock_allowed), bool(live.fan_on))
+        if live.hint != prev_hint:
+            hints.append([n, live.hint])
+            prev_hint = live.hint
+        if ev != prev:
+            events.append([n] + [int(x) for x in ev])
+            prev = ev
+        if before is not None:
+            snaps.append({"step": n, "before": before, "after": live_state(live)})
+        if n % 6 == 0:
+            trace.append([n, float(live.rpm), float(live.dl.v), float(live.T_coolant), float(live.trip_L)])
+    final = {k: float(getattr(live, k)) for k in ("rpm", "odo_m", "trip_m", "fuel_L", "trip_L", "T_coolant",
+                                                  "boost", "turbo_rpm", "tank_L", "inst_kmpl", "fan_frac",
+                                                  "fan_power", "derate")}
+    final["v"] = float(live.dl.v)
+    veh = {k: v for k, v in vars(live.dl.veh).items()}
+    return {"veh": veh, "snapshots": snaps, "events": events, "hints": hints, "trace": trace, "final": final}
+
+
+def live_outputs(inp):
+    return {d["name"]: live_run(inp, d) for d in inp["drives"]}
+
+
 MODULES = {"kinematics": (kinematics_inputs, kinematics_outputs),
            "thermo": (thermo_inputs, thermo_outputs),
-           "friction": (friction_inputs, friction_outputs)}
+           "friction": (friction_inputs, friction_outputs),
+           "live": (live_inputs, live_outputs)}
 
 
 def compare(a, b, tol, path=""):
@@ -220,17 +373,56 @@ def compare_fd(got, want, cams):
     return worst
 
 
+def compare_live(got, want, tol):
+    """Events and strings exactly; every number at `tol` relative (floored at
+    1e-9 absolute). Returns (worst, where); worst = inf on an exact mismatch."""
+    worst = [0.0, ""]
+
+    def walk(a, b, path):
+        if isinstance(b, dict):
+            if set(a) != set(b):
+                worst[:] = [math.inf, f"{path} keys"]
+                return
+            for k in b:
+                walk(a[k], b[k], f"{path}.{k}")
+        elif isinstance(b, list):
+            if len(a) != len(b):
+                worst[:] = [math.inf, f"{path} length {len(a)} vs {len(b)}"]
+                return
+            for i, (x, y) in enumerate(zip(a, b)):
+                walk(x, y, f"{path}[{i}]")
+        elif isinstance(b, (bool, str)) or b is None or isinstance(b, int) and not isinstance(b, bool):
+            if a != b and not (isinstance(b, int) and isinstance(a, float) and a == b):
+                worst[:] = [math.inf, f"{path}: {a!r} vs {b!r}"]
+        else:
+            r = abs(a - b) / max(abs(b), 1e-9)
+            if r > worst[0]:
+                worst[:] = [r, path]
+    for tr in want:
+        walk(got[tr]["events"], want[tr]["events"], f"{tr}.events")
+        walk(got[tr]["hints"], want[tr]["hints"], f"{tr}.hints")
+        for key in ("veh", "final", "snapshots", "trace"):
+            walk(got[tr][key], want[tr][key], f"{tr}.{key}")
+    return worst[0], worst[1]
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     check = "--check" in sys.argv
+    only = sys.argv[sys.argv.index("--only") + 1] if "--only" in sys.argv else None
     bad = 0
     for name, (gen_in, gen_out) in MODULES.items():
+        if only and name != only:
+            continue
         path = os.path.join(OUT, f"{name}.json")
         if check:
             with open(path) as fh:
                 fx = json.load(fh)
             now = gen_out(fx["inputs"])
-            worst, where = compare(now, fx["outputs"], TOL[name])
+            if name == "live":
+                worst, where = compare_live(now, fx["outputs"], TOL[name])
+            else:
+                worst, where = compare(now, fx["outputs"], TOL[name])
             ok = worst <= TOL[name]
             bad += not ok
             print(f"{'ok   ' if ok else 'STALE'} {name:10} worst rel diff {worst:.2e} at {where} "
