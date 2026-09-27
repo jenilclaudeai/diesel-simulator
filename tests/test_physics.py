@@ -1109,10 +1109,10 @@ def test_grid_hash_ignores_the_live_loop():
     consume grids but cannot change a cell. Editing either must leave it
     unchanged; editing any other file must change it. Checked on a copy of
     the package, so nothing on disk is touched. And an excluded file really
-    cannot change a cell only if the cell's solve never imports it."""
+    cannot change a cell only if the cell's solve never imports it (checked
+    statically: first written with a subprocess, which Pyodide lacks)."""
     import hashlib
     import shutil
-    import subprocess
     import tempfile
     from dieselsim import bridge
     pkg = os.path.join(os.path.dirname(__file__), "..", "dieselsim")
@@ -1136,11 +1136,28 @@ def test_grid_hash_ignores_the_live_loop():
         with open(os.path.join(cp, "engine.py"), "a") as fh:
             fh.write("\n# edit\n")
         engine_edit = gh(cp)
-    probe = ("import sys; import dieselsim.grid, dieselsim.acoustics; "
-             "print(' '.join(m.split('.')[1] + '.py' for m in sys.modules if m.startswith('dieselsim.')))")
-    loaded = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True,
-                            cwd=os.path.join(pkg, "..")).stdout.split()
-    leaked = sorted(set(loaded) & set(bridge.GRID_HASH_EXCLUDES))
+    # every package module the cell solve can import, statically (imports
+    # inside functions included) -- no subprocess, which Pyodide lacks
+    import ast
+    loaded, todo = set(), ["grid.py", "acoustics.py"]
+    while todo:
+        name = todo.pop()
+        if name in loaded or not os.path.exists(os.path.join(pkg, name)):
+            continue
+        loaded.add(name)
+        with open(os.path.join(pkg, name)) as fh:
+            tree = ast.parse(fh.read())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                if node.level == 1 and node.module:
+                    todo.append(node.module.split(".")[0] + ".py")
+                elif node.level == 1:
+                    todo += [a.name + ".py" for a in node.names]
+                elif node.module and node.module.startswith("dieselsim."):
+                    todo.append(node.module.split(".")[1] + ".py")
+            elif isinstance(node, ast.Import):
+                todo += [a.name.split(".")[1] + ".py" for a in node.names if a.name.startswith("dieselsim.")]
+    leaked = sorted(loaded & set(bridge.GRID_HASH_EXCLUDES))
     ok = same_as_bridge and live_edit == base and engine_edit != base and bool(loaded) and not leaked
     check("grid hash: live-loop and synth edits keep it, solver edits change it", 1.0 if ok else 0.0, 1.0, 0.0,
           f"matches bridge {same_as_bridge}, {'/'.join(bridge.GRID_HASH_EXCLUDES)} edits keep {live_edit == base}, "
