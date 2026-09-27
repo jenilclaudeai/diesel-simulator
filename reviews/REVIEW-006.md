@@ -164,7 +164,8 @@ faithful to `acoustics.MICS`. The e2e listens at the exhaust tip (28 Hz).
   acting.
 - My first debug instrumentation broke its own file.
 - #59's first hash test used `subprocess`, which Pyodide lacks; CI's
-  Pyodide job caught it. It is now a static walk of the imports, which also
+  Pyodide job caught it. #60's grid tests then failed there too, because
+  the Pyodide harness copies no data files; they now SKIP with that reason. It is now a static walk of the imports, which also
   sees lazy imports (a mutant adding one inside a function is caught).
 - Two over-claiming tests in #60, corrected before commit:
   - "cold skirt film is thicker" (false in 115 cells);
@@ -187,7 +188,8 @@ Physics suite on this tree:
 
 The four known defects: n_cycles=6 convergence, cold-start dp/dθ (both
 older), and FINDINGs 022 and 023. Also on this tree:
-- under Pyodide: 54 passed, 0 failed (on #59's tree);
+- under Pyodide: 54 passed, 0 failed. The two prebuilt-grid tests SKIP
+  there, because the harness copies only the package and the tests;
 - fixtures current in 6 modules;
 - `web/physics`: 51 checks (5 + 36 + 10);
 - app unit tests: 28;

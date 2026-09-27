@@ -54,7 +54,8 @@ The owner took three decisions, all as recommended:
     all five prebuilt grids, because `grid_hash()` covered it. It is now
     excluded; the app reads the exclusions from `bridge.py`; and a static
     import walk proves the cell solve never imports an excluded file. That
-    check was first a subprocess, which Pyodide lacks; CI caught it.
+    check was first a subprocess, which Pyodide lacks; CI caught it. The
+    grid tests SKIP under Pyodide, where the harness copies no data files.
 - **#60: the grids carry sources.** All five were rebuilt (~58 min).
   - perf 0 of 9,600 values and traces 0 of 480 differ, which confirms the
     re-stamp;
