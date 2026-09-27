@@ -490,18 +490,64 @@ def sound_inputs():
     import dataclasses
     live_spec = json.loads(json.dumps(dataclasses.asdict(spec), default=float))
     live_spec["geom"]["displacement"] = spec.geom.displacement
+    from dieselsim.acoustics import MICS, SPL_CAL
+    mics = {k: {"gains": dict(m.gains), "lp_hz": m.lp_hz, "hp_hz": m.hp_hz, "distance_m": m.distance_m,
+                "reverb": m.reverb} for k, m in MICS.items()}
+    live = {"boost": 1.3, "turbo_rpm": 6.0e4, "load": 0.3, "Pb": 400.0, "skirt_clr": 2.0e-5, "v_seating": 0.05}
+    # the streaming synth, driven block by block: a run-up, a glide to a
+    # new point with a microphone change (reverb), a stall, and a restart
+    # below the turbo's threshold on a third microphone
+    segments = [
+        {"blocks": 60, "rpm": [750.0, 1300.0], "blend": [900.0, 0.3, 300.0], "live": live, "running": True},
+        {"blocks": 40, "rpm": [1300.0, 1600.0], "blend": [1500.0, 0.85, 350.0], "mic": "cabin",
+         "live": dict(live, boost=2.1, turbo_rpm=1.1e5, load=0.85, Pb=900.0), "running": True},
+        {"blocks": 16, "rpm": [1600.0, 600.0], "running": False},
+        {"blocks": 50, "rpm": [600.0, 900.0], "blend": [800.0, 0.1, 280.0], "mic": "engine_bay",
+         "live": dict(live, turbo_rpm=500.0, boost=1.0, load=0.1), "running": True},
+    ]
     return {"spec": live_spec, "grid": grid,
-            "blend": [[1234.0, 0.55, 320.0], [900.0, 0.9, 361.0], [2500.0, 0.1, 250.0]]}
+            "blend": [[1234.0, 0.55, 320.0], [900.0, 0.9, 361.0], [2500.0, 0.1, 250.0]],
+            "mics": mics, "spl_cal": SPL_CAL,
+            "butter": [[1, 0.06, "low"], [3, 0.3, "low"], [2, 0.0027, "high"], [1, 0.0016, "high"],
+                       [2, [0.0317, 0.295], "band"], [2, [0.0018, 0.0218], "band"]],
+            # the synth's outputs are held at their own bound: libm differs by
+            # an ulp between platforms and from V8 (17,458 of the noise table's
+            # 262,144 entries do), and the rumble's 40 Hz band-pass amplifies
+            # that to ~4e-12 of its peak -- 1.6e-10 in this floored-relative
+            # measure. The arithmetic parts above stay at the module's 1e-12.
+            "synth": {"mic": "exterior_7m", "segments": segments, "tolerance_rel": 1e-8}}
 
 
 def sound_outputs(inp):
+    from dieselsim import livesound as LS
     from dieselsim.live import Adr011Grid
     g = Adr011Grid.from_json(inp["grid"])
     out = []
     for rpm, load, T in inp["blend"]:
         b = g.blend_sources(rpm, load, T)
         out.append({k: (dict(v) if k == "_meta" else lst(v)) for k, v in b.items()})
-    return {"blend": out}
+    butter = [[{"b": list(map(float, b)), "a": list(map(float, a))} for b, a in LS.butter_sos(o, wn, kind)]
+              for o, wn, kind in inp["butter"]]
+    table = LS.noise_table()
+    pure, LS.PURE = LS.PURE, True        # the reference the TypeScript port matches
+    try:
+        syn = LS.LiveSynth(g.spec, inp["synth"]["mic"])
+        y, live = [], {}
+        for seg in inp["synth"]["segments"]:
+            if "blend" in seg:
+                syn.set_sources(g.blend_sources(*seg["blend"]))
+            if "mic" in seg:
+                syn.set_mic(seg["mic"])
+            live = seg.get("live", live)
+            r0, r1 = seg["rpm"]
+            for b in range(seg["blocks"]):
+                y.append(syn.block(r0 + (r1 - r0) * (b + 1) / seg["blocks"], live, seg["running"]))
+        parts = {k: lst(v) for k, v in syn.last_parts.items()}
+    finally:
+        LS.PURE = pure
+    return {"blend": out, "butter": butter,
+            "noise": {"head": lst(table[:64]), "sum": float(np.sum(table)), "sumsq": float(np.dot(table, table))},
+            "synth": {"y": lst(np.concatenate(y)), "last_parts": parts}}
 
 
 MODULES = {"kinematics": (kinematics_inputs, kinematics_outputs),
@@ -598,6 +644,14 @@ def main():
             now = gen_out(fx["inputs"])
             if name == "live":
                 worst, where = compare_live(now, fx["outputs"], TOL[name])
+            elif name == "sound":
+                # the synth at its own bound (see sound_inputs), reported on the module's scale
+                ts = fx["inputs"]["synth"]["tolerance_rel"]
+                syn_now, syn_want = now.pop("synth"), dict(fx["outputs"]).pop("synth")
+                rest = {k: v for k, v in fx["outputs"].items() if k != "synth"}
+                w1 = compare(now, rest, TOL[name])
+                w2 = compare(syn_now, syn_want, ts)
+                worst, where = max(w1, (w2[0] * TOL[name] / ts, "synth" + w2[1]), key=lambda x: x[0])
             else:
                 worst, where = compare(now, fx["outputs"], TOL[name])
             ok = worst <= TOL[name]

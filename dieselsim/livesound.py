@@ -13,8 +13,8 @@ What cannot stream is replaced by its causal equivalent, stated here:
     here a one-pole mean-square tracker per source (time constant NORM_TAU)
     does it, seeded from the first block.
   * render() divides the rumble's firing modulation by its maximum over the
-    render; here by the maximum over the 720-degree source waveform, which
-    is known in advance.
+    render; here it is not divided at all: ahead of the shape tracker, a
+    constant scale changes nothing (FINDING-021, an equivalent mutant).
   * noise comes from a fixed Gaussian table filled by a 32-bit generator
     (mulberry32 + Box-Muller) instead of numpy's -- identical in TypeScript
     -- read by three independent cursors.

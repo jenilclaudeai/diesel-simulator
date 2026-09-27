@@ -6,6 +6,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Adr011Grid, SOURCE_KEYS, type Adr011GridData } from "../src/live/adr011.js";
 import type { LiveSpec } from "../src/live/common.js";
+import { butterSos, noiseTable } from "../src/audio/dsp.js";
+import { LiveSynth, MICS, SPL_CAL, type SoundSpec } from "../src/audio/synth.js";
 
 /** fixtures.test.ts's definition (importing it would run that suite). */
 function worstRel(got: readonly number[], want: readonly number[]): { rel: number; at: number } {
@@ -25,9 +27,23 @@ function worstRel(got: readonly number[], want: readonly number[]): { rel: numbe
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fx = JSON.parse(readFileSync(path.resolve(here, "..", "..", "fixtures", "sound.json"), "utf8")) as {
   meta: { tolerance_rel: number; physics_hash: string };
-  inputs: { spec: LiveSpec; grid: Adr011GridData; blend: [number, number, number][] };
-  outputs: { blend: Record<string, number[] | Record<string, number>>[] };
+  inputs: {
+    spec: LiveSpec & SoundSpec; grid: Adr011GridData; blend: [number, number, number][];
+    mics: Record<string, unknown>; spl_cal: number;
+    butter: [number, number | [number, number], "low" | "high" | "band"][];
+    synth: { mic: string; segments: Segment[]; tolerance_rel: number };
+  };
+  outputs: {
+    blend: Record<string, number[] | Record<string, number>>[];
+    butter: { b: number[]; a: number[] }[][];
+    noise: { head: number[]; sum: number; sumsq: number };
+    synth: { y: number[]; last_parts: Record<string, number[]> };
+  };
 };
+interface Segment {
+  blocks: number; rpm: [number, number]; running: boolean;
+  blend?: [number, number, number]; mic?: string; live?: Record<string, number>;
+}
 const TOL = fx.meta.tolerance_rel;
 
 let failed = 0, passed = 0;
@@ -62,6 +78,89 @@ delete bare.src_f32; delete bare.src_cold_f32; delete bare.src_meta; delete bare
 let threw = false;
 try { new Adr011Grid(fx.inputs.spec, bare).blendSources(1200, 0.5, 300); } catch { threw = true; }
 check("a grid without sources refuses to blend them", threw);
+
+// ---- the synth's parts, then the synth ----
+check("microphone table and calibration match acoustics.MICS",
+  JSON.stringify(MICS) === JSON.stringify(fx.inputs.mics) && SPL_CAL === fx.inputs.spl_cal);
+
+let wb = 0;
+fx.inputs.butter.forEach(([order, wn, kind], n) => {
+  const got = butterSos(order, wn, kind), want = fx.outputs.butter[n]!;
+  if (got.length !== want.length) { wb = Infinity; return; }
+  got.forEach(([b, a], k) => {
+    wb = Math.max(wb, worstRel(b, want[k]!.b).rel, worstRel(a, want[k]!.a).rel);
+  });
+});
+check("Butterworth sections match livesound.butter_sos", wb <= TOL,
+  `worst rel ${wb.toExponential(2)} over ${fx.inputs.butter.length} designs (bound ${TOL})`);
+
+const table = noiseTable();
+let sum = 0, sumsq = 0;
+for (const v of table) { sum += v; sumsq += v * v; }
+const wn = Math.max(worstRel(Array.from(table.subarray(0, 64)), fx.outputs.noise.head).rel,
+  Math.abs(sumsq / fx.outputs.noise.sumsq - 1));
+check("noise table matches livesound.noise_table (mulberry32 + Box-Muller)", wn <= TOL,
+  `head worst rel and sum-of-squares ${wn.toExponential(2)}; sum ${sum.toFixed(6)} vs ${fx.outputs.noise.sum.toFixed(6)}`);
+
+const syn = new LiveSynth(fx.inputs.spec, fx.inputs.synth.mic);
+const ys: number[] = [];
+let live: Record<string, number> = {};
+for (const seg of fx.inputs.synth.segments) {
+  if (seg.blend) syn.setSources(grid.blendSources(...seg.blend));
+  if (seg.mic) syn.setMic(seg.mic);
+  live = seg.live ?? live;
+  const [r0, r1] = seg.rpm;
+  for (let b = 0; b < seg.blocks; b++) ys.push(...syn.block(r0 + (r1 - r0) * (b + 1) / seg.blocks, live, seg.running));
+}
+const want = fx.outputs.synth.y;
+const wy = worstRel(ys, want);
+let peak = 0;
+for (const v of want) peak = Math.max(peak, Math.abs(v));
+// libm differs from V8 by an ulp (see gen_fixtures.sound_inputs): the synth has its own bound
+const TS = fx.inputs.synth.tolerance_rel;
+let maxd = 0;
+want.forEach((w, i) => { maxd = Math.max(maxd, Math.abs(ys[i]! - w)); });
+check("the synth matches livesound's pure mode, sample for sample", wy.rel <= TS,
+  `worst rel ${wy.rel.toExponential(2)} at sample ${wy.at} of ${want.length} (floor 1e-3 of peak ${peak.toFixed(3)}; ` +
+  `bound ${TS}); max |diff| ${(maxd / peak).toExponential(2)} of peak`);
+let wp = 0, wpAt = "";
+for (const [k, v] of Object.entries(fx.outputs.synth.last_parts)) {
+  const r = worstRel(Array.from(syn.last_parts![k as keyof typeof syn.last_parts]), v).rel;
+  if (r > wp) { wp = r; wpAt = k; }
+}
+check("each source's last block matches too", wp <= TS, `worst rel ${wp.toExponential(2)}${wpAt ? " in " + wpAt : ""}`);
+
+// ---- PLAN.md's Phase 4 exit criterion, on the TypeScript port itself ----
+// an I6 at 1400 rpm: firing at 70 Hz, harmonics at 140 and 210, each standing
+// above the spectrum halfway to its neighbours; and no source silent
+{
+  const i6 = new LiveSynth(fx.inputs.spec, "exterior_7m");
+  i6.setSources(grid.blendSources(1400, 0.6, fx.inputs.grid.T_warm));
+  const live6 = { boost: 1.9, turbo_rpm: 8.5e4, load: 0.6 };
+  const n = Math.round(1.5 * 44100 / 128), y: number[] = [];
+  const rms: Record<string, number> = {};
+  for (let b = 0; b < n; b++) {
+    const out = i6.block(1400, live6);
+    if (b >= n / 3) {                          // after the trackers settle
+      y.push(...out);
+      for (const [k, v] of Object.entries(i6.last_parts!)) rms[k] = (rms[k] ?? 0) + v.reduce((a, x) => a + x * x, 0);
+    }
+  }
+  const power = (f: number) => {
+    const w = 2 * Math.PI * f / 44100, c = 2 * Math.cos(w);
+    let s1 = 0, s2 = 0;
+    for (let i = 0; i < y.length; i++) {
+      const s0 = y[i]! * (0.5 - 0.5 * Math.cos(2 * Math.PI * i / (y.length - 1))) + c * s1 - s2;
+      s2 = s1; s1 = s0;
+    }
+    return s1 * s1 + s2 * s2 - c * s1 * s2;
+  };
+  const db = [70, 140, 210].map(f => 10 * Math.log10(power(f) / (0.5 * (power(f - 35) + power(f + 35)))));
+  const silent = Object.entries(rms).filter(([, v]) => !(v > 0)).map(([k]) => k);
+  check("exit criterion: an I6 at 1400 rpm peaks at 70/140/210 Hz, and no source is silent",
+    Math.min(...db) > 6 && silent.length === 0 && Object.keys(rms).length === 7,
+    `peaks ${db.map(d => "+" + d.toFixed(1)).join(", ")} dB over the half-way points; silent: ${silent.join(", ") || "none"} of ${Object.keys(rms).length}`);
+}
 
 console.log(`\n${passed} passed, ${failed} failed  (physics ${fx.meta.physics_hash.slice(0, 12)})`);
 process.exit(failed ? 1 : 0);

@@ -9,3 +9,5 @@ export { Adr011Grid, SOURCE_KEYS, type Adr011GridData, type SourceKey, type Sour
 export { vehicleFor, finishVehicle, type Transmission, type Vehicle } from "./live/vehicle.js";
 export { Driveline, Gearbox, LaunchClutch, ManualClutch, TorqueConverter } from "./live/driveline.js";
 export { LiveEngine, handleKey, pedalReturn, type LiveState } from "./live/engine.js";
+export { BLOCK, FS } from "./audio/dsp.js";
+export { LiveSynth, MICS, type Mic, type Part, type SoundSpec } from "./audio/synth.js";
