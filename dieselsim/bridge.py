@@ -102,10 +102,11 @@ def source_hash():
     return h.hexdigest()
 
 
-# The real-time loop consumes grids and does not shape them, so a change to
-# it must not make every prebuilt grid stale (Phase 3, prebuilt converged
-# grids). Everything else in the package can change a cell.
-GRID_HASH_EXCLUDES = ("live.py",)
+# The real-time loop and its streaming synth consume grids and do not shape
+# them, so a change to either must not make every prebuilt grid stale (Phase
+# 3, prebuilt converged grids; FINDING-021's synth first shipped without
+# this, staling all five). Everything else in the package can change a cell.
+GRID_HASH_EXCLUDES = ("live.py", "livesound.py")
 
 
 def grid_hash():

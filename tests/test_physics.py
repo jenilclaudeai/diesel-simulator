@@ -1105,12 +1105,14 @@ def test_adr011_live_friction():
 
 def test_grid_hash_ignores_the_live_loop():
     """Prebuilt grids are keyed on bridge.grid_hash(): the package sources
-    without the real-time loop (live.py), which consumes grids but cannot
-    change a cell. Editing live.py must leave it unchanged; editing any other
-    file must change it. Checked on a copy of the package, so nothing on disk
-    is touched."""
+    without the real-time loop and its synth (live.py, livesound.py), which
+    consume grids but cannot change a cell. Editing either must leave it
+    unchanged; editing any other file must change it. Checked on a copy of
+    the package, so nothing on disk is touched. And an excluded file really
+    cannot change a cell only if the cell's solve never imports it."""
     import hashlib
     import shutil
+    import subprocess
     import tempfile
     from dieselsim import bridge
     pkg = os.path.join(os.path.dirname(__file__), "..", "dieselsim")
@@ -1127,16 +1129,23 @@ def test_grid_hash_ignores_the_live_loop():
         shutil.copytree(pkg, cp, ignore=shutil.ignore_patterns("__pycache__"))
         base = gh(cp)
         same_as_bridge = base == bridge.grid_hash()
-        with open(os.path.join(cp, "live.py"), "a") as fh:
-            fh.write("\n# edit\n")
+        for name in ("live.py", "livesound.py"):
+            with open(os.path.join(cp, name), "a") as fh:
+                fh.write("\n# edit\n")
         live_edit = gh(cp)
         with open(os.path.join(cp, "engine.py"), "a") as fh:
             fh.write("\n# edit\n")
         engine_edit = gh(cp)
-    ok = same_as_bridge and live_edit == base and engine_edit != base
-    check("grid hash: live.py edits keep it, solver edits change it", 1.0 if ok else 0.0, 1.0, 0.0,
-          f"matches bridge {same_as_bridge}, live.py edit keeps {live_edit == base}, "
-          f"engine.py edit changes {engine_edit != base}")
+    probe = ("import sys; import dieselsim.grid, dieselsim.acoustics; "
+             "print(' '.join(m.split('.')[1] + '.py' for m in sys.modules if m.startswith('dieselsim.')))")
+    loaded = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True,
+                            cwd=os.path.join(pkg, "..")).stdout.split()
+    leaked = sorted(set(loaded) & set(bridge.GRID_HASH_EXCLUDES))
+    ok = same_as_bridge and live_edit == base and engine_edit != base and bool(loaded) and not leaked
+    check("grid hash: live-loop and synth edits keep it, solver edits change it", 1.0 if ok else 0.0, 1.0, 0.0,
+          f"matches bridge {same_as_bridge}, {'/'.join(bridge.GRID_HASH_EXCLUDES)} edits keep {live_edit == base}, "
+          f"engine.py edit changes {engine_edit != base}, excluded files the cell solve imports: {leaked or 'none'}"
+          f" (of {len(loaded)} loaded)")
 
 
 _HD_SRC = {}

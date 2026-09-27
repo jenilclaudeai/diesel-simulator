@@ -66,10 +66,14 @@ for (const n of names) {
   files[n] = b.toString("utf8");
 }
 const physics = h.digest("hex");
-// grid hash: the same, without the real-time loop -- dieselsim/bridge.py
-// grid_hash() and GRID_HASH_EXCLUDES. Prebuilt grids (public/grids/) carry
-// it; the drive page uses one only when it matches this build.
-const GRID_HASH_EXCLUDES = ["live.py"];
+// grid hash: the same, without the real-time loop and its synth --
+// dieselsim/bridge.py grid_hash(). Prebuilt grids (public/grids/) carry it;
+// the drive page uses one only when it matches this build. The exclusions
+// are read from bridge.py itself: a second copy here drifted once
+// (FINDING-021's synth), and every prebuilt grid read as stale.
+const exm = files["bridge.py"].match(/^GRID_HASH_EXCLUDES = \(([^)]*)\)/m);
+if (!exm) throw new Error("prepare-assets: GRID_HASH_EXCLUDES not found in dieselsim/bridge.py");
+const GRID_HASH_EXCLUDES = [...exm[1].matchAll(/"([^"]+)"/g)].map(m => m[1]);
 const gh = createHash("sha256");
 for (const n of names.filter(n => !GRID_HASH_EXCLUDES.includes(n))) {
   gh.update(Buffer.concat([Buffer.from(n), Buffer.from([0]), fs.readFileSync(path.join(pkg, n)), Buffer.from([0])]));
