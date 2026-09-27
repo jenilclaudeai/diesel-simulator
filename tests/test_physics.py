@@ -1139,6 +1139,146 @@ def test_grid_hash_ignores_the_live_loop():
           f"engine.py edit changes {engine_edit != base}")
 
 
+_HD_SRC = {}
+
+
+def _hd_i6_sources():
+    """hd_i6 at 1400 rpm / 0.6 and its acoustic sources, solved once."""
+    if not _HD_SRC:
+        from dieselsim.acoustics import EngineSound
+        eng = DieselEngine(preset="hd_i6")
+        op = eng.operating_point(1400.0, load=0.6, n_cycles=9)
+        _HD_SRC.update(eng=eng, op=op, es=EngineSound(eng.spec))
+        _HD_SRC["src"] = _HD_SRC["es"].build_sources(op)
+    return _HD_SRC
+
+
+def _stream(spec, src, secs, rpm=1400.0, mic="exterior_7m", parts=False):
+    from dieselsim import livesound as LS
+    syn = LS.LiveSynth(spec, mic)
+    syn.set_sources(src)
+    ys, acc = [], {}
+    for i in range(int(secs * LS.FS / LS.BLOCK)):
+        ys.append(syn.block(rpm))
+        if parts and i * LS.BLOCK >= LS.FS:
+            for k, v in syn.last_parts.items():
+                acc.setdefault(k, []).append(v)
+    import numpy as np
+    return np.concatenate(ys), {k: np.concatenate(v) for k, v in acc.items()}
+
+
+def test_livesound_firing_peaks_and_sources():
+    """Phase 4 exit criterion, on the streaming synth (dieselsim/livesound.py):
+    an I6 at 1400 rpm peaks at its firing frequency and harmonics, 70/140/210
+    Hz (each > 15 dB over its surroundings), and every source is non-silent.
+    numpy only, so it runs under Pyodide too."""
+    import numpy as np
+    d = _hd_i6_sources()
+    y, parts = _stream(d["eng"].spec, d["src"], 3.0, parts=True)
+    y = y[44100:]
+    seg = 1 << 15
+    P = np.zeros(seg // 2 + 1)
+    for k in range(0, len(y) - seg + 1, seg // 2):
+        P += np.abs(np.fft.rfft(y[k:k + seg] * np.hanning(seg))) ** 2
+    f = np.fft.rfftfreq(seg, 1 / 44100)
+    peaks = []
+    for h in (70.0, 140.0, 210.0):
+        band = (f > h - 3) & (f < h + 3)
+        side = ((f > h - 15) & (f < h - 6)) | ((f > h + 6) & (f < h + 15))
+        peaks.append(10 * np.log10(P[band].max() / np.median(P[side])))
+    rms = {k: float(np.sqrt(np.mean(v ** 2))) for k, v in parts.items()}
+    silent = [k for k, v in rms.items() if v < 1e-3 * max(rms.values())]
+    check("sound: I6 at 1400 rpm peaks at 70/140/210 Hz, every source audible",
+          1.0 if min(peaks) > 15.0 and not silent else 0.0, 1.0, 0.0,
+          f"peaks {', '.join(f'{p:+.1f}' for p in peaks)} dB; silent sources {silent or 'none'} of {len(rms)}")
+
+
+def test_livesound_carries_physics():
+    """FINDING-021: play.py's LiveSound ignored the physics its sources carry
+    -- doubling the slap input, the exhaust mass flow or the valve seating
+    speed changed its output by 0.0000%. The streaming synth that replaces
+    it must respond to each, in the source it feeds (> 1% RMS)."""
+    import numpy as np
+    d = _hd_i6_sources()
+    # each input is judged on the source it feeds: on hd_i6 the valve tick is
+    # 13x the slap, so slap x2 moves the whole exterior mix only ~0.2%
+    feeds = {"skirt_clr": "mech", "mdot_air": "exhaust", "v_seating": "mech"}
+    # and even inside "mech" the tick outweighs the slap (the sound-design
+    # question left for the owner's ears), so slap is tested with the
+    # seating speed turned down to 1% in both runs
+    rms = lambda parts, k: float(np.sqrt(np.mean(parts[k] ** 2)))  # noqa: E731
+
+    def run(key, factor):
+        s2 = dict(d["src"])
+        s2["_meta"] = dict(d["src"]["_meta"])
+        if key == "skirt_clr":
+            s2["_meta"]["v_seating"] *= 0.01
+        s2["_meta"][key] *= factor
+        return _stream(d["eng"].spec, s2, 1.5, parts=True)[1]
+    moved = {k: rms(run(k, 2.0), part) / rms(run(k, 1.0), part) - 1.0 for k, part in feeds.items()}
+    check("sound carries physics: slap, exhaust flow and seating each move it (FINDING-021)",
+          1.0 if min(abs(v) for v in moved.values()) > 0.01 else 0.0, 1.0, 0.0,
+          ", ".join(f"{k} x2 -> {feeds[k]} {100 * v:+.1f}%" for k, v in moved.items()))
+
+
+def test_livesound_matches_render():
+    """The streaming synth against acoustics.EngineSound.render, the offline
+    reference (ADR-004: spectral): its Butterworth design matches scipy's
+    response, its pure and scipy paths agree, and at a steady operating
+    point every source's level is within 3% of render's, and the
+    third-octave spectrum within 1.5 dB -- the mix's, and each source's
+    shape over its bands within 30 dB of its strongest (the mix alone hid a
+    stale combustion sharpness; below -30 dB lie inter-harmonic floors and
+    the trackers' block-step sidebands). Needs scipy; SKIP without."""
+    import importlib.util
+    if importlib.util.find_spec("scipy") is None:
+        RESULTS.append(("SKIP", "streaming sound matches the offline render", None, None,
+                        "scipy unavailable"))
+        return
+    import numpy as np
+    from scipy import signal
+    from dieselsim import livesound as LS
+    worst = 0.0
+    for kind, order, wn in (("low", 1, 0.06), ("low", 3, 0.3), ("high", 2, 0.0027), ("band", 2, (0.0317, 0.295))):
+        w = np.linspace(1e-4, np.pi * 0.999, 2000)
+        _, h_ref = signal.sosfreqz(signal.butter(order, wn, btype=kind, output="sos"), worN=w)
+        h = np.ones_like(h_ref)
+        for b, a in LS.butter_sos(order, wn, kind):
+            h *= signal.freqz(b, a, worN=w)[1]
+        worst = max(worst, float(np.max(np.abs(h - h_ref)) / np.max(np.abs(h_ref))))
+    d = _hd_i6_sources()
+    LS.PURE = True
+    y_pure = _stream(d["eng"].spec, d["src"], 0.3)[0]
+    LS.PURE = False
+    y_fast = _stream(d["eng"].spec, d["src"], 0.3)[0]
+    paths = float(np.max(np.abs(y_pure - y_fast)))
+    y_s, parts = _stream(d["eng"].spec, d["src"], 4.0, parts=True)
+    y_s = y_s[44100:]
+    y_r, parts_r = d["es"].render(d["op"], duration=3.0, mic="exterior_7m", sources=d["src"], seed=5)
+    lvl = {k: float(np.sqrt(np.mean(parts[k] ** 2)) / (np.sqrt(np.mean(parts_r[k] ** 2)) + 1e-30)) for k in parts_r}
+    def bands(y):
+        f, P = signal.welch(y, 44100, nperseg=8192)
+        e = 25.0 * 2 ** (np.arange(0, 30) / 3.0)
+        return np.array([P[(f >= lo) & (f < hi)].sum() for lo, hi in zip(e[:-1], e[1:])])
+    bs, br = bands(y_s), bands(y_r)
+    m = br > 1e-6 * br.max()
+    db = np.abs(10 * np.log10(bs[m] / br[m]))
+    shape = {}
+    for k in parts_r:
+        a, b = bands(parts[k]), bands(parts_r[k])
+        a, b = a / a.sum(), b / b.sum()
+        mk = b > 1e-3 * b.max()
+        shape[k] = float(np.abs(10 * np.log10(a[mk] / b[mk])).max())
+    worst_shape = max(shape, key=shape.get)
+    worst_lvl = max(abs(v - 1.0) for v in lvl.values())
+    ok = (worst < 1e-9 and paths < 1e-9 and worst_lvl < 0.03 and float(db.max()) < 1.5
+          and shape[worst_shape] < 1.5)
+    check("streaming sound matches the offline render (filters, paths, levels, spectrum)", 1.0 if ok else 0.0, 1.0, 0.0,
+          f"filter response {worst:.1e}; pure vs scipy {paths:.1e}; worst source level {100 * worst_lvl:.1f}% off; "
+          f"worst third-octave {float(db.max()):.2f} dB over {int(m.sum())} bands; "
+          f"worst source shape {shape[worst_shape]:.2f} dB ({worst_shape})")
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -1177,7 +1317,10 @@ def main():
                test_manual_gearbox,
                test_lockup_and_coast_downshifts,
                test_adr011_live_friction,
-               test_grid_hash_ignores_the_live_loop):
+               test_grid_hash_ignores_the_live_loop,
+               test_livesound_firing_peaks_and_sources,
+               test_livesound_carries_physics,
+               test_livesound_matches_render):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001

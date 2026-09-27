@@ -72,6 +72,7 @@ from scipy import signal
 from dieselsim.acoustics import MICS, EngineSound
 from dieselsim.engine import DieselEngine
 from dieselsim.grid import GRID_CYCLES, solve_cell
+from dieselsim.livesound import LiveSynth
 from dieselsim.live import (  # noqa: F401  (the real-time loop, Phase 3)
     Driveline, Gearbox, LaunchClutch, LiveEngine, PerfGrid, TorqueConverter,
     Vehicle, handle_key, pedal_return)
@@ -88,89 +89,6 @@ CACHE_VERSION = 7   # 7: cells carry p_cyl and p_rail (ADR-011); 6: per-cell fre
 # changes: coupling, launch behaviour, shift feel and efficiency.
 # ======================================================================
 TRANSMISSION = "dct"
-
-
-# ==========================================================================
-# streaming DSP -- the same models as acoustics.py, but block-by-block with
-# persistent state so they can run inside an audio callback
-# ==========================================================================
-class Comb:
-    """
-    Feedback comb = a pipe with a reflecting end.
-
-    y[n] = x[n] + refl * lowpass(y[n-D])
-
-    Every read is of a sample written at least D ago, so a chunk of up to D
-    samples has no internal dependency and can be done with numpy.  Only the
-    one-pole wall loss is sequential, and lfilter handles that.
-    """
-
-    def __init__(self, delay_s: float, refl: float, fs: int, a_lp: float = 0.55):
-        self.D = max(4, int(round(delay_s * fs)))
-        self.buf = np.zeros(self.D)
-        self.idx = 0
-        self.refl = refl
-        self.b = np.array([1.0 - a_lp])
-        self.a = np.array([1.0, -a_lp])
-        self.zi = np.zeros(1)
-
-    def process(self, x: np.ndarray) -> np.ndarray:
-        out = np.empty_like(x)
-        n = 0
-        while n < len(x):
-            L = min(self.D - self.idx, len(x) - n)
-            d = self.buf[self.idx:self.idx + L]
-            lp, self.zi = signal.lfilter(self.b, self.a, d, zi=self.zi)
-            y = x[n:n + L] + self.refl * lp
-            self.buf[self.idx:self.idx + L] = y
-            out[n:n + L] = y
-            self.idx = (self.idx + L) % self.D
-            n += L
-        return out
-
-
-class Biquad:
-    """Any 2-pole/2-zero section, carrying its state between blocks."""
-
-    def __init__(self, b, a):
-        self.b = np.asarray(b, dtype=float)
-        self.a = np.asarray(a, dtype=float)
-        self.zi = np.zeros(max(len(self.b), len(self.a)) - 1)
-
-    def process(self, x):
-        y, self.zi = signal.lfilter(self.b, self.a, x, zi=self.zi)
-        return y
-
-
-def resonator_coeffs(f0, Q, fs, gain=1.0):
-    f0 = min(f0, 0.45 * fs)
-    r = math.exp(-math.pi * f0 / (Q * fs))
-    th = 2 * math.pi * f0 / fs
-    b = [gain * (1 - r), 0.0, -gain * (1 - r) * r]
-    a = [1.0, -2 * r * math.cos(th), r * r]
-    return b, a
-
-
-def butter_sos_filter(kind, cutoff, fs, order=2):
-    ny = 0.5 * fs
-    if kind == "band":
-        lo = max(20.0, min(cutoff[0], 0.9 * ny))
-        hi = max(lo * 1.05, min(cutoff[1], 0.95 * ny))
-        Wn = [lo / ny, hi / ny]
-    else:
-        Wn = max(5.0, min(cutoff, 0.95 * ny)) / ny
-    sos = signal.butter(order, Wn, btype=kind, output="sos")
-    return SosStream(sos)
-
-
-class SosStream:
-    def __init__(self, sos):
-        self.sos = sos
-        self.zi = np.zeros((sos.shape[0], 2))
-
-    def process(self, x):
-        y, self.zi = signal.sosfilt(self.sos, x, zi=self.zi)
-        return y
 
 
 # ==========================================================================
@@ -343,202 +261,40 @@ class EngineGrid(PerfGrid):
 # real-time sound
 # ==========================================================================
 class LiveSound:
+    """The audio callback's view of dieselsim.livesound.LiveSynth, the
+    streaming synth shared with the browser (FINDING-021: the copy that lived
+    here had drifted from acoustics.py and ignored the physics its sources
+    carry). sounddevice asks for BLOCK frames; the synth makes LS.BLOCK."""
+
     def __init__(self, grid: EngineGrid, mic: str = "exterior_7m"):
         self.g = grid
         self.spec = grid.spec
-        self.fs = FS
-        self.grid_deg = grid.grid_deg
-        self.theta = 0.0
         self.mic = mic
-        self.rng = np.random.default_rng(7)
-        self.src = grid.blend_sources(self.spec.idle_rpm, 0.0)
-        self.src_target = self.src
-        self.level = 0.0
-        self._build_chain()
-
-    # ------------------------------------------------------------------
-    def _build_chain(self):
-        s = self.spec
-        fs = self.fs
-        c_exh = math.sqrt(1.4 * 287.0 * 750.0)
-        self.exh_wg = Comb(2.0 * s.air.exhaust_pipe_length / c_exh, -0.62, fs)
-        self.exh_lp = butter_sos_filter(
-            "low", 900.0 * (0.02 / max(s.air.muffler_volume, 1e-4)) ** 0.25,
-            fs, 2)
-        self.exh_hp = butter_sos_filter("high", 35.0, fs, 1)
-        self.exh_turb_lp = butter_sos_filter("low", 1400.0, fs, 1) \
-            if s.turbo.enabled else None
-
-        self.int_wg = Comb(4.0 * s.air.runner_length_int / 343.0, -0.45, fs)
-        A_n, L_n, V_b = (s.air.airbox_neck_area, s.air.airbox_neck_len,
-                         s.air.airbox_volume)
-        f_h = 343.0 / (2 * math.pi) * math.sqrt(
-            A_n / max(V_b * (L_n + 0.85 * math.sqrt(A_n / math.pi)), 1e-9))
-        self.int_helm = Biquad(*resonator_coeffs(max(f_h, 25.0), 3.5, fs, 2.0))
-        self.hiss_bp = butter_sos_filter("band", (700.0, 6500.0), fs, 2)
-
-        self.knock = [Biquad(*resonator_coeffs(f0, Q, fs, gn))
-                      for f0, Q, gn in ((680.0, 11.0, 1.00),
-                                        (1450.0, 14.0, 0.72),
-                                        (2350.0, 16.0, 0.55),
-                                        (3600.0, 18.0, 0.42),
-                                        (5200.0, 20.0, 0.26))]
-        self.knock_f = np.array([680.0, 1450.0, 2350.0, 3600.0, 5200.0])
-        self.knock_g = np.array([1.00, 0.72, 0.55, 0.42, 0.26])
-
-        self.tick = [Biquad(*resonator_coeffs(3100.0, 26.0, fs)),
-                     Biquad(*resonator_coeffs(5400.0, 30.0, fs))]
-        self.injr = [Biquad(*resonator_coeffs(4200.0, 34.0, fs)),
-                     Biquad(*resonator_coeffs(6800.0, 36.0, fs))]
-        self.slapr = [Biquad(*resonator_coeffs(900.0, 9.0, fs)),
-                      Biquad(*resonator_coeffs(1750.0, 12.0, fs))]
-
-        self.whoosh_bp = butter_sos_filter("band", (1200.0, 9000.0), fs, 2)
-        self.rumble_bp = butter_sos_filter("band", (40.0, 480.0), fs, 2)
-        self.turbo_phase = 0.0
-        self.gear_phase = 0.0
-        self._set_mic(self.mic)
-
-    def _set_mic(self, name):
-        self.mic = name
-        m = MICS[name]
-        self.mic_gains = m.gains
-        self.out_lp = butter_sos_filter("low", m.lp_hz, self.fs, 3)
-        self.out_hp = butter_sos_filter("high", m.hp_hz, self.fs, 2)
-        self.dist = max(1.0, m.distance_m) ** 0.55
-        self.reverb_mix = m.reverb
-        self.rev_buf = np.zeros(int(0.09 * self.fs))
-        self.rev_idx = 0
+        self.syn = LiveSynth(grid.spec, mic, fs=FS)
+        self.syn.set_sources(grid.blend_sources(self.spec.idle_rpm, 0.0))
+        self.buf = np.zeros(0)
 
     def set_mic(self, name):
         if name in MICS:
-            self._set_mic(name)
+            self.mic = name
+            self.syn.set_mic(name)
 
-    # ------------------------------------------------------------------
     def update_operating_point(self, rpm, load):
-        self.src_target = self.g.blend_sources(rpm, load)
+        # the synth glides to the new set; one dict assignment, so the audio
+        # thread never sees half of it
+        self.syn.set_sources(self.g.blend_sources(rpm, load))
 
-    # ------------------------------------------------------------------
     def block(self, n, rpm, load_eff, boost, turbo_rpm, running=True):
-        fs = self.fs
-        # crossfade the source set so grid changes never click
-        a = min(1.0, n / (0.25 * fs))
-        for k in ("exh_flow", "int_flow", "dpdth", "inj", "valve", "slap"):
-            self.src[k] = (1 - a) * self.src[k] + a * self.src_target[k]
-
-        # ---- crank phase: this is where pitch comes from ---------------
-        dth = 6.0 * rpm / fs
-        th = (self.theta + dth * np.arange(1, n + 1)) % 720.0
-        self.theta = float(th[-1])
-
-        def samp(name):
-            return np.interp(th, self.grid_deg, self.src[name], period=720.0)
-
-        if not running:
-            return np.zeros(n, dtype=np.float32)
-
-        spd = rpm / max(self.spec.rated_rpm, 1.0)
-        meta = self.src["_meta"]
-        out = {}
-
-        # ---- exhaust ---------------------------------------------------
-        q = samp("exh_flow")
-        dq = np.diff(q, prepend=q[0]) * fs
-        y = self.exh_wg.process(dq)
-        y = self.exh_lp.process(y)
-        if self.exh_turb_lp is not None:
-            y = self.exh_turb_lp.process(y)
-        y = self.exh_hp.process(y)
-        out["exhaust"] = y / (np.std(y) + 1e-9)
-
-        # ---- intake ----------------------------------------------------
-        qi = samp("int_flow")
-        dqi = np.diff(qi, prepend=qi[0]) * fs
-        y = self.int_wg.process(dqi)
-        y = self.int_helm.process(y) + 0.5 * y
-        hiss = self.hiss_bp.process(self.rng.standard_normal(n))
-        y = y / (np.std(y) + 1e-9) + 0.45 * hiss / (np.std(hiss) + 1e-9) * \
-            min(2.0, spd * (0.3 + 0.7 * load_eff))
-        out["intake"] = y
-
-        # ---- combustion: dp/dtheta into the block modes -----------------
-        exc = samp("dpdth") * (rpm / 60.0 * 360.0)
-        exc = exc / (np.std(exc) + 1e-9)
-        sharp = min(3.0, float(meta.get("dpdt_max", 0.0)) / 6.0e6)
-        kn = np.zeros(n)
-        for r, f0, gn in zip(self.knock, self.knock_f, self.knock_g):
-            kn += r.process(exc) * (1.0 + sharp * (f0 / 2000.0) ** 1.1) * gn
-        out["combustion"] = kn / (np.std(kn) + 1e-9)
-
-        # ---- mechanical impulses ---------------------------------------
-        tk = samp("valve") * (float(meta.get("v_seating", 1.0)) / 1.2) ** 1.5
-        tk = self.tick[0].process(tk) + 0.6 * self.tick[1].process(tk)
-        ij = samp("inj")
-        ij = self.injr[0].process(ij) + 0.5 * self.injr[1].process(ij)
-        sl = samp("slap") * (float(meta.get("skirt_clr", 30e-6)) / 30e-6) ** 0.6
-        sl = self.slapr[0].process(sl) + 0.7 * self.slapr[1].process(sl)
-        mech = (tk / (np.std(tk) + 1e-9) + 0.75 * ij / (np.std(ij) + 1e-9)
-                + 0.9 * sl / (np.std(sl) + 1e-9))
-        out["mech"] = mech / (np.std(mech) + 1e-9)
-
-        # ---- turbo ------------------------------------------------------
-        if self.spec.turbo.enabled and turbo_rpm > 1000.0:
-            f_shaft = turbo_rpm / 60.0
-            ph = self.turbo_phase + 2 * math.pi * f_shaft / fs * \
-                np.arange(1, n + 1)
-            self.turbo_phase = float(ph[-1] % (2 * math.pi))
-            whine = np.sin(ph) + 0.45 * np.sin(2 * ph + 0.7) + \
-                0.22 * np.sin(3 * ph + 1.4)
-            wh = self.whoosh_bp.process(self.rng.standard_normal(n))
-            amp = max(0.0, boost - 1.0)
-            y = (0.55 * whine + 0.45 * wh / (np.std(wh) + 1e-9)) * amp
-            out["turbo"] = y / (np.std(y) + 1e-9) if np.std(y) > 1e-9 \
-                else np.zeros(n)
-        else:
-            out["turbo"] = np.zeros(n)
-
-        # ---- gear train -------------------------------------------------
-        s = self.spec
-        f_mesh = s.crank_gear_teeth * rpm / 60.0
-        if f_mesh < 0.45 * fs:
-            ph = self.gear_phase + 2 * math.pi * f_mesh / fs * \
-                np.arange(1, n + 1)
-            self.gear_phase = float(ph[-1] % (2 * math.pi))
-            gr = np.sin(ph) + 0.35 * np.sin(2 * ph + 1.1)
-            out["gear"] = gr * (0.3 + 0.7 * load_eff)
-        else:
-            out["gear"] = np.zeros(n)
-
-        # ---- rumble ------------------------------------------------------
-        rum = self.rumble_bp.process(self.rng.standard_normal(n))
-        out["rumble"] = rum / (np.std(rum) + 1e-9)
-
-        # ---- mix ----------------------------------------------------------
-        y = np.zeros(n)
-        for k, gn in self.mic_gains.items():
-            y += gn * out[k]
-        y = self.out_lp.process(y)
-        y = self.out_hp.process(y)
-        y /= self.dist
-        if self.reverb_mix > 0.0:
-            y = y + self.reverb_mix * self._reverb(y)
-
-        lvl = (0.25 + 0.75 * min(1.6, load_eff)) * (0.45 + 0.55 * spd)
-        self.level += (lvl - self.level) * min(1.0, n / (0.08 * fs))
-        y = y / (np.std(y) + 1e-9) * 0.22 * self.level
-        y = np.tanh(1.1 * y) / math.tanh(1.1)
-        return y.astype(np.float32)
-
-    def _reverb(self, x):
-        n = len(x)
-        y = np.zeros(n)
-        for d, g in ((0.021, 0.42), (0.037, 0.33), (0.053, 0.26)):
-            D = int(d * self.fs)
-            if D < len(self.rev_buf):
-                z = np.concatenate([self.rev_buf[-D:], x])[:n]
-                y += g * z
-        self.rev_buf = np.concatenate([self.rev_buf, x])[-len(self.rev_buf):]
-        return y
+        live = dict(load=load_eff, boost=boost, turbo_rpm=turbo_rpm)
+        parts = [self.buf]
+        have = len(self.buf)
+        while have < n:
+            y = self.syn.block(rpm, live, running)
+            parts.append(y)
+            have += len(y)
+        y = np.concatenate(parts)
+        self.buf = y[n:]
+        return y[:n].astype(np.float32)
 
 
 # ==========================================================================
