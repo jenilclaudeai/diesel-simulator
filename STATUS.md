@@ -1,14 +1,18 @@
 # Status
 
-**Updated:** 2026-09-27 (session 5, part 2: "complete Phase 3")
-**Phase:** 1, 2 and 3 **exit-ready** (REVIEW-003, -004, -005). Nothing is
-waiting on a decision; the stack below only needs merging. Next is Phase 4
-(audio).
+**Updated:** 2026-09-27 (session 5, part 3: "continue to the next step", Phase 4)
+**Phase:** 1, 2 and 3 **exit-ready** (REVIEW-003, -004, -005). Phase 4 (audio)
+is **built and measured** (REVIEW-006). What's left needs the owner:
+- a listening sign-off (PLAN's third criterion);
+- options for FINDINGs 022 and 023, best decided together so that one
+  ~70 min grid rebuild covers both.
+
 **Main:** only #40 of the Phase 1–2 stack reached `main`. #41–#49 merged into
 their parent branches instead, so **#50 lands them all in one merge**: its
-content was verified identical to the top of that stack. Then Phase 3, one
-stack, **merge in order**. After each merge, retarget the next PR to `main`
-(`gh pr edit <n> --base main`), or it merges into a dead branch again.
+content was verified identical to the top of that stack. After it, two
+stacks, both **merged in order**: Phase 3 (#51–#58), then Phase 4 (#59–#63).
+After each merge, retarget the next PR to `main` (`gh pr edit <n> --base
+main`), or it merges into a dead branch again.
 
 | PR | branch | what |
 |---|---|---|
@@ -20,10 +24,63 @@ stack, **merge in order**. After each merge, retarget the next PR to `main`
 | #55 | `feat/live-friction` | friction computed live in the loop (ADR-011 step 2) |
 | #56 | `feat/prebuilt-grids` | prebuilt converged grids for the five presets |
 | #57 | `feat/drive-page` | `/drive`: the TypeScript loop at 60 Hz in a worker |
-| #58 | `docs/phase3-exit` | REVIEW-005, accuracy table, PLAN, this file |
+| #58 | `docs/phase3-exit` | REVIEW-005, accuracy table, PLAN, STATUS |
+| #59 | `fix/live-sound` | `dieselsim/livesound.py`, a streaming synth faithful to `render()`; `play.py`'s stale copy replaced (FINDING-021); grid-hash exclusion |
+| #60 | `feat/grid-sources` | the grids carry warm and cold sound sources (all five rebuilt); the loop feeds the synth its live friction; FINDING-023 |
+| #61 | `feat/ts-synth` | the synth in TypeScript, sample-exact to Python; FINDING-022 |
+| #62 | `feat/drive-sound` | the AudioWorklet on `/drive`: Sound on, five mics, Record WAV; sound e2e in CI |
+| #63 | `docs/phase4-exit` | REVIEW-006, PLAN, this file |
 
 The repository is **public** now: Actions minutes are free, and the history
 was scanned for tokens before it went public (none found).
+
+---
+
+## Session 5, part 3 (2026-09-27) — Phase 4 built; the sign-off is the owner's
+
+The owner took three decisions, all as recommended:
+- warm and cold sources in the grids;
+- sample-exact plus spectral testing;
+- port faithfully and decide by ear.
+
+- **#59: FINDING-021.** `play.py`'s LiveSound was a stale copy of the
+  acoustics model. Slap, exhaust flow and seating speed each moved its
+  output by 0.0000%.
+  - `dieselsim/livesound.py` replaces it: 128-sample blocks, numpy only,
+    and a pure mode that is the TypeScript reference. Against `render()`:
+    levels within 1.2%, third-octaves within 1.02 dB, each source's shape
+    within 1.23 dB.
+  - **A mistake of mine, corrected in place:** the new file first staled
+    all five prebuilt grids, because `grid_hash()` covered it. It is now
+    excluded; the app reads the exclusions from `bridge.py`; and a static
+    import walk proves the cell solve never imports an excluded file. That
+    check was first a subprocess, which Pyodide lacks; CI caught it.
+- **#60: the grids carry sources.** All five were rebuilt (~58 min).
+  - perf 0 of 9,600 values and traces 0 of 480 differ, which confirms the
+    re-stamp;
+  - 5,139 KiB raw each; gzip 1,003 KiB (crdi15), 1,424 KiB (single).
+  - `LiveEngine.sound_inputs()` passes the live friction on: cold oil moves
+    the rumble −8.9% through the live path, and 0.0% without it.
+  - **FINDING-023:** the slap input sits on its clamp in every cold cell.
+- **#61: the synth in TypeScript**, held to Python:
+  - max |diff| 2.2e-13 of peak; its own bound is 1e-8, because libm and V8
+    differ by an ulp;
+  - PLAN's exit peaks on the port: +38.3/+26.2/+25.8 dB at 70/140/210 Hz;
+  - 12 of 13 mutants caught, the 13th equivalent;
+  - **FINDING-022:** in `render()`, the intake's flow level and the turbo's
+    boost term are divided out: ×2 → 0.0000%.
+- **#62: `/drive` has sound.** The AudioWorklet is fed over a MessagePort
+  (no SharedArrayBuffer); first sound 304 ms after the click; Record 10 s
+  gives a WAV.
+  - The e2e found two bugs: no `atob` in the worklet scope; and space (full
+    throttle) pressed the last-clicked button.
+  - A flaky e2e estimator of mine was replaced by a median floor.
+- **REVIEW-006:** 0 BLOCK. 1 MAJOR: the listening sign-off. 5 MINOR:
+  - phone CPU;
+  - the synth bound;
+  - grid size;
+  - a stopped engine still sounds fuelled;
+  - the I4 idle fundamental sits under the high-pass.
 
 ---
 
@@ -421,6 +478,10 @@ a miscount, not a change.)*
 | 017 | slap and tick normalised away in the mechanical sub-mix; mechanical-lash presets seat valves off the closing ramp | **fixed (#34, #37, #43)**; by-ear sign-off in Phase 4 |
 | 018 | cam lift stepped 4× where the ramps meet the flank (2.0 mm on `hd_i6`), since the first commit | **fixed with option C′ (#42) — owner to confirm** |
 | 019 | the aged `crdi15`'s torque gain | a fast-path artifact, not a wear bug; `durability_run` moved to 9 cycles (#45) |
+| 020 | the converter's lock-up clutch was numerically unstable, pinned at its clamp (bug #11's jolts) | **fixed (#54)** |
+| 021 | `play.py`'s real-time sound was a stale copy; slap, exhaust flow and seating moved it 0.0000% | **fixed (#59)** |
+| 022 | intake loudness and turbo boost term normalised away in `render()`, so also in the synth | **open**: known defect, the owner's call with the listening review |
+| 023 | the synth's slap input (skirt film) sits on its clamp in 240/240 cold cells, 115/240 warm | **open**: known defect, decided with 022 (one rebuild) |
 
 ### Still open inside those
 
@@ -477,19 +538,20 @@ claim is corrected in PROJECT_CONTEXT §1.3 (#46). Kept as history.)*
 ## Tests
 
 ```
-python3 tests/test_physics.py                    # top of the stack: 51 passed, 0 failed, 2 known with scipy; 47 + 3 skipped without
+python3 tests/test_physics.py                    # top of the stack: 61 passed, 0 failed, 4 known with scipy; 56 + 4 skipped without
 python3 tools/audit_dead_signals.py              # 0 dead, 2 frozen (the h_ring clamp, known), 0 tiny
 python3 tools/validate_table.py [--aged]         # PROJECT_CONTEXT §1.5 re-check: 12 of 12 in band
 python3 tools/fixtures/gen_fixtures.py --check   # golden fixtures current (regenerate without --check)
 cd web/physics && npm ci && npm test             # TypeScript ports vs fixtures: 5 checks
 cd tools/pyodide && npm ci && npm run suite      # the same physics suite under Pyodide
 cd web/solver && npm ci && npm test              # 20 cache tests + 18 round-trip checks through a real worker
-cd web/app && npm test -- --watch=false          # 22 unit tests (vitest)
+cd web/app && npm test -- --watch=false          # 28 unit tests (vitest)
 cd web/app && npm run build:pages                # never plain `build`
 cd web/app && CHROME_PATH=... npm run e2e        # dyno pull in Chrome vs native (computes its own reference)
 cd web/app && CHROME_PATH=... npm run e2e:grid   # full 8 x 6 grid in Chrome vs native, cell for cell (~9 min)
 cd web/app && CHROME_PATH=... npm run e2e:drive  # /drive: prebuilt grid, 60 Hz, 60 s script vs native Python
-cd web/physics && npm test                       # 41 checks: fixture ports + 7 live drives (per step + terminal)
+cd web/physics && npm test                       # 51 checks: fixture ports, 7 live drives, the synth (sound.json)
+cd web/app && CHROME_PATH=... npm run e2e:sound  # /drive with sound: worklet output, firing harmonics, pitch, mics
 python3 tools/fixtures/gen_fixtures.py --only live   # regenerate live drives after a live.py change (~4 min)
 python3 tools/build_live_grids.py                # rebuild the prebuilt converged grids after a SOLVER change (~57 min)
 ```
@@ -514,18 +576,23 @@ The open stack is in the table at the top of this file. Merged branches are
 
 ## Next actions
 
-1. **Owner:** merge #50, then #51 → #58, retargeting each child to `main`.
-2. **Phase 4 — audio:** a TypeScript AudioWorklet port of `acoustics.py`
-   (ADR-003), and the owner's by-ear sign-off, which is now its exit criterion.
-   Its inputs:
-   - the grids need their acoustic sources, since the prebuilt files carry only
-     perf and pressure traces today, so add them to `build_live_grids.py`;
+1. **Owner:** merge #50, then #51 → #58, then #59 → #63, retargeting each
+   child to `main`.
+2. **Owner: listen, then decide.** On `/drive`: Sound on, keys 1–5 for the
+   mics, "Record 10 s (WAV)". Or `python3 play.py`. Listen for:
    - `hd_i6`'s tick dominance (13×);
-   - a ramp-height parameter separate from `ramp_fraction`;
-   - crank phase carried across source swaps (FINDING-014).
+   - a cold start against a warm one;
+   - the intake at idle against full load (FINDING-022);
+   - cold slap (FINDING-023).
+
+   Pick options for 022 and 023 (both recommend A). Then one session makes
+   the `acoustics.py` + `livesound.py` + TypeScript edits and one ~70 min
+   grid rebuild, and the known defects flip to unexpected passes. A
+   ramp-height parameter separate from `ramp_fraction` is still open for
+   the same review.
 3. **Phase 5 — Enjoy mode:** the roster (OPEN-F), the dashboard, and the
-   steady-state economy label. Check live friction's cost on a mid-range phone
-   (REVIEW-005 m-5).
+   steady-state economy label. Check live friction's cost and the synth's on a
+   mid-range phone (REVIEW-005 m-5, REVIEW-006 m-1).
 4. Follow-ups:
    - a TCU engine-speed match on converter downshifts (REVIEW-005 m-3);
    - `play.py` on `Adr011Grid` (m-6);

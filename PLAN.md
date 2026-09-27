@@ -199,6 +199,18 @@ tick and slap scaling (FINDING-017), ramp-speed seating and the doubled ramp
 speed (FINDING-018), and `hd_i6`'s tick dominance (13× its other mechanical
 sources). Moved here from Phase 1 by the owner's decision.
 
+**Status (2026-09-27, REVIEW-006):** built and measured, on the stack #59–#63.
+- `dieselsim/livesound.py` is the streaming reference, and `play.py` uses
+  it (FINDING-021).
+- The grids carry warm and cold sources.
+- The TypeScript synth matches it to 2.2e-13 of peak.
+- The drive page plays it in an AudioWorklet (Sound on, five mics, Record
+  WAV).
+- Criteria 1 and 2 are met, and CI checks both.
+- **Criterion 3, the owner's listening sign-off, is open.** FINDINGs 022
+  (intake and boost levels normalised away) and 023 (the slap input pinned
+  on a clamp) wait on it, so that one grid rebuild covers both.
+
 ---
 
 ## Phase 5 — Enjoy mode

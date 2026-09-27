@@ -56,7 +56,7 @@ cd web/solver  && npm ci && npm run test:fast   # cache tests, seconds
 cd web/solver  && npm test                      # + round trip through a real worker
 cd web/app     && npm test -- --watch=false     # unit tests (vitest)
 cd web/app     && npm run build:pages           # NEVER plain `build`: blank page on Pages
-cd web/app     && npm run e2e                   # browser checks (also e2e:grid, e2e:drive)
+cd web/app     && npm run e2e                   # browser checks (also e2e:grid, e2e:drive, e2e:sound)
 ```
 Angular needs Node ≥ 22.22.3. If npm 10 crashes resolving Angular's peer
 deps, use `npx -y npm@11 install`. The project supports Python 3.10 —
