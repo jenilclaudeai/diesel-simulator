@@ -1332,6 +1332,17 @@ def test_intake_and_boost_levels_are_normalised_away():
 
 
 _GRIDS = {}
+GRID_DIR = os.path.join(os.path.dirname(__file__), "..", "web", "app", "public", "grids")
+
+
+def _no_prebuilt_grids(name):
+    """SKIP a test on the prebuilt grids where they are absent: the Pyodide
+    harness copies only the package and the tests (tools/pyodide), and its
+    job exists to prove the solver runs unmodified, not to re-read data files."""
+    if os.path.isdir(GRID_DIR):
+        return False
+    RESULTS.append(("SKIP", name, None, None, "prebuilt grids not present (Pyodide harness)"))
+    return True
 
 
 def _prebuilt_grid(key):
@@ -1339,8 +1350,7 @@ def _prebuilt_grid(key):
     if key not in _GRIDS:
         import json
         from dieselsim.live import Adr011Grid
-        path = os.path.join(os.path.dirname(__file__), "..", "web", "app", "public", "grids", f"{key}.json")
-        with open(path) as fh:
+        with open(os.path.join(GRID_DIR, f"{key}.json")) as fh:
             _GRIDS[key] = Adr011Grid.from_json(json.load(fh))
     return _GRIDS[key]
 
@@ -1353,6 +1363,8 @@ def test_grid_sources_warm_and_cold():
     stand-in for slap clearance -- is never thinner than the warm one's.
     (First written as "thicker": false in 115 of 240 cells, where both sit
     on the film's clamp. That clamp is FINDING-023, recorded below.)"""
+    if _no_prebuilt_grids("prebuilt grids carry warm and cold sound sources"):
+        return
     import numpy as np
     from dieselsim.config import PRESETS
     from dieselsim.livesound import SOURCE_KEYS
@@ -1405,6 +1417,8 @@ def test_live_sound_follows_the_engine():
     friction power). First written as cold oil AND coolant, where the grid's
     own cold cells could produce the difference without the live path; and
     asserting the slap moved too, which FINDING-023's clamp prevents."""
+    if _no_prebuilt_grids("the live synth follows the live friction"):
+        return
     import numpy as np
     from dieselsim import livesound as LS
     from dieselsim.live import LiveEngine
