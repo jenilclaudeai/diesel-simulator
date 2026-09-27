@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "tsc -p tsconfig.json && node dist/test/fixtures.test.js && node dist/test/live.test.js"
+    "test": "tsc -p tsconfig.json && node dist/test/fixtures.test.js && node dist/test/live.test.js && node dist/test/sound.test.js"
   },
   "devDependencies": {
     "@types/node": "^22.20.4",

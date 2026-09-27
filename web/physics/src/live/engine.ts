@@ -61,6 +61,10 @@ export class LiveEngine {
   T_fric = 0.0;     // mean friction torque [N.m], held between evaluations
   fmep_live = 0.0;
   P_mech = 0.0;     // friction heat into the oil [W]
+  // the live friction's sound inputs (Phase 4), held like T_fric
+  Pb_live = 0.0;    // boundary friction power [W]
+  skirt_live = 0.0; // skirt film [m]
+  vseat_live = 0.0; // valve seating speed [m/s]
   _frame = 0;
   private fric?: FrictionModel;
   private fspec?: FrictionSpec;       // private copy: its walls follow the live coolant
@@ -117,6 +121,18 @@ export class LiveEngine {
     this.fmep_live = r["fmep"]!;
     this.P_mech = r["P_mech"]!;
     this.T_fric = this.fmep_live * g.k_torque;
+    // acoustics.build_sources' definitions, at the live oil and coolant
+    this.Pb_live = r["Pb_rings"]! + r["Pb_skirt"]! + r["Pb_rods"]! + r["Pb_mains"]! + r["Pb_pin"]!;
+    this.skirt_live = r["h_skirt"]!;
+    this.vseat_live = r["v_seating"]!;
+  }
+
+  /** What the streaming synth takes live (live.py sound_inputs): boost,
+   *  turbo speed and load, and under ADR-011 the live friction's. */
+  sound_inputs(): Record<string, number> {
+    const out: Record<string, number> = { boost: this.boost, turbo_rpm: this.turbo_rpm, load: this.load_eff };
+    if (this.adr011) Object.assign(out, { Pb: this.Pb_live, skirt_clr: this.skirt_live, v_seating: this.vseat_live });
+    return out;
   }
 
   /** Grid performance at the live state; torque is BRAKE torque either way. */

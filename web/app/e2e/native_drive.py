@@ -6,16 +6,12 @@ TypeScript. Prints JSON {"events": [...], "final": {...}}.
 
 Run from the repo root:  python3 web/app/e2e/native_drive.py [preset] [trans]
 """
-import base64
 import json
 import os
 import sys
 
-import numpy as np
-
 ROOT = os.path.join(os.path.dirname(__file__), "..", "..", "..")
 sys.path.insert(0, ROOT)
-from dieselsim.engine import DieselEngine  # noqa: E402
 from dieselsim.live import Adr011Grid, LiveEngine, handle_key, pedal_return  # noqa: E402
 
 preset = sys.argv[1] if len(sys.argv) > 1 else "crdi15"
@@ -24,10 +20,7 @@ with open(os.path.join(ROOT, "web", "app", "public", "grids", f"{preset}.json"))
     gj = json.load(fh)
 with open(os.path.join(ROOT, "web", "physics", "fixtures", "live.json")) as fh:
     script = next(d for d in json.load(fh)["inputs"]["drives"] if d["name"] == "tc")["script"]
-dec = lambda rows: [[np.frombuffer(base64.b64decode(c), dtype="<f4") for c in row] for row in rows]  # noqa: E731
-spec = DieselEngine(preset=preset).spec
-grid = Adr011Grid(spec, gj["rpms"], gj["loads"], gj["perf"], dec(gj["p_cyl_f32"]), gj["grid_deg"],
-                  gj["perf_cold"], dec(gj["p_cyl_cold_f32"]), gj["T_warm"], gj["T_cold"])
+grid = Adr011Grid.from_json(gj)
 live = LiveEngine(grid, preset, trans=trans)
 keys = {k: c for k, c in script["keys"]}
 grade = {k: v for k, v in script["grade"]}

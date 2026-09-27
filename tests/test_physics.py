@@ -1288,6 +1288,109 @@ def test_livesound_matches_render():
           f"worst source shape {shape[worst_shape]:.2f} dB ({worst_shape})")
 
 
+_GRIDS = {}
+
+
+def _prebuilt_grid(key):
+    """A prebuilt grid (web/app/public/grids/<key>.json) as live.Adr011Grid."""
+    if key not in _GRIDS:
+        import json
+        from dieselsim.live import Adr011Grid
+        path = os.path.join(os.path.dirname(__file__), "..", "web", "app", "public", "grids", f"{key}.json")
+        with open(path) as fh:
+            _GRIDS[key] = Adr011Grid.from_json(json.load(fh))
+    return _GRIDS[key]
+
+
+def test_grid_sources_warm_and_cold():
+    """Phase 4: every prebuilt grid carries each cell's acoustic sources,
+    warm and cold, and none is silent or non-finite (the dead-signal
+    pattern, checked where it would hide); blend_sources on a node returns
+    that node's cell exactly; and a cold cell's skirt film -- FINDING-017's
+    stand-in for slap clearance -- is never thinner than the warm one's.
+    (First written as "thicker": false in 115 of 240 cells, where both sit
+    on the film's clamp. That clamp is FINDING-023, recorded below.)"""
+    import numpy as np
+    from dieselsim.config import PRESETS
+    from dieselsim.livesound import SOURCE_KEYS
+    bad, n, ratio, off, cmp, pinned, twins = [], 0, [], 0, 0, {"warm": 0, "cold": 0}, 0
+    for key in sorted(PRESETS):
+        g = _prebuilt_grid(key)
+        for tag, S in (("warm", g.src), ("cold", g.src_cold)):
+            for i, row in enumerate(S):
+                for j, c in enumerate(row):
+                    for k in SOURCE_KEYS:
+                        n += 1
+                        if not (np.all(np.isfinite(c[k])) and float(np.max(np.abs(c[k]))) > 0.0):
+                            bad.append(f"{key} {tag}[{i}][{j}].{k}")
+                    if not all(np.isfinite(v) for v in c["_meta"].values()):
+                        bad.append(f"{key} {tag}[{i}][{j}]._meta")
+        ratio += [g.src_cold[i][j]["_meta"]["skirt_clr"] / g.src[i][j]["_meta"]["skirt_clr"]
+                  for i in range(len(g.rpms)) for j in range(len(g.loads))]
+        # a cold cell is its own solve: its combustion waveform is never the warm one's
+        twins += sum(np.array_equal(g.src_cold[i][j]["dpdth"], g.src[i][j]["dpdth"])
+                     for i in range(len(g.rpms)) for j in range(len(g.loads)))
+        # the film's upper clamp is 0.32 x the skirt clearance (lubrication.skirt_film_thickness)
+        top = 0.32 * DieselEngine(preset=key).wear.eff_skirt_clearance()
+        for tag, S in (("warm", g.src), ("cold", g.src_cold)):
+            pinned[tag] += sum(abs(c["_meta"]["skirt_clr"] / top - 1.0) < 1e-9 for row in S for c in row)
+        for i, j in ((0, 0), (len(g.rpms) - 1, len(g.loads) - 1), (3, 2)):
+            for T, S in ((g.T_warm, g.src), (g.T_cold, g.src_cold)):
+                b = g.blend_sources(g.rpms[i], g.loads[j], T)
+                for k in SOURCE_KEYS:
+                    off += int(np.count_nonzero(b[k] != S[i][j][k]))
+                    cmp += b[k].size
+                off += sum(b["_meta"][k] != S[i][j]["_meta"][k] for k in b["_meta"])
+                cmp += len(b["_meta"])
+    ok = not bad and off == 0 and min(ratio) >= 1.0 - 1e-12 and twins == 0
+    check("prebuilt grids carry warm and cold sound sources, none silent (Phase 4)", 1.0 if ok else 0.0, 1.0, 0.0,
+          f"silent or non-finite: {len(bad)} of {n} waveforms {bad[:3] or ''}; node blends: {off} of {cmp} values "
+          f"differ; cold/warm skirt film {min(ratio):.2f}..{max(ratio):.2f} over {len(ratio)} cells; "
+          f"cold combustion identical to warm in {twins}")
+    cells = len(ratio)
+    known("the slap input (skirt film) is off its clamp in cold cells (FINDING-023)",
+          pinned["cold"] == cells,
+          f"on 0.32 x clearance: {pinned['cold']} of {cells} cold cells, {pinned['warm']} of {cells} warm")
+
+
+def test_live_sound_follows_the_engine():
+    """Phase 4: the synth follows the live loop's friction (ADR-011). On the
+    prebuilt crdi15 grid at idle, one LiveEngine with its oil at 361 K and
+    one at 273 K, both with the coolant at 361 K -- so the grid's blend is
+    identical, and only sound_inputs() (the live friction) can tell them
+    apart -- each feed LiveSynth. Cold oil must move the rumble (boundary
+    friction power). First written as cold oil AND coolant, where the grid's
+    own cold cells could produce the difference without the live path; and
+    asserting the slap moved too, which FINDING-023's clamp prevents."""
+    import numpy as np
+    from dieselsim import livesound as LS
+    from dieselsim.live import LiveEngine
+    g = _prebuilt_grid("crdi15")
+
+    def run(T_oil):
+        live = LiveEngine(g, "crdi15")
+        live.T_coolant, live.T_oil = 361.0, T_oil
+        live._update_friction()
+        inp = live.sound_inputs()
+        syn = LS.LiveSynth(g.spec)
+        syn.set_sources(g.blend_sources(live.rpm, live.load_eff, live.T_coolant))
+        acc = {}
+        for b in range(int(1.2 * LS.FS / LS.BLOCK)):
+            syn.block(live.rpm, inp)
+            if b * LS.BLOCK >= 0.6 * LS.FS:
+                for k, v in syn.last_parts.items():
+                    acc.setdefault(k, []).append(v)
+        return inp, {k: float(np.sqrt(np.mean(np.concatenate(v) ** 2))) for k, v in acc.items()}
+    ic, rc = run(273.0)
+    iw, rw = run(361.0)
+    moved = {k: rc[k] / rw[k] - 1.0 for k in ("mech", "rumble", "combustion")}
+    ok = abs(moved["rumble"]) > 0.01
+    check("the live synth follows the live friction: cold oil (Phase 4)", 1.0 if ok else 0.0, 1.0, 0.0,
+          "oil 273 vs 361 K, coolant 361 K, idle: " + ", ".join(f"{k} {100 * v:+.1f}%" for k, v in moved.items())
+          + f"; skirt film {ic.get('skirt_clr', 0.0) / iw.get('skirt_clr', 1.0):.2f}x, "
+          + f"boundary power {ic.get('Pb', 0.0) / iw.get('Pb', 1.0):.2f}x" + ("" if "Pb" in ic else " (no live friction sent)"))
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -1329,7 +1432,9 @@ def main():
                test_grid_hash_ignores_the_live_loop,
                test_livesound_firing_peaks_and_sources,
                test_livesound_carries_physics,
-               test_livesound_matches_render):
+               test_livesound_matches_render,
+               test_grid_sources_warm_and_cold,
+               test_live_sound_follows_the_engine):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001

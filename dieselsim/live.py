@@ -60,10 +60,14 @@ class Adr011Grid(PerfGrid):
     live loop evaluates friction at the live oil and coolant state
     (grid.cell_friction). Indicated torque is the cell's brake torque plus
     the friction torque it was solved with, fmep * Vd / (4 pi).
+
+    Phase 4: a cell may also carry its acoustic sources (livesound's six
+    crank-angle waveforms and their "_meta" scalars), warm and cold, blended
+    the same way for the streaming synth.
     """
 
     def __init__(self, spec, rpms, loads, perf, p_cyl, grid_deg, perf_cold, p_cyl_cold,
-                 T_warm, T_cold):
+                 T_warm, T_cold, src=None, src_cold=None):
         super().__init__(spec, rpms, loads, perf)
         f64 = lambda cells: [[np.asarray(c, dtype=float) for c in row] for row in cells]  # noqa: E731
         self.p_cyl = f64(p_cyl)
@@ -72,6 +76,33 @@ class Adr011Grid(PerfGrid):
         self.perf_cold = perf_cold
         self.T_warm, self.T_cold = float(T_warm), float(T_cold)
         self.k_torque = spec.geom.displacement / (4.0 * math.pi)   # fmep [Pa] -> N.m
+
+        def srcs(cells):
+            if cells is None:
+                return None
+            return [[dict({k: np.asarray(v, dtype=float) for k, v in c.items() if k != "_meta"},
+                          _meta={k: float(v) for k, v in c["_meta"].items()}) for c in row] for row in cells]
+        self.src, self.src_cold = srcs(src), srcs(src_cold)
+
+    @classmethod
+    def from_json(cls, gj, spec=None):
+        """A grid as tools/build_live_grids.py writes it (arrays as float32
+        base64); `spec` defaults to the preset's."""
+        import base64
+        if spec is None:
+            from .engine import DieselEngine
+            spec = DieselEngine(preset=gj["preset"]).spec
+        dec = lambda b: np.frombuffer(base64.b64decode(b), dtype="<f4")  # noqa: E731
+        cells = lambda rows: [[dec(c) for c in row] for row in rows]  # noqa: E731
+
+        def srcs(arrs, metas):
+            return [[dict({k: dec(v) for k, v in a.items()}, _meta=m) for a, m in zip(ra, rm)]
+                    for ra, rm in zip(arrs, metas)]
+        has = "src_f32" in gj
+        return cls(spec, gj["rpms"], gj["loads"], gj["perf"], cells(gj["p_cyl_f32"]), gj["grid_deg"],
+                   gj["perf_cold"], cells(gj["p_cyl_cold_f32"]), gj["T_warm"], gj["T_cold"],
+                   srcs(gj["src_f32"], gj["src_meta"]) if has else None,
+                   srcs(gj["src_cold_f32"], gj["src_meta_cold"]) if has else None)
 
     def cold_weight(self, T_coolant):
         return float(np.clip((self.T_warm - T_coolant) / (self.T_warm - self.T_cold), 0.0, 1.0))
@@ -99,6 +130,25 @@ class Adr011Grid(PerfGrid):
         warm = w[0] * P[i][j] + w[1] * P[i][j + 1] + w[2] * P[i + 1][j] + w[3] * P[i + 1][j + 1]
         cold = w[0] * Q[i][j] + w[1] * Q[i][j + 1] + w[2] * Q[i + 1][j] + w[3] * Q[i + 1][j + 1]
         return (1.0 - c) * warm + c * cold
+
+    def blend_sources(self, rpm, load, T_coolant):
+        """The acoustic sources at the live point, as livesound.LiveSynth's
+        set_sources takes them: arrays and scalars alike bilinear in (rpm,
+        load) and linear from warm to cold, in blend_p_cyl's order."""
+        i, j, fr, fl = self.weights(rpm, load)
+        w = ((1 - fr) * (1 - fl), (1 - fr) * fl, fr * (1 - fl), fr * fl)
+        c = self.cold_weight(T_coolant)
+        W = (self.src[i][j], self.src[i][j + 1], self.src[i + 1][j], self.src[i + 1][j + 1])
+        C = (self.src_cold[i][j], self.src_cold[i][j + 1], self.src_cold[i + 1][j],
+             self.src_cold[i + 1][j + 1])
+
+        def mix(get):
+            warm = w[0] * get(W[0]) + w[1] * get(W[1]) + w[2] * get(W[2]) + w[3] * get(W[3])
+            cold = w[0] * get(C[0]) + w[1] * get(C[1]) + w[2] * get(C[2]) + w[3] * get(C[3])
+            return (1.0 - c) * warm + c * cold
+        out = {k: mix(lambda q, k=k: q[k]) for k in W[0] if k != "_meta"}
+        out["_meta"] = {k: mix(lambda q, k=k: q["_meta"][k]) for k in W[0]["_meta"]}
+        return out
 
 
 # ==========================================================================
@@ -1029,6 +1079,11 @@ class LiveEngine:
         self.T_fric = 0.0          # mean friction torque [N.m], held between evaluations
         self.fmep_live = 0.0
         self.P_mech = 0.0          # friction heat into the oil [W]
+        # the live friction's sound inputs (Phase 4), held like T_fric:
+        # boundary friction power, skirt film, valve seating speed
+        self.Pb_live = 0.0
+        self.skirt_live = 0.0
+        self.vseat_live = 0.0
         self._frame = 0
         if self.adr011:
             # a private engine for the friction model: walls follow the live
@@ -1061,6 +1116,19 @@ class LiveEngine:
         self.fmep_live = float(fr["fmep"])
         self.P_mech = float(fr["P_mech"])
         self.T_fric = self.fmep_live * g.k_torque
+        # acoustics.build_sources' definitions, at the live oil and coolant
+        self.Pb_live = float(fr["Pb_rings"] + fr["Pb_skirt"] + fr["Pb_rods"] + fr["Pb_mains"] + fr["Pb_pin"])
+        self.skirt_live = float(fr["h_skirt"])
+        self.vseat_live = float(fr["v_seating"])
+
+    def sound_inputs(self):
+        """What the streaming synth takes live (livesound.LiveSynth.block's
+        `live`): the loop's boost, turbo speed and load, and under ADR-011
+        the live friction's, so a cold engine sounds cold."""
+        out = {"boost": self.boost, "turbo_rpm": self.turbo_rpm, "load": self.load_eff}
+        if self.adr011:
+            out.update(Pb=self.Pb_live, skirt_clr=self.skirt_live, v_seating=self.vseat_live)
+        return out
 
     def _perf(self, rpm, load):
         """Grid performance at the live state; torque is BRAKE torque either way."""

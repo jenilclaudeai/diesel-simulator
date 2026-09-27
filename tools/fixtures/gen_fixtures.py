@@ -44,7 +44,7 @@ from dieselsim.engine import DieselEngine  # noqa: E402
 from dieselsim.kinematics import Cam, SliderCrank  # noqa: E402
 
 OUT = os.path.join(ROOT, "web", "physics", "fixtures")
-TOL = {"kinematics": 1e-12, "thermo": 1e-10, "friction": 1e-6, "live": 1e-6}
+TOL = {"kinematics": 1e-12, "thermo": 1e-10, "friction": 1e-6, "live": 1e-6, "sound": 1e-12}
 EPS = float(np.finfo(float).eps)
 # Finite-difference outputs are compared at the rounding bound propagated
 # through their stencil, not at the module tolerance. A lift sample may
@@ -288,12 +288,8 @@ def live_grid_adr011(key="crdi15"):
 
 
 def adr011_grid_object(gj):
-    import base64
     from dieselsim.live import Adr011Grid
-    spec = DieselEngine(preset=gj["preset"]).spec
-    dec = lambda rows: [[np.frombuffer(base64.b64decode(c), dtype="<f4") for c in row] for row in rows]  # noqa: E731
-    return Adr011Grid(spec, gj["rpms"], gj["loads"], gj["perf"], dec(gj["p_cyl_f32"]), gj["grid_deg"],
-                      gj["perf_cold"], dec(gj["p_cyl_cold_f32"]), gj["T_warm"], gj["T_cold"])
+    return Adr011Grid.from_json(gj)
 
 
 def live_state(live):
@@ -459,10 +455,60 @@ def live_outputs(inp):
     return {d["name"]: live_run(inp, d) for d in inp["drives"]}
 
 
+# --------------------------------------------------------------------- sound
+def _sound_cell(task):
+    """One fast cell for the sound fixture: perf, trace and acoustic sources."""
+    import base64
+    from dieselsim.grid import solve_cell
+    from dieselsim.livesound import SOURCE_KEYS
+    key, rpm, load, T_cool = task
+    spec = DieselEngine(preset=key).spec
+    src, perf = solve_cell(spec, rpm, load, T_coolant=T_cool)
+    b64 = lambda a: base64.b64encode(np.asarray(a, dtype="<f4").tobytes()).decode()  # noqa: E731
+    return ({k: float(v) for k, v in perf.items()}, b64(src["p_cyl"]),
+            {k: b64(src[k]) for k in SOURCE_KEYS}, {k: float(v) for k, v in src["_meta"].items()})
+
+
+def sound_inputs():
+    """Phase 4: a 2 x 2 hd_i6 grid, warm and cold, in the prebuilt grids'
+    form (Adr011GridData with its acoustic sources), and the points to blend
+    it at: inside the cell part-cold, on a node warm, and clamped outside
+    (above max rpm, below the cold coolant)."""
+    from multiprocessing import get_context
+    from dieselsim.acoustics import EngineSound
+    key = "hd_i6"
+    spec = DieselEngine(preset=key).spec
+    rpms, loads = [900.0, 1600.0], [0.2, 0.9]
+    grid = {"preset": key, "rpms": rpms, "loads": loads, "T_warm": spec.thermal.coolant_T,
+            "T_cold": ADR011_T_COLD, "grid_deg": lst(EngineSound(spec).grid)}
+    with get_context("spawn").Pool(min(8, os.cpu_count() or 1)) as pool:
+        for tag, T in (("", None), ("_cold", ADR011_T_COLD)):
+            cells = pool.map(_sound_cell, [(key, r, ld, T) for r in rpms for ld in loads])
+            shape = lambda n: [[cells[i * 2 + j][n] for j in range(2)] for i in range(2)]  # noqa: E731
+            grid["perf" + tag], grid["p_cyl" + tag + "_f32"] = shape(0), shape(1)
+            grid["src" + tag + "_f32"], grid["src_meta" + tag] = shape(2), shape(3)
+    import dataclasses
+    live_spec = json.loads(json.dumps(dataclasses.asdict(spec), default=float))
+    live_spec["geom"]["displacement"] = spec.geom.displacement
+    return {"spec": live_spec, "grid": grid,
+            "blend": [[1234.0, 0.55, 320.0], [900.0, 0.9, 361.0], [2500.0, 0.1, 250.0]]}
+
+
+def sound_outputs(inp):
+    from dieselsim.live import Adr011Grid
+    g = Adr011Grid.from_json(inp["grid"])
+    out = []
+    for rpm, load, T in inp["blend"]:
+        b = g.blend_sources(rpm, load, T)
+        out.append({k: (dict(v) if k == "_meta" else lst(v)) for k, v in b.items()})
+    return {"blend": out}
+
+
 MODULES = {"kinematics": (kinematics_inputs, kinematics_outputs),
            "thermo": (thermo_inputs, thermo_outputs),
            "friction": (friction_inputs, friction_outputs),
-           "live": (live_inputs, live_outputs)}
+           "live": (live_inputs, live_outputs),
+           "sound": (sound_inputs, sound_outputs)}
 
 
 def compare(a, b, tol, path=""):
