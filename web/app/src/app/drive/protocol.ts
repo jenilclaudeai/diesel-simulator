@@ -22,7 +22,8 @@ export type ToWorker =
   | { type: 'load'; grid: GridFile; trans: Transmission }
   | { type: 'key'; key: string; down: boolean }
   | { type: 'run' | 'pause' }
-  | { type: 'script'; script: DriveScript; init: Record<string, number> };
+  | { type: 'script'; script: DriveScript; init: Record<string, number> }
+  | { type: 'sound'; port: MessagePort | null };   // the engine-sound worklet's end (Phase 4)
 
 export interface LiveView {
   t: number; frames: number; hz: number;

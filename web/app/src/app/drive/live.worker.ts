@@ -6,6 +6,7 @@
 // rather than replayed (at most 5 frames catch up per tick).
 import { Adr011Grid, handleKey, LiveEngine, pedalReturn } from '@dieselsim/physics';
 import type { FromWorker, LiveView, ToWorker } from './protocol';
+import type { LoopSound } from './sound-protocol';
 
 const DT = 1 / 60;
 const HOLD = new Set(['w', 's', 'b', 'z']); // repeat every frame while held, like key auto-repeat
@@ -13,6 +14,7 @@ let live: LiveEngine | undefined;
 let running = false;
 const held = new Set<string>();
 let acc = 0, last = 0, frames = 0, hzFrames = 0, hzT = 0, hz = 0;
+let sound: MessagePort | null = null;      // straight to the audio thread, no page hop
 
 const post = (m: FromWorker) => postMessage(m);
 
@@ -46,7 +48,15 @@ function tick(): void {
   let n = 0;
   while (acc >= DT * 1000 && n < 5) { frame(); acc -= DT * 1000; n++; }
   if (now - hzT >= 1000) { hz = (hzFrames * 1000) / (now - hzT); hzFrames = 0; hzT = now; }
-  if (n) post({ type: 'state', view: view() });
+  if (n) {
+    post({ type: 'state', view: view() });
+    if (sound) {
+      const e = live;
+      // play.py's rule: silent only when stalled (a stopped engine still turns)
+      const s: LoopSound = { rpm: e.rpm, load: e.load_eff, T: e.T_coolant, live: e.sound_inputs(), running: !e.stalled };
+      sound.postMessage(s);
+    }
+  }
 }
 
 setInterval(tick, 4);
@@ -63,6 +73,7 @@ addEventListener('message', (ev: MessageEvent<ToWorker>) => {
     }
     case 'run': running = true; last = hzT = performance.now(); acc = 0; hzFrames = 0; break;
     case 'pause': running = false; break;
+    case 'sound': sound = m.port; break;
     case 'key':
       if (!live) break;
       if (m.down) {

@@ -14,7 +14,8 @@
     "prebuild:pages": "npm run prepare-assets",
     "e2e": "node e2e/dyno.e2e.mjs",
     "e2e:grid": "node e2e/grid.e2e.mjs",
-    "e2e:drive": "node e2e/drive.e2e.mjs"
+    "e2e:drive": "node e2e/drive.e2e.mjs",
+    "e2e:sound": "node e2e/sound.e2e.mjs"
   },
   "private": true,
   "packageManager": "npm@10.9.7",
@@ -33,6 +34,7 @@
     "@angular/build": "^22.1.8",
     "@angular/cli": "^22.1.8",
     "@angular/compiler-cli": "^22.1.0",
+    "esbuild": "0.28.2",
     "jsdom": "^28.0.0",
     "prettier": "^3.8.1",
     "puppeteer-core": "^25.11.0",

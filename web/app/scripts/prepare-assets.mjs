@@ -7,9 +7,12 @@
 //                           against pyodide-lock.json's sha256
 //   public/physics/         dieselsim/*.py as ONE content-hashed file, so a
 //                           browser can never hold a mix of old and new files
+//   public/audio/           the engine-sound AudioWorklet, bundled here by
+//                           esbuild (Angular bundles workers, not worklets)
 //   src/app/solver/physics-version.ts
 //                           the physics fingerprint, so a cached grid can be
-//                           opened without booting Pyodide at all
+//                           opened without booting Pyodide at all, and the
+//                           worklet's content-hashed file name
 //
 // numpy source: $PYODIDE_WHEEL_DIR if set (offline or CDN-blocked builds),
 // otherwise the Pyodide CDN. A runtime CDN dependency was rejected in
@@ -84,7 +87,22 @@ fs.mkdirSync(outPhys, { recursive: true });
 const bundle = `physics.${physics.slice(0, 12)}.json`;
 fs.writeFileSync(path.join(outPhys, bundle), JSON.stringify({ physics, files }));
 
-// 4. fingerprint for the app
+// 4. the engine-sound AudioWorklet (Phase 4): one self-contained ES module,
+// content-hashed like the physics bundle so a browser never mixes versions
+const { build } = await import("esbuild");
+const outAudio = path.join(app, "public", "audio");
+const res = await build({
+  entryPoints: [path.join(app, "src", "app", "drive", "sound.worklet.ts")],
+  bundle: true, format: "esm", target: "es2022", minify: true, write: false,
+  tsconfig: path.join(app, "tsconfig.json"), logLevel: "warning",
+});
+const workletCode = res.outputFiles[0].contents;
+const worklet = `engine-sound.${sha256(workletCode).slice(0, 12)}.js`;
+fs.rmSync(outAudio, { recursive: true, force: true });
+fs.mkdirSync(outAudio, { recursive: true });
+fs.writeFileSync(path.join(outAudio, worklet), workletCode);
+
+// 5. fingerprint for the app
 const gen = path.join(app, "src", "app", "solver", "physics-version.ts");
 fs.mkdirSync(path.dirname(gen), { recursive: true });
 fs.writeFileSync(gen,
@@ -92,8 +110,9 @@ fs.writeFileSync(gen,
   `export const PHYSICS_VERSION = "${physics}";\n` +
   `export const PHYSICS_BUNDLE = "${bundle}";\n` +
   `export const PYODIDE_VERSION = "${version}";\n` +
-  `export const GRID_VERSION = "${gridVersion}";\n`);
+  `export const GRID_VERSION = "${gridVersion}";\n` +
+  `export const SOUND_WORKLET = "${worklet}";\n`);
 
 const mb = d => (fs.readdirSync(d).reduce((n, f) => n + fs.statSync(path.join(d, f)).size, 0) / 1e6).toFixed(1);
 console.log(`assets: pyodide ${version} (${mb(outPy)} MB), numpy ${np.version} verified, ` +
-            `physics ${physics.slice(0, 12)} (${names.length} files)`);
+            `physics ${physics.slice(0, 12)} (${names.length} files), worklet ${worklet} (${(workletCode.length / 1024).toFixed(0)} KiB)`);

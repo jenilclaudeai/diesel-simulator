@@ -179,6 +179,10 @@ jobs:
         run: npm run e2e:drive
         env:
           CHROME_PATH: /usr/bin/google-chrome
+      - name: engine-sound e2e in headless Chrome
+        run: npm run e2e:sound
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
       - name: keep the screenshots
         if: always()
         uses: actions/upload-artifact@v7

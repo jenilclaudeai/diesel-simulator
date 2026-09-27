@@ -28,6 +28,27 @@
     </button>
   </div>
 
+  <div class="controls sound">
+    <button type="button" class="sound-toggle" (click)="toggleSound()" [disabled]="status() !== 'driving'"
+            [attr.aria-pressed]="soundOn()">{{ soundOn() ? 'Sound off' : 'Sound on' }}</button>
+    <label class="field"><span>Microphone</span>
+      <select (change)="setMic($any($event.target).value)">
+        @for (m of mics; track m.key; let i = $index) {
+          <option [value]="m.key" [selected]="m.key === mic()">{{ i + 1 }} · {{ m.name }}</option>
+        }
+      </select>
+    </label>
+    <label class="field"><span>Volume</span>
+      <input type="range" min="0" max="1" step="0.05" [value]="volume()"
+             (input)="setVolume($any($event.target).valueAsNumber)">
+    </label>
+    <button type="button" (click)="record()" [disabled]="!soundOn() || recording()">
+      {{ recording() ? 'Recording 10 s…' : 'Record 10 s (WAV)' }}
+    </button>
+    @if (soundOn()) { <span class="level">{{ levelDb() > -120 ? fmt0.format(levelDb()) + ' dBFS' : 'silent' }}</span> }
+  </div>
+  @if (soundError()) { <p class="status"><span class="err">{{ soundError() }}</span></p> }
+
   <p class="status" role="status" aria-live="polite">
     @switch (status()) {
       @case ('idle') { Pick an engine and a gearbox, then start. It starts cold, like a real one. }
@@ -64,6 +85,9 @@
       @if (g.unsettled) { {{ g.unsettled }} cells never settled and are averaged over their oscillation (FINDING-013). }
       @if (g.stale) { This grid was built by an older physics build than this page; rebuild it with tools/build_live_grids.py. }
       Fuel figures come from steady-state cells (FINDING-009).
+      The sound is synthesised from the same cells, 44,100 samples a second, following the engine's live friction
+      (FINDING-021); how it should sound is still to be judged by ear, and the intake's loudness does not yet follow
+      its air flow (FINDING-022).
     </p>
   }
 
