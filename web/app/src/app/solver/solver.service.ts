@@ -4,7 +4,7 @@ import {
   type Endpoint, type Grid, type GridOptions, type GridRequest, type PointRequest, type PointResult,
   type RuntimeInfo, type SolverPort,
 } from '@dieselsim/solver';
-import { PHYSICS_BUNDLE, PHYSICS_VERSION } from './physics-version';
+import { NUMPY_BUNDLED, PHYSICS_BUNDLE, PHYSICS_VERSION } from './physics-version';
 
 export type SolverStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -46,6 +46,15 @@ export class SolverService {
   private async boot(): Promise<RuntimeInfo> {
     this.status.set('loading');
     try {
+      if (!NUMPY_BUNDLED) {
+        // npm start could not download the numpy wheel (prepare-assets said
+        // why); fail here with that, not with a 404 deep inside Pyodide
+        // (a plain Error: describe() shows it as is -- "check your connection
+        // and reload" would not help here)
+        throw new Error('numpy is missing from this local build: npm start could not download it. ' +
+          'The Drive page works without it. To fix it, follow the warning npm start printed ' +
+          '(a proxy setting, or PYODIDE_WHEEL_DIR), then restart it.');
+      }
       const worker = new Worker(new URL('./solver.worker', import.meta.url), {
         type: 'module',
         name: JSON.stringify({ assetBase: new URL('.', document.baseURI).href, bundle: PHYSICS_BUNDLE }),

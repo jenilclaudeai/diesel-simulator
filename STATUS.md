@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-09-28 (session 5, part 4: "continue with finding022")
+**Updated:** 2026-09-29 (session 5, part 5: setup behind a restricted network; #66)
 **Phase:** 1, 2 and 3 **exit-ready** (REVIEW-003, -004, -005). Phase 4 (audio)
 is **built and measured** (REVIEW-006).
 - **FINDING-022 is fixed** (the owner chose option A; #64).
@@ -35,6 +35,28 @@ is merged, every branch but `main` can be deleted; see "Branches" below.
 
 The repository is **public** now: Actions minutes are free, and the history
 was scanned for tokens before it went public (none found).
+
+---
+
+## Session 5, part 5 (2026-09-29) — setup on a restricted network
+
+The owner's first `npm start` failed: `ENOTFOUND cdn.jsdelivr.net`, the
+build-time numpy download behind a corporate network. The script crashed
+with a raw stack trace, because its hint only covered an HTTP error.
+
+- **`prepare-assets.mjs` now explains** what failed (host, DNS or proxy
+  error, HTTP status, or a missing local file) and gives three fixes:
+  - `HTTPS_PROXY` plus `NODE_USE_ENV_PROXY=1`. Verified: without the flag,
+    Node ignores the proxy.
+  - `PYODIDE_WHEEL_DIR`.
+  - A `PYODIDE_CDN` mirror.
+
+  The checksum check is unchanged, and a corrupted wheel is refused.
+- **`npm start` (`--dev`) carries on without numpy**, outside CI, and tells
+  the app (`NUMPY_BUNDLED`): Drive works (drive e2e 7/7 on such a build),
+  and Dyno and Grid state the cause. Builds and CI stay strict.
+- **`npm run check:assets`** (in CI) runs the four failure paths with no
+  network needed; 5 of 5 mutants caught.
 
 ---
 

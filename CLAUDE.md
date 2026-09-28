@@ -56,6 +56,7 @@ cd web/solver  && npm ci && npm run test:fast   # cache tests, seconds
 cd web/solver  && npm test                      # + round trip through a real worker
 cd web/app     && npm test -- --watch=false     # unit tests (vitest)
 cd web/app     && npm run build:pages           # NEVER plain `build`: blank page on Pages
+cd web/app     && npm run check:assets          # prepare-assets on a network without the Pyodide CDN
 cd web/app     && npm run e2e                   # browser checks (also e2e:grid, e2e:drive, e2e:sound)
 ```
 Angular needs Node ≥ 22.22.3. If npm 10 crashes resolving Angular's peer
@@ -95,6 +96,10 @@ raising no error.** `tools/audit_dead_signals.py` exists to catch the next.
   governor pulls fuel to 4% at `max_rpm`. That is intended.
 - WebCrypto needs a secure context: over plain http on a LAN address the
   grid cache switches itself off by design.
+- `npm start` downloads the numpy wheel once (`prepare-assets.mjs`). Behind a
+  proxy, Node's fetch ignores `HTTPS_PROXY` unless `NODE_USE_ENV_PROXY=1`;
+  offline, use `PYODIDE_WHEEL_DIR`. Without the wheel `npm start` carries on
+  (Drive works; Dyno and Grid say numpy is missing), but builds and CI stop.
 
 ## Decisions
 
