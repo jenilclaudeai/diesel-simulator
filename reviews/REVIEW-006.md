@@ -198,3 +198,20 @@ older), and FINDINGs 022 and 023. Also on this tree:
 
 The dyno accuracy table is unchanged: no solver file changed in Phase 4
 (the grid rebuild reproduced every committed value).
+
+---
+
+## Addendum (2026-09-28) — FINDING-022 fixed
+
+The owner chose FINDING-022's option A, on its own. FINDING-023 goes in a
+later rebuild. It landed in #64, on top of this stack.
+- The intake now carries (ṁ/ṁ_ref)^1.5, and the turbo's boost term sits
+  after the normalisation: ×2 moves them +182.8% and +190.5%, where both
+  were 0.0000%.
+- The known defect became an assertion.
+- The balance moves most at idle: the intake and turbo parts drop 28–39 dB,
+  and the intake-mic total 11–19 dB. At full boost the turbo rises ~4 dB.
+  The table is in FINDING-022.
+
+M-1 (the listening sign-off) is unchanged, and FINDING-023 is still open.
+The text above is left as it was written.
