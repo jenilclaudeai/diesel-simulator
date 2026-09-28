@@ -7,6 +7,7 @@ FINDING-007, listed as next action 6 in `STATUS.md`
 **Status:** measured, not fixed. Item 3 measured further in session 4 — it is
 **not** local to `crdi15`, and at part load it merges with item 2; see
 *Item 3, measured* at the end. The fix needs a design decision.
+*(Updated 2026-09-26: the status above is stale. Item 1 is fixed (PR #21), item 2 is fixed (PR #40), and item 3 is deferred to Phase 3 by the owner. Converged mode and the dyno accuracy note are the interim answer.)*
 **Reproduce:** `python3 tools/diag_torque_limiter.py` (≈2 min on 6 cores), then
 `--egr-sweep` and `--converge`
 
@@ -559,3 +560,8 @@ run of the comparison set the "old" constants inside reused pool workers, so
 later "new" and converged jobs in the same worker ran with the old start (8
 of 12 rows showed identical old and new). The table above is the rerun with
 every job setting its own constants, one task per worker.
+
+Re-measured at the top of the session-5 stack (physics build `0cc90542b137`,
+after #40–#45): `crdi15` −5.84%, `crdi_1p5` −8.48%, `hd_i6` −3.35%,
+`ld_i4` −3.74%, `single` 0.00%. Governed end: 1.8 / 23.9 / 14.2 / 5.1 / 0.0
+N·m. The page's table carries this build (REVIEW-004).

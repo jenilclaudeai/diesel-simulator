@@ -1,0 +1,14 @@
+{
+  "name": "@dieselsim/physics",
+  "private": true,
+  "description": "TypeScript ports of dieselsim modules, each held to the Python original by golden fixtures (ADR-004). Framework-free.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "tsc -p tsconfig.json && node dist/test/fixtures.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "typescript": "^5.9.3"
+  }
+}

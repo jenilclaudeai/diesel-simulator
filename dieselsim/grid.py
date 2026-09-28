@@ -116,11 +116,11 @@ def solve_cell(spec, rpm, load, n_cycles=GRID_CYCLES, fs=44100,
     """
     Solve one grid cell on a FRESH engine and return (sources, perf).
 
-    Fresh per cell because nothing else isolates a solve: Turbocharger keeps
-    shaft speed (n_rpm) and VGT position (vgt_pos) as instance state across
-    operating_point calls, and warm_start=False resets only the gas state --
-    measured 3.89% off after high-rpm history even with the flag off. This
-    also matches exactly how the regression suite's golden values are made.
+    Fresh per cell: it matches exactly how the regression suite's golden
+    values are made. (When this was written nothing else isolated a solve --
+    warm_start=False reset only the gas state, 3.89% off after high-rpm
+    history. Bug #5 is fixed since: a cold solve now resets the turbo and
+    starts the limiter's calibration cold, bit-identical to a fresh engine.)
 
     `spec` is an EngineSpec object, not a preset name, so rating overrides
     travel with it and nothing depends on a preset registry.

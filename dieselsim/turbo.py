@@ -121,7 +121,13 @@ class Turbocharger:
         self.th = thermal
         self.comp = Compressor(spec)
         self.turb = Turbine(spec)
-        self.n_rpm = 12000.0 if spec.enabled else 0.0
+        self.reset()
+
+    def reset(self):
+        """Back to the fresh-engine shaft speed and actuator positions, so a
+        cold solve (warm_start=False) does not inherit the last one's
+        (bug #5: 3.89 % off after high-rpm history)."""
+        self.n_rpm = 12000.0 if self.s.enabled else 0.0
         self.vgt_pos = 1.0
         self.wg_area = 0.0
         self.surge_margin = 1.0

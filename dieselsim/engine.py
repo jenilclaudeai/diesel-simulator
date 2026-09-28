@@ -112,6 +112,7 @@ class DieselEngine:
         self._calibrating = False
         self.converged_mode = False
         self._fuel_seed = {}
+        self._pt_limit = {}      # rpm key -> (fuel cap or None, reason)
         # Cycles used when calibrating the torque limiter.
         #
         # BUG-8: this was assigned twice, 10 then 8, with comments arguing
@@ -207,8 +208,11 @@ class DieselEngine:
             # later judged under. They used to see f / fuel_limit_raw -- EGR
             # on across part of the plateau -- and the limiter overshot its
             # cap by up to +5.5% where EGR switched on.
+            # The chain starts cold (gas state and turbo, bug #5) so the
+            # calibrated fuel is a function of rpm alone, not of whatever
+            # was solved before; on a fresh engine this changes nothing.
             op0 = self.operating_point(rpm, fuel_mg=f_max, n_cycles=self.cal_cycles,
-                                       load_est=1.0)
+                                       load_est=1.0, warm_start=False)
             headroom = float(np.clip(op0.cycle.afr / max(self.spec.afr_limit,
                                                          1e-6), 1.0, 2.2))
             f_ceiling = f_max * headroom
@@ -248,6 +252,80 @@ class DieselEngine:
 
     def reset_torque_cal(self):
         self._torque_cal = {}
+        self._pt_limit = {}
+
+    # ------------------------------------------------------------------
+    _TURBO_STATE = ("n_rpm", "vgt_pos", "wg_area", "surge_margin", "bsr", "last")
+
+    def _limit_ratio(self, op):
+        """How far over its p_max / T_exh limit a solve is (1.0 = at it)."""
+        s = self.spec
+        r = 0.0
+        if s.p_max_limit and s.p_max_limit > 0.0:
+            r = max(r, op.p_max / s.p_max_limit)
+        if s.T_exh_limit and s.T_exh_limit > 0.0:
+            r = max(r, op.T_exh / s.T_exh_limit)
+        return r
+
+    def pressure_temperature_limit(self, rpm: float, fuel_mg: float):
+        """
+        Fuel at full demand, pulled back until peak cylinder pressure and
+        exhaust temperature are within spec.p_max_limit / spec.T_exh_limit.
+        Returns (fuel_mg, reason) with reason None, "p_max" or "T_exh".
+
+        One check solve per speed (cached), at full-load schedules, under the
+        same convergence as the limiter's calibration. The solver's gas and
+        turbo state are restored afterwards, so the solve that follows sees
+        exactly what it would have without the check (bug #5: both carry).
+        FINDING-010 / known bug #2: the limiter had no pressure or
+        temperature bound, so nothing stopped an over-boosted or over-fuelled
+        engine at its smoke limit.
+        """
+        s = self.spec
+        if not ((s.p_max_limit and s.p_max_limit > 0.0)
+                or (s.T_exh_limit and s.T_exh_limit > 0.0)):
+            return fuel_mg, None
+        key = int(round(rpm / 25.0))
+        hit = self._pt_limit.get(key)
+        if hit is not None and hit[2] == fuel_mg:
+            return hit[0], hit[1]
+        saved = (self._state, {k: getattr(self.turbo, k) for k in self._TURBO_STATE})
+        was = self._calibrating
+        self._calibrating = True
+        try:
+            def solve(f, cold=False):
+                op = self.operating_point(rpm, fuel_mg=f, n_cycles=self.cal_cycles,
+                                          load_est=1.0, warm_start=not cold)
+                return op, self._limit_ratio(op)
+            # the chain starts cold, so the answer depends on (rpm, fuel) and
+            # not on whatever was solved before (bug #5); the secant steps
+            # warm-start from it -- restarting each one cold leaves every
+            # 8-cycle solve short of its boost and reads p_max ~7% low
+            op, ratio = solve(fuel_mg, cold=True)
+            f_out, reason = fuel_mg, None
+            if ratio > 1.0:
+                reason = ("p_max" if s.p_max_limit > 0.0
+                          and op.p_max / s.p_max_limit >= ratio else "T_exh")
+                # secant on fuel toward ratio = 0.995, from (f, r) and a
+                # proportional first guess; both quantities rise with fuel
+                f0, r0 = fuel_mg, ratio
+                f1 = fuel_mg * 0.995 / ratio
+                for _ in range(5):
+                    op1, r1 = solve(f1)
+                    if abs(r1 - 0.995) < 0.004 or abs(f1 - f0) < 1e-3:
+                        break
+                    slope = (r1 - r0) / (f1 - f0)
+                    f0, r0 = f1, r1
+                    f1 = (float(np.clip(f1 + (0.995 - r1) / slope, 0.2 * fuel_mg, fuel_mg))
+                          if slope > 1e-9 else f1 * 0.995 / r1)
+                f_out = min(fuel_mg, f1)
+        finally:
+            self._calibrating = was
+            self._state = saved[0]
+            for k, v in saved[1].items():
+                setattr(self.turbo, k, v)
+        self._pt_limit[key] = (f_out, reason, fuel_mg)
+        return f_out, reason
 
     def seed_fuel_limit(self, rpm: float, fuel_mg: float):
         """Make fuel_limit(rpm) return fuel_mg without calibrating. For
@@ -288,11 +366,11 @@ class DieselEngine:
         if self._calibrating:
             return f
         cap = self.torque_cap(rpm)
-        if cap is None:
-            return f
-        # note: fuel_for_torque may return MORE than the open-loop raw limit,
-        # because it measures the air instead of assuming it
-        return self.fuel_for_torque(rpm, cap, f)
+        if cap is not None:
+            # note: fuel_for_torque may return MORE than the open-loop raw
+            # limit, because it measures the air instead of assuming it
+            f = self.fuel_for_torque(rpm, cap, f)
+        return self.pressure_temperature_limit(rpm, f)[0]
 
     def egr_schedule(self, rpm: float, load: float) -> float:
         """Typical calibration: heavy EGR at part load, cut at full load."""
@@ -351,6 +429,8 @@ class DieselEngine:
             load_est = fuel_mg / max(self.fuel_limit(rpm), 1e-9)
         if egr is None:
             egr = self.egr_schedule(rpm, load_est)
+        if not warm_start:
+            self.turbo.reset()
 
         cyc = self.cycle.run(
             rpm, fuel_mg, self.turbo, egr_cmd=egr, p_amb=p_amb, T_amb=T_amb,
@@ -634,7 +714,10 @@ class DieselEngine:
                 # at fine time resolution while the cycle is refreshed less
                 # often; the friction powers driving wear are reused.
                 if prev is None or i_block % max(resolve_every, 1) == 0:
-                    op = self.operating_point(rpm, load=load, n_cycles=6)
+                    # FINDING-019: was n_cycles=6, which known bug #1 says
+                    # is unconverged; over 2000 h it moved crdi15's logged
+                    # rated torque 3.8% and wear by up to 3% (single: none)
+                    op = self.operating_point(rpm, load=load, n_cycles=9)
                     self._mode_cache[k_mode] = op
                 else:
                     op = prev

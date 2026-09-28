@@ -1,19 +1,95 @@
 # Status
 
-**Updated:** 2026-09-25 (session 4, part 2 — an autonomous stretch; see below)
-**Phase:** 2 — mostly done. Python runs in the browser, the SolverPort exists,
-grids are cached, CI runs, and the first web page (a dyno pull) works end to end.
-**Main:** everything through PR #35 is merged; CI on `main` is green (6 of 6,
-run 36186508876). #20 was closed (its record is FINDING-013; branch kept).
-Open, a stack: **#36** (accuracy table for `6912cc7545ef`; STATUS) → **#37**
-(closing ramps clear the lash, FINDING-017 item 2) → **#38** (cam wear
-calibrated to the owner's 2000 h / 150 µm service interval) → **#39**
-(ADR-011 step 1: cells carry the pressure trace; `cell_friction`). Merge in
-that order, retargeting each child to `main` after its parent merges.
+**Updated:** 2026-09-26 (session 5: "complete Phases 1 and 2")
+**Phase:** 1 and 2 **exit-ready** (REVIEW-003, REVIEW-004). Waiting on two things:
+the owner merging the stack, and one decision (FINDING-018's fix option).
+After that, Phase 3.
+**Main:** everything through PR #39 is merged. Open, **one stack, merge in
+order**, retargeting each child to `main` after its parent merges
+(`gh pr edit <n> --base main`):
+
+| PR | branch | what | needs |
+|---|---|---|---|
+| #40 | `fix/egr-start` | EGR valve starts at 0.14 × command (FINDING-013 item 2) | review |
+| #41 | `fix/turbo-reset` | `warm_start=False` isolates a solve (bug #5) | review |
+| #42 | `fix/cam-profile` | cam lift no longer steps 4× at the ramp junctions (FINDING-018), option C′ | **decision: confirm C′** (A/B/C measured in the finding) |
+| #43 | `fix/seat-ramp` | valves seat at ramp speed when the lash is inside the ramp | review |
+| #44 | `feat/pmax-texh-limits` | p_max and T_exh limits in the fuel limiter (bug #2) | review |
+| #45 | `fix/aged-torque` | `durability_run` at 9 cycles; the aged-engine torque gain explained (FINDING-019) | review |
+| #46 | `docs/phase1-exit` | Phase 1 exit: regression-test gaps closed, validation re-checked, goldens at 1e-5 (REVIEW-003) | review |
+| #47 | `feat/golden-fixtures` | golden-fixture harness and first TypeScript ports (ADR-004) | review |
+| #48 | `feat/browser-grid-e2e` | `/grid` page; a full grid built in Chrome matches native, cell for cell | review |
+| #49 | `docs/phase2-exit` | accuracy table regenerated on the final tree; REVIEW-004; this file | review |
 
 Read this first in a new session, then `PLAN.md`, then `DECISIONS.md`, then
 `reviews/`. Those replace pasting a context document. `CLAUDE.md` says the same
 for Claude Code sessions.
+
+---
+
+## Session 5 (2026-09-26) — Phases 1 and 2 completed
+
+The owner asked for Phases 1 and 2 to be finished. Eight decisions were taken
+up front, and all went with the recommended option: EGR starts from a target
+estimate; add p_max + T_exh limits; fix the economy *claim*; seat at ramp
+speed; reset the turbo too; move the by-ear audio sign-off to Phase 4;
+leave the limit cycle for Phase 3; fix clear bugs.
+
+**Phase 1 (#40–#46, REVIEW-003):**
+- **EGR start (#40).** Delivered-EGR error vs converged 7.75 → 3.07 points;
+  torque RMS 17.6% → 13.5%. One point got worse: `crdi15` 4000/0.25,
+  −1% → −39%. That is the unconverged VGT loop, which the old over-open
+  valve was masking (Phase 3).
+- **Bug #5 (#41).** A cold solve after any history is bit-identical to a
+  fresh engine.
+- **FINDING-018 (#42), new.** Cam lift stepped 4× where the ramps meet the
+  flank, 2.0 mm on `hd_i6`, since the first commit. Option C′ keeps breathing
+  (≤ 0.1%) and the ramp heights, and doubles ramp speed (tick +6 dB). **Owner
+  to confirm.**
+- **Seating (#43).** `hd_i6` tick went from 75.7× to 13.0× its other
+  mechanical sources. It stays dominant because its ramp is steep (Phase 4).
+- **Limits (#44).** 100 of 100 points bit-identical with limits on vs off;
+  they bind when set low. Cost: one extra solve per speed. A fuel-only p_max
+  limit is severe, so it is set not to bind.
+- **FINDING-019 (#45).** The aged-engine torque gain is turbo fouling acting
+  through the limiter's unconverged calibration. Converged it is −0.08%, so
+  there is no wear bug. `durability_run` solved at 6 cycles; now 9.
+- **Exit (#46).**
+  - Every fixed bug has a test (four gaps closed, mutation-tested). Bug #6,
+    in `play.py`'s terminal loop, is carried to Phase 3.
+  - Validation table: 12 of 12 rows in band. The 12,000 h paragraph did
+    **not** hold and is corrected in place.
+  - Goldens tightened 0.5% → 1e-5: PR #37 had moved one −0.09% unrecorded
+    (my miss).
+  - The "two fitted scalars" claim is corrected in place.
+
+**Phase 2 (#47–#49, REVIEW-004):**
+- **Golden fixtures (#47).** `tools/fixtures/gen_fixtures.py` plus the
+  `web/physics` ports (kinematics 3.6e-14, thermo 4.0e-16). `--check` fails
+  on stale fixtures. Finite differences are compared at their stencil's
+  rounding bound (a new ADR-004 rule), and REVIEW-001 M-1 is resolved.
+- **Browser grid (#48).** A full grid built in Chrome matches native in 816
+  of 816 values, worst 8.7e-7. The second build comes from the cache in
+  0.05 s. The build takes 487 s.
+- **Accuracy table (#49).** Regenerated on the final physics build.
+
+**Mistakes of mine this session, corrected where they happened:**
+- Contaminated pool workers in the EGR comparison. Rerun; noted in
+  FINDING-013.
+- An option-C prototype with `min` for `max`. Caught by its own continuity
+  output.
+- Uncomputed ramp speeds and wrong PR numbers in draft docs. Fixed before
+  commit.
+- VE referenced to the wrong density in the validation tool.
+- A comparator that let NaN be overwritten. Caught by its own self-test.
+- A unit test that needed a generated file. Red in CI; fixed in #48.
+- The dyno e2e timed out on CI after #44 made pulls longer. Fixed in #44 and
+  merged up the stack.
+
+**Owner, please:**
+1. Confirm FINDING-018's option C′, or pick A, B or C, before #42 merges.
+2. Merge #40 → #49 in order.
+3. Listen when Phase 4 comes. That is now its exit criterion.
 
 ---
 
@@ -211,7 +287,8 @@ first solve. `scipy` is never imported.
 `dieselsim/grid.py`, shared by native and browser; a cell built under Pyodide
 matches native to 4.8e-10 (performance) and 99.81% bit-identical float32
 sources. Phase 2's exit criterion is met at cell level — not yet at full-grid
-level in a real browser.
+level in a real browser. *(Session 5: now met at full-grid level in real
+Chrome, 816 of 816 values within 8.7e-7, and checked in CI; #48, REVIEW-004.)*
 
 **The SolverPort exists** (`web/solver/`, ADR-010, Accepted). Main-thread
 client → real worker loop → Pyodide → unmodified dieselsim. Typed errors,
@@ -230,6 +307,8 @@ under Pyodide, the SolverPort end to end) on every PR, including stacked ones.
 The handoff believed it had never run; PR mergeable states show it had: #13
 `clean`, #14 `unstable`. #14 was failing — see *Session 3* below.
 **`web/app` is not in CI**: neither `build:pages` nor the e2e checks.
+*(Since fixed: #18 and #23 added them, and session 5 added the fixtures
+and full-grid jobs.)*
 
 ### Session 3 — PR #14 was red, and CI had said so
 
@@ -284,16 +363,18 @@ a miscount, not a change.)*
 | 005 | roller-follower branch never accumulated `Pb_vt`; cam wear structurally impossible | fixed, **but insufficient** — the rest explained by FINDING-015 |
 | 006 | `h_min_ring` always its clamp, and exposed as a headline field | fixed |
 | 007 | bug #8 audit; `fuel_for_torque` returned 8.7% different fuel depending on cache warmth | fixed |
-| 008 | `theta` indexes two references — per-cylinder local vs global engine angle | documented; roll sign fixed |
+| 008 | `theta` indexes two references — per-cylinder local vs global engine angle | **fixed (option D, #30)**: `CycleTraces.theta_global`. *(Was: "documented; roll sign fixed".)* |
 | 009 | bug #4 overstated — light-load gap is ~29%, not 2× | measured; no fix needed |
-| 010 | bug #2 overstated — the loop converges; real gap is missing p_max/T_exh limits | measured |
+| 010 | bug #2 overstated — the loop converges; real gap is missing p_max/T_exh limits | **limits added (#44)** |
 | 011 | the real-time grid was the least accurate part — worst −10.06% | **fixed** — per-cell fresh engines at `n_cycles=9`; now exact vs reference |
 | 012 | `transient()` floor sat inside the solver's NaN region and could not catch NaN | **fixed** — stall detection; root cause as first recorded was wrong |
-| 013 | bug #3 understated: limiter fitted with EGR on, judged with it off; EGR valve opens 25% for any command; `crdi15` never converges at 1650 rpm | item 1 fixed and converged offline solves — **PR #21**; fast path stays unconverged (caveat online); item 2 open |
-| 014 | `render_transient`: crank phase restarts every chunk; each cross-fade deletes 20 ms (bug #10) | **measured, not fixed** — PR #24 |
-| 015 | cam film ~780× too thick (pressure-viscosity counted twice) + two kinematic errors — why cam wear is negligible | **measured, not fixed** — PR #25 |
+| 013 | bug #3 understated: limiter fitted with EGR on, judged with it off; EGR valve opens 25% for any command; `crdi15` never converges at 1650 rpm | item 1 fixed (#21); **item 2 fixed (#40)**; item 3 **deferred to Phase 3** (caveat online) |
+| 014 | `render_transient`: crank phase restarts every chunk; each cross-fade deletes 20 ms (bug #10) | **fixed (#29)**. *(Was: "measured, not fixed — PR #24".)* |
+| 015 | cam film ~780× too thick (pressure-viscosity counted twice) + two kinematic errors — why cam wear is negligible | **fixed (#28, #35); wear calibrated (#38)**. *(Was: "measured, not fixed — PR #25".)* |
 | 016 | FINDING-001/002 guards rode a 1° ignition-delay step; the real response (~0.2° over 90 K) is quantised by the 1° crank step | **fixed** — PR #27 (ignition resolved within the step) |
-| 017 | slap and tick normalised away in the mechanical sub-mix; mechanical-lash presets seat valves off the closing ramp | **measured, not fixed** — PR #31 |
+| 017 | slap and tick normalised away in the mechanical sub-mix; mechanical-lash presets seat valves off the closing ramp | **fixed (#34, #37, #43)**; by-ear sign-off in Phase 4 |
+| 018 | cam lift stepped 4× where the ramps meet the flank (2.0 mm on `hd_i6`), since the first commit | **fixed with option C′ (#42) — owner to confirm** |
+| 019 | the aged `crdi15`'s torque gain | a fast-path artifact, not a wear bug; `durability_run` moved to 9 cycles (#45) |
 
 ### Still open inside those
 
@@ -314,21 +395,25 @@ a miscount, not a change.)*
 | # | Issue | Status |
 |---|---|---|
 | 1 | `n_cycles=6` not converged | **measured 10.8% drift**, worse than documented; test added |
-| 2 | Fuelling open-loop on rpm | **measured — loop converges, no instability.** Real gap is missing p_max/T_exh limits. FINDING-010 |
+| 2 | Fuelling open-loop on rpm | **measured — loop converges, no instability.** Real gap was missing p_max/T_exh limits: **added (#44)**. FINDING-010 |
 | 3 | Torque limiter ±3% | **re-measured in session 4 — understated.** At n=9: `crdi15` −4.3…+6.8%, `crdi_1p5` −0.9…+5.5%. Not only "a symptom of #1": a systematic EGR-schedule bias. FINDING-013. *(Was: "partly addressed by the FINDING-007 cache fix; re-measure".)* |
-| 4 | Light-load fuel understated ~2× | **measured — does not reproduce at 2×; real gap ~29%.** FINDING-009 |
-| 5 | `operating_point` path-dependent | **root cause found** — `Turbocharger` keeps `n_rpm`/`vgt_pos` across calls; `warm_start=False` does not reset it. Grid now immune (FINDING-011); the API itself still leaks |
+| 4 | Light-load fuel understated ~2× | **measured — does not reproduce at 2×; real gap ~29%.** FINDING-009. **Closed as a claim fix:** the economy is a steady-state figure, and pages must say so (PLAN Phases 5/6) |
+| 5 | `operating_point` path-dependent | **fixed (#41)**: `warm_start=False` resets the turbo and the limiter's calibration starts cold; bit-identical to a fresh engine. *(Was: "root cause found — the API itself still leaks".)* |
 | 6 | `l` key dead in DCT | **fixed** — now reports why instead of silently no-opping |
 | 7 | No cold-temperature combustion | root-caused through FINDINGs 001–004 |
 | 8 | Unknown-provenance code in `engine.py` | **closed** — FINDING-007; found a real cache bug |
 | 9 | Worn-vs-new audio pair suspect | root-caused — FINDING-004 and 005 |
 | 10 | `render_transient` seams | **measured (session 4)** — FINDING-014, PR #24: phase resets every chunk, and each cross-fade deletes 20 ms. *(Was: "still unmeasured — blocked by FINDING-012".)* |
-| 11 | Coast downshift calibration | deferred |
+| 11 | Coast downshift calibration | **deferred to Phase 3** (owner's decision) |
 | 12 | Grade small-angle form | **already correct** — `atan`/`sin`/`cos` all present; entry was stale |
 
 ---
 
 ## Also found, not yet actioned
+
+*(Session 5: all three items below are done. FINDING-008 is fixed with
+`theta_global` (#30); ADR-006 is superseded by ADR-011; the fitted-scalars
+claim is corrected in PROJECT_CONTEXT §1.3 (#46). Kept as history.)*
 
 - **Trace arrays index two crank-angle references** — diagnosed as FINDING-008
   (per-cylinder local vs global engine angle). The fix is an API-contract
@@ -346,98 +431,65 @@ a miscount, not a change.)*
 ## Tests
 
 ```
-python3 tests/test_physics.py                    # main: 18/0/2 known; top of the stack (#30): 29 passed, 0 failed, 2 known with scipy; 28 + 1 skipped without
-python3 tools/audit_dead_signals.py              # diagnostic; main: 0 dead, 2 frozen (one clamp), 1 tiny; top of the stack: 0 tiny
-cd tools/pyodide && npm ci && npm run suite      # the same suite under Pyodide
-cd web/solver && npm ci && npm run test:fast     # 20 cache tests, seconds
-cd web/solver && npm test                        # + the round trip through a real worker
-cd web/solver && npm ci                          # BEFORE any web/app build: the app compiles ../solver/src
-cd web/app && npm test -- --watch=false          # 14 unit tests (vitest), once #17 is merged
+python3 tests/test_physics.py                    # top of the stack: 51 passed, 0 failed, 2 known with scipy; 47 + 3 skipped without
+python3 tools/audit_dead_signals.py              # 0 dead, 2 frozen (the h_ring clamp, known), 0 tiny
+python3 tools/validate_table.py [--aged]         # PROJECT_CONTEXT §1.5 re-check: 12 of 12 in band
+python3 tools/fixtures/gen_fixtures.py --check   # golden fixtures current (regenerate without --check)
+cd web/physics && npm ci && npm test             # TypeScript ports vs fixtures: 5 checks
+cd tools/pyodide && npm ci && npm run suite      # the same physics suite under Pyodide
+cd web/solver && npm ci && npm test              # 20 cache tests + 18 round-trip checks through a real worker
+cd web/app && npm test -- --watch=false          # 22 unit tests (vitest)
 cd web/app && npm run build:pages                # never plain `build`
-cd web/app && NATIVE_REF='...' CHROME_PATH=... npm run e2e   # 12 browser checks with 3 reference points
+cd web/app && CHROME_PATH=... npm run e2e        # dyno pull in Chrome vs native (computes its own reference)
+cd web/app && CHROME_PATH=... npm run e2e:grid   # full 8 x 6 grid in Chrome vs native, cell for cell (~9 min)
 ```
 
-*(With PR #23: `NATIVE_REF` is optional — the e2e computes it with
-`web/app/e2e/native_ref.py`, and fails if it cannot get one. The paragraph
-below describes `main` before #23.)*
-
-**e2e needs `NATIVE_REF`** or it silently skips the native comparison and
-passes on the other 9 checks. It is `{"<rpm>": torque}` for points on the page's
-default `crdi15` full-load pull, computed natively the way the page does it (a
-fresh engine per point, `load=1`, `n_cycles=9`):
-
-```bash
-python3 -c 'import json; from dieselsim import bridge as b
-print(json.dumps({r: json.loads(b.solve_point(json.dumps({"engine": {"preset": "crdi15"}, "rpm": r, "load": 1})))["torque"] for r in (800, 2900, 4600)}))'
-```
-
-Session 4 values: `{"800": 87.2755, "2900": 223.2136, "4600": -25.1289}`. The
-rpms must be on the page's sweep (idle to max in 10 steps, rounded to 50) or a
-check fails as "no row". On macOS, `CHROME_PATH="/Applications/Google
-Chrome.app/Contents/MacOS/Google Chrome"`.
-
-Golden points are locked at 0.5%. They were re-baselined after FINDING-001 P-2
-with the justification recorded inline — torque and BSFC moved under 1%, p_max
-rose ~3%, and `hd_i6` still reproduces the documented 2310 N·m and stays inside
-the 160–200 bar band.
-
+On macOS, `CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"`.
+Golden points are locked at **1e-5** (was 0.5% until session 5; REVIEW-003 m-1),
+stored to 9 significant figures, with every re-baseline explained inline.
 Known defects report as KNOWN, not FAIL. When one is fixed the suite reports
 UNEXPECTED PASS, which is the signal to promote it to a real assertion.
+Mutation runs: always `PYTHONDONTWRITEBYTECODE=1`, and a reused pool worker
+keeps module-level changes (session 5's EGR slip), so set constants per job.
 
 ---
 
 ## Branches
 
-Merged in session 4: #15 (this file), #17 (dyno axes), #18 (`web/app` in CI),
-#19 (FINDING-013). Merged branches are **not** auto-deleted: after merging a
-parent, retarget its child PR to `main` (`gh pr edit <n> --base main`).
-
-| PR | branch | contents | needs |
-|---|---|---|---|
-| #27 | `fix/ignition-substep` | FINDING-016 fix — **stacked on #21** | review |
-| #28 | `fix/cam-film` | FINDING-015 items 1, 3 — **stacked on #27**; includes #25's commit | review |
-| #29 | `fix/render-seams` | FINDING-014 fix — **stacked on #28**; includes #24's commit | review |
-| #30 | `feat/theta-global` | FINDING-008 D — **stacked on #29**; includes #22's commit | review; carries the regenerated dyno accuracy table |
-| #21 | `fix/converged-solves` | converged offline solves, item 1, honest `converged`, re-baselined goldens, FINDING-016, `--converged-grid`, dyno accuracy note | ready for review, CI 5/5 green — **three judgements listed in its description**; moves `crdi15` numbers |
-| #23 | `ci/e2e` | e2e in headless Chrome in CI; e2e fails without its reference | review; independent |
-| #22 | `docs/finding-008-options` | FINDING-008 options | **decision** (contract) |
-| #24 | `diag/bug-10-render-seams` | FINDING-014 + tool | **decision** (fix option) |
-| #25 | `diag/finding-005-cam` | FINDING-015 + tool | **decision** (fix option, wear calibration) |
-| #20 | `fix/steady-state-controllers` | `steady_ctrl` experiment, off by default | nothing — a record; close or keep |
-
-**Merge order:** #21 → #27 → #28 → #29 → #30, retargeting each child to `main`
-after its parent merges (`gh pr edit <n> --base main`). #22, #24 and #25 are
-docs whose commits are also inside #30/#29/#28: merge them first (the stacked
-copies then add nothing) or close them as superseded. #23 and #26 are
-independent.
-
-Earlier note, for #21–#26 alone: all are independent of each other and target `main`; any order works. #21
-before #23 is slightly tidier (the e2e reference then reflects item 1 from its
-first run), but both run the same physics on both sides.
-
-Merged earlier: #5 `physics/verified-fixes`, #6 `audio/physical-levels`
-(**not yet listened to** — revert that merge if the mix is wrong), #7 the
-bug-8 audit, #8–#14 the Phase 2 stack, #16 `CLAUDE.md`.
+The open stack is in the table at the top of this file. Merged branches are
+**not** auto-deleted: after merging a parent, retarget its child PR to `main`
+(`gh pr edit <n> --base main`). Session 4's branch table is in git history.
 
 ---
 
 ## Next actions
 
-1. **Listen** to the pairs in `out/listen/` (sent to the owner) — pair 1 first.
-2. **Merge the stack** #36 → #37 → #38 → #39 (retarget each child to `main` after its parent).
-3. **After listening, decide the remaining tick question**: the on-ramp lash
-   penalty in `seating_velocity()` and the `_ref_vseat` level (`hd_i6` tick
-   still 13× its other sources).
-4. **Look at the aged-engine torque**: `crdi15` +3.6% after 2000 h (not the
-   cam) — the other wear mechanisms, bug #9's territory.
-5. **ADR-011 step 2** — port `FrictionModel.evaluate` to TypeScript with
-   ADR-004 fixtures from `cell_friction` (Phase 3).
-6. **FINDING-013 item 2** — the EGR valve's 25% start (fast path only now) and
-   the VGT–EGR limit cycle at `crdi_1p5` 1450/0.5 (controller tuning).
-7. **Enjoy mode's roster** (OPEN-F), then its grids with `--converged-grid`.
-8. Then **Phase 3** — the real-time loop in TypeScript; manual gearbox needs a
-   clutch model; the AudioWorklet must carry crank phase across source swaps
-   (FINDING-014).
+1. **Owner:** confirm FINDING-018's option C′ (or choose A/B/C), then merge
+   #40 → #49 in order. If a different option is chosen:
+   - regenerate the fixtures (`gen_fixtures.py`);
+   - re-baseline the goldens and `NATIVE_TORQUE` in that PR;
+   - re-run the accuracy pull;
+   - check #43 (it builds on C′'s ramp speed).
+2. **Phase 3 — the real-time loop in TypeScript.** It opens with these
+   carried items:
+   - FINDING-013 item 3: the fast path doesn't converge at part load
+     (13.5% RMS, worst −39%) and has the `crdi15` limit cycle;
+   - bug #11 (coast downshift);
+   - a test for bug #6's key once `play.py`'s loop is ported;
+   - ADR-011 step 2: port `FrictionModel.evaluate` against
+     `web/physics/fixtures/friction.json`;
+   - the manual gearbox's clutch;
+   - integrator ports with ADR-004's per-step and terminal bounds.
+3. **Enjoy mode's roster** (OPEN-F) and its prebuilt grids
+   (`--converged-grid`). A browser build takes about 8 minutes (REVIEW-004 m-1).
+4. **Phase 4:** the owner's by-ear sign-off, which is now its exit criterion.
+   Also `hd_i6`'s tick dominance (13×) and a ramp-height parameter separate
+   from `ramp_fraction`.
+5. Follow-ups:
+   - Row-share the p_max / T_exh check in fast grids. This recovers its cost
+     but moves grid numbers.
+   - A timing-based p_max limiter, if a preset ever binds.
+   - Label durability's `health` as "life used".
 
 ---
 

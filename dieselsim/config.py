@@ -351,6 +351,14 @@ class EngineSpec:
     # applied on top of the two scalars above.  This is how you get a flat
     # torque plateau between two speeds.
     torque_limit_map: tuple = ()
+    # Mechanical and thermal limits the fuel limiter respects (FINDING-010,
+    # known bug #2): peak cylinder pressure [Pa] and exhaust-manifold
+    # (turbine-inlet) temperature [K] at full demand. Fuel is pulled back
+    # until neither is exceeded. <= 0 means no limit. Presets set them above
+    # every full-load point they reach today, so they bound what the rating
+    # and smoke limit do not: altitude, heat, wear, an over-boosted turbo.
+    p_max_limit: float = 0.0
+    T_exh_limit: float = 0.0
     # Shape of the OPEN-LOOP boost estimate the fuel limiter uses.  1.0 is
     # the old lazy rise; a VGT reaches its boost target far earlier, so a
     # smaller number (0.4-0.6) is right for one.  This only shapes the
@@ -388,6 +396,9 @@ def heavy_truck_i6() -> EngineSpec:
     # valve clatter drowned this engine's sound. 15.5 % gives ramps of
     # >= 1.25 x the lash on both cams (exhaust 0.69 mm, intake 0.68 mm).
     spec.valves.ramp_fraction = 0.155
+    # full load today peaks at 179 bar and 925 K (session 5 survey)
+    spec.p_max_limit = 220e5
+    spec.T_exh_limit = 1023.0
     return spec
 
 
@@ -453,6 +464,9 @@ def light_duty_i4() -> EngineSpec:
         T_warn=372.0, T_derate=379.0, T_derate_full=386.0,
         T_shutdown=391.0, T_restart=367.0)
     spec.afr_limit = 17.5
+    # full load today peaks at 167 bar and 1050 K (session 5 survey)
+    spec.p_max_limit = 190e5
+    spec.T_exh_limit = 1093.0
     return spec
 
 
@@ -539,6 +553,9 @@ def compact_crdi_i4() -> EngineSpec:
     spec.power_limit = 82.0e3
     spec.torque_limit_map = ((1200, 190.0), (1500, 214.0), (2750, 214.0),
                              (4000, 198.5), (4600, 172.0))
+    # full load today peaks at 154 bar and 929 K (session 5 survey)
+    spec.p_max_limit = 180e5
+    spec.T_exh_limit = 1073.0
     return spec
 
 
@@ -619,6 +636,9 @@ def crdi_1_5() -> EngineSpec:
     spec.torque_limit_map = ((1250, 196.0), (1500, 220.6), (2750, 220.6),
                              (3400, 214.0), (4000, 202.0), (4600, 150.0))
     spec.power_limit = 84.6e3
+    # full load today peaks at 158 bar and 786 K (session 5 survey)
+    spec.p_max_limit = 180e5
+    spec.T_exh_limit = 1073.0
     return spec
 
 
@@ -675,6 +695,9 @@ def industrial_single() -> EngineSpec:
         pin_dia=0.032, pin_width=0.028, oil_supply_film=1.8e-6,
         seal_drag_Nm=0.22, gear_train_k=2.0e-9)
     spec.afr_limit = 21.0
+    # full load today peaks at 132 bar and 682 K (session 5 survey)
+    spec.p_max_limit = 150e5
+    spec.T_exh_limit = 973.0
     return spec
 
 

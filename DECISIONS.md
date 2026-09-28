@@ -205,6 +205,61 @@ to an otherwise pure-Node pipeline.
 Without this, the port is unverifiable and every physics claim in the README
 becomes a guess.
 
+### Addendum (2026-09-26, Phase 2): the harness, and REVIEW-001 M-1
+
+**Built.**
+- `tools/fixtures/gen_fixtures.py` writes `web/physics/fixtures/*.json`
+  (inputs, outputs, physics hash, numpy version).
+- `web/physics` holds the TypeScript ports and their differential test.
+- CI job `fixtures` runs two checks:
+  1. `gen_fixtures.py --check` recomputes every fixture from its stored inputs
+     and fails, naming the module, when the physics has changed and the
+     fixtures were not regenerated;
+  2. every port is run against the fixtures.
+
+**Ported so far:** `kinematics` (slider-crank and cam lift) and `thermo`'s
+scalar paths. The `friction` fixture (`grid.cell_friction` from stored
+pressure traces, warm and cold oil) is generated now for the Phase 3 port
+that ADR-011 needs.
+
+**Measured:** kinematics agrees to 3.6e-14 and thermo to 4.0e-16. Mutations:
+- five port mutants are caught (the pre-FINDING-018 ramp, JS `%` for Python's
+  modulo, the on-ramp lash penalty, a sign in d²x/dθ², a missing
+  dissociation term);
+- three physics changes are caught by `--check` (a cam profile, `_K_DISS`,
+  windage).
+
+**One rule the table above did not have:** outputs computed by finite
+differences cannot meet a module's relative tolerance on a different libm.
+One ulp in `sin` becomes ~1e-10 of `d²L/dθ²` near an inflection, and that holds
+between two Python builds as much as between Python and JavaScript. They are
+compared at the rounding bound propagated through the original's stencil:
+- 4·ε·L_max/h for the central first difference;
+- 16·ε·L_max/h² for the second difference, at 4 ulp per sample: sin's ulp
+  doubled by the square, plus two roundings.
+
+A first bound of 1 ulp per sample was measured at 1.002 of itself, which was
+too tight. Everything else is compared at the module tolerance, with the
+denominator floored at 1e-3 of the series' largest value so that zero
+crossings don't divide by zero.
+
+**REVIEW-001 M-1 (per-step vs terminal).** Resolved as follows, for every
+integrator port (driveline, gearbox, the real-time loop):
+- **Reference trajectory:** Python's recorded state at every step of a fixed
+  scripted drive (inputs recorded per step), written by the generator.
+- **Per-step bound:** starting from Python's state *k* with Python's inputs,
+  one TypeScript step must reproduce state *k+1* to **1e-12 rel** for
+  arithmetic-only steps, and to the module tolerance where a step calls an
+  iterative solver. This isolates the step function; nothing accumulates.
+- **Terminal bound:** the free-running TypeScript trajectory against
+  Python's after the whole drive, on integrated quantities (distance, fuel
+  used, final speed and temperature), to **1e-6 rel**. The trajectory
+  comparison is aligned on discrete events (gear changes, lock-up, stall),
+  and an event firing at a different step is reported as a failure in its
+  own right, not as a numeric drift. A drive chaotic enough to break 1e-6
+  without an event mismatch has to be shortened, and the reason recorded.
+  The tolerance is not to be loosened to fit it.
+
 ---
 
 ## ADR-005 — Angular standalone components with signals

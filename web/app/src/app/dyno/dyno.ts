@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import type { PointResult, PresetInfo } from '@dieselsim/solver';
 import { describe, SolverService } from '../solver/solver.service';
 import { dualAxis } from './axis';
@@ -15,6 +16,7 @@ const fmt2 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2, minimu
 
 @Component({
   selector: 'app-dyno',
+  imports: [RouterLink],
   templateUrl: './dyno.html',
   styleUrl: './dyno.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

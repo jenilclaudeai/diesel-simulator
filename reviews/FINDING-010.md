@@ -108,3 +108,71 @@ One preset, two speeds, steady fixed-point iteration. A fixed point converging
 does not prove a *transient* controller is stable — that is a different
 question and a rate limiter may still be wanted for drivability. But it is not
 needed to stop divergence, because there is no divergence.
+
+---
+
+## Item 2 applied (session 5): p_max and T_exh limits
+
+Owner's decision: add p_max and T_exh limits to the fuel limiter, set above
+today's full-load points so no number moves.
+
+- `EngineSpec.p_max_limit` [Pa] and `T_exh_limit` [K, exhaust manifold];
+  `<= 0` means none.
+- `DieselEngine.pressure_temperature_limit(rpm, fuel)`, applied last in
+  `fuel_limit()`. It runs one check solve at full-load schedules; if either
+  quantity is over, it runs a secant on fuel to 0.995 of the limit. The chain
+  starts cold, so the answer depends on (rpm, fuel) only. The solver's gas
+  and turbo state are restored afterwards, so the solve that follows is
+  exactly what it would have been. The result is cached per speed.
+
+**Limits, and why they don't bind today.** Full-load survey, 10 speeds per
+preset, fresh engine, n_cycles 9:
+
+| preset | full-load max p_max | limit | full-load max T_exh | limit |
+|---|---|---|---|---|
+| `crdi15` | 157.5 bar | 180 bar | 786 K | 1073 K (800 °C) |
+| `crdi_1p5` | 154.3 bar | 180 bar | 929 K | 1073 K |
+| `hd_i6` | 179.3 bar | 220 bar | 925 K | 1023 K (750 °C) |
+| `ld_i4` | 166.5 bar | 190 bar | 1050 K (1057.6 K in a 50 rpm sweep, 3500–4450) | 1093 K (820 °C) |
+| `single` | 132.2 bar | 150 bar | 682 K | 973 K |
+
+The limits are typical design values for each class, not sourced figures.
+They are chosen, like the rating caps.
+
+**Proved not to move anything:** 100 of 100 points (5 presets × 10 speeds ×
+loads 1.0 and 0.5) are bit-identical with limits on vs off in torque, p_max,
+T_exh and BSFC. The suite's goldens are unchanged.
+
+**Proved to bind:** with each limit set below `hd_i6`'s full-load point at
+1700 rpm:
+- p_max 178.8 → 160.1 bar (limit 160); torque 2313 → 989 N·m.
+- T_exh 905.6 → 845.3 K (limit 850); torque 2313 → 2016 N·m.
+
+**Caveat, a modelling limit:** a fuel-only p_max limit is severe. Lowering
+`hd_i6`'s peak pressure by 11% costs 57% of its torque, because boost, and with
+it compression pressure, falls with fuel. A real ECU holds peak pressure
+mainly by retarding injection and trimming boost. Fuel is the last resort. The
+T_exh limit (fuel derate for turbine protection) is how real engines do it.
+If a preset ever runs into its p_max limit, a timing-based limiter is the
+better model.
+
+**Cost:** one extra solve per speed on a fresh engine. Measured per cell:
+`crdi15` +14–18% (it already runs a 4–6 solve calibration), `hd_i6` +89%
+(uncapped: one solve becomes two). Fast grids build a fresh engine per cell,
+so they pay this per cell. A follow-up could share the limit across a grid
+row. That would move grid numbers (each cell's warm start changes), so it
+needs its own re-baseline.
+
+Two design points, measured:
+- Starting every check solve cold read p_max about 7% low: each 8-cycle solve
+  from a fresh turbo is short of its boost, so the bound missed (170.9 bar
+  against 160). The applied version starts cold once and warm-starts the
+  secant steps.
+- A missing state restore changed a non-binding solve by −0.07%. That is inside
+  the 0.5% golden tolerance, so the test compares limits on vs off exactly.
+
+Test `test_pressure_and_temperature_limits`: each limit bounds full demand
+within 2%, with less torque, and non-binding limits leave `crdi15` 1800/0.6
+bit-identical. Mutations: limiter not applied (both bounds fail); state not
+restored (the bit-identity check fails). The unmutated baseline passes. Suite
+45 passed, 0 failed, 2 known.

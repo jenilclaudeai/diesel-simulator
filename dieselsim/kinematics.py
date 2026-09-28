@@ -94,24 +94,33 @@ class SliderCrank:
 def _core_profile(u, ramp):
     """
     Normalised lift for u in [0,1]:
-      * linear opening ramp over [0, ramp]
-      * linear closing ramp over [1-ramp, 1]
-      * raised-cosine main event in between
+      * raised-cosine main event sin^2(pi u)
+      * constant-velocity opening and closing ramps: the chords from each end
+        of the event to where the raised cosine reaches the ramp height
+        h_r = sin^2(pi ramp / 2), i.e. over [0, ramp/2] and [1 - ramp/2, 1]
     The ramps give a *finite seating velocity*, which is exactly what makes
     valvetrain clatter audible -- so they are modelled explicitly.
+
+    FINDING-018: the ramps used to run over [0, ramp] at height h_r, but the
+    raised cosine at u = ramp is sin^2(pi ramp), about 4x h_r, so lift
+    stepped at both junctions (2.0 mm on hd_i6). Ending the ramps where they
+    meet the flank keeps the flank (breathing within 0.1% torque), keeps
+    every ramp height (the lash clearance of FINDING-017), and doubles the
+    ramp speed for a given ramp_fraction.
     """
     u = np.asarray(u, dtype=float)
     L = np.zeros_like(u)
     ramp = max(ramp, 1e-4)
     h_r = 0.5 * (1.0 - math.cos(math.pi * ramp))     # lift at end of ramp
+    u_r = 0.5 * ramp                                   # where the ramp meets the flank
     m = (u >= 0.0) & (u <= 1.0)
     core = np.sin(np.pi * np.clip(u, 0.0, 1.0)) ** 2     # raised cosine
     L[m] = core[m]
     # replace the extremities with the constant-velocity ramps
-    r1 = m & (u < ramp)
-    L[r1] = h_r * (u[r1] / ramp)
-    r2 = m & (u > 1.0 - ramp)
-    L[r2] = h_r * ((1.0 - u[r2]) / ramp)
+    r1 = m & (u < u_r)
+    L[r1] = h_r * (u[r1] / u_r)
+    r2 = m & (u > 1.0 - u_r)
+    L[r2] = h_r * ((1.0 - u[r2]) / u_r)
     return L
 
 
@@ -158,8 +167,17 @@ class Cam:
                 + self.cam_lift(theta_deg - dth)) / h ** 2
 
     def seating_velocity(self, omega):
-        """Valve closing velocity at seat contact [m/s] -- the tick source."""
-        v_ramp = self.h_ramp / (math.radians(self.ramp * self.dur))
+        """Valve closing velocity at seat contact [m/s] -- the tick source.
+
+        With the lash inside the closing ramp the valve seats on the ramp, at
+        the ramp's own constant speed. It used to carry the lash penalty
+        (1 + 2.2 lash / h_ramp) there too -- x2.7 on hd_i6 (550 um lash, 697 um
+        ramp). Only lash taller than the ramp lands on the flank and keeps it.
+        """
+        # the ramp spans ramp/2 of the event (FINDING-018)
+        v_ramp = self.h_ramp / (math.radians(0.5 * self.ramp * self.dur))
+        if self.lash <= self.h_ramp:
+            return v_ramp * omega
         return v_ramp * omega * (1.0 + 2.2 * self.lash / max(self.h_ramp, 1e-9))
 
     def opening_event_deg(self):

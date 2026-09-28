@@ -29,6 +29,10 @@ tools/pyodide/*.whl
 web/solver/node_modules/
 web/solver/dist/
 
+# physics ports (ADR-004)
+web/physics/node_modules/
+web/physics/dist/
+
 # angular app build artefacts
 web/app/node_modules/
 web/app/dist/

@@ -46,8 +46,8 @@ def known(name, cond, note):
 #
 # Captured 2026-09-08 on the pre-fix tree and confirmed bit-identical after
 # removing the double-counted pilot multiplier (FINDING-001 P-1). Tolerance
-# is 0.5% -- these come from a deterministic solver, so anything larger
-# means a real change.
+# was 0.5% -- these come from a deterministic solver, so anything larger
+# means a real change. (Now GOLDEN_TOL = 1e-5; see the end of this block.)
 #
 # hd_i6 @ 1700 rpm reproduces the 2310 N.m peak torque in
 # PROJECT_CONTEXT.md section 1.5.
@@ -91,10 +91,26 @@ def known(name, cond, note):
 # same fuel (torque 125.278, bsfc 233.46, p_max 144.19, EGR 9.08 %):
 #   torque 111.696 -> 122.628 (error -10.8% -> -2.1%), bsfc 261.88 -> 238.51,
 #   p_max 104.78 -> 129.99, delivered EGR 16.64% -> 9.96% (target 9.20%).
+#
+# Re-baselined 2026-09-26 for FINDING-018 (cam lift no longer steps where the
+# ramps meet the flank; flank and ramp heights kept). All inside tolerance,
+# re-baselined anyway so the next change starts from exact values:
+#   crdi15 1800/0.6  torque 122.628 -> 122.580, bsfc 238.51 -> 238.52, p_max 129.99 -> 130.05
+#   crdi15 3000/1.0  torque 216.892 -> 216.888, bsfc 214.56 -> 214.55, p_max 152.23 -> 152.27
+#   hd_i6  1700/1.0  torque 2311.359 -> 2313.377, bsfc 214.29 -> 214.10, p_max 178.17 -> 178.84
+# hd_i6 still reproduces the documented 2310 N.m and stays in the 160-200 bar band.
+#
+# Tolerance tightened 0.5% -> 1e-5 at the Phase 1 exit (REVIEW-003), values
+# now stored to 9 significant figures. 0.5% let PR #37's -0.09% move pass
+# unrecorded. 1e-5 is the SolverPort's bound for the same reason: the
+# limiter's warm-started calibration chain amplifies a ~1e-10 platform
+# difference to ~1e-6 (Pyodide/numpy 2.4.6 vs native/numpy 2.1.0: 4.9e-8 at
+# crdi15 1800/0.6).
+GOLDEN_TOL = 1e-5
 GOLDEN = {
-    ("crdi15", 1800, 0.6): dict(torque=122.628, bsfc=238.51, pmax=129.99),
-    ("crdi15", 3000, 1.0): dict(torque=216.892, bsfc=214.56, pmax=152.23),
-    ("hd_i6", 1700, 1.0): dict(torque=2311.359, bsfc=214.29, pmax=178.17),
+    ("crdi15", 1800, 0.6): dict(torque=122.580341, bsfc=238.524968, pmax=130.046491),
+    ("crdi15", 3000, 1.0): dict(torque=216.888323, bsfc=214.552248, pmax=152.273735),
+    ("hd_i6", 1700, 1.0): dict(torque=2313.377013, bsfc=214.100932, pmax=178.836788),
 }
 
 
@@ -103,9 +119,9 @@ def test_golden_points():
         eng = DieselEngine(preset=preset)
         op = eng.operating_point(rpm, load=load, n_cycles=9)
         tag = f"{preset}@{rpm}/{load}"
-        check(f"{tag} torque", op.torque, exp["torque"], 0.005)
-        check(f"{tag} bsfc", op.bsfc, exp["bsfc"], 0.005)
-        check(f"{tag} p_max", op.p_max / 1e5, exp["pmax"], 0.005)
+        check(f"{tag} torque", op.torque, exp["torque"], GOLDEN_TOL)
+        check(f"{tag} bsfc", op.bsfc, exp["bsfc"], GOLDEN_TOL)
+        check(f"{tag} p_max", op.p_max / 1e5, exp["pmax"], GOLDEN_TOL)
         if (preset, rpm, load) == ("crdi15", 1800, 0.6):
             # FINDING-013 item 2: with the valve starting 25 % open for any
             # command a 9-cycle solve delivered 16.6 % against a 9.2 % target
@@ -496,14 +512,16 @@ def test_cam_film_and_time_base():
     Re-pinned 2026-09-26 for FINDING-013 item 2: 1400/0.6 runs with EGR, and
     the EGR valve's new start changes the cylinder pressure the exhaust valve
     opens against: 577.8 W crank time base, 597.2 W with the cam time base
-    mutated back (velocity, roller slip and inertia), still 3.4% apart."""
+    mutated back (velocity, roller slip and inertia), still 3.4% apart.
+    Re-pinned for FINDING-018 (no lift step, so no inertia spike at the
+    junction): 572.7 W; cam-time-base mutant 588.9 W, 2.8% apart."""
     shares = {}
     for preset, rpm, load in (("hd_i6", 1400, 0.6), ("single", 2000, 0.8)):
         f = DieselEngine(preset=preset).operating_point(rpm, load=load, n_cycles=9).friction
         shares[preset] = f["Pb_valvetrain"] / f["P_valvetrain"]
         if preset == "hd_i6":
             check("hd_i6 valvetrain friction power (crank time base)",
-                  f["P_valvetrain"], 577.8, 0.01)
+                  f["P_valvetrain"], 572.7, 0.01)
     check("cam boundary friction is a material share of valvetrain friction",
           1.0 if min(shares.values()) > 1e-2 else 0.0, 1.0, 0.0,
           ", ".join(f"{k} {v:.3f}" for k, v in shares.items()) + " (must exceed 0.01)")
@@ -603,10 +621,14 @@ def test_mech_levels_carry_physics():
     base = mech_rms("skirt_clr", 1.0)
     slap = mech_rms("skirt_clr", 2.0) / base - 1.0
     tick = mech_rms("v_seating", 2.0) / base - 1.0
+    # The bar was +5%. FINDING-018 doubled the ramp speed, so tick carries 4x
+    # the energy and slap's share of the sub-mix shrank: slap x2 now moves it
+    # +4.5%. The defect this guards against moved it 3.6e-11; removing the
+    # slap level (mutation) gives +0.0%. A 1% bar still separates them.
     check("mechanical sound levels carry physics",
-          1.0 if slap > 0.05 and tick > 0.05 else 0.0, 1.0, 0.0,
+          1.0 if slap > 0.01 and tick > 0.01 else 0.0, 1.0, 0.0,
           f"slap input x2 -> mech {100 * slap:+.1f}%, seating x2 -> mech {100 * tick:+.1f}% "
-          f"(each must exceed +5%)")
+          f"(each must exceed +1%)")
 
 
 def test_flat_tappet_wears_more_than_roller():
@@ -623,7 +645,9 @@ def test_flat_tappet_wears_more_than_roller():
     ratio = pb["single"] / max(pb["hd_i6"], 1e-12)
     # the entrainment half of the fix moves single's boundary power ~6%
     # (228 W with the old entrainment speed) but not the ratio: pin it
-    check("single cam boundary power (flat-tappet entrainment)", pb["single"], 215.1, 0.02)
+    # 215.1 W when pinned; PR #37's ramp raise moved it to 217.3 W unrecorded
+    # (inside the 2%); FINDING-018's continuous profile puts it at 215.3 W
+    check("single cam boundary power (flat-tappet entrainment)", pb["single"], 215.3, 0.02)
     check("flat tappet cam boundary power >> roller's (per cylinder)",
           1.0 if ratio > 10.0 else 0.0, 1.0, 0.0,
           f"single {pb['single']:.1f} W vs hd_i6 {pb['hd_i6']:.2f} W per cylinder, "
@@ -649,7 +673,8 @@ def test_cam_wear_calibration():
     """FINDING-015: K_ARCHARD["cam"] is calibrated to the owner's
     service-interval target -- the flat-tappet single, default duty cycle,
     grows 150 um of exhaust lash in 2000 h (measured 149.8 um). A design
-    choice, stated as one; this pins it."""
+    choice, stated as one; this pins it. Re-fitted for FINDING-018 (the
+    continuous cam profile gave 147.8 um at 2.17e-7): 2.20e-7, 149.8 um."""
     eng = DieselEngine(preset="single")
     eng.durability_run(2000.0, verbose=False)
     check("single exhaust lash growth at 2000 h (calibration target 150 um)",
@@ -678,7 +703,179 @@ def test_cell_friction_from_trace():
     ref.seed_fuel_limit(1800.0, perf["fuel_mg"] / 0.6)
     full_cold = ref.operating_point(1800, fuel_mg=perf["fuel_mg"], n_cycles=9).fmep
     check("cell friction from stored trace (same state)", same, own, 0.002)
+    # FINDING-011: a grid cell is a fresh-engine n_cycles=9 solve; the old
+    # shared-engine build was off by up to -10.06%
+    check("grid cell torque equals a fresh-engine solve (FINDING-011)", perf["torque"],
+          DieselEngine(preset="crdi15").operating_point(1800, load=0.6, n_cycles=9).torque, 1e-12)
     check("cell friction from stored trace (cold oil vs full cold solve)", cold, full_cold, 0.002)
+
+
+def test_cold_solve_is_path_independent():
+    """Bug #5: warm_start=False reset only the gas state; the turbo kept its
+    shaft speed and VGT position (+0.54% at 2000 rpm after a 4000 rpm solve,
+    seeded fuel), and the limiter's calibration chain warm-started from
+    whatever came before (-0.16% more, unseeded). A cold solve after any
+    history must now equal a fresh engine's, bit for bit."""
+    def solve(history):
+        e = DieselEngine(preset="crdi15")
+        if history:
+            e.operating_point(4000.0, load=1.0, n_cycles=9)
+        return e.operating_point(2000.0, load=0.6, n_cycles=9, warm_start=False).torque
+    fresh, after = solve(False), solve(True)
+    check("cold solve after history equals a fresh engine", after, fresh, 1e-12,
+          f"fresh {fresh:.9f} vs after 4000 rpm {after:.9f}")
+
+
+def test_cam_lift_is_continuous():
+    """FINDING-018: the ramps ended at h_r = sin^2(pi r/2) while the flank
+    they joined started at sin^2(pi r), about 4x higher, so valve lift
+    stepped at both junctions (0.026 of peak lift at ramp 0.06, 0.16 --
+    2.0 mm -- on hd_i6). On a 0.01-deg grid no sample-to-sample change may
+    exceed 1e-3 of peak lift (smooth flanks reach ~2e-4); and the seating
+    velocity must be the profile's own ramp speed (lash-free crdi15)."""
+    import numpy as np
+    from dieselsim.config import PRESETS
+    th = np.arange(0.0, 720.0, 0.01)
+    worst, where = 0.0, ""
+    for key in sorted(PRESETS):
+        cyc = DieselEngine(preset=key).cycle
+        for cam, which in ((cyc.cam_int, "intake"), (cyc.cam_exh, "exhaust")):
+            step = float(np.max(np.abs(np.diff(cam.cam_lift(th))))) / cam.lift_max
+            if step > worst:
+                worst, where = step, f"{key} {which}"
+    check("cam lift has no step (max change per 0.01 deg / peak lift < 1e-3)",
+          1.0 if worst < 1e-3 else 0.0, 1.0, 0.0, f"worst {worst:.2e} at {where}")
+    cam = DieselEngine(preset="crdi15").cycle.cam_exh
+    L, v = cam.cam_lift(th), np.abs(cam.dlift_dtheta(th))
+    on_ramp = (L > 1e-9) & (L < 0.9 * cam.h_ramp)
+    check("seating velocity is the profile's ramp speed (crdi15 exhaust, no lash)",
+          cam.seating_velocity(1.0), float(np.median(v[on_ramp])), 0.01)
+
+
+def test_seating_on_ramp_is_ramp_speed():
+    """FINDING-017 follow-up (task #27): with the lash inside the closing ramp
+    the valve seats at the ramp's own speed. The lash penalty
+    (1 + 2.2 lash / h_ramp) applied there too -- x2.74 on hd_i6's exhaust
+    (550 um lash, 697 um ramp). Off the ramp (lash taller than the ramp) the
+    penalty stays, by the owner's decision."""
+    import math
+    import numpy as np
+    from dieselsim.kinematics import Cam
+    cam = DieselEngine(preset="hd_i6").cycle.cam_exh
+    th = np.arange(0.0, 720.0, 0.01)
+    L, v = cam.cam_lift(th), np.abs(cam.dlift_dtheta(th))
+    ramp_speed = float(np.median(v[(L > 1e-9) & (L < 0.9 * cam.h_ramp)]))
+    check("hd_i6 exhaust seats at its ramp speed (lash within the ramp)",
+          cam.seating_velocity(1.0), ramp_speed, 0.01,
+          f"lash {cam.lash * 1e6:.0f} um, ramp {cam.h_ramp * 1e6:.0f} um")
+    off = Cam(cam.open_deg, cam.close_deg, cam.lift_max, lash=2.0 * cam.h_ramp, ramp=cam.ramp)
+    check("lash above the ramp keeps the penalty", off.seating_velocity(1.0),
+          ramp_speed * (1.0 + 2.2 * 2.0), 0.01)
+
+
+def test_pressure_and_temperature_limits():
+    """FINDING-010 / known bug #2: the fuel limiter had no peak-pressure or
+    exhaust-temperature bound. With each limit set below hd_i6's full-load
+    point at 1700 rpm (179 bar, 895 K), full demand must come back within
+    2% of it (the limit is found at the calibration's 8 cycles, judged at
+    9) with less torque; and limits that do not bind must leave a solve
+    bit-identical (the check solve restores gas and turbo state)."""
+    free = DieselEngine(preset="hd_i6")
+    free.spec.p_max_limit = free.spec.T_exh_limit = 0.0
+    ref = free.operating_point(1700.0, load=1.0, n_cycles=9)
+    for field, value, attr, scale, unit in (("p_max_limit", 160e5, "p_max", 1e-5, "bar"),
+                                            ("T_exh_limit", 850.0, "T_exh", 1.0, "K")):
+        e = DieselEngine(preset="hd_i6")
+        e.spec.p_max_limit = e.spec.T_exh_limit = 0.0
+        setattr(e.spec, field, value)
+        op = e.operating_point(1700.0, load=1.0, n_cycles=9)
+        got, lim = getattr(op, attr) * scale, value * scale
+        check(f"{field} bounds full demand (hd_i6 1700 rpm)",
+              1.0 if got <= 1.02 * lim and op.torque < ref.torque else 0.0, 1.0, 0.0,
+              f"{attr} {getattr(ref, attr) * scale:.1f} -> {got:.1f} {unit} (limit {lim:.0f}), "
+              f"torque {ref.torque:.0f} -> {op.torque:.0f} N.m, "
+              f"reason {e.pressure_temperature_limit(1700.0, e.fuel_limit_raw(1700.0))[1]}")
+    on = DieselEngine(preset="crdi15").operating_point(1800.0, load=0.6, n_cycles=9).torque
+    off_eng = DieselEngine(preset="crdi15")
+    off_eng.spec.p_max_limit = off_eng.spec.T_exh_limit = 0.0
+    off = off_eng.operating_point(1800.0, load=0.6, n_cycles=9).torque
+    check("limits that do not bind leave the solve bit-identical (crdi15 1800/0.6)",
+          on, off, 1e-12)
+
+
+def test_durability_solves_are_converged_enough():
+    """FINDING-019: durability_run solved every mode at n_cycles=6, which
+    known bug #1 measured as unconverged; over 2000 h that moved crdi15's
+    logged rated torque 3.8%. No solve it makes may use fewer than 9."""
+    eng = DieselEngine(preset="single")
+    seen = []
+    orig = eng.operating_point
+
+    def spy(*a, **kw):
+        # the limiter's own calibration runs at cal_cycles (8, a recorded
+        # decision -- see engine.py); only durability_run's solves count
+        if not eng._calibrating:
+            seen.append(kw.get("n_cycles", 10))
+        return orig(*a, **kw)
+    eng.operating_point = spy
+    eng.durability_run(50.0, verbose=False)
+    check("durability_run solves at n_cycles >= 9",
+          1.0 if seen and min(seen) >= 9 else 0.0, 1.0, 0.0,
+          f"{len(seen)} solves, n_cycles {sorted(set(seen))}")
+
+
+def test_calibration_cache_is_consistent():
+    """FINDING-007 (BUG-8): fuel_for_torque's cache clipped against a lower
+    ceiling than its calibration, so the same call returned 61.31 mg cold and
+    55.97 mg warm (-8.71%). A warm call must return the cold call's fuel."""
+    eng = DieselEngine(preset="crdi15")
+    cold = eng.fuel_for_torque(1800.0, 286.6)
+    warm = eng.fuel_for_torque(1800.0, 286.6)
+    check("fuel_for_torque: warm cache returns the cold calibration (BUG-8)", warm, cold, 1e-12,
+          f"{cold:.4f} mg cold, {warm:.4f} mg warm")
+
+
+def test_ring_film_field_responds():
+    """FINDING-006: the ring film minimum sits on its 12 nm clamp at the
+    reversals in every condition, so it is exposed as h_ring_tdc; the
+    mid-stroke film h_ring_mid is the one that responds. It must move with
+    load, and h_ring_tdc stays the clamp."""
+    lo = DieselEngine(preset="crdi15").operating_point(1800.0, load=0.2, n_cycles=9)
+    hi = DieselEngine(preset="crdi15").operating_point(1800.0, load=0.9, n_cycles=9)
+    moved = abs(hi.h_ring_mid / lo.h_ring_mid - 1.0)
+    check("h_ring_mid responds to load (FINDING-006)", 1.0 if moved > 0.01 else 0.0, 1.0, 0.0,
+          f"load 0.2 {lo.h_ring_mid * 1e9:.1f} nm vs 0.9 {hi.h_ring_mid * 1e9:.1f} nm ({100 * moved:.1f}%); "
+          f"h_ring_tdc {lo.h_ring_tdc * 1e9:.1f} / {hi.h_ring_tdc * 1e9:.1f} nm")
+
+
+def test_source_levels_carry_physics():
+    """FINDING-004: every source was normalised to unit level, so load and
+    temperature changed timbre but not loudness. Exhaust now scales as
+    (mass flow)^1.5 and combustion as dp/dt: doubling each input must scale
+    its source exactly 2^1.5 and 2. Needs scipy; SKIP without."""
+    import importlib.util
+    if importlib.util.find_spec("scipy") is None:
+        RESULTS.append(("SKIP", "exhaust and combustion levels carry physics", None, None,
+                        "scipy unavailable (acoustics renders with it)"))
+        return
+    import numpy as np
+    from dieselsim.acoustics import EngineSound
+    eng = DieselEngine(preset="crdi15")
+    op = eng.operating_point(1800.0, load=0.6, n_cycles=9)
+    snd = EngineSound(eng.spec)
+    snd.wear = eng.wear
+    src = snd.build_sources(op)
+
+    def rms(key, k, part):
+        s2 = dict(src)
+        s2["_meta"] = dict(src["_meta"])
+        s2["_meta"][key] *= k
+        y = snd.render(op, duration=0.5, sources=s2, seed=5)[1][part]
+        return float(np.sqrt(np.mean(y ** 2)))
+    check("exhaust level x mass flow^1.5 (FINDING-004)",
+          rms("mdot_air", 2.0, "exhaust") / rms("mdot_air", 1.0, "exhaust"), 2.0 ** 1.5, 1e-6)
+    check("combustion level x dp/dt (FINDING-004)",
+          rms("dpdt_max", 2.0, "combustion") / rms("dpdt_max", 1.0, "combustion"), 2.0, 1e-6)
 
 
 def main():
@@ -706,7 +903,15 @@ def main():
                test_flat_tappet_wears_more_than_roller,
                test_closing_ramps_clear_the_lash,
                test_cam_wear_calibration,
-               test_cell_friction_from_trace):
+               test_cell_friction_from_trace,
+               test_cold_solve_is_path_independent,
+               test_cam_lift_is_continuous,
+               test_seating_on_ramp_is_ramp_speed,
+               test_pressure_and_temperature_limits,
+               test_durability_solves_are_converged_enough,
+               test_calibration_cache_is_consistent,
+               test_ring_film_field_responds,
+               test_source_levels_carry_physics):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001

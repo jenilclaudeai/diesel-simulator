@@ -83,7 +83,11 @@ with L/D), Sutherland viscosity.
 Exact offset slider-crank — no small-angle shortcuts. Cam profiles are a
 raised-cosine main event with **explicit constant-velocity opening and closing
 ramps**. The ramps are deliberate: the finite seating velocity they produce is
-the physical source of valvetrain tick, and it grows as lash opens with wear.
+the physical source of valvetrain tick. ~~It grows as lash opens with wear.~~
+*Corrected 2026-09-26:* while the lash stays inside the closing ramp, the
+valve seats at the ramp's own speed whatever the lash (PR #43). Only lash
+that outgrows the ramp raises it. The ramps end where they meet the flank, so
+lift is continuous (FINDING-018).
 
 ### `lubrication.py` — oil and films
 
@@ -179,7 +183,20 @@ scaled `(1800/rpm)^0.55` — mixing is driven by injection turbulence as well as
 piston motion, so it does not scale as 1/rpm), `TAU_WALL = 0.11`,
 `NOX_CAL = 0.030`, `SOOT_CAL = 0.28`, `GAMMA_B = 1.27`.
 
-**The two emissions constants are the only fitted scalars in the package.**
+~~**The two emissions constants are the only fitted scalars in the package.**~~
+*Corrected 2026-09-26 (Phase 1 exit):* that is no longer true. `NOX_CAL` and
+`SOOT_CAL` are the two constants **fitted to data**. Beside them sit
+**chosen** constants: set by judgement or to an owner's target, not fitted to
+measurements. Each is stated where it lives:
+
+- acoustics: `SPL_CAL = 0.10`, the combustion-sharpness divisor `5.0e9`
+  (FINDING-003), the reference levels `_ref_dpdt`, `_ref_vseat`, `_ref_mdot`;
+- wear: `K_ARCHARD["cam"] = 2.20e-7`, set to the owner's service-interval
+  target of 150 µm at 2000 h (FINDING-015, FINDING-018);
+- the limiter: the `crdi_1p5` torque trim, and the per-preset p_max / T_exh
+  limits (FINDING-010);
+- the EGR valve's starting opening, `EGR_VALVE_START_PER_CMD = 0.14`, the
+  median of measured converged openings (FINDING-013).
 
 ### `engine.py` — governor, flywheel, orchestration
 
@@ -269,8 +286,22 @@ per cycle, has a longer ignition delay, a bigger premixed spike and a sharper
 | blow-by, new | 11.8 L/min | 8–20 |
 | wall heat loss | 19% of fuel energy | 15–25 |
 
-Over 12,000 h: power −5%, BSFC +6%, blow-by 11.8 → 18 L/min, oil soot sawtooths
-0 → 2.8% per 500 h drain, life consumed ~20%.
+Re-checked 2026-09-26 at the Phase 1 exit (`python3 tools/validate_table.py`,
+fresh engine per point, n_cycles 9). All 12 rows are in band: peak torque
+2313 N·m @ 1700, rated 432 kW, peak BMEP 22.8 bar, best BSFC 200 g/kWh
+(1800 rpm, load 0.5), peak p_max 179 bar, FMEP at rated 1.10 bar, mechanical
+efficiency 95%, volumetric efficiency 1.18 (on intake-manifold density), NOx
+4.4 rated / 15.6 lugging at 1000 rpm, soot 0.047 g/kWh, blow-by 11.7 L/min,
+wall heat 18%.
+
+~~Over 12,000 h: power −5%, BSFC +6%, blow-by 11.8 → 18 L/min, oil soot sawtooths
+0 → 2.8% per 500 h drain, life consumed ~20%.~~
+*Corrected 2026-09-26:* that paragraph no longer holds, and how it was measured
+was not recorded. On this tree (`tools/validate_table.py --aged`, 500 h steps,
+rated point): power **−3.6%**, BSFC **+3.7%**, blow-by 11.5 → 18.3 L/min, oil
+soot peaking at **1.8%** per drain, life consumed **6%**. The cylinder-kit
+and bearing wear rates follow from boundary friction powers that FINDINGs
+005, 006 and 015 changed.
 
 Rendered audio at 1400 rpm peaks at 70/140/210 Hz — exactly firing frequency
 and harmonics for an I6.
@@ -285,7 +316,8 @@ and harmonics for an I6.
 - Compressor and turbine maps are similitude-generated, not measured.
 - Structural response in the sound engine is a bank of modal resonators with
   assumed frequencies. A real one would come from an FE model.
-- Wear coefficients are literature values.
+- Wear coefficients are literature values, except the cam's, which is set to
+  the owner's service-interval target (FINDING-015).
 - Combustion is a Wiebe parameterisation informed by physics, not CFD spray and
   chemistry. **Removing that assumption is the single biggest fidelity upgrade
   available.**

@@ -10,7 +10,7 @@ presenting an approximation as truth.
 
 ---
 
-## Phase 0 — Foundations *(current)*
+## Phase 0 — Foundations *(done)*
 
 Establish the repo so any future session can be rebuilt from it rather than
 from a pasted context document.
@@ -68,18 +68,67 @@ seams), #11 (coast downshift calibration).
 **Exit criteria:** every fixed bug has a regression test. Validation table in
 `PROJECT_CONTEXT.md` §1.5 still holds. No number moves without an explanation.
 
+### Outcome (session 5, 2026-09-26) — see REVIEW-003
+
+The plan above is kept as written. What actually happened, per bug:
+
+- [x] #1 — measured (10.8% at 6 cycles); defaults ≥ 9; the last 6-cycle call
+  sites (`durability_run`, `demo.py`) fixed in FINDING-019.
+- [x] #2 — the instability did not reproduce (FINDING-010). The real gap, no
+  p_max / T_exh limit, was fixed in PR #44.
+- [x] #3 — not only a symptom of #2: the limiter was calibrated under the wrong
+  schedules (FINDING-013 item 1, fixed). The part-load EGR start (item 2) was
+  also fixed, in PR #40.
+- [x] #4 — the claim, not the solver: the gap is ~29%, not 2× (FINDING-009).
+  The economy figure is a **steady-state** figure. Any page that shows it must
+  say so (a Phase 5/6 requirement, below). Recalibrating needs part-load data
+  we don't have.
+- [x] #5 — fixed after all (PR #41): `warm_start=False` isolates a solve.
+- [x] #6, #8 (FINDING-007), #9 (FINDINGs 004/005/015/017), #10 (FINDING-014),
+  #12 (already correct) — done.
+- [x] #7 — resolved by **ADR-011** (friction live from each cell's pressure
+  trace; combustion from a cold/warm pair). The ADR-006 line above is
+  superseded.
+- [x] New on the way: FINDINGs 016 (ignition quantised to the crank step),
+  018 (cam lift stepped 4× at the ramp junctions) and 019 (aged-engine torque,
+  a fast-path artifact).
+- **Deferred to Phase 3, by the owner's decision:** FINDING-013 item 3 (the
+  fast path's VGT/EGR loops do not converge in 9 cycles; limit cycle at
+  `crdi15`) and #11 (coast downshift). Until then: converge offline, state the
+  accuracy online (the dyno page does).
+- **Moved to Phase 4's exit criteria, by the owner's decision:** the by-ear
+  sign-off of every audio change since FINDING-004.
+
+Exit criteria, checked:
+
+- [x] Every fixed bug has a regression test. The table is in REVIEW-003. One
+  exception is recorded there: bug #6 lives in `play.py`'s interactive
+  terminal loop and is carried to Phase 3's port.
+- [x] Validation table still holds: 12 of 12 rows in band on this tree
+  (`tools/validate_table.py`). The 12,000 h paragraph under it did not, and is
+  corrected in place.
+- [x] No number moved without an explanation: every re-baseline is written up
+  next to the golden it moved, in `tests/test_physics.py`.
+
 ---
 
 ## Phase 2 — Solver port and fixture harness
 
-- `SolverPort` interface — one seam, Pyodide behind it (ADR-001)
-- Pyodide in a Web Worker; **verify scipy submodule availability first**
-- Grid build with real progress reporting, cached in IndexedDB, keyed by
-  preset **and** spec hash
-- Golden-fixture generator (ADR-004) + CI
+- [x] `SolverPort` interface — one seam, Pyodide behind it (ADR-001, ADR-010; #11)
+- [x] Pyodide in a Web Worker; **verify scipy submodule availability first**
+  (not needed: the solver is numpy-only, and scipy is never imported; #9)
+- [x] Grid build with real progress reporting, cached in IndexedDB, keyed by
+  preset **and** spec hash (cache #12; the `/grid` page with per-cell
+  progress, #48)
+- [x] Golden-fixture generator (ADR-004) + CI (#47: kinematics and thermo
+  ported, the friction fixture ready for Phase 3)
 
 **Exit criteria:** a grid built in-browser matches one built by native Python
 within tolerance.
+
+- [x] Met (REVIEW-004): `crdi15`'s full 8 × 6 grid built in headless Chrome
+  through the app's worker matches native in 816 of 816 values, worst 8.7e-7
+  against a 1e-5 tolerance. CI job `web-grid-e2e` checks it on every PR.
 
 ---
 
@@ -103,6 +152,12 @@ New work: **manual gearbox** with clutch (does not exist in `play.py`).
 - Never step the sim from an event handler. Fixed rate or the flywheel
   integration goes wrong.
 
+Carried in from Phase 1 (owner's decision): FINDING-013 item 3 (the fast
+path's VGT/EGR loops do not converge in 9 cycles, with a limit cycle at
+`crdi15`; its part-load error is 13.5% RMS against converged, see FINDING-013),
+known bug #11 (coast downshift calibration), and a test for bug #6's key
+handling once the loop is ported.
+
 **Exit criteria:** differential tests green; a 60-second drive in TS matches
 the same drive in Python within tolerance.
 
@@ -118,7 +173,11 @@ Five mic positions. "Start engine" gesture button to satisfy autoplay policy.
 
 **Exit criteria:** rendered audio at 1400 rpm on an I6 peaks at 70/140/210 Hz
 (firing frequency and harmonics). Every source asserted non-silent — see the
-`_impulses` note in ADR-003.
+`_impulses` note in ADR-003. **The owner has listened to, and signed off,**
+every audio change since FINDING-004: physical levels, the warm/cold pair,
+tick and slap scaling (FINDING-017), ramp-speed seating and the doubled ramp
+speed (FINDING-018), and `hd_i6`'s tick dominance (13× its other mechanical
+sources). Moved here from Phase 1 by the owner's decision.
 
 ---
 
@@ -129,6 +188,10 @@ Prebuilt grids, no Pyodide, no spec editing. Instant start.
 Dashboard: tachometer, speedometer, gear indicator with **shift phase** (torque
 phase / inertia phase — the sim models it and nothing else on the web shows
 it), warning lamps, vitals, thermal stack, trip computer.
+
+The trip computer's economy is a **steady-state** figure (FINDING-009: about
+29% leaner than mixed real-world driving at a 90 km/h cruise). Label it that
+way, and don't set it beside brochure consumption.
 
 **Exit criteria:** loads and drives on a mid-range phone in landscape with
 audio, without ever fetching Pyodide.
@@ -142,7 +205,9 @@ physical subsystem rather than class name. Live 2D schematics (OPEN-E).
 Grid-invalidation banner with rebuild progress.
 
 Analysis pages: curve, map, cycle (p–V log-log, p–θ, HRR, valve lift), sweep,
-durability.
+durability. Economy and BSFC shown anywhere are steady-state figures and are
+labelled so (FINDING-009). Durability's `health` is **life consumed**
+(0 = new), not remaining health (FINDING-019).
 
 ---
 

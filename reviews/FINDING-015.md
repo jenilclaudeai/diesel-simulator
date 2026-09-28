@@ -6,6 +6,7 @@ reversal. Untested."
 **Lens:** PHY2 (lead), PHY1
 **Status:** measured, not fixed — the fix is a physics and calibration
 decision, see Options
+*(Updated 2026-09-26: the line above is stale. Items 1 and 2 are fixed (PRs #28, #35), and the wear rate is calibrated to the owner's 2000 h / 150 µm target (PR #38; re-fitted to 2.20e-7 for FINDING-018). The aged-engine torque note is answered in FINDING-019.)*
 **Reproduce:** `python3 tools/diag_cam_boundary.py`
 
 ---

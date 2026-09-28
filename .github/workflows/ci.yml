@@ -1,8 +1,12 @@
 # Continuous integration for dieselsim.
 #
-# Five independent jobs, so a failure says where the problem is:
+# Independent jobs, so a failure says where the problem is:
 #   physics          native CPython, the reference implementation
 #   physics-pyodide  the SAME suite under Pyodide - ADR-001's guarantee
+#   fixtures         golden fixtures are current, and every TypeScript port
+#                    matches them (ADR-004)
+#   web-grid-e2e     a full operating grid built in Chrome through the app's
+#                    worker matches a native build cell for cell (Phase 2 exit)
 #   solver           the TypeScript SolverPort, end to end through a real worker
 #   web-app          the Angular app: unit tests and the GitHub Pages build
 #   web-e2e          the Pages build in real headless Chrome: Python boots in the
@@ -62,6 +66,34 @@ jobs:
           cache-dependency-path: tools/pyodide/package-lock.json
       - run: npm ci
       - run: npm run suite
+
+  # ADR-004. First: the committed fixtures still match what the Python
+  # original computes from their stored inputs (a physics change without
+  # regenerated fixtures fails here, naming the module). Then: every
+  # TypeScript port in web/physics matches the fixtures.
+  fixtures:
+    name: golden fixtures + TypeScript ports (ADR-004)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: fixtures are current
+        run: python tools/fixtures/gen_fixtures.py --check
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/physics/package-lock.json
+      - run: npm ci
+        working-directory: web/physics
+      - name: ports match the fixtures
+        run: npm test
+        working-directory: web/physics
 
   solver:
     name: SolverPort (TypeScript)
@@ -146,5 +178,47 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: e2e-screenshots
+          path: web/app/e2e/out/
+          if-no-files-found: ignore
+
+  # PLAN.md Phase 2's exit criterion, checked on every PR: a full 8 x 6 grid
+  # (crdi15) built in headless Chrome through the app's own worker and
+  # SolverPort matches a native-Python build of the same grid, every perf
+  # value of every cell at 1e-5; then a second build comes from the cache.
+  web-grid-e2e:
+    name: grid in Chrome matches native (e2e)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: web/app
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+        working-directory: .
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            web/app/package-lock.json
+            web/solver/package-lock.json
+      - run: npm ci
+        working-directory: web/solver
+      - run: npm ci
+      - run: npm run build:pages
+      - name: grid e2e in headless Chrome
+        run: npm run e2e:grid
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+      - name: keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: grid-e2e-screenshots
           path: web/app/e2e/out/
           if-no-files-found: ignore

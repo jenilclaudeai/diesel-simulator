@@ -47,6 +47,8 @@ truth. A stale STATUS.md is the failure this setup exists to prevent.
 ```bash
 python3 tests/test_physics.py          # regression suite; see STATUS.md for expected counts
 python3 tools/audit_dead_signals.py    # run after ANY physics change
+python3 tools/fixtures/gen_fixtures.py --check   # golden fixtures current? (regenerate without --check)
+cd web/physics && npm ci && npm test            # TypeScript ports vs fixtures (ADR-004)
 cd tools/pyodide && npm ci && npm run suite     # the same suite under Pyodide
 cd web/solver  && npm ci && npm run test:fast   # cache tests, seconds
 cd web/solver  && npm test                      # + round trip through a real worker
@@ -70,8 +72,11 @@ raising no error.** `tools/audit_dead_signals.py` exists to catch the next.
   mutating `spec.thermal.coolant_T` after construction does nothing.
 - Oil temperature is separate state (`oil.cond.T_oil`). A cold-engine test
   needs cold oil **and** cold coolant, or it misses a 255% friction effect.
-- `warm_start=False` does not isolate a solve: `Turbocharger` keeps shaft
-  speed and VGT position. Only a fresh engine is clean.
+- `warm_start=False` isolates a solve since session 5 (bug #5, PR #41): it
+  resets the turbo's shaft speed and VGT position too, and the limiter's
+  calibration chain starts cold. Before that it reset only the gas state and
+  only a fresh engine was clean. A cold solve on a used engine still differs
+  from a *warm* one on a fresh engine -- compare like with like.
 - `dpdtheta_max` measures compression; read **`dpdtheta_comb`**.
 - Read `h_ring_mid`, not `h_ring_tdc` (always its 12 nm clamp).
 - Use `n_cycles >= 9`; at 6 the drift is 10.8%.

@@ -356,7 +356,7 @@ if run("s6"):
  log("  mic positions")
 
  # rev sweep -- pitch comes from the integrated crank phase
- sweep_ops = {r: eng.operating_point(r, load=0.85, n_cycles=6)
+ sweep_ops = {r: eng.operating_point(r, load=0.85, n_cycles=9)
               for r in (750, 950, 1150, 1350, 1550, 1750, 1950)}
 
 
