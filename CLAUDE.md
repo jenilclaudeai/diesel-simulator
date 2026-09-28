@@ -48,13 +48,15 @@ truth. A stale STATUS.md is the failure this setup exists to prevent.
 python3 tests/test_physics.py          # regression suite; see STATUS.md for expected counts
 python3 tools/audit_dead_signals.py    # run after ANY physics change
 python3 tools/fixtures/gen_fixtures.py --check   # golden fixtures current? (regenerate without --check)
-cd web/physics && npm ci && npm test            # TypeScript ports vs fixtures (ADR-004)
+cd web/physics && npm ci && npm test            # TypeScript ports vs fixtures (ADR-004), incl. the live loop
+python3 tools/fixtures/gen_fixtures.py --only live   # after changing dieselsim/live.py
+python3 tools/build_live_grids.py               # after a SOLVER change: prebuilt converged grids (~1 h)
 cd tools/pyodide && npm ci && npm run suite     # the same suite under Pyodide
 cd web/solver  && npm ci && npm run test:fast   # cache tests, seconds
 cd web/solver  && npm test                      # + round trip through a real worker
 cd web/app     && npm test -- --watch=false     # unit tests (vitest)
 cd web/app     && npm run build:pages           # NEVER plain `build`: blank page on Pages
-cd web/app     && npm run e2e                   # browser checks
+cd web/app     && npm run e2e                   # browser checks (also e2e:grid, e2e:drive, e2e:sound)
 ```
 Angular needs Node ≥ 22.22.3. If npm 10 crashes resolving Angular's peer
 deps, use `npx -y npm@11 install`. The project supports Python 3.10 —
@@ -83,6 +85,9 @@ raising no error.** `tools/audit_dead_signals.py` exists to catch the next.
 - `CycleTraces.theta`: per-cylinder arrays are in that cylinder's own crank
   angle, manifold traces in global engine angle. Don't overlay naively;
   never `ravel()` a 2D field and index `theta` with the result.
+- The real-time loop (vehicle, gearbox, driveline, `LiveEngine`, driver
+  keys) lives in `dieselsim/live.py`, not `play.py`: it is the Python
+  reference for the TypeScript port. `play.py` is the terminal front end.
 - The solver needs **numpy only**. Never import `scipy` at module level in
   `dieselsim/` (a test enforces it). `batch.py` imports `multiprocessing`,
   which Pyodide lacks.

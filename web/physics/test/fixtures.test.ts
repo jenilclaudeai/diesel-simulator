@@ -7,6 +7,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Cam, SliderCrank, type CamSpec, type CrankGeometry } from "../src/kinematics.js";
 import * as thermo from "../src/thermo.js";
+import { FrictionModel, type EngineView } from "../src/friction.js";
+import { Oil } from "../src/lubrication.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // compiled to dist/test/, fixtures live beside src/
@@ -172,12 +174,27 @@ const EPS = 2.220446049250313e-16;
     `worst rel ${w.rel.toExponential(2)} at ${w.where || "-"} (tolerance ${fx.meta.tolerance_rel})`);
 }
 
-// ------------------------------------------------------ fixtures without a port yet
+// -------------------------------------------------------------------- friction
 {
-  const fx = load<{ cases: unknown[] }, Record<string, number>[]>("friction");
-  const keys = Object.keys(fx.outputs[0] ?? {});
-  check("friction fixture is present for the Phase 3 port", fx.outputs.length === fx.inputs.cases.length && keys.includes("fmep"),
-    `${fx.outputs.length} cases, keys ${keys.join(", ")}, tolerance ${fx.meta.tolerance_rel} -- no TypeScript port yet (ADR-011)`);
+  type Case = { preset: string; rpm: number; T_oil: number; T_coolant: number | null; fuel_mg: number;
+    p_rail: number; grid_deg: number[]; p_cyl: number[]; engine: EngineView };
+  const fx = load<{ cases: Case[] }, Record<string, number>[]>("friction");
+  let worst = 0, where = "", evals = 0, ms = 0;
+  fx.inputs.cases.forEach((c, i) => {
+    const model = new FrictionModel(c.engine.spec, c.engine.cams);
+    const oil = new Oil(c.engine.spec.oil, { ...c.engine.oil });
+    const t0 = performance.now();
+    const r = model.evaluate(c.grid_deg, c.p_cyl, c.rpm, oil, c.engine.wear, 1.05e5, c.fuel_mg, c.p_rail);
+    ms += performance.now() - t0; evals++;
+    for (const [k, want] of Object.entries(fx.outputs[i]!)) {
+      const got = r[k];
+      const rel = got === undefined ? Infinity : Math.abs(got - want) / Math.max(Math.abs(want), 1e-30);
+      if (!(rel <= worst)) { worst = Number.isNaN(rel) ? Infinity : rel; where = `${c.preset} ${c.rpm} oil ${c.T_oil} K: ${k} (${got} vs ${want})`; }
+    }
+  });
+  check("friction port matches Python (ADR-011)", worst <= fx.meta.tolerance_rel,
+    `${fx.inputs.cases.length} cases x ${Object.keys(fx.outputs[0]!).length} quantities, worst rel ${worst.toExponential(2)}${where ? " at " + where : ""} ` +
+    `(tolerance ${fx.meta.tolerance_rel}); ${(ms / evals).toFixed(1)} ms per evaluation of ${fx.inputs.cases[0]!.grid_deg.length} samples`);
 }
 
 const failed = results.filter(([, ok]) => !ok).length;

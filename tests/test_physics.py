@@ -878,6 +878,576 @@ def test_source_levels_carry_physics():
           rms("dpdt_max", 2.0, "combustion") / rms("dpdt_max", 1.0, "combustion"), 2.0, 1e-6)
 
 
+def _toy_live(trans, motoring=False):
+    """A LiveEngine on a synthetic 2 x 2 grid -- enough for controls, no solve.
+    motoring=True gives torque = -15 + 230 x load N.m, so an engine off the
+    throttle brakes the car as a real one does."""
+    from dieselsim.live import LiveEngine, PerfGrid
+    spec = DieselEngine(preset="crdi15").spec
+    def cell(load):
+        tq = -15.0 + 230.0 * load if motoring else 100.0
+        return dict(torque=tq, power=20e3, fuel_kg_h=0.3 + 12.0 * load, boost=1.0 + 1.2 * load,
+                    turbo_rpm=9e4, afr=25.0, q_wall=0.2)
+    perf = [[cell(0.0), cell(1.0)], [cell(0.0), cell(1.0)]]
+    return LiveEngine(PerfGrid(spec, [spec.idle_rpm, spec.max_rpm], [0.0, 1.0], perf), "crdi15", trans=trans)
+
+
+def test_lockup_key_by_transmission():
+    """Bug #6: the "l" key toggled a lock-up flag a DCT never reads, silently.
+    Now in dieselsim.live.handle_key (moved from play.py's terminal loop so it
+    can be tested): on a torque converter it toggles lock-up; on a DCT it
+    changes nothing and says why."""
+    from dieselsim.live import handle_key
+    tc, dct = _toy_live("tc"), _toy_live("dct")
+    handle_key(tc, "l")
+    before = dct.dl.lock_allowed
+    handle_key(dct, "l")
+    ok = (tc.dl.lock_allowed is False and tc.hint == "lockup blocked"
+          and dct.dl.lock_allowed == before and "DCT" in dct.hint and dct.hint_t > 0)
+    check("lock-up key: toggles on a converter, explains itself on a DCT (bug #6)",
+          1.0 if ok else 0.0, 1.0, 0.0, f"tc: {tc.hint!r}; dct: {dct.hint!r}")
+
+
+def _manual_moving(assist=False):
+    """A manual crdi15 on the toy grid, launched in 1st and rolling with the
+    clutch clamped: pedal floored, lever into 1st, pedal released, throttle."""
+    from dieselsim.live import handle_key, pedal_return
+    live = _toy_live("manual")
+    handle_key(live, "z"); handle_key(live, "z")          # pedal to the floor
+    handle_key(live, ".")                                 # neutral -> 1st
+    if assist:
+        handle_key(live, "a")
+    live.throttle = 0.5
+    for _ in range(360):                                  # 6 s: pedal returns, car moves
+        pedal_return(live, 1 / 60)
+        live.step(1 / 60)
+    return live
+
+
+def test_manual_gearbox():
+    """Phase 3 manual box: the lever will not move without the clutch; braking
+    to a stop in gear with the clutch up stalls the engine; it restarts only
+    with the clutch down (or in neutral); with the auto-clutch the same stop
+    -- even braking with the throttle feathered -- does not stall."""
+    from dieselsim.live import handle_key, pedal_return
+    live = _manual_moving()
+    moving = live.dl.v > 1.0 and live.dl.tc.engaged and not live.dl.gb.neutral
+    g0 = live.dl.gb.gear
+    handle_key(live, ".")                                 # no clutch: refused
+    refused = live.dl.gb.gear == g0 and "clutch" in live.hint
+    live.dl.clutch_pedal = 1.0
+    handle_key(live, ".")
+    accepted = live.dl.gb.gear == g0 + 1
+    handle_key(live, ",")
+    live.dl.clutch_pedal = 0.0
+    live.throttle = 0.0
+    for _ in range(600):                                  # brake hard to a stop, clutch up
+        live.dl.brake = 1.0
+        live.step(1 / 60)
+    stalled = live.stalled and live.rpm == 0.0 and live.fuel_kg_h == 0.0
+    handle_key(live, "i")
+    still = live.stalled
+    live.dl.clutch_pedal = 1.0
+    handle_key(live, "i")
+    restarted = not live.stalled and live.rpm == live.spec.idle_rpm
+    a = _manual_moving(assist=True)
+    # braking with the throttle feathered (0.1): the stopped-car rule that
+    # opens the clutch needs the throttle off, so only the anti-stall rule
+    # (open below 0.85 x idle) can save the engine here
+    a.throttle = 0.1
+    for _ in range(600):
+        a.dl.brake = 1.0
+        a.step(1 / 60)
+    assisted = not a.stalled and a.rpm > 0.8 * a.spec.idle_rpm
+    ok = moving and refused and accepted and stalled and still and restarted and assisted
+    check("manual box: clutch to shift, stall on a stop in gear, clutch to restart, assist does not stall",
+          1.0 if ok else 0.0, 1.0, 0.0,
+          f"moving {moving}, refused {refused}, accepted {accepted}, stalled {stalled}, "
+          f"restart refused {still}, restarted {restarted}, assist no stall {assisted} "
+          f"(assisted rpm {a.rpm:.0f})")
+
+
+def _coast_down(trans):
+    """Coast from 100 km/h in top gear with a light brake to 5 km/h; returns
+    per-frame (accel m/s^2, gear) and the lock-up torque into the box."""
+    import math
+    live = _toy_live(trans, motoring=True)
+    gb, dl = live.dl.gb, live.dl
+    dl.v = 100 / 3.6
+    for k in range(gb.n - 1, -1, -1):
+        gb.gear = gb.gear_from = k
+        if dl.w_out_at_input() * 60 / (2 * math.pi) > 1.05 * live.spec.idle_rpm:
+            break
+    dl.w_in = dl.w_out_at_input()
+    live.rpm = dl.w_in * 60 / (2 * math.pi)
+    rows, locked_T, vp = [], [], dl.v
+    for _ in range(3600):
+        live.throttle, dl.brake = 0.0, 0.08
+        live.step(1 / 60)
+        rows.append(((dl.v - vp) * 60, gb.gear))
+        vp = dl.v
+        if dl.lockup:
+            locked_T.append(abs(dl.T_turb))
+        if dl.v < 5 / 3.6:
+            break
+    return rows, locked_T
+
+
+def _worst_overshoot(rows):
+    """Largest excursion of the deceleration, within 1 s of a shift, beyond
+    both the steady value before and the steady value after it."""
+    import statistics
+    worst = 0.0
+    for i in range(1, len(rows)):
+        if rows[i][1] != rows[i - 1][1] and i + 120 < len(rows):
+            before = statistics.median(r[0] for r in rows[max(0, i - 60):max(1, i - 5)])
+            after = statistics.median(r[0] for r in rows[i + 60:i + 120])
+            lo, hi = min(before, after), max(before, after)
+            worst = max(worst, max(max(lo - r[0], r[0] - hi, 0.0) for r in rows[i:i + 60]))
+    return worst
+
+
+def test_lockup_and_coast_downshifts():
+    """FINDING-020 / bug #11: the converter's lock-up was a spring integrated
+    explicitly at h*C/J = 17 (stable below 2) -- every locked frame sat on its
+    4500 N.m clamp, and coast downshifts re-locked as 1 g jolts. Now a clutch
+    (slip-engaged, then rigid), and coast downshifts stretch both shift
+    phases. On a coast-down from 100 km/h no locked frame may reach the
+    clamp, and no downshift may overshoot the steady deceleration by more
+    than 2 m/s^2 (converter or dual clutch)."""
+    rows_tc, locked = _coast_down("tc")
+    rows_dct, _ = _coast_down("dct")
+    at_clamp = sum(1 for t in locked if t > 4400.0)
+    o_tc, o_dct = _worst_overshoot(rows_tc), _worst_overshoot(rows_dct)
+    check("lock-up never at its clamp; coast downshifts within 2 m/s^2 (FINDING-020, bug #11)",
+          1.0 if locked and at_clamp == 0 and o_tc < 2.0 and o_dct < 2.0 else 0.0, 1.0, 0.0,
+          f"locked {len(locked)} frames, {at_clamp} at the clamp; worst overshoot tc {o_tc:.2f}, dct {o_dct:.2f} m/s^2")
+
+
+def _toy_adr011_grid():
+    """A 2 x 2 ADR-011 grid with synthetic pressure traces (polytropic
+    compression/expansion, a pressure rise that grows with load and falls
+    when cold) and perf built through grid.cell_friction at the engine's
+    default warm state (oil 373 K, coolant 361 K) -- small enough for the
+    suite, faithful enough to test the plumbing."""
+    import numpy as np
+    from dieselsim.grid import cell_friction
+    from dieselsim.kinematics import SliderCrank
+    from dieselsim.live import Adr011Grid
+    spec = DieselEngine(preset="crdi15").spec
+    sc = SliderCrank(spec.geom)
+    deg = np.arange(0.0, 720.0, 0.5)
+    V = sc.volume(np.radians(deg - 360.0))
+    Vmax = float(V.max())
+    def trace(load, cold):
+        p = 1.4e5 * (Vmax / V) ** 1.35
+        burn = np.exp(-((deg - 372.0) / 18.0) ** 2) * (35e5 * load) * (0.94 if cold else 1.0)
+        return np.where((deg > 180) & (deg < 540), p + burn, 1.2e5).astype("<f4")
+    rpms, loads = [spec.idle_rpm, spec.max_rpm], [0.0, 1.0]
+    def cells(cold):
+        perf, traces = [], []
+        for r in rpms:
+            prow, trow = [], []
+            for l in loads:
+                tr = trace(l, cold)
+                fr = cell_friction(DieselEngine(preset="crdi15"), r, tr.astype(float), deg, 30.0 * l, 1.2e8)
+                ind = 30.0 + 190.0 * l - (8.0 if cold else 0.0)
+                k = spec.geom.displacement / (4.0 * np.pi)
+                prow.append(dict(torque=ind - fr["fmep"] * k, fmep=fr["fmep"], fuel_mg=30.0 * l, p_rail=1.2e8,
+                                 boost=1.0 + 1.2 * l, turbo_rpm=9e4, fuel_kg_h=0.3 + 12.0 * l, afr=25.0,
+                                 q_wall=0.2))
+                trow.append(tr)
+            perf.append(prow)
+            traces.append(trow)
+        return perf, traces
+    pw, tw = cells(False)
+    pc, tc = cells(True)
+    return Adr011Grid(spec, rpms, loads, pw, tw, deg, pc, tc, 361.0, 273.0)
+
+
+def test_adr011_live_friction():
+    """ADR-011 in the live loop (Phase 3): friction is evaluated live from
+    the cells' pressure traces at the live oil and coolant state.
+    - at the warm state on a cell, the live friction is the cell's own
+      (the plumbing -- blending, walls, oil, torque conversion -- adds nothing)
+    - cold coolant alone raises it through the walls (x > 1.05), and cold oil
+      on top of that raises it again (x > 1.3 beyond the walls, at 298 K)
+    - the oil node warms the oil while the engine runs
+    - at the cold endpoint the grid's performance is the cold cells'."""
+    from dieselsim.live import LiveEngine
+    g = _toy_adr011_grid()
+    live = LiveEngine(g, "crdi15", trans="tc")
+    live.T_coolant, live.T_oil, live.rpm, live.load_eff = 361.0, 373.0, g.rpms[1], g.loads[1]
+    live._update_friction()
+    own = abs(live.fmep_live / g.perf[1][1]["fmep"] - 1.0)
+    warm = live.T_fric
+    live.T_coolant, live.T_oil = 298.0, 373.0           # cold coolant only: the walls
+    live._update_friction()
+    walls = live.T_fric / warm
+    live.T_coolant, live.T_oil = 298.0, 298.0
+    live._update_friction()
+    ratio = live.T_fric / warm
+    cold_ok = abs(g.blend_perf_T(g.rpms[0], g.loads[1], 273.0)["torque"] / g.perf_cold[0][1]["torque"] - 1.0)
+    run = LiveEngine(g, "crdi15", trans="tc")
+    T0 = run.T_oil
+    for _ in range(1800):
+        run.throttle = 0.6
+        run.step(1 / 60)
+    warmed = run.T_oil - T0
+    oil_extra = ratio / walls                             # what the oil adds beyond the walls
+    ok = own < 1e-9 and walls > 1.05 and oil_extra > 1.3 and warmed > 2.0 and cold_ok < 1e-12
+    check("ADR-011 live friction: own cell exact warm, higher cold, oil warms, cold endpoint",
+          1.0 if ok else 0.0, 1.0, 0.0,
+          f"own-cell diff {own:.1e}; cold coolant only x{walls:.2f}, cold oil on top x{oil_extra:.2f}; "
+          f"oil +{warmed:.1f} K in 30 s; "
+          f"cold endpoint diff {cold_ok:.1e}")
+
+
+def test_grid_hash_ignores_the_live_loop():
+    """Prebuilt grids are keyed on bridge.grid_hash(): the package sources
+    without the real-time loop and its synth (live.py, livesound.py), which
+    consume grids but cannot change a cell. Editing either must leave it
+    unchanged; editing any other file must change it. Checked on a copy of
+    the package, so nothing on disk is touched. And an excluded file really
+    cannot change a cell only if the cell's solve never imports it (checked
+    statically: first written with a subprocess, which Pyodide lacks)."""
+    import hashlib
+    import shutil
+    import tempfile
+    from dieselsim import bridge
+    pkg = os.path.join(os.path.dirname(__file__), "..", "dieselsim")
+
+    def gh(folder):
+        h = hashlib.sha256()
+        for name in sorted(f for f in os.listdir(folder)
+                           if f.endswith(".py") and f not in bridge.GRID_HASH_EXCLUDES):
+            with open(os.path.join(folder, name), "rb") as fh:
+                h.update(name.encode() + b"\0" + fh.read() + b"\0")
+        return h.hexdigest()
+    with tempfile.TemporaryDirectory() as tmp:
+        cp = os.path.join(tmp, "dieselsim")
+        shutil.copytree(pkg, cp, ignore=shutil.ignore_patterns("__pycache__"))
+        base = gh(cp)
+        same_as_bridge = base == bridge.grid_hash()
+        for name in ("live.py", "livesound.py"):
+            with open(os.path.join(cp, name), "a") as fh:
+                fh.write("\n# edit\n")
+        live_edit = gh(cp)
+        with open(os.path.join(cp, "engine.py"), "a") as fh:
+            fh.write("\n# edit\n")
+        engine_edit = gh(cp)
+    # every package module the cell solve can import, statically (imports
+    # inside functions included) -- no subprocess, which Pyodide lacks
+    import ast
+    loaded, todo = set(), ["grid.py", "acoustics.py"]
+    while todo:
+        name = todo.pop()
+        if name in loaded or not os.path.exists(os.path.join(pkg, name)):
+            continue
+        loaded.add(name)
+        with open(os.path.join(pkg, name)) as fh:
+            tree = ast.parse(fh.read())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                if node.level == 1 and node.module:
+                    todo.append(node.module.split(".")[0] + ".py")
+                elif node.level == 1:
+                    todo += [a.name + ".py" for a in node.names]
+                elif node.module and node.module.startswith("dieselsim."):
+                    todo.append(node.module.split(".")[1] + ".py")
+            elif isinstance(node, ast.Import):
+                todo += [a.name.split(".")[1] + ".py" for a in node.names if a.name.startswith("dieselsim.")]
+    leaked = sorted(loaded & set(bridge.GRID_HASH_EXCLUDES))
+    ok = same_as_bridge and live_edit == base and engine_edit != base and bool(loaded) and not leaked
+    check("grid hash: live-loop and synth edits keep it, solver edits change it", 1.0 if ok else 0.0, 1.0, 0.0,
+          f"matches bridge {same_as_bridge}, {'/'.join(bridge.GRID_HASH_EXCLUDES)} edits keep {live_edit == base}, "
+          f"engine.py edit changes {engine_edit != base}, excluded files the cell solve imports: {leaked or 'none'}"
+          f" (of {len(loaded)} loaded)")
+
+
+_HD_SRC = {}
+
+
+def _hd_i6_sources():
+    """hd_i6 at 1400 rpm / 0.6 and its acoustic sources, solved once."""
+    if not _HD_SRC:
+        from dieselsim.acoustics import EngineSound
+        eng = DieselEngine(preset="hd_i6")
+        op = eng.operating_point(1400.0, load=0.6, n_cycles=9)
+        _HD_SRC.update(eng=eng, op=op, es=EngineSound(eng.spec))
+        _HD_SRC["src"] = _HD_SRC["es"].build_sources(op)
+    return _HD_SRC
+
+
+def _stream(spec, src, secs, rpm=1400.0, mic="exterior_7m", parts=False):
+    from dieselsim import livesound as LS
+    syn = LS.LiveSynth(spec, mic)
+    syn.set_sources(src)
+    ys, acc = [], {}
+    for i in range(int(secs * LS.FS / LS.BLOCK)):
+        ys.append(syn.block(rpm))
+        if parts and i * LS.BLOCK >= LS.FS:
+            for k, v in syn.last_parts.items():
+                acc.setdefault(k, []).append(v)
+    import numpy as np
+    return np.concatenate(ys), {k: np.concatenate(v) for k, v in acc.items()}
+
+
+def test_livesound_firing_peaks_and_sources():
+    """Phase 4 exit criterion, on the streaming synth (dieselsim/livesound.py):
+    an I6 at 1400 rpm peaks at its firing frequency and harmonics, 70/140/210
+    Hz (each > 15 dB over its surroundings), and every source is non-silent.
+    numpy only, so it runs under Pyodide too."""
+    import numpy as np
+    d = _hd_i6_sources()
+    y, parts = _stream(d["eng"].spec, d["src"], 3.0, parts=True)
+    y = y[44100:]
+    seg = 1 << 15
+    P = np.zeros(seg // 2 + 1)
+    for k in range(0, len(y) - seg + 1, seg // 2):
+        P += np.abs(np.fft.rfft(y[k:k + seg] * np.hanning(seg))) ** 2
+    f = np.fft.rfftfreq(seg, 1 / 44100)
+    peaks = []
+    for h in (70.0, 140.0, 210.0):
+        band = (f > h - 3) & (f < h + 3)
+        side = ((f > h - 15) & (f < h - 6)) | ((f > h + 6) & (f < h + 15))
+        peaks.append(10 * np.log10(P[band].max() / np.median(P[side])))
+    rms = {k: float(np.sqrt(np.mean(v ** 2))) for k, v in parts.items()}
+    silent = [k for k, v in rms.items() if v < 1e-3 * max(rms.values())]
+    check("sound: I6 at 1400 rpm peaks at 70/140/210 Hz, every source audible",
+          1.0 if min(peaks) > 15.0 and not silent else 0.0, 1.0, 0.0,
+          f"peaks {', '.join(f'{p:+.1f}' for p in peaks)} dB; silent sources {silent or 'none'} of {len(rms)}")
+
+
+def test_livesound_carries_physics():
+    """FINDING-021: play.py's LiveSound ignored the physics its sources carry
+    -- doubling the slap input, the exhaust mass flow or the valve seating
+    speed changed its output by 0.0000%. The streaming synth that replaces
+    it must respond to each, in the source it feeds (> 1% RMS)."""
+    import numpy as np
+    d = _hd_i6_sources()
+    # each input is judged on the source it feeds: on hd_i6 the valve tick is
+    # 13x the slap, so slap x2 moves the whole exterior mix only ~0.2%
+    feeds = {"skirt_clr": "mech", "mdot_air": "exhaust", "v_seating": "mech"}
+    # and even inside "mech" the tick outweighs the slap (the sound-design
+    # question left for the owner's ears), so slap is tested with the
+    # seating speed turned down to 1% in both runs
+    rms = lambda parts, k: float(np.sqrt(np.mean(parts[k] ** 2)))  # noqa: E731
+
+    def run(key, factor):
+        s2 = dict(d["src"])
+        s2["_meta"] = dict(d["src"]["_meta"])
+        if key == "skirt_clr":
+            s2["_meta"]["v_seating"] *= 0.01
+        s2["_meta"][key] *= factor
+        return _stream(d["eng"].spec, s2, 1.5, parts=True)[1]
+    moved = {k: rms(run(k, 2.0), part) / rms(run(k, 1.0), part) - 1.0 for k, part in feeds.items()}
+    check("sound carries physics: slap, exhaust flow and seating each move it (FINDING-021)",
+          1.0 if min(abs(v) for v in moved.values()) > 0.01 else 0.0, 1.0, 0.0,
+          ", ".join(f"{k} x2 -> {feeds[k]} {100 * v:+.1f}%" for k, v in moved.items()))
+
+
+def test_livesound_matches_render():
+    """The streaming synth against acoustics.EngineSound.render, the offline
+    reference (ADR-004: spectral): its Butterworth design matches scipy's
+    response, its pure and scipy paths agree, and at a steady operating
+    point every source's level is within 3% of render's, and the
+    third-octave spectrum within 1.5 dB -- the mix's, and each source's
+    shape over its bands within 30 dB of its strongest (the mix alone hid a
+    stale combustion sharpness; below -30 dB lie inter-harmonic floors and
+    the trackers' block-step sidebands). Needs scipy; SKIP without."""
+    import importlib.util
+    if importlib.util.find_spec("scipy") is None:
+        RESULTS.append(("SKIP", "streaming sound matches the offline render", None, None,
+                        "scipy unavailable"))
+        return
+    import numpy as np
+    from scipy import signal
+    from dieselsim import livesound as LS
+    worst = 0.0
+    for kind, order, wn in (("low", 1, 0.06), ("low", 3, 0.3), ("high", 2, 0.0027), ("band", 2, (0.0317, 0.295))):
+        w = np.linspace(1e-4, np.pi * 0.999, 2000)
+        _, h_ref = signal.sosfreqz(signal.butter(order, wn, btype=kind, output="sos"), worN=w)
+        h = np.ones_like(h_ref)
+        for b, a in LS.butter_sos(order, wn, kind):
+            h *= signal.freqz(b, a, worN=w)[1]
+        worst = max(worst, float(np.max(np.abs(h - h_ref)) / np.max(np.abs(h_ref))))
+    d = _hd_i6_sources()
+    LS.PURE = True
+    y_pure = _stream(d["eng"].spec, d["src"], 0.3)[0]
+    LS.PURE = False
+    y_fast = _stream(d["eng"].spec, d["src"], 0.3)[0]
+    paths = float(np.max(np.abs(y_pure - y_fast)))
+    y_s, parts = _stream(d["eng"].spec, d["src"], 4.0, parts=True)
+    y_s = y_s[44100:]
+    y_r, parts_r = d["es"].render(d["op"], duration=3.0, mic="exterior_7m", sources=d["src"], seed=5)
+    lvl = {k: float(np.sqrt(np.mean(parts[k] ** 2)) / (np.sqrt(np.mean(parts_r[k] ** 2)) + 1e-30)) for k in parts_r}
+    def bands(y):
+        f, P = signal.welch(y, 44100, nperseg=8192)
+        e = 25.0 * 2 ** (np.arange(0, 30) / 3.0)
+        return np.array([P[(f >= lo) & (f < hi)].sum() for lo, hi in zip(e[:-1], e[1:])])
+    bs, br = bands(y_s), bands(y_r)
+    m = br > 1e-6 * br.max()
+    db = np.abs(10 * np.log10(bs[m] / br[m]))
+    shape = {}
+    for k in parts_r:
+        a, b = bands(parts[k]), bands(parts_r[k])
+        a, b = a / a.sum(), b / b.sum()
+        mk = b > 1e-3 * b.max()
+        shape[k] = float(np.abs(10 * np.log10(a[mk] / b[mk])).max())
+    worst_shape = max(shape, key=shape.get)
+    worst_lvl = max(abs(v - 1.0) for v in lvl.values())
+    ok = (worst < 1e-9 and paths < 1e-9 and worst_lvl < 0.03 and float(db.max()) < 1.5
+          and shape[worst_shape] < 1.5)
+    check("streaming sound matches the offline render (filters, paths, levels, spectrum)", 1.0 if ok else 0.0, 1.0, 0.0,
+          f"filter response {worst:.1e}; pure vs scipy {paths:.1e}; worst source level {100 * worst_lvl:.1f}% off; "
+          f"worst third-octave {float(db.max()):.2f} dB over {int(m.sum())} bands; "
+          f"worst source shape {shape[worst_shape]:.2f} dB ({worst_shape})")
+
+
+def test_intake_and_boost_levels_carry_physics():
+    """FINDING-022, fixed with option A (the owner's decision): in
+    acoustics.render -- and so in the faithful streaming port -- the intake
+    hiss was scaled by its mass flow and the next line divided it out, and
+    the turbo's boost term went the same way: doubling the mass flow moved
+    the intake by 0.0000%, doubling the boost moved the turbo by 0.0000%
+    (this test's first form was a known defect saying so). The intake now
+    carries the exhaust's law, (mdot/mdot_ref)^1.5, and the boost term sits
+    after the normalisation. Each must move its part by more than 1%.
+    Measured on the streaming synth, which runs without scipy."""
+    import copy
+    import numpy as np
+    d = _hd_i6_sources()
+    rms = lambda y: float(np.sqrt(np.mean(np.asarray(y, float) ** 2)))  # noqa: E731
+    base = _stream(d["eng"].spec, d["src"], 1.3, parts=True)[1]
+
+    def part(key, name):
+        src = copy.deepcopy(d["src"])
+        src["_meta"][key] *= 2.0
+        return rms(_stream(d["eng"].spec, src, 1.3, parts=True)[1][name]) / rms(base[name]) - 1.0
+    i, t = part("mdot_air", "intake"), part("boost", "turbo")
+    check("intake level carries mass flow, turbo level carries boost (FINDING-022)",
+          1.0 if min(i, t) > 0.01 else 0.0, 1.0, 0.0,
+          f"mass flow x2 -> intake {100 * i:+.1f}%, boost x2 -> turbo {100 * t:+.1f}%")
+
+
+_GRIDS = {}
+GRID_DIR = os.path.join(os.path.dirname(__file__), "..", "web", "app", "public", "grids")
+
+
+def _no_prebuilt_grids(name):
+    """SKIP a test on the prebuilt grids where they are absent: the Pyodide
+    harness copies only the package and the tests (tools/pyodide), and its
+    job exists to prove the solver runs unmodified, not to re-read data files."""
+    if os.path.isdir(GRID_DIR):
+        return False
+    RESULTS.append(("SKIP", name, None, None, "prebuilt grids not present (Pyodide harness)"))
+    return True
+
+
+def _prebuilt_grid(key):
+    """A prebuilt grid (web/app/public/grids/<key>.json) as live.Adr011Grid."""
+    if key not in _GRIDS:
+        import json
+        from dieselsim.live import Adr011Grid
+        with open(os.path.join(GRID_DIR, f"{key}.json")) as fh:
+            _GRIDS[key] = Adr011Grid.from_json(json.load(fh))
+    return _GRIDS[key]
+
+
+def test_grid_sources_warm_and_cold():
+    """Phase 4: every prebuilt grid carries each cell's acoustic sources,
+    warm and cold, and none is silent or non-finite (the dead-signal
+    pattern, checked where it would hide); blend_sources on a node returns
+    that node's cell exactly; and a cold cell's skirt film -- FINDING-017's
+    stand-in for slap clearance -- is never thinner than the warm one's.
+    (First written as "thicker": false in 115 of 240 cells, where both sit
+    on the film's clamp. That clamp is FINDING-023, recorded below.)"""
+    if _no_prebuilt_grids("prebuilt grids carry warm and cold sound sources"):
+        return
+    import numpy as np
+    from dieselsim.config import PRESETS
+    from dieselsim.livesound import SOURCE_KEYS
+    bad, n, ratio, off, cmp, pinned, twins = [], 0, [], 0, 0, {"warm": 0, "cold": 0}, 0
+    for key in sorted(PRESETS):
+        g = _prebuilt_grid(key)
+        for tag, S in (("warm", g.src), ("cold", g.src_cold)):
+            for i, row in enumerate(S):
+                for j, c in enumerate(row):
+                    for k in SOURCE_KEYS:
+                        n += 1
+                        if not (np.all(np.isfinite(c[k])) and float(np.max(np.abs(c[k]))) > 0.0):
+                            bad.append(f"{key} {tag}[{i}][{j}].{k}")
+                    if not all(np.isfinite(v) for v in c["_meta"].values()):
+                        bad.append(f"{key} {tag}[{i}][{j}]._meta")
+        ratio += [g.src_cold[i][j]["_meta"]["skirt_clr"] / g.src[i][j]["_meta"]["skirt_clr"]
+                  for i in range(len(g.rpms)) for j in range(len(g.loads))]
+        # a cold cell is its own solve: its combustion waveform is never the warm one's
+        twins += sum(np.array_equal(g.src_cold[i][j]["dpdth"], g.src[i][j]["dpdth"])
+                     for i in range(len(g.rpms)) for j in range(len(g.loads)))
+        # the film's upper clamp is 0.32 x the skirt clearance (lubrication.skirt_film_thickness)
+        top = 0.32 * DieselEngine(preset=key).wear.eff_skirt_clearance()
+        for tag, S in (("warm", g.src), ("cold", g.src_cold)):
+            pinned[tag] += sum(abs(c["_meta"]["skirt_clr"] / top - 1.0) < 1e-9 for row in S for c in row)
+        for i, j in ((0, 0), (len(g.rpms) - 1, len(g.loads) - 1), (3, 2)):
+            for T, S in ((g.T_warm, g.src), (g.T_cold, g.src_cold)):
+                b = g.blend_sources(g.rpms[i], g.loads[j], T)
+                for k in SOURCE_KEYS:
+                    off += int(np.count_nonzero(b[k] != S[i][j][k]))
+                    cmp += b[k].size
+                off += sum(b["_meta"][k] != S[i][j]["_meta"][k] for k in b["_meta"])
+                cmp += len(b["_meta"])
+    ok = not bad and off == 0 and min(ratio) >= 1.0 - 1e-12 and twins == 0
+    check("prebuilt grids carry warm and cold sound sources, none silent (Phase 4)", 1.0 if ok else 0.0, 1.0, 0.0,
+          f"silent or non-finite: {len(bad)} of {n} waveforms {bad[:3] or ''}; node blends: {off} of {cmp} values "
+          f"differ; cold/warm skirt film {min(ratio):.2f}..{max(ratio):.2f} over {len(ratio)} cells; "
+          f"cold combustion identical to warm in {twins}")
+    cells = len(ratio)
+    known("the slap input (skirt film) is off its clamp in cold cells (FINDING-023)",
+          pinned["cold"] == cells,
+          f"on 0.32 x clearance: {pinned['cold']} of {cells} cold cells, {pinned['warm']} of {cells} warm")
+
+
+def test_live_sound_follows_the_engine():
+    """Phase 4: the synth follows the live loop's friction (ADR-011). On the
+    prebuilt crdi15 grid at idle, one LiveEngine with its oil at 361 K and
+    one at 273 K, both with the coolant at 361 K -- so the grid's blend is
+    identical, and only sound_inputs() (the live friction) can tell them
+    apart -- each feed LiveSynth. Cold oil must move the rumble (boundary
+    friction power). First written as cold oil AND coolant, where the grid's
+    own cold cells could produce the difference without the live path; and
+    asserting the slap moved too, which FINDING-023's clamp prevents."""
+    if _no_prebuilt_grids("the live synth follows the live friction"):
+        return
+    import numpy as np
+    from dieselsim import livesound as LS
+    from dieselsim.live import LiveEngine
+    g = _prebuilt_grid("crdi15")
+
+    def run(T_oil):
+        live = LiveEngine(g, "crdi15")
+        live.T_coolant, live.T_oil = 361.0, T_oil
+        live._update_friction()
+        inp = live.sound_inputs()
+        syn = LS.LiveSynth(g.spec)
+        syn.set_sources(g.blend_sources(live.rpm, live.load_eff, live.T_coolant))
+        acc = {}
+        for b in range(int(1.2 * LS.FS / LS.BLOCK)):
+            syn.block(live.rpm, inp)
+            if b * LS.BLOCK >= 0.6 * LS.FS:
+                for k, v in syn.last_parts.items():
+                    acc.setdefault(k, []).append(v)
+        return inp, {k: float(np.sqrt(np.mean(np.concatenate(v) ** 2))) for k, v in acc.items()}
+    ic, rc = run(273.0)
+    iw, rw = run(361.0)
+    moved = {k: rc[k] / rw[k] - 1.0 for k in ("mech", "rumble", "combustion")}
+    ok = abs(moved["rumble"]) > 0.01
+    check("the live synth follows the live friction: cold oil (Phase 4)", 1.0 if ok else 0.0, 1.0, 0.0,
+          "oil 273 vs 361 K, coolant 361 K, idle: " + ", ".join(f"{k} {100 * v:+.1f}%" for k, v in moved.items())
+          + f"; skirt film {ic.get('skirt_clr', 0.0) / iw.get('skirt_clr', 1.0):.2f}x, "
+          + f"boundary power {ic.get('Pb', 0.0) / iw.get('Pb', 1.0):.2f}x" + ("" if "Pb" in ic else " (no live friction sent)"))
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -911,7 +1481,18 @@ def main():
                test_durability_solves_are_converged_enough,
                test_calibration_cache_is_consistent,
                test_ring_film_field_responds,
-               test_source_levels_carry_physics):
+               test_source_levels_carry_physics,
+               test_lockup_key_by_transmission,
+               test_manual_gearbox,
+               test_lockup_and_coast_downshifts,
+               test_adr011_live_friction,
+               test_grid_hash_ignores_the_live_loop,
+               test_livesound_firing_peaks_and_sources,
+               test_livesound_carries_physics,
+               test_livesound_matches_render,
+               test_intake_and_boost_levels_carry_physics,
+               test_grid_sources_warm_and_cold,
+               test_live_sound_follows_the_engine):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001

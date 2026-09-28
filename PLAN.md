@@ -161,6 +161,26 @@ handling once the loop is ported.
 **Exit criteria:** differential tests green; a 60-second drive in TS matches
 the same drive in Python within tolerance.
 
+### Outcome (session 5, 2026-09-27) — see REVIEW-005
+
+- [x] The loop ported: `play.py`'s real-time classes were moved into
+  `dieselsim/live.py` bit-identically, then ported to `web/physics/src/live`
+  with Python's field names (#51, #52).
+- [x] Fixed 60 Hz in a Web Worker, decoupled from rendering: the `/drive`
+  page (#57).
+- [x] Manual gearbox with a clutch pedal and an auto-clutch assist (#53).
+- [x] Carried items:
+  - FINDING-013 item 3: prebuilt converged grids for the presets (#56);
+  - bug #11: root cause FINDING-020, the lock-up's numerical instability (#54);
+  - bug #6: tested (#51);
+  - ADR-011 step 2: friction live in the loop (#55).
+- [x] Exit criterion 1: `web/physics` has 41 checks, all passing, with
+  per-step agreement at worst 1.0e-14 and every event at the same step in 7
+  fixture drives.
+- [x] Exit criterion 2: the 60 s script through the drive page's worker in
+  Chrome, on a prebuilt converged grid, matches native Python: 53 of 53
+  events at the same frame, final values within 1.7e-16. Checked in CI.
+
 ---
 
 ## Phase 4 — Audio
@@ -178,6 +198,18 @@ every audio change since FINDING-004: physical levels, the warm/cold pair,
 tick and slap scaling (FINDING-017), ramp-speed seating and the doubled ramp
 speed (FINDING-018), and `hd_i6`'s tick dominance (13× its other mechanical
 sources). Moved here from Phase 1 by the owner's decision.
+
+**Status (2026-09-27, REVIEW-006):** built and measured, on the stack #59–#63.
+- `dieselsim/livesound.py` is the streaming reference, and `play.py` uses
+  it (FINDING-021).
+- The grids carry warm and cold sources.
+- The TypeScript synth matches it to 2.2e-13 of peak.
+- The drive page plays it in an AudioWorklet (Sound on, five mics, Record
+  WAV).
+- Criteria 1 and 2 are met, and CI checks both.
+- **Criterion 3, the owner's listening sign-off, is open.** FINDINGs 022
+  (intake and boost levels normalised away) and 023 (the slap input pinned
+  on a clamp) wait on it, so that one grid rebuild covers both.
 
 ---
 

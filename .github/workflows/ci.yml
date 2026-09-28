@@ -173,6 +173,16 @@ jobs:
         run: npm run e2e
         env:
           CHROME_PATH: /usr/bin/google-chrome
+      # Phase 3: the real-time drive -- prebuilt grid loaded and current, the
+      # worker at 60 Hz, and a 60 s scripted drive matching native Python
+      - name: drive e2e in headless Chrome
+        run: npm run e2e:drive
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+      - name: engine-sound e2e in headless Chrome
+        run: npm run e2e:sound
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
       - name: keep the screenshots
         if: always()
         uses: actions/upload-artifact@v7

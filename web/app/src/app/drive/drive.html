@@ -1,0 +1,99 @@
+<header class="bar">
+  <span class="wordmark">Diesel Sim</span>
+  <nav class="nav"><a routerLink="/">Dyno pull</a> · <a routerLink="/grid">Operating grid</a> · <span aria-current="page">Drive</span></nav>
+</header>
+
+<main class="page">
+  <h1>Drive</h1>
+  <p class="lead">
+    The engine running in real time: a converged grid solved offline, friction computed live from each cell's
+    pressure trace at the oil's temperature, and the drivetrain integrated 60 times a second in your browser.
+  </p>
+
+  <div class="controls">
+    <label class="field"><span>Engine</span>
+      <select [disabled]="status() === 'loading'" (change)="selectPreset($any($event.target).value)">
+        @for (p of presets; track p.key) { <option [value]="p.key" [selected]="p.key === preset()">{{ p.name }}</option> }
+      </select>
+    </label>
+    <label class="field"><span>Gearbox</span>
+      <select [disabled]="status() === 'loading'" (change)="selectTrans($any($event.target).value)">
+        <option value="tc" [selected]="trans() === 'tc'">Automatic, torque converter</option>
+        <option value="dct" [selected]="trans() === 'dct'">Dual clutch</option>
+        <option value="manual" [selected]="trans() === 'manual'">Manual, clutch pedal</option>
+      </select>
+    </label>
+    <button type="button" class="run" (click)="start()" [disabled]="status() === 'loading'">
+      {{ status() === 'driving' ? 'Restart' : 'Start engine' }}
+    </button>
+  </div>
+
+  <div class="controls sound">
+    <button type="button" class="sound-toggle" (click)="toggleSound()" [disabled]="status() !== 'driving'"
+            [attr.aria-pressed]="soundOn()">{{ soundOn() ? 'Sound off' : 'Sound on' }}</button>
+    <label class="field"><span>Microphone</span>
+      <select (change)="setMic($any($event.target).value)">
+        @for (m of mics; track m.key; let i = $index) {
+          <option [value]="m.key" [selected]="m.key === mic()">{{ i + 1 }} · {{ m.name }}</option>
+        }
+      </select>
+    </label>
+    <label class="field"><span>Volume</span>
+      <input type="range" min="0" max="1" step="0.05" [value]="volume()"
+             (input)="setVolume($any($event.target).valueAsNumber)">
+    </label>
+    <button type="button" (click)="record()" [disabled]="!soundOn() || recording()">
+      {{ recording() ? 'Recording 10 s…' : 'Record 10 s (WAV)' }}
+    </button>
+    @if (soundOn()) { <span class="level">{{ levelDb() > -120 ? fmt0.format(levelDb()) + ' dBFS' : 'silent' }}</span> }
+  </div>
+  @if (soundError()) { <p class="status"><span class="err">{{ soundError() }}</span></p> }
+
+  <p class="status" role="status" aria-live="polite">
+    @switch (status()) {
+      @case ('idle') { Pick an engine and a gearbox, then start. It starts cold, like a real one. }
+      @case ('loading') { Loading the grid. }
+      @case ('error') { <span class="err">{{ error() }}</span> }
+      @case ('driving') {
+        @if (v()?.hint) { {{ v()!.hint }} } @else if (v()?.overheat) { <span class="err">{{ v()!.overheat }}</span> }
+        @else { Running. Keys below. }
+      }
+    }
+  </p>
+
+  @if (v(); as s) {
+    <dl class="readouts gauges">
+      <div><dt>Engine</dt><dd><strong class="rpm">{{ fmt0.format(s.rpm) }}</strong> rpm
+        <span class="meter" [style.--f]="rpmFrac()"></span></dd></div>
+      <div><dt>Speed</dt><dd><strong class="kmh">{{ fmt0.format(s.kmh) }}</strong> km/h</dd></div>
+      <div><dt>Gear</dt><dd><strong class="gear">{{ s.gear }}</strong>
+        @if (s.trans === 'manual') { {{ s.assist ? 'auto-clutch' : 'clutch ' + fmt0.format(100 * s.clutch) + '%' }} }
+        @if (s.lockup) { lock-up } @if (s.cruise) { cruise } @if (s.stalled) { <span class="err">stalled</span> }</dd></div>
+      <div><dt>Pedals</dt><dd>throttle {{ fmt0.format(100 * s.throttle) }}% · brake {{ fmt0.format(100 * s.brake) }}%</dd></div>
+      <div><dt>Coolant / oil</dt><dd>{{ fmt0.format(s.T_coolant - 273.15) }} / {{ fmt0.format(s.T_oil - 273.15) }} °C</dd></div>
+      <div><dt>Friction (live)</dt><dd>{{ fmt2.format(s.fmep_bar) }} bar FMEP</dd></div>
+      <div><dt>Boost</dt><dd>{{ fmt2.format(s.boost) }} pressure ratio</dd></div>
+      <div><dt>Grade</dt><dd>{{ fmt0.format(100 * s.grade) }}%</dd></div>
+      <div><dt>Trip</dt><dd>{{ fmt1.format(s.trip_km) }} km · {{ fmt2.format(s.trip_L) }} L</dd></div>
+    </dl>
+    <p class="about">Loop {{ fmt0.format(s.hz) }} Hz, frame {{ fmt0.format(s.frames) }}.</p>
+  }
+
+  @if (gridStatus(); as g) {
+    <p class="note accuracy">
+      {{ g.converged ? 'Converged' : 'Fast' }} grid, {{ g.cells }} cells (warm and cold).
+      @if (g.unsettled) { {{ g.unsettled }} cells never settled and are averaged over their oscillation (FINDING-013). }
+      @if (g.stale) { This grid was built by an older physics build than this page; rebuild it with tools/build_live_grids.py. }
+      Fuel figures come from steady-state cells (FINDING-009).
+      The sound is synthesised from the same cells, 44,100 samples a second, following the engine's live friction
+      (FINDING-021) and its air flow and boost (FINDING-022); how it should sound is still to be judged by ear.
+    </p>
+  }
+
+  <table class="data keys">
+    <caption>Controls</caption>
+    <tbody>
+      @for (k of keyHelp; track k[0]) { <tr><th scope="row">{{ k[0] }}</th><td>{{ k[1] }}</td></tr> }
+    </tbody>
+  </table>
+</main>
