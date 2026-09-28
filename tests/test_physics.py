@@ -1305,16 +1305,16 @@ def test_livesound_matches_render():
           f"worst source shape {shape[worst_shape]:.2f} dB ({worst_shape})")
 
 
-def test_intake_and_boost_levels_are_normalised_away():
-    """FINDING-022 (known defect): in acoustics.render -- and so in the
-    faithful streaming port -- the intake hiss is scaled by its mass flow,
-    (mdot * spd^1.5)^1.5, and the next line divides it by its own std, and
-    the intake source carries no other level; the turbo's boost term goes
-    the same way. Doubling the mass flow moves the intake by 0.0000%, and
-    doubling the boost moves the turbo by 0.0000%. Left in place for the
-    owner's listening review (Phase 4: port faithfully, decide by ear).
-    Measured on the streaming synth, which runs without scipy; render()
-    gives the same 0.0000% (reviews/FINDING-022.md)."""
+def test_intake_and_boost_levels_carry_physics():
+    """FINDING-022, fixed with option A (the owner's decision): in
+    acoustics.render -- and so in the faithful streaming port -- the intake
+    hiss was scaled by its mass flow and the next line divided it out, and
+    the turbo's boost term went the same way: doubling the mass flow moved
+    the intake by 0.0000%, doubling the boost moved the turbo by 0.0000%
+    (this test's first form was a known defect saying so). The intake now
+    carries the exhaust's law, (mdot/mdot_ref)^1.5, and the boost term sits
+    after the normalisation. Each must move its part by more than 1%.
+    Measured on the streaming synth, which runs without scipy."""
     import copy
     import numpy as np
     d = _hd_i6_sources()
@@ -1326,9 +1326,9 @@ def test_intake_and_boost_levels_are_normalised_away():
         src["_meta"][key] *= 2.0
         return rms(_stream(d["eng"].spec, src, 1.3, parts=True)[1][name]) / rms(base[name]) - 1.0
     i, t = part("mdot_air", "intake"), part("boost", "turbo")
-    known("intake level carries mass flow, turbo level carries boost (FINDING-022)",
-          abs(i) < 1e-6 and abs(t) < 1e-6,
-          f"mass flow x2 -> intake {100 * i:+.4f}%, boost x2 -> turbo {100 * t:+.4f}%")
+    check("intake level carries mass flow, turbo level carries boost (FINDING-022)",
+          1.0 if min(i, t) > 0.01 else 0.0, 1.0, 0.0,
+          f"mass flow x2 -> intake {100 * i:+.1f}%, boost x2 -> turbo {100 * t:+.1f}%")
 
 
 _GRIDS = {}
@@ -1490,7 +1490,7 @@ def main():
                test_livesound_firing_peaks_and_sources,
                test_livesound_carries_physics,
                test_livesound_matches_render,
-               test_intake_and_boost_levels_are_normalised_away,
+               test_intake_and_boost_levels_carry_physics,
                test_grid_sources_warm_and_cold,
                test_live_sound_follows_the_engine):
         try:

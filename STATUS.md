@@ -1,16 +1,17 @@
 # Status
 
-**Updated:** 2026-09-27 (session 5, part 3: "continue to the next step", Phase 4)
+**Updated:** 2026-09-28 (session 5, part 4: "continue with finding022")
 **Phase:** 1, 2 and 3 **exit-ready** (REVIEW-003, -004, -005). Phase 4 (audio)
-is **built and measured** (REVIEW-006). What's left needs the owner:
-- a listening sign-off (PLAN's third criterion);
-- options for FINDINGs 022 and 023, best decided together so that one
-  ~70 min grid rebuild covers both.
+is **built and measured** (REVIEW-006).
+- **FINDING-022 is fixed** (the owner chose option A; #64).
+- Still waiting on the owner:
+  - the listening sign-off (PLAN's third criterion);
+  - an option for FINDING-023, which will need its own ~70 min grid rebuild.
 
 **Main:** only #40 of the Phase 1–2 stack reached `main`. #41–#49 merged into
 their parent branches instead, so **#50 lands them all in one merge**: its
 content was verified identical to the top of that stack. After it, two
-stacks, both **merged in order**: Phase 3 (#51–#58), then Phase 4 (#59–#63).
+stacks, both **merged in order**: Phase 3 (#51–#58), then Phase 4 (#59–#64).
 After each merge, retarget the next PR to `main` (`gh pr edit <n> --base
 main`), or it merges into a dead branch again.
 
@@ -30,9 +31,43 @@ main`), or it merges into a dead branch again.
 | #61 | `feat/ts-synth` | the synth in TypeScript, sample-exact to Python; FINDING-022 |
 | #62 | `feat/drive-sound` | the AudioWorklet on `/drive`: Sound on, five mics, Record WAV; sound e2e in CI |
 | #63 | `docs/phase4-exit` | REVIEW-006, PLAN, this file |
+| #64 | `fix/finding-022` | FINDING-022 option A: intake and boost levels survive the normalisation; grids re-stamped by rebuild; the dyno's accuracy note keyed on the solver hash and re-measured |
 
 The repository is **public** now: Actions minutes are free, and the history
 was scanned for tokens before it went public (none found).
+
+---
+
+## Session 5, part 4 (2026-09-28) — FINDING-022 fixed (option A)
+
+The owner chose FINDING-022's option A, and FINDING-023 later (its own
+rebuild).
+
+- **The fix:**
+  - `render()`, `livesound.py` and the TypeScript synth give the intake
+    (ṁ/ṁ_ref)^1.5 after its normalisation;
+  - the turbo's boost term is applied after its normalisation, referenced
+    to rated;
+  - ×2 now moves them +182.8% and +190.5%, where both were 0.0000%;
+  - the known defect became an assertion.
+- **Balance:**
+  - at idle the intake and turbo parts drop 28–39 dB, and the intake-mic
+    total 11–19 dB;
+  - at full boost the turbo rises ~4 dB;
+  - outside at 7 m the total moves ≤ 2.8 dB.
+  - The table is in FINDING-022. These are the points to listen for.
+- **Grids:** all five rebuilt for the new hash. Only `grid_hash` and
+  `build_s` changed (sources 0 of 2,880 differ).
+- **Also found and fixed, my regression from #59:** the dyno page's accuracy
+  note had said "not measured" on every Phase 4 PR. It was keyed on the
+  whole-package hash, which adding the synth moved.
+  - It is now keyed on the solver (grid) hash, and re-measured: 0 of 50 pull
+    rows differ from REVIEW-005's run.
+  - Verified in the browser: "within 5.8% … 1.8 N·m".
+  - The printed "worst" lines of `--pull` (e.g. +93.6%) are a known quirk at
+    the governed end, where torque is near zero; they are identical in the
+    old run. The table uses absolute N·m there.
+- Mutation: 6 of 6 caught (4 Python, 2 TypeScript).
 
 ---
 
@@ -481,8 +516,8 @@ a miscount, not a change.)*
 | 019 | the aged `crdi15`'s torque gain | a fast-path artifact, not a wear bug; `durability_run` moved to 9 cycles (#45) |
 | 020 | the converter's lock-up clutch was numerically unstable, pinned at its clamp (bug #11's jolts) | **fixed (#54)** |
 | 021 | `play.py`'s real-time sound was a stale copy; slap, exhaust flow and seating moved it 0.0000% | **fixed (#59)** |
-| 022 | intake loudness and turbo boost term normalised away in `render()`, so also in the synth | **open**: known defect, the owner's call with the listening review |
-| 023 | the synth's slap input (skirt film) sits on its clamp in 240/240 cold cells, 115/240 warm | **open**: known defect, decided with 022 (one rebuild) |
+| 022 | intake loudness and turbo boost term normalised away in `render()`, so also in the synth | **fixed with option A (#64)**. *(Was: "open: known defect, the owner's call with the listening review".)* |
+| 023 | the synth's slap input (skirt film) sits on its clamp in 240/240 cold cells, 115/240 warm | **open**: known defect; the owner chose to do it after 022, in its own rebuild |
 
 ### Still open inside those
 
@@ -539,7 +574,7 @@ claim is corrected in PROJECT_CONTEXT §1.3 (#46). Kept as history.)*
 ## Tests
 
 ```
-python3 tests/test_physics.py                    # top of the stack: 61 passed, 0 failed, 4 known with scipy; 56 + 4 skipped without
+python3 tests/test_physics.py                    # top of the stack: 62 passed, 0 failed, 3 known with scipy; 57 + 4 skipped without
 python3 tools/audit_dead_signals.py              # 0 dead, 2 frozen (the h_ring clamp, known), 0 tiny
 python3 tools/validate_table.py [--aged]         # PROJECT_CONTEXT §1.5 re-check: 12 of 12 in band
 python3 tools/fixtures/gen_fixtures.py --check   # golden fixtures current (regenerate without --check)
@@ -577,20 +612,19 @@ The open stack is in the table at the top of this file. Merged branches are
 
 ## Next actions
 
-1. **Owner:** merge #50, then #51 → #58, then #59 → #63, retargeting each
+1. **Owner:** merge #50, then #51 → #58, then #59 → #64, retargeting each
    child to `main`.
-2. **Owner: listen, then decide.** On `/drive`: Sound on, keys 1–5 for the
-   mics, "Record 10 s (WAV)". Or `python3 play.py`. Listen for:
+2. **Owner: listen.** On `/drive`: Sound on, keys 1–5 for the mics, "Record
+   10 s (WAV)". Or `python3 play.py`. Listen for:
    - `hd_i6`'s tick dominance (13×);
    - a cold start against a warm one;
-   - the intake at idle against full load (FINDING-022);
-   - cold slap (FINDING-023).
+   - FINDING-022's new balance: a quiet intake at idle, and the turbo
+     rising with boost;
+   - cold slap, which FINDING-023 still caps.
 
-   Pick options for 022 and 023 (both recommend A). Then one session makes
-   the `acoustics.py` + `livesound.py` + TypeScript edits and one ~70 min
-   grid rebuild, and the known defects flip to unexpected passes. A
-   ramp-height parameter separate from `ramp_fraction` is still open for
-   the same review.
+   Then pick an option for 023 (recommended: A, a temperature-dependent
+   clearance), which means one ~70 min grid rebuild. A ramp-height parameter
+   separate from `ramp_fraction` is still open for the same review.
 3. **Phase 5 — Enjoy mode:** the roster (OPEN-F), the dashboard, and the
    steady-state economy label. Check live friction's cost and the synth's on a
    mid-range phone (REVIEW-005 m-5, REVIEW-006 m-1).

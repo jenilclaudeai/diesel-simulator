@@ -6,15 +6,15 @@ const table = {
 };
 
 describe('accuracyNote', () => {
-  it('gives the measured gap when the physics build matches', () => {
+  it('gives the measured gap when the solver build matches', () => {
     const s = accuracyNote('eng', 'abc', String, table, 'abc');
     expect(s).toContain('within 5.9%');
     expect(s).toContain('1650 rpm');
     expect(s).toContain('within 2.0 N·m');
   });
-  it('never shows a number measured on a different physics build', () => {
+  it('never shows a number measured on a different solver build', () => {
     const s = accuracyNote('eng', 'other', String, table, 'abc');
-    expect(s).toContain('has not been measured for this physics build');
+    expect(s).toContain('has not been measured for this solver build');
     expect(s).not.toMatch(/\d%/);
   });
   it('says so for an engine that was not measured', () => {
@@ -27,8 +27,8 @@ describe('accuracyNote', () => {
     expect(accuracyNote('eng', 'abc', r => `#${r}`, table, 'abc')).toContain('#1650 rpm');
   });
   it('ships a table for every preset the page offers', async () => {
-    const { ACCURACY, ACCURACY_PHYSICS } = await import('./accuracy');
+    const { ACCURACY, ACCURACY_SOLVER } = await import('./accuracy');
     expect(Object.keys(ACCURACY).sort()).toEqual(['crdi15', 'crdi_1p5', 'hd_i6', 'ld_i4', 'single']);
-    expect(ACCURACY_PHYSICS).toMatch(/^[0-9a-f]{64}$/);
+    expect(ACCURACY_SOLVER).toMatch(/^[0-9a-f]{64}$/);
   });
 });

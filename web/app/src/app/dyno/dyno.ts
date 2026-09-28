@@ -4,7 +4,7 @@ import type { PointResult, PresetInfo } from '@dieselsim/solver';
 import { describe, SolverService } from '../solver/solver.service';
 import { dualAxis } from './axis';
 import { accuracyNote } from './accuracy-note';
-import { PHYSICS_VERSION } from '../solver/physics-version';
+import { GRID_VERSION } from '../solver/physics-version';
 
 interface Pt { rpm: number; torque: number; powerKw: number; r: PointResult; }
 
@@ -40,7 +40,8 @@ export class Dyno implements OnInit {
   });
   /** how far this page's fast solve is from a converged one (FINDING-013) */
   protected readonly accuracy = computed(() =>
-    accuracyNote(this.engine(), PHYSICS_VERSION, r => fmt0.format(r)));
+    // keyed on the solver (grid) hash: the live loop and the synth never run in a pull
+    accuracyNote(this.engine(), GRID_VERSION, r => fmt0.format(r)));
   protected readonly spec = computed<PresetInfo | undefined>(() => this.solver.info()?.preset_info[this.engine()]);
   protected readonly rpms = computed(() => {
     const s = this.spec();

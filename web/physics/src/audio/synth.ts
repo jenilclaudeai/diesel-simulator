@@ -73,6 +73,7 @@ export class LiveSynth {
   private readonly ref_dpdt = 5.0e9;
   private readonly ref_vseat = 0.10;
   private readonly ref_turbo = 1.2e5;
+  private readonly ref_boost: number;          // FINDING-022
   private readonly n_hiss: NoiseCursor;
   private readonly n_whoosh: NoiseCursor;
   private readonly n_rumble: NoiseCursor;
@@ -107,6 +108,7 @@ export class LiveSynth {
     // acoustics.EngineSound's physical reference levels (FINDING-004)
     this.ref_mdot = Math.max(g.displacement * (rated / 120.0) * 1.19 * 1.15 * pr, 1e-6);
     this.ref_Pb = Math.max(0.5 * 1.1e5 * g.displacement * (rated / 120.0), 1.0);
+    this.ref_boost = Math.max(pr - 1.0, 1e-6);
     const table = noiseTable(noise_seed);
     this.n_hiss = new NoiseCursor(table, 0);
     this.n_whoosh = new NoiseCursor(table, Math.floor(NOISE_N / 3));
@@ -236,7 +238,8 @@ export class LiveSynth {
     const mdot = meta["mdot_air"]!;
     hiss = map(hiss, (v, i) => v * (mdot * spd[i]! ** 1.5) ** 1.5 * 4.0);
     const ni = N["int"]!.apply(yi), nh = N["hiss"]!.apply(hiss);
-    const intake = map(ni, (v, i) => v + 0.45 * nh[i]!);
+    const kInt = (mdot / this.ref_mdot) ** 1.5;          // FINDING-022
+    const intake = map(ni, (v, i) => (v + 0.45 * nh[i]!) * kInt);
 
     // ---- combustion ----
     const dp = this.sample("dpdth", theta);
@@ -286,9 +289,10 @@ export class LiveSynth {
       if (mean(f_bp) < 0.42 * fs) whine = map(whine, (v, i) => v + 0.30 * Math.sin(ph_bp[i]!));
       const wh = N["whoosh"]!.apply(this.whoosh_bp.process(this.n_whoosh.take(n)));
       const boost = meta["boost"]!;
-      const yt = map(whine, (v, i) => (0.55 * v + 0.45 * wh[i]!) * Math.max((boost - 1.0) * spd[i]! ** 2, 0.0));
-      const kT = (tr / this.ref_turbo) ** 2;
-      turbo = map(N["turbo"]!.apply(yt), v => v * kT);
+      const yt = map(whine, (v, i) => 0.55 * v + 0.45 * wh[i]!);
+      const kT = (tr / this.ref_turbo) ** 2, rb = this.ref_boost;
+      // FINDING-022: the boost term after the normalisation
+      turbo = map(N["turbo"]!.apply(yt), (v, i) => v * kT * Math.max((boost - 1.0) * spd[i]! ** 2, 0.0) / rb);
     } else {
       turbo = zeros(n);
     }

@@ -207,6 +207,9 @@ class EngineSound:
         self._ref_dpdt = 5.0e9        # measured band across shipped presets
         self._ref_vseat = 0.10        # m/s, typical seating velocity
         self._ref_turbo = 1.2e5       # rpm
+        # boost term (boost - 1) * spd^2 at rated: the assumed pr, at spd 1
+        # (FINDING-022; only a turbocharged engine reaches it)
+        self._ref_boost = max(pr - 1.0, 1e-6)
 
     # ------------------------------------------------------------------ #
     # crank-angle-domain source construction
@@ -426,12 +429,16 @@ class EngineSound:
         f_h = C_AIR_STP / (2 * math.pi) * math.sqrt(
             A_n / max(V_b * (L_n + 0.85 * math.sqrt(A_n / math.pi)), 1e-9))
         y = _resonator(y, max(f_h, 25.0), 3.5, fs, gain=2.0) + 0.5 * y
-        # filter / throttle hiss: turbulent broadband ~ mdot^3
+        # filter / throttle hiss: turbulent broadband ~ mdot^3. The next
+        # line normalises it, so this factor survives only as shape
+        # (FINDING-022); the level is the whole part's, below.
         hiss = self._rng.standard_normal(n)
         hiss = _bandpass(hiss, 700.0, 6500.0, fs, order=2)
         hiss *= (meta["mdot_air"] * spd ** 1.5) ** 1.5 * 4.0
         y = y / (np.std(y) + 1e-12) + 0.45 * hiss / (np.std(hiss) + 1e-12)
-        out["intake"] = y
+        # FINDING-022: the intake's level, the exhaust's law (FINDING-004),
+        # applied after the normalisation so that it survives it
+        out["intake"] = y * (meta["mdot_air"] / self._ref_mdot) ** 1.5
 
         # ---------------- combustion / diesel clatter ------------------
         exc = sample("dpdth") * (rpm / 60.0 * 360.0)     # -> dp/dt
@@ -501,11 +508,12 @@ class EngineSound:
                 whine += 0.30 * np.sin(ph_bp)
             whoosh = _bandpass(self._rng.standard_normal(n), 1200.0, 9000.0,
                                fs, 2)
-            amp = (meta["boost"] - 1.0) * spd ** 2
-            y = (0.55 * whine + 0.45 * whoosh /
-                 (np.std(whoosh) + 1e-12)) * np.maximum(amp, 0.0)
+            amp = np.maximum((meta["boost"] - 1.0) * spd ** 2, 0.0)
+            y = 0.55 * whine + 0.45 * whoosh / (np.std(whoosh) + 1e-12)
+            # FINDING-022: the boost term after the normalisation (it was
+            # divided out before), referenced to rated: pr 2.2 at spd 1
             out["turbo"] = y / (np.std(y) + 1e-12) * \
-                (meta["turbo_rpm"] / self._ref_turbo) ** 2
+                (meta["turbo_rpm"] / self._ref_turbo) ** 2 * amp / self._ref_boost
         else:
             out["turbo"] = np.zeros(n)
             ph = ph_bp = np.zeros(n)

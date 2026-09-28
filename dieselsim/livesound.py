@@ -307,6 +307,7 @@ class LiveSynth:
         self.ref_mdot = max(g.displacement * (rated / 120.0) * 1.19 * 1.15 * pr, 1e-6)
         self.ref_Pb = max(0.5 * 1.1e5 * g.displacement * (rated / 120.0), 1.0)
         self.ref_dpdt, self.ref_vseat, self.ref_turbo = 5.0e9, 0.10, 1.2e5
+        self.ref_boost = max(pr - 1.0, 1e-6)       # FINDING-022
         table = noise_table(noise_seed)
         self.n_hiss = NoiseCursor(table, 0)
         self.n_whoosh = NoiseCursor(table, NOISE_N // 3)
@@ -430,7 +431,9 @@ class LiveSynth:
         y = self.int_helm.process(y) + 0.5 * y
         hiss = self.hiss_bp.process(self.n_hiss.take(n))
         hiss = hiss * (meta["mdot_air"] * spd ** 1.5) ** 1.5 * 4.0
-        out["intake"] = self.norm["int"](y) + 0.45 * self.norm["hiss"](hiss)
+        # FINDING-022: the exhaust's law, after the normalisation
+        out["intake"] = (self.norm["int"](y) + 0.45 * self.norm["hiss"](hiss)) * \
+            (meta["mdot_air"] / self.ref_mdot) ** 1.5
 
         # ---- combustion ----
         exc = self.norm["exc"](self._sample("dpdth", theta) * (rpm_s / 60.0 * 360.0))
@@ -468,8 +471,10 @@ class LiveSynth:
                 whine = whine + 0.30 * np.sin(ph_bp)
             wh = self.norm["whoosh"](self.whoosh_bp.process(self.n_whoosh.take(n)))
             amp = np.maximum((meta["boost"] - 1.0) * spd ** 2, 0.0)
-            y = (0.55 * whine + 0.45 * wh) * amp
-            out["turbo"] = self.norm["turbo"](y) * (meta["turbo_rpm"] / self.ref_turbo) ** 2
+            y = 0.55 * whine + 0.45 * wh
+            # FINDING-022: the boost term after the normalisation
+            kT = (meta["turbo_rpm"] / self.ref_turbo) ** 2
+            out["turbo"] = self.norm["turbo"](y) * kT * amp / self.ref_boost
         else:
             out["turbo"] = np.zeros(n)
 
