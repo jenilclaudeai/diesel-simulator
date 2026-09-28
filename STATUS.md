@@ -8,12 +8,12 @@ is **built and measured** (REVIEW-006).
   - the listening sign-off (PLAN's third criterion);
   - an option for FINDING-023, which will need its own ~70 min grid rebuild.
 
-**Main:** only #40 of the Phase 1–2 stack reached `main`. #41–#49 merged into
-their parent branches instead, so **#50 lands them all in one merge**: its
-content was verified identical to the top of that stack. After it, two
-stacks, both **merged in order**: Phase 3 (#51–#58), then Phase 4 (#59–#64).
-After each merge, retarget the next PR to `main` (`gh pr edit <n> --base
-main`), or it merges into a dead branch again.
+**Main:** everything up to #50 (Phases 1–2) is on `main`. #51–#64 were all
+merged on 2026-09-28, but bottom-up into their parent branches, so none
+reached `main`. It is the same trap as #41–#49. **#65 lands them all in one
+merge** from `docs/phase4-exit`, where #64 merged. A trial merge into
+`main` is identical to the tested top of the stack (0 lines differ). Once #65
+is merged, every branch but `main` can be deleted; see "Branches" below.
 
 | PR | branch | what |
 |---|---|---|
@@ -604,9 +604,22 @@ keeps module-level changes (session 5's EGR slip), so set constants per job.
 
 ## Branches
 
-The open stack is in the table at the top of this file. Merged branches are
-**not** auto-deleted: after merging a parent, retarget its child PR to `main`
-(`gh pr edit <n> --base main`). Session 4's branch table is in git history.
+Merged branches are **not** auto-deleted: after merging a parent, retarget
+its child PR to `main` (`gh pr edit <n> --base main`), or merge top-down.
+
+Checked on 2026-09-28 by content, not commit ancestry. The question asked
+of each branch: "does merging it into the roll-up change the tree?"
+- **24 branches:** contained, so safe to delete once #65 is on `main`.
+- **3 closed-PR docs branches**
+  (`diag/bug-10-render-seams`, `diag/finding-005-cam`,
+  `docs/finding-008-options`): superseded. Every line is in `main`'s later
+  copies, except one pre-fix line in a diag script.
+- **`fix/steady-state-controllers`** (closed PR #20): the abandoned
+  FINDING-013 option A experiment, 558 lines (`steady_ctrl`), in nothing
+  else. It is the only record of that attempt: keep it, or tag it
+  (`archive/steady-state-controllers`) before deleting.
+
+Session 4's branch table is in git history.
 
 ---
 
