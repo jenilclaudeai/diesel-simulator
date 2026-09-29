@@ -23,7 +23,16 @@ export type ToWorker =
   | { type: 'key'; key: string; down: boolean }
   | { type: 'run' | 'pause' }
   | { type: 'script'; script: DriveScript; init: Record<string, number> }
-  | { type: 'sound'; port: MessagePort | null };   // the engine-sound worklet's end (Phase 4)
+  | { type: 'sound'; port: MessagePort | null }    // the engine-sound worklet's end (Phase 4)
+  | { type: 'pedals'; pedals: Pedals };            // touch pedals (ADR-012)
+
+/**
+ * Touch pedals (ADR-012), positions 0-1. The throttle follows the finger;
+ * `null` leaves it to the keys (a released pedal sends 0 once, then null).
+ * Brake and clutch are held at least this far down, and otherwise spring
+ * back as the keyboard's do (pedal_return).
+ */
+export interface Pedals { throttle: number | null; brake: number; clutch: number }
 
 export interface LiveView {
   t: number; frames: number; hz: number;
@@ -32,6 +41,8 @@ export interface LiveView {
   boost: number; T_coolant: number; T_oil: number; fmep_bar: number; torque: number;
   hint: string; overheat: string; stalled: boolean; assist: boolean; cruise: boolean; lockup: boolean;
   trip_L: number; trip_km: number; inst_kmpl: number;
+  phase: number;      // the gearbox's shift phase: 0 idle, 1 torque, 2 inertia
+  auto: boolean;      // automatic shifting (the paddles switch it to manual)
 }
 
 export type FromWorker =

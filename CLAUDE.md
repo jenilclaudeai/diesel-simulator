@@ -58,7 +58,7 @@ cd web/app     && npm test -- --watch=false     # unit tests (vitest)
 cd web/app     && npm run build:pages           # NEVER plain `build`: blank page on Pages
 cd web/app     && npm run check:assets          # prepare-assets on a network without the Pyodide CDN
 cd web/app     && npm run perf                  # synth/loop/friction cost under Chrome CPU throttling (reports only)
-cd web/app     && npm run e2e                   # browser checks (also e2e:grid, e2e:drive, e2e:sound)
+cd web/app     && npm run e2e                   # browser checks (also e2e:grid, e2e:drive, e2e:sound, e2e:enjoy)
 ```
 Angular needs Node ≥ 22.22.3. If npm 10 crashes resolving Angular's peer
 deps, use `npx -y npm@11 install`. The project supports Python 3.10 —
