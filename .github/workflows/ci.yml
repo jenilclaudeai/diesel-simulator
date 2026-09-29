@@ -138,6 +138,8 @@ jobs:
       - run: npm ci
       - run: npm test -- --watch=false
       - run: npm run build:pages
+      - name: prepare-assets on a network without the Pyodide CDN
+        run: npm run check:assets
 
   # The built app in a real browser. A dyno pull is solved by Python in the
   # page's worker and checked against native Python at three points

@@ -5,7 +5,7 @@
 // COOP/COEP headers and GitHub Pages hosting stays possible (ADR-003).
 // Bundled by scripts/prepare-assets.mjs (esbuild): Angular's builder
 // bundles workers but not worklets.
-import { Adr011Grid, BLOCK, FS, LiveSynth, type Adr011GridData, type SoundSpec } from '@dieselsim/physics';
+import { Adr011Grid, BLOCK, FS, LiveSynth, type Adr011GridData, type SoundSpec, type Sources } from '@dieselsim/physics';
 import type { LoopSound, ToWorklet } from './sound-protocol';
 
 declare const sampleRate: number;
@@ -29,6 +29,7 @@ class EngineSoundProcessor extends AudioWorkletProcessor {
   private cap?: Float32Array;
   private capN = 0;
   private said = false;
+  private blend?: Sources;           // reused by every 20 Hz blend: no allocation on this thread
 
   constructor() {
     super();
@@ -68,7 +69,10 @@ class EngineSoundProcessor extends AudioWorkletProcessor {
     if (!syn || !st || !grid) return true;                  // silence until the loop speaks
     if (out[0].length !== BLOCK) { this.fail(`render quantum ${out[0].length}, expected ${BLOCK}`); return true; }
     try {
-      if (syn.src === null || this.n % BLEND_EVERY === 0) syn.setSources(grid.blendSources(st.rpm, st.load, st.T));
+      if (syn.src === null || this.n % BLEND_EVERY === 0) {
+        this.blend = grid.blendSources(st.rpm, st.load, st.T, this.blend);
+        syn.setSources(this.blend);
+      }
       const y = syn.block(st.rpm, st.live, st.running);
       const v = this.volume;
       for (let i = 0; i < BLOCK; i++) {

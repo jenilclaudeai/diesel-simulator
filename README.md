@@ -11,6 +11,27 @@ and clearances are all inputs, and everything downstream reacts to them.
 
 ---
 
+## Getting started
+
+Python 3.10+ for the solver; Node.js ≥ 22.22.3 for the browser app.
+
+```bash
+git clone https://github.com/jenilclaudeai/diesel-simulator.git
+cd diesel-simulator
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python tests/test_physics.py          # the regression suite (counts in STATUS.md)
+
+cd web/app && npm ci && npm start     # the browser app on http://localhost:4200
+```
+
+`python3 play.py --preset crdi15` drives an engine from the terminal (with
+sound, if `sounddevice` is installed). The browser app's own setup notes are
+in [web/app/README.md](web/app/README.md), including what to do behind a
+proxy or offline. The project's working state is in `STATUS.md`.
+
+---
+
 ## What actually gets solved
 
 ### 1. In-cylinder process — `cycle.py`
@@ -160,11 +181,11 @@ Five microphone positions are provided: `exhaust_tip`, `intake`,
 from dieselsim.engine import DieselEngine
 from dieselsim.acoustics import EngineSound
 
-eng = DieselEngine(preset="hd_i6")      # or "ld_i4", "single"
+eng = DieselEngine(preset="hd_i6")      # or "crdi15", "crdi_1p5", "ld_i4", "single"
 
 op = eng.operating_point(1500, load=1.0)
 print(op)
-# 1500 rpm | 2252 N.m | 353.8 kW | BMEP 22.21 bar | BSFC 213.2 g/kWh ...
+# 1500 rpm | 2241.0 N.m | 352.0 kW | BMEP 22.10 bar | BSFC 214.3 g/kWh ...
 
 snd = EngineSound(eng.spec)
 y, sources = snd.render(op, duration=4.0, mic="exterior_7m")
@@ -200,27 +221,29 @@ Run `python3 demo.py <outdir>` to generate every figure and audio file.
 
 ## Does it produce sensible numbers?
 
-12.74 L heavy-duty inline-6, VGT, cooled EGR:
+12.74 L heavy-duty inline-6, VGT, cooled EGR. Measured on 2026-09-29 with
+`tools/validate_table.py` (fresh engine per point, 9 cycles, the way the app
+solves), which re-runs this table on any tree:
 
 | quantity | simulated | typical real HD diesel |
 |---|---|---|
-| peak torque | 2310 N·m @ 1700 rpm | 2000–2500 N·m |
+| peak torque | 2313 N·m @ 1700 rpm | 2000–2500 N·m |
 | rated power | 432 kW @ 1800 rpm | 350–450 kW |
 | peak BMEP | 22.8 bar | 20–24 bar |
-| best BSFC | 213 g/kWh | 190–215 g/kWh |
-| peak cylinder pressure | 176 bar | 160–200 bar |
-| FMEP at rated | 1.08 bar | 0.9–1.5 bar |
-| mechanical efficiency | 95 % @ rated, 92 % @ 700 rpm | 88–95 % |
-| volumetric efficiency | 1.19 (boosted) | 1.1–1.3 |
-| engine-out NOx | 4.5 g/kWh @ rated, 20 g/kWh lugging | 4–20 g/kWh |
-| engine-out soot | 0.05 g/kWh | 0.02–0.08 g/kWh |
-| blow-by, new engine | 11 L/min | 8–20 L/min |
-| wall heat loss | 19 % of fuel energy | 15–25 % |
+| best BSFC | 200 g/kWh @ 1800 rpm, half load | 190–215 g/kWh |
+| peak cylinder pressure | 179 bar | 160–200 bar |
+| FMEP at rated | 1.10 bar | 0.9–1.5 bar |
+| mechanical efficiency | 95 % @ rated, 91 % @ 700 rpm | 88–95 % |
+| volumetric efficiency | 1.18 (boosted) | 1.1–1.3 |
+| engine-out NOx | 4.4 g/kWh @ rated, 15.6 g/kWh lugging (1000 rpm) | 4–20 g/kWh |
+| engine-out soot | 0.047 g/kWh | 0.02–0.08 g/kWh |
+| blow-by, new engine | 11.7 L/min | 8–20 L/min |
+| wall heat loss | 18 % of fuel energy | 15–25 % |
 
 The trends behave too, which matters more than any single number:
 
-- **EGR trade-off.** Adding ~20 % EGR cuts NOx by ~75 %, raises soot, and
-  costs fuel. This is not scripted anywhere — it falls out of the dilution
+- **EGR trade-off.** Adding ~18 % EGR cuts NOx by ~70 % (7.1 → 2.2 g/kWh at
+  1400 rpm, 65 % load), raises soot (+5 %) and costs fuel (+2 % BSFC). This is not scripted anywhere — it falls out of the dilution
   lowering the flame temperature (more inert mass to heat per kg of fuel)
   while simultaneously displacing oxygen in the Zeldovich and Hiroyasu terms.
 - **Cold start.** Thick oil raises FMEP sharply and boundary-friction wear
@@ -255,16 +278,31 @@ The trends behave too, which matters more than any single number:
 ## Files
 
 ```
-dieselsim/
-  config.py       specification dataclasses + presets
-  thermo.py       gas properties, fuel, compressible flow
-  kinematics.py   slider-crank and cam profiles
-  lubrication.py  viscosity, films, bearings, oil ageing
-  wear.py         Archard wear and its feedback into everything else
-  friction.py     crank-resolved component friction
-  turbo.py        compressor, turbine, shaft dynamics
-  cycle.py        the crank-angle first-law solver
-  engine.py       governor, flywheel, maps, durability, transients
-  acoustics.py    physics-driven sound synthesis
-demo.py           generates every figure and wav file
+dieselsim/          the solver: numpy only, runs unmodified under Pyodide
+  config.py         specification dataclasses + presets
+  builder.py        a new engine from the numbers on the brochure
+  overrides.py      validated spec overrides
+  thermo.py         gas properties, fuel, compressible flow
+  kinematics.py     slider-crank and cam profiles
+  lubrication.py    viscosity, films, bearings, oil ageing
+  wear.py           Archard wear and its feedback into everything else
+  friction.py       crank-resolved component friction
+  turbo.py          compressor, turbine, shaft dynamics
+  cycle.py          the crank-angle first-law solver
+  engine.py         governor, flywheel, maps, durability, transients
+  acoustics.py      physics-driven sound synthesis (offline render)
+  grid.py           one cell of the real-time (rpm x load) grid
+  live.py           the real-time loop: vehicle, gearboxes, driveline, LiveEngine
+  livesound.py      the engine sound, streamed block by block
+  bridge.py         the Python side of the browser's SolverPort contract
+  batch.py          many independent operating points at once (native only)
+web/
+  app/              the Angular app: dyno, grid, drive (see web/app/README.md)
+  physics/          TypeScript ports (live loop, friction, synth), held to Python by fixtures
+  solver/           the SolverPort: Pyodide worker, grid cache
+tools/              fixtures, grid builder, audits, diagnostics
+tests/              the regression suite (test_physics.py)
+reviews/            findings and phase reviews
+play.py             drive an engine in the terminal, with sound
+demo.py             generates every figure and wav file
 ```

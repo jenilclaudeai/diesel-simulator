@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-09-28 (session 5, part 4: "continue with finding022")
+**Updated:** 2026-09-29 (session 5, part 7: play.py on the prebuilt grids; Phase 5 proposal; #66–#70)
 **Phase:** 1, 2 and 3 **exit-ready** (REVIEW-003, -004, -005). Phase 4 (audio)
 is **built and measured** (REVIEW-006).
 - **FINDING-022 is fixed** (the owner chose option A; #64).
@@ -35,6 +35,113 @@ is merged, every branch but `main` can be deleted; see "Branches" below.
 
 The repository is **public** now: Actions minutes are free, and the history
 was scanned for tokens before it went public (none found).
+
+---
+
+## Phase 5 proposal, for decision (#70): `reviews/PROPOSAL-phase5.md`
+
+Measured today:
+- `/drive` on an emulated phone fetches no Pyodide (7 requests, 0 solver).
+- Audio and the loop fit at 4× (#68).
+- **But the app cannot be driven on a phone:** there are no touch
+  controls, only keys. That is the largest Phase 5 item, and PLAN.md did
+  not list it.
+
+The roster (OPEN-F) costs, per engine: a vehicle (every engine but three
+falls through to a "3 t utility tractor"), a converged grid (3.5–15 min,
+~1 MB gzip), and a tuning pass. `verify()` on the two builder engines hits
+the peaks within 3.5% but not the plateau: crdi22 has 85% of its cap at
+1,873 rpm, v8hd 82% at 1,133.
+
+Options: A (3 engines), B (5), C (8). Recommended: B, delivered as A first.
+Also for decision: the touch layout, `/enjoy` against reworking `/drive`,
+and the phone the exit is judged on.
+
+---
+
+## Session 5, part 7 (2026-09-29) — `play.py` on the prebuilt grids (#69, stacked on #68)
+
+REVIEW-005 m-6 is closed. `python3 play.py` now loads the browser's prebuilt
+converged grid for a preset. It starts instantly, with live friction from
+the cells' traces, the warm/cold pair and the sound sources, so the terminal
+and `/drive` run the same model. The synth gets `LiveEngine.sound_inputs()`,
+and the sources are blended at the live coolant: cold oil sends 80 W of
+boundary power into the synth, against 97 W warm. A custom engine, rating
+caps, another grid size, `--converged-grid`, `--rebuild` or the new
+`--own-grid` keep the old solve-and-cache path. Both paths were run
+headless in a pseudo-terminal.
+
+A listening note: with the grids as they are, a cold start barely changes
+the *total* level (engine bay −0.1% at idle, cold oil). The rumble moves
+(−8.9% of that part), but the slap, which should grow, is pinned by
+FINDING-023.
+
+---
+
+## Session 5, part 6 (2026-09-29) — phone performance (#68, stacked on #67)
+
+The owner chose this while the PRs wait. Phase 5's exit criterion is a
+mid-range phone with audio.
+
+- **`npm run perf`** (new, reports only) times the synth, the live loop and
+  live friction under Chrome's CPU throttling: 4× is DevTools' "mid-tier
+  mobile", 6× its "low-end".
+  - Chrome's throttling does **not** reach workers (identical at 1×/4×/6×),
+    so the throttled main thread is the phone estimate.
+  - A real phone is still the final test.
+- **The synth was the risk.** At 6×, up to 12 of 3,445 audio blocks ran over
+  the 2.9 ms budget, one at 61 ms; that looked like garbage collection.
+  - It is now allocation-free: preallocated buffers, reusable 20 Hz blends.
+    The output is **bit-identical** (0 of 1,154,688 values differ over all
+    paths), and the fixtures pass.
+  - 4×: 19–21% → 8% of the audio thread. 6×: 29–32% → 12%; p99.9 → 1.8 ms;
+    over budget 0–1 of 3,445.
+- **Live friction is left as it is**: 11 ms of a 16.7 ms frame at 4×, a
+  whole frame at 6×, in the loop worker and off the audio path. Its cost is
+  a 60-step bisection per bearing per crank sample (~176,000 evaluations
+  per call). Cheaper needs an algorithm change in Python and TypeScript
+  together, so it is an owner decision, and matters for low-end phones only.
+- **Found and fixed on the way:**
+  - `e2e:sound` had passed its idle check on an empty capture (a vacuous
+    pass: `Math.min()` over nothing is +∞). It now requires samples, and it
+    fails as it should on silence.
+  - The e2e now uses Chrome's fake audio sink: this Mac's output stopped
+    pulling samples (the clock advanced 0.006 s in 1.5 s), which silenced
+    every worklet, old code too.
+  - The page now reports a `processorerror` from the audio thread, which
+    used to fail in silence.
+
+---
+
+## Session 5, part 5 (2026-09-29) — setup on a restricted network
+
+The owner's first `npm start` failed: `ENOTFOUND cdn.jsdelivr.net`, the
+build-time numpy download behind a corporate network. The script crashed
+with a raw stack trace, because its hint only covered an HTTP error.
+
+- **`prepare-assets.mjs` now explains** what failed (host, DNS or proxy
+  error, HTTP status, or a missing local file) and gives three fixes:
+  - `HTTPS_PROXY` plus `NODE_USE_ENV_PROXY=1`. Verified: without the flag,
+    Node ignores the proxy.
+  - `PYODIDE_WHEEL_DIR`.
+  - A `PYODIDE_CDN` mirror.
+
+  The checksum check is unchanged, and a corrupted wheel is refused.
+- **`npm start` (`--dev`) carries on without numpy**, outside CI, and tells
+  the app (`NUMPY_BUNDLED`): Drive works (drive e2e 7/7 on such a build),
+  and Dyno and Grid state the cause. Builds and CI stay strict.
+- **`npm run check:assets`** (in CI) runs the four failure paths with no
+  network needed; 5 of 5 mutants caught.
+- **#67 (docs, stacked on #66):**
+  - `web/app/README.md` replaced the Angular template, which recommended
+    the blank-page `ng build`;
+  - `README.md` gained Getting started, and its validation table was
+    re-measured (all 12 rows in band; best BSFC 213 → 200 g/kWh, lugging
+    NOx 20 → 15.6, and more);
+  - all five usage snippets run as written.
+
+  `PROJECT_CONTEXT.md` §1.5's "documented" column carries the same old
+  values; `tools/validate_table.py` prints both side by side.
 
 ---
 
@@ -643,7 +750,7 @@ Session 4's branch table is in git history.
    mid-range phone (REVIEW-005 m-5, REVIEW-006 m-1).
 4. Follow-ups:
    - a TCU engine-speed match on converter downshifts (REVIEW-005 m-3);
-   - `play.py` on `Adr011Grid` (m-6);
+   - ~~`play.py` on `Adr011Grid` (m-6)~~ done in #69;
    - row-sharing the p_max / T_exh check;
    - a timing-based p_max limiter;
    - "life used" labelling.

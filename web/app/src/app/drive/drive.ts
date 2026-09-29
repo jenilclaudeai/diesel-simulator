@@ -189,6 +189,10 @@ export class DrivePage implements OnDestroy {
         else if (m.type === 'capture') this.captureWaiter?.(m);
         else if (m.type === 'error') this.soundError.set(m.message);
       };
+      // a processor that throws in its constructor or process() stops for good,
+      // and says so only here: without this, the sound fails in silence
+      node.onprocessorerror = (e: Event) =>
+        this.soundError.set(`the sound processor stopped: ${(e as ErrorEvent).message || 'an error in the audio thread'}`);
       node.connect(ctx.destination);
       await ctx.resume();
       this.ctx = ctx;

@@ -215,3 +215,23 @@ later rebuild. It landed in #64, on top of this stack.
 
 M-1 (the listening sign-off) is unchanged, and FINDING-023 is still open.
 The text above is left as it was written.
+
+---
+
+## Addendum (2026-09-29) — m-1, phone cost, measured
+
+`npm run perf` (Chrome CPU throttling; 4× ≈ mid-tier phone, 6× ≈ low-end).
+The synth was made allocation-free, bit-identical over 1,154,688 values:
+
+| synth | 4× | 6× |
+|---|---|---|
+| share of the audio thread, before → after | 19–21% → 8% | 29–32% → 12% |
+| worst block, before → after | up to 6.6 ms → 3.2 ms | 61 ms → 4.7 ms |
+| over the 2.9 ms budget (of 3,445), before → after | 0–2 → 0–1 | up to 12 → 0–1 |
+
+Live friction (in the loop worker, off the audio path): 11 ms of a 16.7 ms
+frame at 4×, a whole frame at 6×. It is left for an owner decision: a
+cheaper bearing solve changes Python and TypeScript together.
+
+m-1 is **addressed for mid-tier phones by measurement**. A real phone is
+still the final check (Phase 5's exit).

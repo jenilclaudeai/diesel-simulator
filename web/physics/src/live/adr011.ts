@@ -113,8 +113,10 @@ export class Adr011Grid extends PerfGrid {
   }
 
   /** The sources at the live point (live.py blend_sources): bilinear in
-   *  (rpm, load), linear warm to cold, in blendPCyl's order. */
-  blendSources(rpm: number, load: number, T_coolant: number): Sources {
+   *  (rpm, load), linear warm to cold, in blendPCyl's order. With `into`,
+   *  written into its arrays (the audio thread reuses one set, 20 times a
+   *  second, rather than allocate 70 KB each time). */
+  blendSources(rpm: number, load: number, T_coolant: number, into?: Sources): Sources {
     if (!this.src || !this.src_cold) throw new Error("this grid carries no acoustic sources");
     const [i, j, fr, fl] = this.weights(rpm, load);
     const w0 = (1 - fr) * (1 - fl), w1 = (1 - fr) * fl, w2 = fr * (1 - fl), w3 = fr * fl;
@@ -123,13 +125,13 @@ export class Adr011Grid extends PerfGrid {
     const C = [this.src_cold[i]![j]!, this.src_cold[i]![j + 1]!, this.src_cold[i + 1]![j]!, this.src_cold[i + 1]![j + 1]!];
     const mix = (a: number, b: number, e: number, f: number, qa: number, qb: number, qe: number, qf: number) =>
       (1.0 - c) * (w0 * a + w1 * b + w2 * e + w3 * f) + c * (w0 * qa + w1 * qb + w2 * qe + w3 * qf);
-    const out = { _meta: {} } as Sources;
+    const out = into ?? ({ _meta: {} } as Sources);
     const cw = 1.0 - c;
     for (const k of SOURCE_KEYS) {
       // plain loops, mix()'s arithmetic inlined: the audio thread calls this at 20 Hz
       const a = W[0]![k], b = W[1]![k], e = W[2]![k], f = W[3]![k];
       const qa = C[0]![k], qb = C[1]![k], qe = C[2]![k], qf = C[3]![k];
-      const y = new Float64Array(a.length);
+      const y = into && out[k]?.length === a.length ? out[k] : new Float64Array(a.length);
       for (let n = 0; n < a.length; n++)
         y[n] = cw * (w0 * a[n]! + w1 * b[n]! + w2 * e[n]! + w3 * f[n]!) + c * (w0 * qa[n]! + w1 * qb[n]! + w2 * qe[n]! + w3 * qf[n]!);
       out[k] = y;

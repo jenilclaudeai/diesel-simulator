@@ -78,7 +78,11 @@ function harmonics(x, rate, f0, k = 4, at = f0) {
 const N_CYL = 4;                    // crdi15
 const browser = await puppeteer.launch({
   executablePath: process.env.CHROME_PATH,
+  // a fake audio sink that runs in real time: the test judges what the
+  // worklet renders, not whether this machine's speakers are awake (a stuck
+  // macOS output once left every worklet uncalled, and CI has no device)
   args: ["--no-sandbox", "--disable-dev-shm-usage", "--autoplay-policy=no-user-gesture-required",
+    ...(process.env.SOUND_REAL_DEVICE ? [] : ["--disable-audio-output"]),
     ...(process.env.CHROME_ARGS?.split(" ") ?? [])],
   headless: process.env.CHROME_HEADLESS === "shell" ? "shell" : true,
   protocolTimeout: 120_000,
@@ -127,8 +131,10 @@ const hIdle = idle.samples.length ? harmonics(idle.samples, idle.rate, fIdle) : 
 // harmonics 2-4 only: an I4 at ~780 rpm fires at ~26 Hz, below the exhaust
 // chain's 35 Hz high-pass and the tip mic's 28 Hz (acoustics.py), so the
 // fundamental is attenuated by the model itself and is reported, not asserted
+// a capture must have samples: an empty one made Math.min() over no values
+// +Infinity, and this check once passed on silence
 check("at idle, the firing harmonics stand out at the loop's rpm",
-  Math.abs(idle.r1 - idle.r0) < 0.03 * idle.r0 && Math.min(...hIdle.slice(1)) > 6,
+  idle.samples.length > 0 && Math.abs(idle.r1 - idle.r0) < 0.03 * idle.r0 && Math.min(...hIdle.slice(1)) > 6,
   `${idle.r0}-${idle.r1} rpm, firing ${fIdle.toFixed(1)} Hz: harmonics 1-4 at ${hIdle.map(d => d.toFixed(1)).join(", ")} dB over the floor`);
 
 // ---- revved in neutral ----
@@ -143,7 +149,7 @@ const fRev = N_CYL / 2 * (rev.r0 + rev.r1) / 2 / 60;
 const hRev = rev.samples.length ? harmonics(rev.samples, rev.rate, fRev, 3) : [-Infinity];
 // the idle pitch, where it no longer is: against the same (revved) floor
 const hWrong = rev.samples.length ? harmonics(rev.samples, rev.rate, fRev, 3, fIdle) : [Infinity];
-check("revved, the harmonics move with the rpm", rev.r0 > 1.5 * idle.r0 && Math.abs(rev.r1 - rev.r0) < 0.05 * rev.r0
+check("revved, the harmonics move with the rpm", rev.samples.length > 0 && rev.r0 > 1.5 * idle.r0 && Math.abs(rev.r1 - rev.r0) < 0.05 * rev.r0
   && Math.min(...hRev) > 6 && Math.max(...hWrong) < Math.min(...hRev),
   `${rev.r0}-${rev.r1} rpm, firing ${fRev.toFixed(1)} Hz: ${hRev.map(d => d.toFixed(1)).join(", ")} dB; ` +
   `at the idle pitch ${hWrong.map(d => d.toFixed(1)).join(", ")} dB`);

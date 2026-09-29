@@ -15,8 +15,15 @@
 //                           worklet's content-hashed file name
 //
 // numpy source: $PYODIDE_WHEEL_DIR if set (offline or CDN-blocked builds),
-// otherwise the Pyodide CDN. A runtime CDN dependency was rejected in
-// ADR-010; this is a build-time one, and the checksum makes it safe.
+// otherwise the Pyodide CDN ($PYODIDE_CDN overrides its base URL, for a
+// mirror). A runtime CDN dependency was rejected in ADR-010; this is a
+// build-time one, and the checksum makes it safe.
+//
+// If the wheel cannot be had, the script says why and what to do. With
+// --dev (npm start) and outside CI it then carries on without numpy: the
+// Drive page needs none, and the Dyno and Grid pages say it is missing
+// (NUMPY_BUNDLED below). Builds and CI stay strict, so a deployable build
+// can never ship without it.
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -39,20 +46,53 @@ const version = JSON.parse(fs.readFileSync(path.join(pyo, "package.json"))).vers
 const lock = JSON.parse(fs.readFileSync(path.join(pyo, "pyodide-lock.json")));
 const np = lock.packages.numpy;
 const wheelOut = path.join(outPy, np.file_name);
-if (!(fs.existsSync(wheelOut) && sha256(fs.readFileSync(wheelOut)) === np.sha256)) {
-  let bytes;
-  if (process.env.PYODIDE_WHEEL_DIR) {
-    bytes = fs.readFileSync(path.join(process.env.PYODIDE_WHEEL_DIR, np.file_name));
-  } else {
-    const url = `https://cdn.jsdelivr.net/pyodide/v${version}/full/${np.file_name}`;
-    const r = await fetch(url);
-    if (!r.ok) throw new Error(`numpy wheel: HTTP ${r.status} from ${url}. ` +
-      `If the CDN is blocked, set PYODIDE_WHEEL_DIR (see tools/pyodide/README.md).`);
-    bytes = Buffer.from(await r.arrayBuffer());
+const lenient = process.argv.includes("--dev") && !process.env.CI;
+let numpyOk = fs.existsSync(wheelOut) && sha256(fs.readFileSync(wheelOut)) === np.sha256;
+if (!numpyOk) {
+  const cdn = (process.env.PYODIDE_CDN ?? "https://cdn.jsdelivr.net/pyodide").replace(/\/+$/, "");
+  const url = `${cdn}/v${version}/full/${np.file_name}`;
+  let bytes, why;
+  try {
+    if (process.env.PYODIDE_WHEEL_DIR) {
+      bytes = fs.readFileSync(path.join(process.env.PYODIDE_WHEEL_DIR, np.file_name));
+    } else {
+      const r = await fetch(url);
+      if (!r.ok) why = `HTTP ${r.status} from ${url}`;
+      else bytes = Buffer.from(await r.arrayBuffer());
+    }
+  } catch (e) {
+    // a network failure (no route, DNS, proxy) lands here, not in r.ok
+    const cause = e.cause?.code ?? e.cause?.message ?? e.code ?? "";
+    why = process.env.PYODIDE_WHEEL_DIR
+      ? `cannot read ${path.join(process.env.PYODIDE_WHEEL_DIR, np.file_name)} (${e.code ?? e.message})`
+      : `cannot reach ${new URL(url).host}${cause ? ` (${cause})` : ""}`;
   }
-  const got = sha256(bytes);
-  if (got !== np.sha256) throw new Error(`numpy wheel checksum mismatch: expected ${np.sha256}, got ${got}`);
-  fs.writeFileSync(wheelOut, bytes);
+  if (bytes) {
+    const got = sha256(bytes);
+    if (got !== np.sha256) throw new Error(`numpy wheel checksum mismatch: expected ${np.sha256}, got ${got}`);
+    fs.writeFileSync(wheelOut, bytes);
+    numpyOk = true;
+  } else {
+    const help = [
+      `numpy wheel not available: ${why}.`,
+      ``,
+      `The in-browser solver (Dyno and Grid pages) needs this one file, fetched once:`,
+      `  ${np.file_name}`,
+      `  sha256 ${np.sha256}`,
+      `Fix it in one of three ways:`,
+      `  1. Behind a proxy? Node's fetch ignores it unless told (Node 22.21+):`,
+      `       export HTTPS_PROXY=http://<host>:<port>   # npm config get https-proxy shows npm's`,
+      `       export NODE_USE_ENV_PROXY=1`,
+      `  2. Download the file elsewhere (${url}),`,
+      `     put it in a folder and run with PYODIDE_WHEEL_DIR=/that/folder`,
+      `     (tools/pyodide/README.md shows how to take it from Pyodide's GitHub release).`,
+      `  3. A mirror of the Pyodide CDN: PYODIDE_CDN=https://<mirror>/pyodide`,
+      `The file is checked against the sha256 above whichever way it arrives.`,
+    ].join("\n");
+    if (!lenient) throw new Error(help);
+    console.warn(`\n*** WARNING: carrying on WITHOUT numpy (npm start only). ***\n` +
+      `The Drive page works; the Dyno and Grid pages will say numpy is missing.\n\n${help}\n`);
+  }
 }
 
 // 3. physics bundle. Hash algorithm must match dieselsim/bridge.py
@@ -111,8 +151,10 @@ fs.writeFileSync(gen,
   `export const PHYSICS_BUNDLE = "${bundle}";\n` +
   `export const PYODIDE_VERSION = "${version}";\n` +
   `export const GRID_VERSION = "${gridVersion}";\n` +
-  `export const SOUND_WORKLET = "${worklet}";\n`);
+  `export const SOUND_WORKLET = "${worklet}";\n` +
+  `/** false only in an npm start without the numpy wheel: Dyno and Grid cannot run */\n` +
+  `export const NUMPY_BUNDLED = ${numpyOk};\n`);
 
 const mb = d => (fs.readdirSync(d).reduce((n, f) => n + fs.statSync(path.join(d, f)).size, 0) / 1e6).toFixed(1);
-console.log(`assets: pyodide ${version} (${mb(outPy)} MB), numpy ${np.version} verified, ` +
+console.log(`assets: pyodide ${version} (${mb(outPy)} MB), numpy ${numpyOk ? `${np.version} verified` : "MISSING"}, ` +
             `physics ${physics.slice(0, 12)} (${names.length} files), worklet ${worklet} (${(workletCode.length / 1024).toFixed(0)} KiB)`);

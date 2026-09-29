@@ -74,8 +74,36 @@ from dieselsim.engine import DieselEngine
 from dieselsim.grid import GRID_CYCLES, solve_cell
 from dieselsim.livesound import LiveSynth
 from dieselsim.live import (  # noqa: F401  (the real-time loop, Phase 3)
-    Driveline, Gearbox, LaunchClutch, LiveEngine, PerfGrid, TorqueConverter,
+    Adr011Grid, Driveline, Gearbox, LaunchClutch, LiveEngine, PerfGrid, TorqueConverter,
     Vehicle, handle_key, pedal_return)
+
+# the browser's prebuilt converged grids (tools/build_live_grids.py): used
+# for the presets unless a flag needs a grid solved here
+PREBUILT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", "app", "public", "grids")
+
+
+def load_prebuilt(preset):
+    """The preset's prebuilt ADR-011 grid (warm and cold cells, pressure
+    traces, sound sources), or None if there is none. Says so if it was
+    built by an older solver, as the drive page does, but uses it."""
+    import json
+    path = os.path.join(PREBUILT, f"{preset}.json")
+    if not os.path.exists(path):
+        return None
+    with open(path) as fh:
+        gj = json.load(fh)
+    if "src_f32" not in gj:
+        return None                     # a grid from before Phase 4: no sound sources
+    from dieselsim.bridge import grid_hash
+    grid = Adr011Grid.from_json(gj)
+    # the display scales its torque and power bars to these (EngineGrid's definition)
+    grid.peak_torque = max(c["torque"] for row in gj["perf"] for c in row)
+    grid.peak_power = max(c["power"] for row in gj["perf"] for c in row)
+    print(f"prebuilt converged grid {os.path.relpath(path)}: live friction from the cells' traces, "
+          f"warm and cold (ADR-011)")
+    if gj.get("grid_hash") != grid_hash():
+        print("  note: built by an older solver than this tree; rebuild with tools/build_live_grids.py")
+    return grid
 
 FS = 44100
 BLOCK = 1024
@@ -266,26 +294,33 @@ class LiveSound:
     here had drifted from acoustics.py and ignored the physics its sources
     carry). sounddevice asks for BLOCK frames; the synth makes LS.BLOCK."""
 
-    def __init__(self, grid: EngineGrid, mic: str = "exterior_7m"):
+    def __init__(self, grid, mic: str = "exterior_7m", T_coolant: float = None):
         self.g = grid
         self.spec = grid.spec
         self.mic = mic
         self.syn = LiveSynth(grid.spec, mic, fs=FS)
-        self.syn.set_sources(grid.blend_sources(self.spec.idle_rpm, 0.0))
+        self.syn.set_sources(self._blend(self.spec.idle_rpm, 0.0, T_coolant))
         self.buf = np.zeros(0)
+
+    def _blend(self, rpm, load, T_coolant):
+        # an ADR-011 grid blends warm to cold at the live coolant, as the browser does
+        if isinstance(self.g, Adr011Grid):
+            return self.g.blend_sources(rpm, load, self.g.T_warm if T_coolant is None else T_coolant)
+        return self.g.blend_sources(rpm, load)
 
     def set_mic(self, name):
         if name in MICS:
             self.mic = name
             self.syn.set_mic(name)
 
-    def update_operating_point(self, rpm, load):
+    def update_operating_point(self, rpm, load, T_coolant=None):
         # the synth glides to the new set; one dict assignment, so the audio
         # thread never sees half of it
-        self.syn.set_sources(self.g.blend_sources(rpm, load))
+        self.syn.set_sources(self._blend(rpm, load, T_coolant))
 
-    def block(self, n, rpm, load_eff, boost, turbo_rpm, running=True):
-        live = dict(load=load_eff, boost=boost, turbo_rpm=turbo_rpm)
+    def block(self, n, rpm, live, running=True):
+        """`live`: LiveEngine.sound_inputs() -- boost, turbo speed, load, and
+        on an ADR-011 grid the live friction's (so a cold start sounds cold)."""
         parts = [self.buf]
         have = len(self.buf)
         while have < n:
@@ -668,6 +703,10 @@ def main():
     ap.add_argument("--no-audio", action="store_true")
     ap.add_argument("--audio-test", action="store_true")
     ap.add_argument("--rebuild", action="store_true")
+    ap.add_argument("--own-grid", action="store_true",
+                    help="solve and cache a grid here instead of using the browser's "
+                         "prebuilt one (implied by --rebuild, --converged-grid, "
+                         "--torque-limit, --power-limit and a non-default grid size)")
     ap.add_argument("--rpm-points", type=int, default=8)
     ap.add_argument("--converged-grid", action="store_true",
                     help="solve the grid at real time until every cell settles "
@@ -729,9 +768,15 @@ def main():
                           args.torque_limit, args.power_limit,
                           args.jobs or None)
 
-    grid = EngineGrid(args.preset, args.rpm_points, args.load_points,
-                      converged=args.converged_grid)
-    if os.path.exists(grid.path()) and not args.rebuild:
+    # the prebuilt grid unless something it cannot represent was asked for
+    own = (args.own_grid or args.rebuild or args.converged_grid or args.torque_limit > 0.0
+           or args.power_limit > 0.0 or args.rpm_points != 8 or args.load_points != 6)
+    prebuilt = None if own else load_prebuilt(args.preset)
+    grid = prebuilt or EngineGrid(args.preset, args.rpm_points, args.load_points,
+                                  converged=args.converged_grid)
+    if prebuilt is not None:
+        pass
+    elif os.path.exists(grid.path()) and not args.rebuild:
         print(f"loading cached grid {grid.path()}")
         try:
             grid.load()
@@ -767,7 +812,7 @@ def main():
             gb.gear = g
             if live.dl.w_turbine() * 60.0 / (2 * math.pi) < gb.up_rpm:
                 break
-    snd = LiveSound(grid, args.mic)
+    snd = LiveSound(grid, args.mic, live.T_coolant)
 
     stream = None
     dropouts = [0]
@@ -781,10 +826,9 @@ def main():
                     dropouts[0] += 1
                 try:
                     with live.lock:
-                        rpm, le = live.rpm, live.load_eff
-                        b, tr = live.boost, live.turbo_rpm
+                        rpm, inputs = live.rpm, live.sound_inputs()
                         run = not live.stalled
-                    y = snd.block(frames, rpm, le, b, tr, run)
+                    y = snd.block(frames, rpm, inputs, run)
                     if rec is not None:
                         rec.append(y.copy())
                     outdata[:, 0] = y
@@ -835,7 +879,7 @@ def main():
                 # refresh the interpolated source set 20 times a second;
                 # the audio thread crossfades to it
                 if t - last_src > 0.05:
-                    snd.update_operating_point(live.rpm, live.load_eff)
+                    snd.update_operating_point(live.rpm, live.load_eff, live.T_coolant)
                     last_src = t
                 if t - last_draw > 0.1:
                     draw(live, snd, t, stream is not None, dropouts[0])
