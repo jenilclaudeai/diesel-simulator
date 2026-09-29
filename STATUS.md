@@ -1,12 +1,12 @@
 # Status
 
 **Updated:** 2026-09-30 (session 5, part 8: everything is on `main`)
-**Phase:** 1, 2 and 3 **exit-ready** (REVIEW-003, -004, -005). Phase 4 (audio)
-is **built and measured** (REVIEW-006).
-- **FINDING-022 is fixed** (the owner chose option A; #64).
+**Phase:** 1, 2, 3 and **4 exit-ready** (REVIEW-003 to -006). The owner signed
+off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
+- FINDING-022 is fixed (option A, #64).
 - Still waiting on the owner:
-  - the listening sign-off (PLAN's third criterion);
-  - an option for FINDING-023, which will need its own ~70 min grid rebuild;
+  - an option for FINDING-023 (cold slap), a model improvement for later
+    that needs its own ~70 min grid rebuild;
   - the Phase 5 decisions in `reviews/PROPOSAL-phase5.md`: the roster, the
     touch layout, the route, the phone.
 

@@ -235,3 +235,23 @@ cheaper bearing solve changes Python and TypeScript together.
 
 m-1 is **addressed for mid-tier phones by measurement**. A real phone is
 still the final check (Phase 5's exit).
+
+---
+
+## Addendum (2026-09-30) — M-1 closed: the owner's listening sign-off
+
+The owner listened on `/drive` (the prebuilt grids, the TypeScript synth in
+the AudioWorklet, FINDING-022's option A in place) and signed off:
+
+> "Awesome on /drive... Really amazed."
+> "Yes it sounds right to me."
+
+This was asked about in terms of the four places the measurements cannot
+judge: cold against warm; the intake at idle against full load; `hd_i6`'s
+tick dominance (13×); and the turbo with boost. The sign-off covers the
+sound as it now stands, which is every audio change since FINDING-004
+(PLAN's third criterion).
+
+**Phase 4's three exit criteria are met.** FINDING-023 (cold slap pinned on
+the skirt film's clamp) remains open as a known defect: it is a model
+improvement for later, with its own grid rebuild, not an exit criterion.
