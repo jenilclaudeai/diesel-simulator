@@ -227,8 +227,19 @@ The trip computer's economy is a **steady-state** figure (FINDING-009: about
 29% leaner than mixed real-world driving at a 90 km/h cruise). Label it that
 way, and don't set it beside brochure consumption.
 
+**Touch controls** (added 2026-09-30, ADR-012; measured missing on
+2026-09-29):
+- throttle on the right, brake on the left, pressed harder by sliding up;
+- shift paddles in the top corners;
+- a clutch for the manual.
+
+A new **`/enjoy`** page; `/drive` stays for engineering. **Roster** (ADR-012,
+resolving OPEN-F): A first (1.5 L hatchback, 2.2 L SUV, 12.7 L I6 truck),
+then B (a 15 L V8 truck and an old NA single).
+
 **Exit criteria:** loads and drives on a mid-range phone in landscape with
-audio, without ever fetching Pyodide.
+audio, without ever fetching Pyodide. Judged on a real mid-range Android
+phone in Chrome (ADR-012).
 
 ---
 
