@@ -1,59 +1,77 @@
-# App
+# Diesel Sim — the browser app
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.1.8.
+Angular (standalone components, signals, OnPush; ADR-005). Three pages:
 
-## Development server
+- **Dyno pull** (`/`) and **Operating grid** (`/grid`): the Python solver
+  (`dieselsim/`, unmodified) runs in your browser under Pyodide, in a worker.
+- **Drive** (`/drive`): the real-time engine and drivetrain in TypeScript
+  (`web/physics`), on prebuilt converged grids (`public/grids/`), with engine
+  sound from an AudioWorklet. No Python in the browser.
 
-To start a local development server, run:
+## Requirements
 
-```bash
-ng serve
-```
+- **Node.js ≥ 22.22.3** (Angular 22). If npm 10 fails resolving Angular's peer
+  dependencies, use `npx -y npm@11 install`.
+- Google Chrome, only for the end-to-end checks.
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
-
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
-
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+## Run it
 
 ```bash
-ng generate --help
+npm ci
+npm start                 # http://localhost:4200
 ```
 
-## Building
+`npm start` first runs `scripts/prepare-assets.mjs`. It copies the Pyodide
+runtime from `node_modules`, bundles `dieselsim/*.py` and the sound worklet,
+and **downloads the numpy wheel for Pyodide once** (checked against its
+sha256).
 
-To build the project run:
+**If that download fails** (a proxy or an offline network), the script says
+why and carries on without numpy. The Drive page works; Dyno and Grid say
+numpy is missing. To fix it, use one of these:
 
 ```bash
-ng build
+# behind a proxy: Node's fetch ignores HTTPS_PROXY unless told to (Node 22.21+)
+export HTTPS_PROXY=http://<host>:<port>      # `npm config get https-proxy` shows npm's
+export NODE_USE_ENV_PROXY=1
+
+# or: download the file named in the warning elsewhere, then
+PYODIDE_WHEEL_DIR=/folder/with/the/wheel npm start
+
+# or: a mirror of the Pyodide CDN
+PYODIDE_CDN=https://<mirror>/pyodide npm start
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+## Build
 
 ```bash
-ng test
+npm run build:pages       # for GitHub Pages: base href /diesel-simulator/
 ```
 
-## Running end-to-end tests
+**Never deploy plain `npm run build` / `ng build`**: its base href is `/`, and
+on GitHub Pages the page comes up blank. Builds are strict: without the numpy
+wheel they stop rather than ship a broken solver.
 
-For end-to-end (e2e) testing, run:
+## Test
 
 ```bash
-ng e2e
+npm test -- --watch=false          # unit tests (vitest)
+npm run check:assets               # prepare-assets on a network without the Pyodide CDN
+npm run build:pages                # the e2e checks serve dist/, so build first
+CHROME_PATH="/path/to/chrome" npm run e2e         # dyno pull vs native Python
+CHROME_PATH="/path/to/chrome" npm run e2e:grid    # full 8 x 6 grid vs native (~9 min)
+CHROME_PATH="/path/to/chrome" npm run e2e:drive   # /drive: 60 s script frame-exact vs Python
+CHROME_PATH="/path/to/chrome" npm run e2e:sound   # /drive with sound: worklet output, pitch, mics
 ```
 
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+On macOS: `CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"`.
+The drive and dyno checks call `python3` for their native reference, so run
+them with the repository's Python environment active.
 
-## Additional Resources
+## Notes
 
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+- Over plain http on a LAN address (not `localhost`), the grid cache turns
+  itself off by design: WebCrypto needs a secure context.
+- The prebuilt grids are keyed on the solver's hash. After a solver change,
+  rebuild them with `python3 tools/build_live_grids.py` (~1 h); until then
+  the Drive page labels them as built by an older physics build.
