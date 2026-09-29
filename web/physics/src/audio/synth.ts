@@ -47,22 +47,28 @@ export interface SoundSpec {
 }
 
 type Arr = Float64Array;
-const zeros = (n: number): Arr => new Float64Array(n);
-const map = (a: Arr, f: (v: number, i: number) => number): Arr => {
-  const y = new Float64Array(a.length);
-  for (let i = 0; i < a.length; i++) y[i] = f(a[i]!, i);
-  return y;
-};
-/** numpy.cumsum: sequential. */
-const cumsum = (a: Arr): Arr => {
-  const y = new Float64Array(a.length);
+/** numpy.cumsum, sequential, into y. */
+const cumsumInto = (a: Arr, y: Arr): void => {
   let s = 0.0;
   for (let i = 0; i < a.length; i++) { s = i === 0 ? a[0]! : s + a[i]!; y[i] = s; }
-  return y;
 };
-const mean = (a: Arr): number => { let s = 0.0; for (const v of a) s += v; return s / a.length; };
+const mean = (a: Arr): number => { let s = 0.0; for (let i = 0; i < a.length; i++) s += a[i]!; return s / a.length; };
 /** Python's float %: the sign of the divisor. */
 const pymod = (x: number, m: number): number => { const r = x % m; return r !== 0 && (r < 0) !== (m < 0) ? r + m : r; };
+const PARTS: readonly Part[] = ["exhaust", "intake", "combustion", "mech", "turbo", "gear", "rumble"];
+
+/** Every buffer one block needs, allocated once: the audio thread must not
+ *  allocate (garbage collection there is an audible glitch). */
+class Scratch {
+  private readonly n: number;
+  constructor(n: number) { this.n = n; }
+  private readonly pool = new Map<string, Arr>();
+  get(name: string): Arr {
+    let a = this.pool.get(name);
+    if (!a) { a = new Float64Array(this.n); this.pool.set(name, a); }
+    return a;
+  }
+}
 
 export class LiveSynth {
   readonly fs: number;
@@ -97,6 +103,11 @@ export class LiveSynth {
   private out_lp!: Chain; private out_hp!: Chain;
   private rev_taps!: number[]; private readonly rev_gains = [0.42, 0.33, 0.26, 0.18];
   private rev!: Delay; private rev_lp!: Chain;
+  private readonly sc = new Scratch(BLOCK);
+  private readonly meta: Record<string, number> = {};
+  private readonly parts: Record<Part, Arr>;
+  private readonly taps: Arr[];
+  /** Each source's last block. Its arrays are reused by the next block. */
   last_parts: Record<Part, Arr> | null = null;
 
   constructor(readonly spec: SoundSpec, mic = "exterior_7m", fs = FS, noise_seed = 12345, dtheta = 0.5) {
@@ -113,6 +124,8 @@ export class LiveSynth {
     this.n_hiss = new NoiseCursor(table, 0);
     this.n_whoosh = new NoiseCursor(table, Math.floor(NOISE_N / 3));
     this.n_rumble = new NoiseCursor(table, Math.floor(2 * NOISE_N / 3));
+    this.parts = Object.fromEntries(PARTS.map(p => [p, new Float64Array(BLOCK)])) as Record<Part, Arr>;
+    this.taps = [0, 1, 2, 3].map(() => new Float64Array(BLOCK));
     this.build(mic);
   }
 
@@ -153,58 +166,68 @@ export class LiveSynth {
     this.rev_lp = butter("low", 2500.0, 1);
   }
 
+  /** The operating point's sources; copied into buffers kept from the first
+   *  call, so the 20 Hz updates allocate nothing. */
   setSources(src: Sources): void {
-    const t = { _meta: { ...src._meta } } as Sources;
-    for (const k of SOURCE_KEYS) t[k] = Float64Array.from(src[k]);
-    this.target = t;
-    if (this.src === null) {
-      const c = { _meta: { ...t._meta } } as Sources;
-      for (const k of SOURCE_KEYS) c[k] = Float64Array.from(t[k]);
-      this.src = c;
-    }
+    const copy = (into: Sources | null): Sources => {
+      const t = into ?? ({ _meta: {} } as Sources);
+      for (const k of SOURCE_KEYS) {
+        if (into && t[k].length === src[k].length) t[k].set(src[k]);
+        else t[k] = Float64Array.from(src[k]);
+      }
+      for (const k in src._meta) t._meta[k] = src._meta[k]!;
+      return t;
+    };
+    this.target = copy(this.target);
+    if (this.src === null) this.src = copy(null);
   }
 
   private glide(): void {
     const a = Math.min(1.0, BLOCK / (SRC_TAU * this.fs));
     const s = this.src!, t = this.target!;
-    // in place: the audio thread must not allocate 70 KB a block
     for (const k of SOURCE_KEYS) {
       const x = s[k], y = t[k];
       for (let i = 0; i < x.length; i++) x[i] = x[i]! + a * (y[i]! - x[i]!);
     }
-    for (const [k, v] of Object.entries(t._meta)) s._meta[k] = s._meta[k]! + a * (v - s._meta[k]!);
+    for (const k in t._meta) s._meta[k] = s._meta[k]! + a * (t._meta[k]! - s._meta[k]!);
   }
 
-  private sample(name: SourceKey, theta: Arr): Arr {
-    const s = this.src![name], n = this.n_src;
-    return map(theta, th => {
-      const u = th / this.dtheta;
+  private sampleInto(name: SourceKey, theta: Arr, out: Arr): void {
+    const s = this.src![name], n = this.n_src, dth = this.dtheta;
+    for (let k = 0; k < theta.length; k++) {
+      const u = theta[k]! / dth;
       let i = Math.floor(u);
       const f = u - i;
       i = ((i % n) + n) % n;
       const j = (i + 1) % n;
-      return s[i]! + (s[j]! - s[i]!) * f;
-    });
+      out[k] = s[i]! + (s[j]! - s[i]!) * f;
+    }
   }
 
   /** The next BLOCK samples. `live`: boost, turbo_rpm, load, Pb, skirt_clr,
-   *  v_seating from the real-time loop (each optional). */
+   *  v_seating from the real-time loop (each optional). The returned array
+   *  is reused by the next call: copy it out first. */
   block(rpm: number, live: Record<string, number> | null = null, running = true): Arr {
-    const n = BLOCK, fs = this.fs, s = this.spec;
+    const n = BLOCK, fs = this.fs, s = this.spec, sc = this.sc;
     this.glide();
-    const meta: Record<string, number> = { ...this.src!._meta, ...(live ?? {}) };
+    const meta = this.meta;
+    for (const k in this.src!._meta) meta[k] = this.src!._meta[k]!;
+    if (live) for (const k in live) meta[k] = live[k]!;
     const r0 = this.rpm ?? rpm;
     this.rpm = rpm;
-    const rpm_s = new Float64Array(n);
+    const rpm_s = sc.get("rpm_s"), inc = sc.get("inc"), S = sc.get("S"), theta_u = sc.get("theta_u"), theta = sc.get("theta");
     for (let i = 0; i < n; i++) rpm_s[i] = Math.max(r0 + (rpm - r0) * (i + 1) / n, 50.0);
-    const S = cumsum(map(rpm_s, r => 6.0 * r / fs));
-    const theta_u = map(S, v => this.theta + v);
+    for (let i = 0; i < n; i++) inc[i] = 6.0 * rpm_s[i]! / fs;
+    cumsumInto(inc, S);
+    for (let i = 0; i < n; i++) theta_u[i] = this.theta + S[i]!;
     this.theta = pymod(theta_u[n - 1]!, 720.0 * 3600.0);
-    const theta = map(theta_u, v => pymod(v, 720.0));
-    if (!running) return zeros(n);
+    for (let i = 0; i < n; i++) theta[i] = pymod(theta_u[i]!, 720.0);
+    const out = sc.get("out");
+    if (!running) { out.fill(0); return out; }
     const rpmRef = Math.max(meta["rpm"]!, 1.0);
-    const spd = map(rpm_s, r => r / rpmRef);
-    const N = this.norm;
+    const spd = sc.get("spd");
+    for (let i = 0; i < n; i++) spd[i] = rpm_s[i]! / rpmRef;
+    const N = this.norm, P = this.parts;
 
     // ---- exhaust ----
     const c_exh = Math.sqrt(1.4 * 287.0 * Math.max(meta["T_exh"]!, 400.0));
@@ -214,131 +237,169 @@ export class LiveSynth {
       this.exh_peaks = [1, 3].map(kk => new Biquad(peakBa(Math.min(kk * f_hx, 0.4 * fs), 2.2, -14.0)));
       this.exh_q0 = null;
     }
-    const q = map(this.sample("exh_flow", theta), (v, i) => v * spd[i]!);
+    const q = sc.get("q"), dq = sc.get("dq"), y = sc.get("y");
+    this.sampleInto("exh_flow", theta, q);
+    for (let i = 0; i < n; i++) q[i] = q[i]! * spd[i]!;
     let prev = this.exh_q0 ?? q[0]!;
-    const dq = map(q, (v, i) => (v - (i === 0 ? prev : q[i - 1]!)) * fs);
+    for (let i = 0; i < n; i++) dq[i] = (q[i]! - (i === 0 ? prev : q[i - 1]!)) * fs;
     this.exh_q0 = q[n - 1]!;
-    let y = this.exh_comb.process(dq);
-    y = this.exh_lp.process(y);
-    for (const b of this.exh_peaks) y = b.process(y);
-    y = this.exh_hp.process(y);
-    if (this.exh_turb) y = this.exh_turb.process(y);
+    this.exh_comb.processInto(dq, y);
+    this.exh_lp.processInto(y, y);
+    for (const b of this.exh_peaks) b.processInto(y, y);
+    this.exh_hp.processInto(y, y);
+    if (this.exh_turb) this.exh_turb.processInto(y, y);
     const kExh = (meta["mdot_air"]! / this.ref_mdot) ** 1.5;
-    const exhaust = map(N["exh"]!.apply(y), v => v * kExh);
+    const exhaust = P.exhaust;
+    N["exh"]!.applyInto(y, exhaust);
+    for (let i = 0; i < n; i++) exhaust[i] = exhaust[i]! * kExh;
 
     // ---- intake ----
-    const qi = map(this.sample("int_flow", theta), (v, i) => v * spd[i]!);
+    const qi = sc.get("qi"), dqi = sc.get("dqi"), yc = sc.get("yc"), yh = sc.get("yh"), yi = sc.get("yi");
+    this.sampleInto("int_flow", theta, qi);
+    for (let i = 0; i < n; i++) qi[i] = qi[i]! * spd[i]!;
     prev = this.int_q0 ?? qi[0]!;
-    const dqi = map(qi, (v, i) => (v - (i === 0 ? prev : qi[i - 1]!)) * fs);
+    for (let i = 0; i < n; i++) dqi[i] = (qi[i]! - (i === 0 ? prev : qi[i - 1]!)) * fs;
     this.int_q0 = qi[n - 1]!;
-    const yc = this.int_comb.process(dqi);
-    const yh = this.int_helm.process(yc);
-    const yi = map(yh, (v, i) => v + 0.5 * yc[i]!);
-    let hiss = this.hiss_bp.process(this.n_hiss.take(n));
+    this.int_comb.processInto(dqi, yc);
+    this.int_helm.processInto(yc, yh);
+    for (let i = 0; i < n; i++) yi[i] = yh[i]! + 0.5 * yc[i]!;
+    const hiss = sc.get("hiss");
+    this.n_hiss.takeInto(hiss);
+    this.hiss_bp.processInto(hiss, hiss);
     const mdot = meta["mdot_air"]!;
-    hiss = map(hiss, (v, i) => v * (mdot * spd[i]! ** 1.5) ** 1.5 * 4.0);
-    const ni = N["int"]!.apply(yi), nh = N["hiss"]!.apply(hiss);
+    for (let i = 0; i < n; i++) hiss[i] = hiss[i]! * (mdot * spd[i]! ** 1.5) ** 1.5 * 4.0;
+    const ni = sc.get("ni"), nh = sc.get("nh");
+    N["int"]!.applyInto(yi, ni);
+    N["hiss"]!.applyInto(hiss, nh);
     const kInt = (mdot / this.ref_mdot) ** 1.5;          // FINDING-022
-    const intake = map(ni, (v, i) => (v + 0.45 * nh[i]!) * kInt);
+    const intake = P.intake;
+    for (let i = 0; i < n; i++) intake[i] = (ni[i]! + 0.45 * nh[i]!) * kInt;
 
     // ---- combustion ----
-    const dp = this.sample("dpdth", theta);
-    const exc = N["exc"]!.apply(map(dp, (v, i) => v * (rpm_s[i]! / 60.0 * 360.0)));
+    const dp = sc.get("dp"), exc = sc.get("exc"), knock = sc.get("knock"), kr = sc.get("kr");
+    this.sampleInto("dpdth", theta, dp);
+    for (let i = 0; i < n; i++) exc[i] = dp[i]! * (rpm_s[i]! / 60.0 * 360.0);
+    N["exc"]!.applyInto(exc, exc);
     const sharp = Math.min(3.0, meta["dpdt_max"]! / 5.0e9);
-    let knock = zeros(n);
+    knock.fill(0);
     for (const [bq, f0, gn] of this.knock) {
-      const r = bq.process(exc), k = gn * (1.0 + sharp * (f0 / 2000.0) ** 1.1);
-      knock = map(knock, (v, i) => v + r[i]! * k);
+      bq.processInto(exc, kr);
+      const k = gn * (1.0 + sharp * (f0 / 2000.0) ** 1.1);
+      for (let i = 0; i < n; i++) knock[i] = knock[i]! + kr[i]! * k;
     }
     const kComb = meta["dpdt_max"]! / this.ref_dpdt;
-    const combustion = map(N["knock"]!.apply(knock), v => v * kComb);
+    const combustion = P.combustion;
+    N["knock"]!.applyInto(knock, combustion);
+    for (let i = 0; i < n; i++) combustion[i] = combustion[i]! * kComb;
 
     // ---- mechanical impulses ----
-    const pair = ([p, q2]: [Biquad, Biquad], x: Arr, g: number): Arr => {
-      const a = p.process(x), b = q2.process(x);
-      return map(a, (v, i) => v + g * b[i]!);
+    const pa = sc.get("pa"), pb = sc.get("pb");
+    const pairInto = ([p, q2]: [Biquad, Biquad], x: Arr, g: number, into: Arr): void => {
+      p.processInto(x, pa);
+      q2.processInto(x, pb);
+      for (let i = 0; i < n; i++) into[i] = pa[i]! + g * pb[i]!;
     };
-    const tk = pair(this.tick, this.sample("valve", theta), 0.6);
-    const ij = pair(this.injr, this.sample("inj", theta), 0.5);
-    const sl = pair(this.slapr, this.sample("slap", theta), 0.7);
+    const src = sc.get("src"), tk = sc.get("tk"), ij = sc.get("ij"), sl = sc.get("sl");
+    this.sampleInto("valve", theta, src); pairInto(this.tick, src, 0.6, tk);
+    this.sampleInto("inj", theta, src); pairInto(this.injr, src, 0.5, ij);
+    this.sampleInto("slap", theta, src); pairInto(this.slapr, src, 0.7, sl);
     const a_tick = (Math.max(meta["v_seating"]!, 1e-6) / this.ref_vseat) ** 2;
     const a_slap = (Math.max(meta["skirt_clr"]!, 1e-9) / 30e-6) ** 0.6;
-    const nt = N["tick"]!.apply(tk), nj = N["inj"]!.apply(ij), ns = N["slap"]!.apply(sl);
+    N["tick"]!.applyInto(tk, tk); N["inj"]!.applyInto(ij, ij); N["slap"]!.applyInto(sl, sl);
     const ks = 0.9 * a_slap;
-    const mech = map(nt, (v, i) => a_tick * v + 0.75 * nj[i]! + ks * ns[i]!);
+    const mech = P.mech;
+    for (let i = 0; i < n; i++) mech[i] = a_tick * tk[i]! + 0.75 * ij[i]! + ks * sl[i]!;
 
     // ---- turbocharger ----
-    let turbo: Arr;
+    const turbo = P.turbo;
     if (s.turbo.enabled && meta["turbo_rpm"]! > 1000.0) {
       const tr = meta["turbo_rpm"]!;
-      const f_shaft = map(spd, v => tr * (0.35 + 0.65 * v) / 60.0);
+      const f_shaft = sc.get("f_shaft"), cs = sc.get("cs"), ph = sc.get("ph"), whine = sc.get("whine");
+      for (let i = 0; i < n; i++) f_shaft[i] = tr * (0.35 + 0.65 * spd[i]!) / 60.0;
       const twoPi = 2 * Math.PI;
-      const cs = cumsum(map(f_shaft, v => v / fs));
-      const ph = map(cs, v => this.ph_t + twoPi * v);
+      for (let i = 0; i < n; i++) inc[i] = f_shaft[i]! / fs;
+      cumsumInto(inc, cs);
+      for (let i = 0; i < n; i++) ph[i] = this.ph_t + twoPi * cs[i]!;
       this.ph_t = pymod(ph[n - 1]!, twoPi);
-      let whine = zeros(n);
+      whine.fill(0);
       const mf = mean(f_shaft);
       for (const [kk, amp] of [[1, 1.0], [2, 0.45], [3, 0.22]] as const) {
-        if (kk * mf < 0.45 * fs) whine = map(whine, (v, i) => v + amp * Math.sin(kk * ph[i]! + 0.7 * kk));
+        if (kk * mf < 0.45 * fs) for (let i = 0; i < n; i++) whine[i] = whine[i]! + amp * Math.sin(kk * ph[i]! + 0.7 * kk);
       }
       const blades = s.turbo.comp_blades;
-      const f_bp = map(f_shaft, v => v * blades);
-      const cb = cumsum(map(f_bp, v => v / fs));
-      const ph_bp = map(cb, v => this.ph_bp + twoPi * v);
-      this.ph_bp = pymod(ph_bp[n - 1]!, twoPi);
-      if (mean(f_bp) < 0.42 * fs) whine = map(whine, (v, i) => v + 0.30 * Math.sin(ph_bp[i]!));
-      const wh = N["whoosh"]!.apply(this.whoosh_bp.process(this.n_whoosh.take(n)));
+      const f_bp = sc.get("f_bp"), phb = sc.get("phb");
+      for (let i = 0; i < n; i++) f_bp[i] = f_shaft[i]! * blades;
+      for (let i = 0; i < n; i++) inc[i] = f_bp[i]! / fs;
+      cumsumInto(inc, cs);
+      for (let i = 0; i < n; i++) phb[i] = this.ph_bp + twoPi * cs[i]!;
+      this.ph_bp = pymod(phb[n - 1]!, twoPi);
+      if (mean(f_bp) < 0.42 * fs) for (let i = 0; i < n; i++) whine[i] = whine[i]! + 0.30 * Math.sin(phb[i]!);
+      const wh = sc.get("wh");
+      this.n_whoosh.takeInto(wh);
+      this.whoosh_bp.processInto(wh, wh);
+      N["whoosh"]!.applyInto(wh, wh);
       const boost = meta["boost"]!;
-      const yt = map(whine, (v, i) => 0.55 * v + 0.45 * wh[i]!);
+      for (let i = 0; i < n; i++) whine[i] = 0.55 * whine[i]! + 0.45 * wh[i]!;
       const kT = (tr / this.ref_turbo) ** 2, rb = this.ref_boost;
       // FINDING-022: the boost term after the normalisation
-      turbo = map(N["turbo"]!.apply(yt), (v, i) => v * kT * Math.max((boost - 1.0) * spd[i]! ** 2, 0.0) / rb);
+      N["turbo"]!.applyInto(whine, turbo);
+      for (let i = 0; i < n; i++) turbo[i] = turbo[i]! * kT * Math.max((boost - 1.0) * spd[i]! ** 2, 0.0) / rb;
     } else {
-      turbo = zeros(n);
+      turbo.fill(0);
     }
 
     // ---- gear train (locked to the crank) ----
-    let gear = zeros(n);
-    const f_crank = map(rpm_s, r => r / 60.0);
+    const gear = sc.get("gear"), f_crank = sc.get("f_crank");
+    gear.fill(0);
+    for (let i = 0; i < n; i++) f_crank[i] = rpm_s[i]! / 60.0;
     for (const [teeth, ratio, amp] of [[s.crank_gear_teeth, 1.0, 1.0], [s.cam_gear_teeth, 0.5, 0.7],
                                        [s.injpump_gear_teeth, 0.5, 0.5]] as const) {
-      if (mean(map(f_crank, v => teeth * v * ratio)) < 0.45 * fs) {
+      for (let i = 0; i < n; i++) inc[i] = teeth * f_crank[i]! * ratio;
+      if (mean(inc) < 0.45 * fs) {
         const c = 2 * Math.PI * teeth * ratio;
-        gear = map(gear, (v, i) => {
+        for (let i = 0; i < n; i++) {
           const ph_g = c * theta_u[i]! / 360.0;
-          return v + amp * (Math.sin(ph_g) + 0.35 * Math.sin(2 * ph_g + 1.1));
-        });
+          gear[i] = gear[i]! + amp * (Math.sin(ph_g) + 0.35 * Math.sin(2 * ph_g + 1.1));
+        }
       }
     }
     const kG = 0.3 + 0.7 * meta["load"]!;
-    const gearOut = map(N["gear"]!.apply(gear), v => v * kG);
+    const gearOut = P.gear;
+    N["gear"]!.applyInto(gear, gearOut);
+    for (let i = 0; i < n; i++) gearOut[i] = gearOut[i]! * kG;
 
     // ---- rumble: boundary-friction noise, firing-modulated ----
-    const rum = this.rumble_bp.process(this.n_rumble.take(n));
+    const rum = sc.get("rum");
+    this.n_rumble.takeInto(rum);
+    this.rumble_bp.processInto(rum, rum);
     const kR = (Math.max(meta["Pb"]!, 1e-9) / this.ref_Pb) ** 0.5;
-    const rumble = map(N["rumble"]!.apply(map(rum, (v, i) => v * (0.6 + 0.4 * Math.abs(dp[i]!)))), v => v * kR);
+    for (let i = 0; i < n; i++) rum[i] = rum[i]! * (0.6 + 0.4 * Math.abs(dp[i]!));
+    const rumble = P.rumble;
+    N["rumble"]!.applyInto(rum, rumble);
+    for (let i = 0; i < n; i++) rumble[i] = rumble[i]! * kR;
 
     // ---- the microphone ----
-    const out: Record<Part, Arr> = { exhaust, intake, combustion, mech, turbo, gear: gearOut, rumble };
-    const m = this.mic;
-    let mix = zeros(n);
-    for (const [key, gn] of Object.entries(m.gains) as [Part, number][]) {
-      const p = out[key];
-      mix = map(mix, (v, i) => v + gn * p[i]!);
+    const m = this.mic, mix = sc.get("mix");
+    mix.fill(0);
+    for (const key in m.gains) {
+      const gn = m.gains[key as Part], p = P[key as Part];
+      for (let i = 0; i < n; i++) mix[i] = mix[i]! + gn * p[i]!;
     }
-    mix = this.out_lp.process(mix);
-    mix = this.out_hp.process(mix);
+    this.out_lp.processInto(mix, mix);
+    this.out_hp.processInto(mix, mix);
     const dist = Math.max(1.0, m.distance_m) ** 0.55;
-    mix = map(mix, v => v / dist);
-    const taps = this.rev.taps(mix, this.rev_taps);
+    for (let i = 0; i < n; i++) mix[i] = mix[i]! / dist;
+    this.rev.tapsInto(mix, this.rev_taps, this.taps);
     if (m.reverb > 0.0) {
-      let r = zeros(n);
-      taps.forEach((t, k) => { const g = this.rev_gains[k]!; r = map(r, (v, i) => v + g * t[i]!); });
-      const rl = this.rev_lp.process(r);
-      mix = map(mix, (v, i) => v + m.reverb * rl[i]!);
+      const r = sc.get("r");
+      r.fill(0);
+      this.taps.forEach((t, k) => { const g = this.rev_gains[k]!; for (let i = 0; i < n; i++) r[i] = r[i]! + g * t[i]!; });
+      this.rev_lp.processInto(r, r);
+      for (let i = 0; i < n; i++) mix[i] = mix[i]! + m.reverb * r[i]!;
     }
-    this.last_parts = out;
+    this.last_parts = P;
     const th11 = Math.tanh(1.1);
-    return map(mix, v => Math.tanh(1.1 * (v * SPL_CAL)) / th11);
+    for (let i = 0; i < n; i++) out[i] = Math.tanh(1.1 * (mix[i]! * SPL_CAL)) / th11;
+    return out;
   }
 }

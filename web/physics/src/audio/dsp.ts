@@ -122,9 +122,14 @@ export class Biquad {
     this.a1 = a[1]!; this.a2 = a[2]!;
   }
   process(x: Float64Array): Float64Array {
+    const y = new Float64Array(x.length);
+    this.processInto(x, y);
+    return y;
+  }
+  /** Into a caller's buffer (the audio thread must not allocate); y may be x. */
+  processInto(x: Float64Array, y: Float64Array): void {
     const { b0, b1, b2, a1, a2 } = this;
     let z1 = this.z1, z2 = this.z2;
-    const y = new Float64Array(x.length);
     for (let n = 0; n < x.length; n++) {
       const xn = x[n]!;
       const yn = b0 * xn + z1;
@@ -133,7 +138,6 @@ export class Biquad {
       y[n] = yn;
     }
     this.z1 = z1; this.z2 = z2;
-    return y;
   }
 }
 
@@ -144,6 +148,11 @@ export class Chain {
   process(x: Float64Array): Float64Array {
     for (const s of this.st) x = s.process(x);
     return x;
+  }
+  /** Into a caller's buffer; y may be x. */
+  processInto(x: Float64Array, y: Float64Array): void {
+    let src = x;
+    for (const s of this.st) { s.processInto(src, y); src = y; }
   }
 }
 
@@ -172,9 +181,14 @@ export class Comb {
     this.buf = new Float64Array(this.D);
   }
   process(x: Float64Array): Float64Array {
+    const y = new Float64Array(x.length);
+    this.processInto(x, y);
+    return y;
+  }
+  /** Into a caller's buffer; y may be x. */
+  processInto(x: Float64Array, y: Float64Array): void {
     const { buf, D, refl, a_lp: a } = this;
     let idx = this.idx, lp = this.lp;
-    const y = new Float64Array(x.length);
     for (let n = 0; n < x.length; n++) {
       const d = buf[idx]!;
       lp = a * lp + (1.0 - a) * d;
@@ -185,7 +199,6 @@ export class Comb {
       y[n] = yn;
     }
     this.idx = idx; this.lp = lp;
-    return y;
   }
 }
 
@@ -204,28 +217,44 @@ export class Norm {
   private ms = -1.0;
   constructor(n = BLOCK, fs = FS, tau = NORM_TAU) { this.beta = Math.min(1.0, n / (tau * fs)); }
   apply(y: Float64Array): Float64Array {
+    const out = new Float64Array(y.length);
+    this.applyInto(y, out);
+    return out;
+  }
+  /** Into a caller's buffer; out may be y. */
+  applyInto(y: Float64Array, out: Float64Array): void {
     let s = 0.0;
     for (let n = 0; n < y.length; n++) s += y[n]! * y[n]!;
     const m = s / y.length;
     this.ms = this.ms < 0.0 ? m : this.ms + this.beta * (m - this.ms);
     const k = Math.sqrt(this.ms) + 1e-12;
-    const out = new Float64Array(y.length);
     for (let n = 0; n < y.length; n++) out[n] = y[n]! / k;
-    return out;
   }
 }
 
-/** A tapped delay line for the cabin/exterior reverb. */
+/** A tapped delay line for the cabin/exterior reverb: the last L samples,
+ *  then the new block, in one buffer that shifts in place. */
 export class Delay {
-  private buf: Float64Array;
-  constructor(n: number) { this.buf = new Float64Array(n); }
+  private readonly L: number;
+  private z: Float64Array;
+  constructor(n: number) { this.L = n; this.z = new Float64Array(n); }
   taps(x: Float64Array, delays: readonly number[]): Float64Array[] {
-    const L = this.buf.length, n = x.length;
-    const z = new Float64Array(L + n);
-    z.set(this.buf, 0); z.set(x, L);
-    const out = delays.map(d => z.slice(L - d, L - d + n));
-    this.buf = z.slice(z.length - L);
-    return out;
+    const outs = delays.map(() => new Float64Array(x.length));
+    this.tapsInto(x, delays, outs);
+    return outs;
+  }
+  /** Each delay's block into outs[k] (copies: the values are exactly the samples). */
+  tapsInto(x: Float64Array, delays: readonly number[], outs: Float64Array[]): void {
+    const L = this.L, n = x.length;
+    if (this.z.length !== L + n) {                 // first call, or a new block size
+      const z = new Float64Array(L + n);
+      z.set(this.z.subarray(0, L));
+      this.z = z;
+    }
+    const z = this.z;
+    z.set(x, L);
+    delays.forEach((d, k) => outs[k]!.set(z.subarray(L - d, L - d + n)));
+    z.copyWithin(0, n, L + n);                     // keep the last L
   }
 }
 
@@ -254,9 +283,13 @@ export class NoiseCursor {
   private i: number;
   constructor(private readonly t: Float64Array, start: number) { this.i = ((start % t.length) + t.length) % t.length; }
   take(n: number): Float64Array {
-    const L = this.t.length, out = new Float64Array(n);
+    const out = new Float64Array(n);
+    this.takeInto(out);
+    return out;
+  }
+  takeInto(out: Float64Array): void {
+    const L = this.t.length, n = out.length;
     for (let k = 0; k < n; k++) out[k] = this.t[(this.i + k) % L]!;
     this.i = (this.i + n) % L;
-    return out;
   }
 }

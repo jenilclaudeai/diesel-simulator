@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-09-29 (session 5, part 5: setup behind a restricted network; #66, #67)
+**Updated:** 2026-09-29 (session 5, part 6: phone performance; #66, #67, #68)
 **Phase:** 1, 2 and 3 **exit-ready** (REVIEW-003, -004, -005). Phase 4 (audio)
 is **built and measured** (REVIEW-006).
 - **FINDING-022 is fixed** (the owner chose option A; #64).
@@ -35,6 +35,41 @@ is merged, every branch but `main` can be deleted; see "Branches" below.
 
 The repository is **public** now: Actions minutes are free, and the history
 was scanned for tokens before it went public (none found).
+
+---
+
+## Session 5, part 6 (2026-09-29) — phone performance (#68, stacked on #67)
+
+The owner chose this while the PRs wait. Phase 5's exit criterion is a
+mid-range phone with audio.
+
+- **`npm run perf`** (new, reports only) times the synth, the live loop and
+  live friction under Chrome's CPU throttling: 4× is DevTools' "mid-tier
+  mobile", 6× its "low-end".
+  - Chrome's throttling does **not** reach workers (identical at 1×/4×/6×),
+    so the throttled main thread is the phone estimate.
+  - A real phone is still the final test.
+- **The synth was the risk.** At 6×, up to 12 of 3,445 audio blocks ran over
+  the 2.9 ms budget, one at 61 ms; that looked like garbage collection.
+  - It is now allocation-free: preallocated buffers, reusable 20 Hz blends.
+    The output is **bit-identical** (0 of 1,154,688 values differ over all
+    paths), and the fixtures pass.
+  - 4×: 19–21% → 8% of the audio thread. 6×: 29–32% → 12%; p99.9 → 1.8 ms;
+    over budget 0–1 of 3,445.
+- **Live friction is left as it is**: 11 ms of a 16.7 ms frame at 4×, a
+  whole frame at 6×, in the loop worker and off the audio path. Its cost is
+  a 60-step bisection per bearing per crank sample (~176,000 evaluations
+  per call). Cheaper needs an algorithm change in Python and TypeScript
+  together, so it is an owner decision, and matters for low-end phones only.
+- **Found and fixed on the way:**
+  - `e2e:sound` had passed its idle check on an empty capture (a vacuous
+    pass: `Math.min()` over nothing is +∞). It now requires samples, and it
+    fails as it should on silence.
+  - The e2e now uses Chrome's fake audio sink: this Mac's output stopped
+    pulling samples (the clock advanced 0.006 s in 1.5 s), which silenced
+    every worklet, old code too.
+  - The page now reports a `processorerror` from the audio thread, which
+    used to fail in silence.
 
 ---
 
