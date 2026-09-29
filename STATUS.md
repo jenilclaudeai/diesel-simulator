@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-09-29 (session 5, part 5: setup behind a restricted network; #66)
+**Updated:** 2026-09-29 (session 5, part 5: setup behind a restricted network; #66, #67)
 **Phase:** 1, 2 and 3 **exit-ready** (REVIEW-003, -004, -005). Phase 4 (audio)
 is **built and measured** (REVIEW-006).
 - **FINDING-022 is fixed** (the owner chose option A; #64).
@@ -57,6 +57,16 @@ with a raw stack trace, because its hint only covered an HTTP error.
   and Dyno and Grid state the cause. Builds and CI stay strict.
 - **`npm run check:assets`** (in CI) runs the four failure paths with no
   network needed; 5 of 5 mutants caught.
+- **#67 (docs, stacked on #66):**
+  - `web/app/README.md` replaced the Angular template, which recommended
+    the blank-page `ng build`;
+  - `README.md` gained Getting started, and its validation table was
+    re-measured (all 12 rows in band; best BSFC 213 → 200 g/kWh, lugging
+    NOx 20 → 15.6, and more);
+  - all five usage snippets run as written.
+
+  `PROJECT_CONTEXT.md` §1.5's "documented" column carries the same old
+  values; `tools/validate_table.py` prints both side by side.
 
 ---
 
