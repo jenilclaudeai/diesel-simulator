@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-09-29 (session 5, part 6: phone performance; #66, #67, #68)
+**Updated:** 2026-09-29 (session 5, part 7: play.py on the prebuilt grids; #66–#69)
 **Phase:** 1, 2 and 3 **exit-ready** (REVIEW-003, -004, -005). Phase 4 (audio)
 is **built and measured** (REVIEW-006).
 - **FINDING-022 is fixed** (the owner chose option A; #64).
@@ -35,6 +35,25 @@ is merged, every branch but `main` can be deleted; see "Branches" below.
 
 The repository is **public** now: Actions minutes are free, and the history
 was scanned for tokens before it went public (none found).
+
+---
+
+## Session 5, part 7 (2026-09-29) — `play.py` on the prebuilt grids (#69, stacked on #68)
+
+REVIEW-005 m-6 is closed. `python3 play.py` now loads the browser's prebuilt
+converged grid for a preset. It starts instantly, with live friction from
+the cells' traces, the warm/cold pair and the sound sources, so the terminal
+and `/drive` run the same model. The synth gets `LiveEngine.sound_inputs()`,
+and the sources are blended at the live coolant: cold oil sends 80 W of
+boundary power into the synth, against 97 W warm. A custom engine, rating
+caps, another grid size, `--converged-grid`, `--rebuild` or the new
+`--own-grid` keep the old solve-and-cache path. Both paths were run
+headless in a pseudo-terminal.
+
+A listening note: with the grids as they are, a cold start barely changes
+the *total* level (engine bay −0.1% at idle, cold oil). The rumble moves
+(−8.9% of that part), but the slap, which should grow, is pinned by
+FINDING-023.
 
 ---
 
@@ -710,7 +729,7 @@ Session 4's branch table is in git history.
    mid-range phone (REVIEW-005 m-5, REVIEW-006 m-1).
 4. Follow-ups:
    - a TCU engine-speed match on converter downshifts (REVIEW-005 m-3);
-   - `play.py` on `Adr011Grid` (m-6);
+   - ~~`play.py` on `Adr011Grid` (m-6)~~ done in #69;
    - row-sharing the p_max / T_exh check;
    - a timing-based p_max limiter;
    - "life used" labelling.
