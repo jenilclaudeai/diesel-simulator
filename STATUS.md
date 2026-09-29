@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-09-29 (session 5, part 7: play.py on the prebuilt grids; #66–#69)
+**Updated:** 2026-09-29 (session 5, part 7: play.py on the prebuilt grids; Phase 5 proposal; #66–#70)
 **Phase:** 1, 2 and 3 **exit-ready** (REVIEW-003, -004, -005). Phase 4 (audio)
 is **built and measured** (REVIEW-006).
 - **FINDING-022 is fixed** (the owner chose option A; #64).
@@ -35,6 +35,27 @@ is merged, every branch but `main` can be deleted; see "Branches" below.
 
 The repository is **public** now: Actions minutes are free, and the history
 was scanned for tokens before it went public (none found).
+
+---
+
+## Phase 5 proposal, for decision (#70): `reviews/PROPOSAL-phase5.md`
+
+Measured today:
+- `/drive` on an emulated phone fetches no Pyodide (7 requests, 0 solver).
+- Audio and the loop fit at 4× (#68).
+- **But the app cannot be driven on a phone:** there are no touch
+  controls, only keys. That is the largest Phase 5 item, and PLAN.md did
+  not list it.
+
+The roster (OPEN-F) costs, per engine: a vehicle (every engine but three
+falls through to a "3 t utility tractor"), a converged grid (3.5–15 min,
+~1 MB gzip), and a tuning pass. `verify()` on the two builder engines hits
+the peaks within 3.5% but not the plateau: crdi22 has 85% of its cap at
+1,873 rpm, v8hd 82% at 1,133.
+
+Options: A (3 engines), B (5), C (8). Recommended: B, delivered as A first.
+Also for decision: the touch layout, `/enjoy` against reworking `/drive`,
+and the phone the exit is judged on.
 
 ---
 

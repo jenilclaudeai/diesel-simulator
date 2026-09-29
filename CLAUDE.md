@@ -109,4 +109,5 @@ measured reason. The ones most easily undone by accident: the Python solver
 runs **unmodified** under Pyodide (ADR-001); audio is a TypeScript
 AudioWorklet with no `SharedArrayBuffer`, so no COOP/COEP headers, so GitHub
 Pages hosting works (ADR-003); Angular pinned, standalone, signals, OnPush,
-no NgRx (ADR-005). ADR-006 is on hold pending reassessment.
+no NgRx (ADR-005). ADR-006 is superseded by ADR-011 (live friction from
+the cells' traces, a warm/cold grid pair).
