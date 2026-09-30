@@ -443,7 +443,7 @@ the number does. This is the *Automation* lesson.
 
 ### OPEN-B — Persona team operating model
 
-Proposed: use the twelve roles as **review lenses at decision points** — the
+**Resolved by ADR-013 (2026-09-30).** *Was:* Proposed: use the twelve roles as **review lenses at decision points** — the
 physics pair reviews physics ADRs, the testers write acceptance criteria, the
 two non-technical users are consulted on UX only — rather than as active agents
 in every response. Running all twelve every turn costs a great deal of context
@@ -825,3 +825,32 @@ Android is the engine every test here already runs.
 - Every roster engine costs a vehicle (Python + TypeScript + fixture), a
   tuning pass, and a converged grid (3.5–15 min, ~1 MB gzip).
 - FINDING-023 (cold slap) is best settled before the roster is tuned by ear.
+
+---
+
+## ADR-013 — The twelve personas are review lenses, not agents
+
+**Status:** Accepted (2026-09-30), resolving OPEN-B. The owner accepted the
+proposal as written.
+
+### Decision
+
+The twelve roles in `TEAM.md` are **review lenses applied at decision
+points**:
+- the physics pair reviews physics ADRs and findings;
+- the testers write acceptance criteria and review test design;
+- the two non-technical users are consulted on UX only.
+
+They are not active agents in every reply.
+
+### Rationale
+
+Running all twelve every turn costs a great deal of context for little added
+rigour. The project had already worked this way since session 1 (CLAUDE.md
+says so), and every finding names its lenses. The ADR records the practice.
+
+### Consequences
+
+- No change in how work is done; `DECISIONS.md` now agrees with CLAUDE.md,
+  and no open decision remains in it.
+- Revisit if a review misses something a lens would have caught at the time.
