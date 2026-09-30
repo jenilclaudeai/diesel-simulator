@@ -5,7 +5,7 @@
 // into whole 1/60 s frames; if the tab stalls, the backlog is dropped
 // rather than replayed (at most 5 frames catch up per tick).
 import { Adr011Grid, handleKey, LiveEngine, pedalReturn } from '@dieselsim/physics';
-import type { FromWorker, LiveView, Pedals, ToWorker } from './protocol';
+import type { DashInfo, FromWorker, LiveView, Pedals, ToWorker } from './protocol';
 import type { LoopSound } from './sound-protocol';
 
 const DT = 1 / 60;
@@ -29,6 +29,36 @@ function view(): LiveView {
     hint: e.hint, overheat: e.overheat_msg, stalled: e.stalled, assist: d.assist, cruise: e.cruise_on,
     lockup: d.lockup, trip_L: e.trip_L, trip_km: e.trip_m / 1000, inst_kmpl: e.inst_kmpl,
     phase: gb.phase, auto: gb.auto,
+    tank_L: e.tank_L, out_of_fuel: e.out_of_fuel, fuel_kg_h: e.fuel_kg_h,
+    fan_on: e.fan_on, T_charge: e.T_charge, derate: e.derate, engine_stopped: e.engine_stopped,
+  };
+}
+
+/**
+ * The speedometer's scale: the lower of the top gear at max rpm and the
+ * speed where the engine's peak power, through the driveline, meets the same
+ * drag and rolling resistance the driveline integrates (0.5 x 1.2 x CdA v^2 +
+ * Crr m g). By gearing alone a laden 40 t truck showed 167 km/h.
+ */
+function topSpeedKmh(): number {
+  const e = live!, s = e.spec, v = e.veh;
+  const gear = (s.max_rpm / 60) * 2 * Math.PI * v.r_wheel / (v.gears[v.gears.length - 1]! * v.final);
+  let P = 0;
+  for (const row of e.g.perf) for (const c of row) P = Math.max(P, c['power'] ?? 0);
+  P *= v.eta;
+  const need = (u: number) => 0.5 * 1.2 * v.CdA * u ** 3 + v.Crr * v.mass * 9.81 * u;
+  let lo = 0, hi = 150;
+  for (let k = 0; k < 60; k++) { const mid = 0.5 * (lo + hi); if (need(mid) < P) lo = mid; else hi = mid; }
+  return Math.min(gear, lo) * 3.6;
+}
+
+function info(): DashInfo {
+  const e = live!, s = e.spec, v = e.veh, c = s.cooling;
+  return {
+    idle_rpm: s.idle_rpm, rated_rpm: s.rated_rpm, max_rpm: s.max_rpm,
+    vmax_kmh: topSpeedKmh(),
+    vehicle: v.name, tank_L: v.fuel_tank_L, gears: v.gears.length,
+    T_warn: c.T_warn, T_derate: c.T_derate, T_shutdown: c.T_shutdown, fan_on_T: c.fan_on_T,
   };
 }
 
@@ -81,6 +111,7 @@ addEventListener('message', (ev: MessageEvent<ToWorker>) => {
       const grid = new Adr011Grid(m.grid.spec, m.grid);
       live = new LiveEngine(grid, m.grid.preset, m.trans, m.grid.engine_view);
       frames = 0; held.clear();
+      post({ type: 'info', info: info() });
       post({ type: 'state', view: view() });
       break;
     }

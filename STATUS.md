@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-09-30 (session 5, part 9: Phase 5 begins -- `/enjoy` with touch pedals; #72–#74)
+**Updated:** 2026-09-30 (session 5, part 10: the Enjoy dashboard; #72–#75)
 **Phase:** 1, 2, 3 and **4 exit-ready** (REVIEW-003 to -006). The owner signed
 off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
 - FINDING-022 is fixed (option A, #64).
@@ -21,8 +21,19 @@ off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
   drive 7/7, sound 6/6).
 - `e2e:enjoy` (in CI) drives it with real multi-touch on an emulated
   landscape Pixel: 9/9, and 6 of 6 mutants caught.
-- Next: the dashboard (gauges, lamps, thermal stack, trip computer), then
-  the roster, then a real phone.
+- **The dashboard (#75, stacked on #74):**
+  - a tachometer with a red band from rated speed (a truck reads ×100 rpm);
+  - a speedometer scaled to the lower of gearing and drag-limited top
+    speed (the 40 t truck showed 200 km/h by gearing alone; now 160);
+  - the gear with its shift phase;
+  - an 8-lamp cluster;
+  - coolant, oil and charge temperatures, with the warning and derate marks;
+  - a trip computer labelled steady-state (FINDING-009).
+- **Found by the tests:** a paddle tap while a thumb held the clutch
+  produced no click, so a manual could not be shifted on a phone. Paddles
+  now act on `pointerdown`. `e2e:enjoy` is 14/14 with 11 of 11 mutants
+  caught; the dial scales carry property tests.
+- **Next:** the roster (A first), then a real Android phone.
 
 **Main has everything** (checked 2026-09-30 by content: `main` against the
 tested top of each stack, 0 lines differ):

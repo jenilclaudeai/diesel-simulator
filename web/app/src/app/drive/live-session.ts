@@ -4,7 +4,7 @@
 import { signal } from '@angular/core';
 import { FS, type Transmission } from '@dieselsim/physics';
 import { GRID_VERSION, SOUND_WORKLET } from '../solver/physics-version';
-import type { DriveScript, FromWorker, GridFile, LiveView, Pedals } from './protocol';
+import type { DashInfo, DriveScript, FromWorker, GridFile, LiveView, Pedals } from './protocol';
 import type { FromWorklet, ToWorklet } from './sound-protocol';
 import { wavBytes } from './wav';
 
@@ -16,6 +16,7 @@ export class LiveSession {
   readonly error = signal<string | undefined>(undefined);
   readonly gridStatus = signal<GridStatus | undefined>(undefined);
   readonly v = signal<LiveView | undefined>(undefined);
+  readonly info = signal<DashInfo | undefined>(undefined);
   readonly soundOn = signal(false);
   readonly mic = signal('exterior_7m');
   readonly volume = signal(0.8);
@@ -53,6 +54,7 @@ export class LiveSession {
           const m = ev.data;
           if (m.type === 'ready') { w.postMessage({ type: 'load', grid, trans }); resolve(); }
           else if (m.type === 'state') this.v.set(m.view);
+          else if (m.type === 'info') this.info.set(m.info);
           else if (m.type === 'scriptResult') this.scriptWaiter?.(m);
         });
       });
