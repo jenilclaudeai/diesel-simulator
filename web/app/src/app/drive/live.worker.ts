@@ -5,7 +5,7 @@
 // into whole 1/60 s frames; if the tab stalls, the backlog is dropped
 // rather than replayed (at most 5 frames catch up per tick).
 import { Adr011Grid, handleKey, LiveEngine, pedalReturn } from '@dieselsim/physics';
-import type { FromWorker, LiveView, ToWorker } from './protocol';
+import type { FromWorker, LiveView, Pedals, ToWorker } from './protocol';
 import type { LoopSound } from './sound-protocol';
 
 const DT = 1 / 60;
@@ -15,6 +15,7 @@ let running = false;
 const held = new Set<string>();
 let acc = 0, last = 0, frames = 0, hzFrames = 0, hzT = 0, hz = 0;
 let sound: MessagePort | null = null;      // straight to the audio thread, no page hop
+let pedals: Pedals | null = null;           // touch pedals (ADR-012)
 
 const post = (m: FromWorker) => postMessage(m);
 
@@ -27,6 +28,7 @@ function view(): LiveView {
     boost: e.boost, T_coolant: e.T_coolant, T_oil: e.T_oil, fmep_bar: e.fmep_live / 1e5, torque: e.torque,
     hint: e.hint, overheat: e.overheat_msg, stalled: e.stalled, assist: d.assist, cruise: e.cruise_on,
     lockup: d.lockup, trip_L: e.trip_L, trip_km: e.trip_m / 1000, inst_kmpl: e.inst_kmpl,
+    phase: gb.phase, auto: gb.auto,
   };
 }
 
@@ -34,6 +36,17 @@ function frame(): void {
   const e = live!;
   for (const k of held) if (HOLD.has(k)) handleKey(e, k);
   pedalReturn(e, DT);
+  if (pedals) {
+    // touch: the throttle follows the finger (0 once on release, then the
+    // keys have it back); brake and clutch are held at least this far down
+    // and otherwise spring back as the keys' do
+    if (pedals.throttle !== null) {
+      e.throttle = pedals.throttle;
+      if (pedals.throttle === 0) pedals.throttle = null;
+    }
+    e.dl.brake = Math.max(e.dl.brake, pedals.brake);
+    if (e.veh.trans === 'manual') e.dl.clutch_pedal = Math.max(e.dl.clutch_pedal, pedals.clutch);
+  }
   e.step(DT);
   frames++;
   hzFrames++;
@@ -74,6 +87,7 @@ addEventListener('message', (ev: MessageEvent<ToWorker>) => {
     case 'run': running = true; last = hzT = performance.now(); acc = 0; hzFrames = 0; break;
     case 'pause': running = false; break;
     case 'sound': sound = m.port; break;
+    case 'pedals': pedals = { ...m.pedals }; break;
     case 'key':
       if (!live) break;
       if (m.down) {

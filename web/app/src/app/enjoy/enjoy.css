@@ -1,0 +1,55 @@
+/* Enjoy mode: a landscape dashboard on block slate, amber fills, grey type. */
+.enjoy {
+  position: fixed; inset: 0; overflow: hidden;
+  background: var(--slate); color: var(--grey);
+  display: grid; grid-template-columns: minmax(84px, 17vw) 1fr minmax(84px, 17vw);
+  grid-template-rows: auto 1fr; gap: 10px; padding: 10px;
+  overscroll-behavior: none; touch-action: manipulation;
+}
+.top { grid-column: 2; grid-row: 1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; }
+.top .home { color: var(--grey); font-weight: 700; text-decoration: none; margin-right: 6px; }
+.top select, .top button, .dash button {
+  font: inherit; font-size: 0.95rem; color: var(--grey); background: rgba(223, 227, 220, 0.12);
+  border: 1px solid rgba(223, 227, 220, 0.35); border-radius: 8px; padding: 6px 10px; min-height: 40px;
+}
+.top select option { color: var(--slate); }
+.seg { display: inline-flex; }
+.seg button { border-radius: 0; }
+.seg button:first-child { border-radius: 8px 0 0 8px; }
+.seg button:last-child { border-radius: 0 8px 8px 0; }
+/* scoped styles give ".top button" more weight than an attribute rule: anchor it on .enjoy */
+.enjoy button[aria-pressed="true"] { background: var(--amber); color: var(--slate); border-color: var(--amber); }
+button:disabled { opacity: 0.45; }
+
+.paddle {
+  grid-row: 1; align-self: start; font: inherit; font-size: 2rem; font-weight: 700; line-height: 1;
+  min-height: 56px; border-radius: 12px; border: 2px solid rgba(223, 227, 220, 0.5);
+  background: rgba(223, 227, 220, 0.14); color: var(--grey); touch-action: manipulation;
+}
+.paddle.minus { grid-column: 1; }
+.paddle.plus { grid-column: 3; }
+.paddle:active:not(:disabled) { background: var(--amber); color: var(--slate); }
+
+.dash { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; }
+.dash .n { font-size: clamp(2.2rem, 9vh, 4.5rem); line-height: 1; font-weight: 700; }
+.rpm, .kmh, .gear { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.bar { flex-basis: 100%; height: 8px; border-radius: 4px; background: rgba(223, 227, 220, 0.18); overflow: hidden; margin-top: 4px; }
+.bar > span { display: block; height: 100%; background: var(--amber); }
+.phase { min-height: 1.4em; margin: 0; color: var(--amber); }
+.line { margin: 0; opacity: 0.85; }
+.start { font-size: 1.3rem !important; padding: 14px 28px !important; background: var(--amber) !important; color: var(--slate) !important; border-color: var(--amber) !important; }
+.hint { opacity: 0.8; max-width: 34em; }
+.err { color: #ffb4a6; }
+
+.pedals { grid-row: 1 / span 2; align-self: end; height: 62vh; display: flex; gap: 8px; }
+.pedals.left { grid-column: 1; }
+.pedals.right { grid-column: 3; }
+.pedals app-pedal { flex: 1; height: 100%; }
+
+.rotate { display: none; }
+@media (orientation: portrait) {
+  .rotate {
+    display: flex; position: fixed; inset: 0; z-index: 10; align-items: center; justify-content: center;
+    background: var(--slate); color: var(--grey); font-size: 1.3rem; padding: 24px; text-align: center;
+  }
+}

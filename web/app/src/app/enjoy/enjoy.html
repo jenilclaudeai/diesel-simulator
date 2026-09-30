@@ -1,0 +1,53 @@
+<div class="enjoy">
+  <div class="rotate" aria-hidden="true">Turn your phone sideways to drive.</div>
+
+  <button type="button" class="paddle minus" (click)="tap(',')" [disabled]="status() !== 'driving'"
+          aria-label="Shift down">&minus;</button>
+  <button type="button" class="paddle plus" (click)="tap('.')" [disabled]="status() !== 'driving'"
+          aria-label="Shift up">+</button>
+
+  <header class="top">
+    <a routerLink="/" class="home">Diesel Sim</a>
+    <select aria-label="Engine" [disabled]="status() === 'loading'" (change)="selectPreset($any($event.target).value)">
+      @for (p of presets; track p.key) { <option [value]="p.key" [selected]="p.key === preset()">{{ p.name }}</option> }
+    </select>
+    <div class="seg" role="group" aria-label="Gearbox">
+      <button type="button" [attr.aria-pressed]="!manual()" (click)="setManual(false)">Auto</button>
+      <button type="button" [attr.aria-pressed]="manual()" (click)="setManual(true)">Manual</button>
+    </div>
+    @if (status() === 'driving') {
+      <button type="button" class="stop" (click)="stop()">Stop</button>
+      <button type="button" class="mic" (click)="nextMic()" [disabled]="!soundOn()">Mic: {{ micName() }}</button>
+      <button type="button" class="snd" (click)="toggleSound()" [attr.aria-pressed]="soundOn()">{{ soundOn() ? 'Sound on' : 'Sound off' }}</button>
+    }
+  </header>
+
+  <main class="dash">
+    @if (status() !== 'driving') {
+      <button type="button" class="start" (click)="start()" [disabled]="status() === 'loading'">
+        {{ status() === 'loading' ? 'Starting…' : 'Start engine' }}
+      </button>
+      @if (error()) { <p class="err">{{ error() }}</p> }
+      <p class="hint">Throttle on the right, brake on the left: press harder by sliding up. Paddles shift.</p>
+    } @else if (v(); as s) {
+      <div class="rpm"><strong class="n">{{ fmt0.format(s.rpm) }}</strong> <span>rpm</span>
+        <span class="bar"><span [style.width.%]="rpmFrac() * 100"></span></span></div>
+      <div class="kmh"><strong class="n">{{ fmt0.format(s.kmh) }}</strong> <span>km/h</span></div>
+      <div class="gear"><strong class="n">{{ s.gear }}</strong> <span>{{ s.trans === 'manual' ? 'manual' : s.auto ? 'auto' : 'manual shift' }}</span>
+        @if (!s.auto && s.trans !== 'manual') { <button type="button" class="auto" (click)="tap('m')">back to auto</button> }</div>
+      <p class="phase">{{ phase() }}</p>
+      <p class="line">{{ fmt0.format(s.T_coolant - 273.15) }} °C coolant · boost {{ s.boost.toFixed(2) }}
+        @if (s.stalled) { · <span class="err">stalled</span> <button type="button" (click)="tap('i')">Restart</button> }
+        @if (s.hint) { · {{ s.hint }} }</p>
+      @if (soundError()) { <p class="err">{{ soundError() }}</p> }
+    }
+  </main>
+
+  <div class="pedals left">
+    <app-pedal class="brake" label="Brake" (changed)="pedal('brake', $event)" />
+    @if (manual()) { <app-pedal class="clutch" label="Clutch" (changed)="pedal('clutch', $event)" /> }
+  </div>
+  <div class="pedals right">
+    <app-pedal class="throttle" label="Throttle" (changed)="pedal('throttle', $event)" />
+  </div>
+</div>

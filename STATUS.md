@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-09-30 (session 5, part 8: everything is on `main`)
+**Updated:** 2026-09-30 (session 5, part 9: Phase 5 begins -- `/enjoy` with touch pedals; #72–#74)
 **Phase:** 1, 2, 3 and **4 exit-ready** (REVIEW-003 to -006). The owner signed
 off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
 - FINDING-022 is fixed (option A, #64).
@@ -10,6 +10,19 @@ off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
   - *(the Phase 5 decisions are made: ADR-012, 2026-09-30: roster B as A
     first; touch pedals with top paddles; a new `/enjoy`; judged on a
     mid-range Android)*
+
+**Phase 5 has started (#74, stacked on #73 → #72): `/enjoy` with touch pedals.**
+- One tap starts the engine and the sound.
+- Throttle on the right, brake on the left (a clutch on the manual),
+  pressed harder by sliding up; shift paddles in the top corners.
+- rpm, speed, and the gear with its shift phase; a rotate hint in portrait.
+- The worker and the sound moved into a shared `LiveSession`, so `/drive`
+  and `/enjoy` cannot drift apart (`/drive`'s tests are unchanged:
+  drive 7/7, sound 6/6).
+- `e2e:enjoy` (in CI) drives it with real multi-touch on an emulated
+  landscape Pixel: 9/9, and 6 of 6 mutants caught.
+- Next: the dashboard (gauges, lamps, thermal stack, trip computer), then
+  the roster, then a real phone.
 
 **Main has everything** (checked 2026-09-30 by content: `main` against the
 tested top of each stack, 0 lines differ):
