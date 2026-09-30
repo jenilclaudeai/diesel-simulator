@@ -43,9 +43,21 @@ export interface LiveView {
   trip_L: number; trip_km: number; inst_kmpl: number;
   phase: number;      // the gearbox's shift phase: 0 idle, 1 torque, 2 inertia
   auto: boolean;      // automatic shifting (the paddles switch it to manual)
+  // the dashboard (Phase 5)
+  tank_L: number; out_of_fuel: boolean; fuel_kg_h: number;
+  fan_on: boolean; T_charge: number; derate: number; engine_stopped: boolean;
+}
+
+/** What the dashboard needs once per engine: its scales and limits. */
+export interface DashInfo {
+  idle_rpm: number; rated_rpm: number; max_rpm: number;
+  vmax_kmh: number;          // the speedometer's scale: min(gearing, drag-limited top speed)
+  vehicle: string; tank_L: number; gears: number;
+  T_warn: number; T_derate: number; T_shutdown: number; fan_on_T: number;
 }
 
 export type FromWorker =
   | { type: 'ready' }
   | { type: 'state'; view: LiveView }
+  | { type: 'info'; info: DashInfo }
   | { type: 'scriptResult'; events: number[][]; final: Record<string, number>; frames: number; ms: number };

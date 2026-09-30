@@ -1,10 +1,13 @@
 <div class="enjoy">
   <div class="rotate" aria-hidden="true">Turn your phone sideways to drive.</div>
 
-  <button type="button" class="paddle minus" (click)="tap(',')" [disabled]="status() !== 'driving'"
-          aria-label="Shift down">&minus;</button>
-  <button type="button" class="paddle plus" (click)="tap('.')" [disabled]="status() !== 'driving'"
-          aria-label="Shift up">+</button>
+  <!-- pointerdown, not click: with a thumb already on the clutch, a tap here
+       produces no click on a phone (measured by e2e:enjoy); click is kept for
+       the keyboard (a key activation has detail 0) -->
+  <button type="button" class="paddle minus" (pointerdown)="paddle(',', $event)" (click)="keyTap(',', $event)"
+          [disabled]="status() !== 'driving'" aria-label="Shift down">&minus;</button>
+  <button type="button" class="paddle plus" (pointerdown)="paddle('.', $event)" (click)="keyTap('.', $event)"
+          [disabled]="status() !== 'driving'" aria-label="Shift up">+</button>
 
   <header class="top">
     <a routerLink="/" class="home">Diesel Sim</a>
@@ -15,11 +18,7 @@
       <button type="button" [attr.aria-pressed]="!manual()" (click)="setManual(false)">Auto</button>
       <button type="button" [attr.aria-pressed]="manual()" (click)="setManual(true)">Manual</button>
     </div>
-    @if (status() === 'driving') {
-      <button type="button" class="stop" (click)="stop()">Stop</button>
-      <button type="button" class="mic" (click)="nextMic()" [disabled]="!soundOn()">Mic: {{ micName() }}</button>
-      <button type="button" class="snd" (click)="toggleSound()" [attr.aria-pressed]="soundOn()">{{ soundOn() ? 'Sound on' : 'Sound off' }}</button>
-    }
+    @if (status() === 'driving') { <button type="button" class="stop" (click)="stop()">Stop</button> }
   </header>
 
   <main class="dash">
@@ -30,15 +29,50 @@
       @if (error()) { <p class="err">{{ error() }}</p> }
       <p class="hint">Throttle on the right, brake on the left: press harder by sliding up. Paddles shift.</p>
     } @else if (v(); as s) {
-      <div class="rpm"><strong class="n">{{ fmt0.format(s.rpm) }}</strong> <span>rpm</span>
-        <span class="bar"><span [style.width.%]="rpmFrac() * 100"></span></span></div>
-      <div class="kmh"><strong class="n">{{ fmt0.format(s.kmh) }}</strong> <span>km/h</span></div>
-      <div class="gear"><strong class="n">{{ s.gear }}</strong> <span>{{ s.trans === 'manual' ? 'manual' : s.auto ? 'auto' : 'manual shift' }}</span>
-        @if (!s.auto && s.trans !== 'manual') { <button type="button" class="auto" (click)="tap('m')">back to auto</button> }</div>
-      <p class="phase">{{ phase() }}</p>
-      <p class="line">{{ fmt0.format(s.T_coolant - 273.15) }} °C coolant · boost {{ s.boost.toFixed(2) }}
-        @if (s.stalled) { · <span class="err">stalled</span> <button type="button" (click)="tap('i')">Restart</button> }
-        @if (s.hint) { · {{ s.hint }} }</p>
+      <ul class="lamps" aria-label="Warning lamps">
+        @for (l of lamps(); track l.key) {
+          <li [class]="'lamp ' + l.key" [class.on]="l.on" [class.warn]="l.warn" [attr.aria-hidden]="!l.on">{{ l.text }}</li>
+        }
+      </ul>
+      <div class="gauges">
+        <app-gauge class="tach" label="Engine speed" [unit]="tach().unit" [value]="s.rpm" [max]="tach().max"
+                   [step]="tach().step" [labelEvery]="tach().labelEvery" [labelScale]="tach().labelScale"
+                   [redFrom]="info()?.rated_rpm ?? null" />
+        <div class="mid">
+          <strong class="gear n">{{ s.gear }}</strong>
+          <span class="mode">{{ s.trans === 'manual' ? 'manual' : s.auto ? 'auto' : 'manual shift' }}</span>
+          @if (!s.auto && s.trans !== 'manual') { <button type="button" class="auto" (click)="tap('m')">back to auto</button> }
+          <span class="phase">{{ phase() }}</span>
+          <span class="digits"><span class="rpm">{{ fmt0.format(s.rpm) }}</span> rpm · <span class="kmh">{{ fmt0.format(s.kmh) }}</span> km/h</span>
+          @if (s.stalled) { <button type="button" class="restart" (click)="tap('i')">Restart</button> }
+          @if (s.hint) { <span class="hint">{{ s.hint }}</span> }
+        </div>
+        <app-gauge class="speedo" label="Speed" [unit]="speed().unit" [value]="s.kmh" [max]="speed().max"
+                   [step]="speed().step" [labelEvery]="speed().labelEvery" [labelScale]="speed().labelScale" />
+      </div>
+      <div class="strip">
+        <div class="thermal" aria-label="Temperatures">
+          <div class="temp coolant"><span class="k">Coolant</span>
+            <span class="tbar"><span [style.width.%]="tempFrac(s.T_coolant) * 100"></span>
+              @if (info(); as i) { <i class="mark" [style.left.%]="tempFrac(i.T_warn) * 100"></i><i class="mark red" [style.left.%]="tempFrac(i.T_derate) * 100"></i> }
+            </span><span class="val">{{ fmt0.format(C(s.T_coolant)) }} °C</span></div>
+          <div class="temp oil"><span class="k">Oil</span>
+            <span class="tbar"><span [style.width.%]="tempFrac(s.T_oil) * 100"></span></span><span class="val">{{ fmt0.format(C(s.T_oil)) }} °C</span></div>
+          <div class="temp charge"><span class="k">Charge air</span>
+            <span class="tbar"><span [style.width.%]="tempFrac(s.T_charge) * 100"></span></span><span class="val">{{ fmt0.format(C(s.T_charge)) }} °C</span></div>
+          <div class="kv">Boost {{ s.boost.toFixed(2) }} · friction {{ s.fmep_bar.toFixed(2) }} bar</div>
+        </div>
+        <div class="trip" aria-label="Trip computer">
+          <div class="kv"><span class="trip-km">{{ s.trip_km.toFixed(1) }}</span> km · {{ s.trip_L.toFixed(2) }} L</div>
+          <div class="kv">Average <span class="avg">{{ fmt1(avg()) }}</span> L/100 km</div>
+          <div class="kv">Now {{ fmt1(now()) }} L/100 km · range {{ range() === null ? '—' : fmt0.format(range()!) }} km</div>
+          <div class="note">steady-state figures (FINDING-009)</div>
+        </div>
+        <div class="sound">
+          <button type="button" class="mic" (click)="nextMic()" [disabled]="!soundOn()">Mic: {{ micName() }}</button>
+          <button type="button" class="snd" (click)="toggleSound()" [attr.aria-pressed]="soundOn()">{{ soundOn() ? 'Sound on' : 'Sound off' }}</button>
+        </div>
+      </div>
       @if (soundError()) { <p class="err">{{ soundError() }}</p> }
     }
   </main>

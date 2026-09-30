@@ -9,8 +9,13 @@
 // 3. Holding the brake slows the car.
 // 4. Two thumbs at once: throttle and brake both register.
 // 5. The shift paddle changes gear.
-// 6. In portrait, the page asks to be turned sideways.
-// 7. No Pyodide is fetched, and there are no page errors.
+// 6. The dashboard shows the truth:
+//    - both needles point where the readings say;
+//    - the trip computer counts distance and labels its figures steady-state;
+//    - a stalled manual lights the Stalled lamp;
+//    - the heavy truck's speedometer has a slower scale than the hatchback's.
+// 7. In portrait, the page asks to be turned sideways.
+// 8. No Pyodide is fetched, and there are no page errors.
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -118,6 +123,77 @@ check("the shift paddle changes gear (and switches the automatic to manual shift
   g1.gear !== g0 && g1.auto === false, `gear ${g0} -> ${g1.gear}, auto ${g1.auto}`);
 
 await page.screenshot({ path: path.join(here, "out", "enjoy-landscape.png") });
+
+// ---- the dashboard ----
+/** Each dial's needle angle next to what the digits say, read in one go. */
+const dials = () => page.evaluate(() => {
+  const ang = sel => Number(document.querySelector(`${sel} .needle`)?.getAttribute("transform")?.match(/rotate\(([-\d.e]+)\)/)?.[1]);
+  const top = sel => Math.max(...[...document.querySelectorAll(`${sel} .num`)].map(t => Number(t.textContent)));
+  const max = sel => Number(document.querySelector(`${sel} svg`)?.getAttribute("data-max"));
+  const scale = sel => Number(document.querySelector(`${sel} svg`)?.getAttribute("data-label-scale"));
+  // the digits drawn in the same render as the needles (the worker's latest
+  // view can be a frame ahead of what is on screen)
+  const num = sel => Number(document.querySelector(sel)?.textContent?.replace(/[^0-9.]/g, ""));
+  return { rpm: num(".digits .rpm"), kmh: num(".digits .kmh"), tach: ang(".tach"), speedo: ang(".speedo"),
+    tachTop: top(".tach") * scale(".tach"), speedTop: top(".speedo") * scale(".speedo"),
+    tachMax: max(".tach"), speedMax: max(".speedo") };
+});
+await touch("touchStart", [await at(".throttle .pedal", 0.7)]);
+await sleep(1500);
+const d = await dials();
+await touch("touchEnd", []);
+// each dial publishes its scale (data-max); inferring it from the labels was wrong once
+const angleOf = (v, max) => -120 + 240 * Math.min(1, Math.max(0, v / max));
+const tachMax = d.tachMax, speedMax = d.speedMax;
+const eT = Math.abs(d.tach - angleOf(d.rpm, tachMax)), eS = Math.abs(d.speedo - angleOf(d.kmh, speedMax));
+// the digits are whole numbers: rounding moves a needle by < 0.5 of a unit
+check("the needles point where the readings say, and each scale's end is labelled",
+  d.rpm > 900 && eT < 0.5 && eS < 1 && d.speedTop === d.speedMax && d.tachTop === d.tachMax,
+  `${Math.round(d.rpm)} rpm -> ${d.tach.toFixed(1)} deg (off ${eT.toFixed(2)}, tach labelled to ${d.tachTop} of ${d.tachMax}); ` +
+  `${d.kmh.toFixed(1)} km/h -> ${d.speedo.toFixed(1)} deg (off ${eS.toFixed(2)}, speedo labels to ${d.speedTop})`);
+const trip = await page.evaluate(() => ({ km: document.querySelector(".trip-km")?.textContent, note: document.querySelector(".trip .note")?.textContent,
+  v: globalThis.__enjoy.view() }));
+check("the trip computer counts the drive, labelled steady-state (FINDING-009)",
+  trip.v.trip_km > 0.02 && Number(trip.km) === Number(trip.v.trip_km.toFixed(1)) && /steady-state/.test(trip.note ?? ""),
+  `${trip.v.trip_km.toFixed(3)} km, ${trip.v.trip_L.toFixed(3)} L; shows "${trip.km}"`);
+
+// a manual, stalled: clutch down, 1st gear, clutch up with no throttle
+await tapEl(".seg button:nth-child(2)");                 // Manual (stops the engine)
+await page.waitForSelector("button.start");              // re-rendered: tapping before it raced once
+await tapEl("button.start");
+await page.waitForFunction(() => globalThis.__enjoy.view()?.trans === "manual", { timeout: 30_000 });
+await sleep(800);
+// two thumbs: the left holds the clutch down, the right taps the + paddle
+const clutch = await at(".clutch .pedal", 0.95), plus = await at("button.paddle.plus", 0.5);
+await touch("touchStart", [clutch]);
+await sleep(300);
+await touch("touchStart", [clutch, plus]);                // second finger down on the paddle
+await sleep(60);
+await touch("touchMove", [clutch]);                       // ... and up again (the clutch stays down)
+await sleep(400);
+const shifted = await view();
+await touch("touchEnd", []);                              // clutch up, no throttle
+check("with the clutch held, the paddle shifts (two thumbs)", shifted.gear !== "N",
+  `gear ${shifted.gear}, clutch ${shifted.clutch.toFixed(2)}`);
+await page.waitForFunction(() => globalThis.__enjoy.view()?.stalled, { timeout: 8000 }).catch(() => {});
+const stall = await page.evaluate(() => ({ stalled: globalThis.__enjoy.view().stalled, gear: globalThis.__enjoy.view().gear,
+  lit: document.querySelector(".lamp.stall")?.classList.contains("on"), others: [...document.querySelectorAll(".lamp.on")].map(l => l.textContent.trim()) }));
+check("a stalled manual lights the Stalled lamp", stall.stalled && stall.lit,
+  `stalled ${stall.stalled} in gear ${stall.gear}; lit: ${stall.others.join(", ") || "none"}`);
+
+// the dial scale follows the vehicle
+const hatchTop = d.speedTop;
+await page.select('select[aria-label="Engine"]', "hd_i6");
+await page.waitForSelector("button.start");
+await tapEl("button.start");
+await page.waitForFunction(() => globalThis.__enjoy.view(), { timeout: 60_000 });
+await sleep(800);
+const truck = await dials();
+check("the truck's dials: a slower speedometer than the hatchback's, both scales labelled to the end",
+  truck.speedTop < hatchTop && truck.speedTop >= 80 && truck.speedTop <= 160
+  && truck.speedTop === truck.speedMax && truck.tachTop === truck.tachMax,
+  `speedometer to ${truck.speedTop} km/h (truck) vs ${hatchTop} (hatchback); tach labelled to ${truck.tachTop} of ${truck.tachMax} rpm`);
+await page.screenshot({ path: path.join(here, "out", "enjoy-truck.png") });
 
 // ---- portrait ----
 await page.setViewport({ width: 412, height: 915, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true, isLandscape: false });
