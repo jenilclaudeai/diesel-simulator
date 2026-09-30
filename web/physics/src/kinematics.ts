@@ -82,15 +82,27 @@ export class SliderCrank {
  * Normalised lift for u in [0, 1]: raised cosine sin^2(pi u) with
  * constant-velocity ramps over [0, ramp/2] and [1 - ramp/2, 1] up to the
  * ramp height h_r = sin^2(pi ramp / 2), where they meet the flank
- * (FINDING-018).
+ * (FINDING-018). With h (a ramp height of its own, normalised; REVIEW-003
+ * m-5) the main event is unchanged and each ramp is a chord of span ramp/2
+ * ending at h where the raised cosine reaches it (u_h = asin(sqrt h) / pi).
  */
-export function coreProfile(u: number, ramp: number): number {
+export function coreProfile(u: number, ramp: number, h: number | null = null): number {
   const r = Math.max(ramp, 1e-4);
-  const hR = 0.5 * (1.0 - Math.cos(Math.PI * r));
-  const uR = 0.5 * r;
-  if (!(u >= 0.0 && u <= 1.0)) return 0.0;
-  if (u < uR) return hR * (u / uR);
-  if (u > 1.0 - uR) return hR * ((1.0 - u) / uR);
+  if (h === null) {
+    const hR = 0.5 * (1.0 - Math.cos(Math.PI * r));
+    const uR = 0.5 * r;
+    if (!(u >= 0.0 && u <= 1.0)) return 0.0;
+    if (u < uR) return hR * (u / uR);
+    if (u > 1.0 - uR) return hR * ((1.0 - u) / uR);
+    const s = Math.sin(Math.PI * Math.min(1.0, Math.max(0.0, u)));
+    return s * s;
+  }
+  const sp = 0.5 * r;
+  const uH = Math.asin(Math.sqrt(h)) / Math.PI;
+  const a = uH - sp, b = 1.0 - uH + sp;
+  if (!(u >= a && u <= b)) return 0.0;
+  if (u < uH) return (h * (u - a)) / sp;
+  if (u > 1.0 - uH) return (h * (b - u)) / sp;
   const s = Math.sin(Math.PI * Math.min(1.0, Math.max(0.0, u)));
   return s * s;
 }
@@ -101,6 +113,7 @@ export interface CamSpec {
   lift_max: number; // m
   lash: number;     // m
   ramp: number;     // ramp_fraction
+  ramp_height?: number | null;  // m, or null: the height follows ramp
 }
 
 /** Valve lift, velocity and acceleration versus crank angle in degrees. */
@@ -112,6 +125,9 @@ export class Cam {
   readonly lash: number;
   readonly ramp: number;
   readonly hRamp: number;
+  private readonly h: number | null;
+  private readonly pre: number;   // crank degrees the opening ramp starts before openDeg
+  private readonly uHi: number;
 
   constructor(c: CamSpec) {
     this.openDeg = pyMod(c.open_deg, 720.0);
@@ -122,11 +138,21 @@ export class Cam {
     this.liftMax = c.lift_max;
     this.lash = c.lash;
     this.ramp = c.ramp;
-    this.hRamp = 0.5 * (1.0 - Math.cos(Math.PI * c.ramp)) * c.lift_max;
+    const H = c.ramp_height ?? null;
+    this.hRamp = H === null ? 0.5 * (1.0 - Math.cos(Math.PI * c.ramp)) * c.lift_max : H;
+    this.h = H === null ? null : this.hRamp / c.lift_max;
+    if (this.h === null) {
+      this.pre = 0.0;
+      this.uHi = 1.0;
+    } else {
+      const uH = Math.asin(Math.sqrt(this.h)) / Math.PI, sp = 0.5 * Math.max(c.ramp, 1e-4);
+      this.pre = Math.max(0.0, sp - uH) * dur;
+      this.uHi = 1.0 - uH + sp;
+    }
   }
 
   private phase(thetaDeg: number): number {
-    return pyMod(thetaDeg - this.openDeg, 720.0) / this.dur;
+    return (pyMod(thetaDeg - this.openDeg + this.pre, 720.0) - this.pre) / this.dur;
   }
 
   /** Lift at the valve, after lash [m]. */
@@ -137,7 +163,7 @@ export class Cam {
   /** Lift at the cam, before lash [m]. */
   camLift(thetaDeg: number): number {
     const u = this.phase(thetaDeg);
-    return u <= 1.0 ? coreProfile(u, this.ramp) * this.liftMax : 0.0;
+    return u <= this.uHi ? coreProfile(u, this.ramp, this.h) * this.liftMax : 0.0;
   }
 
   dliftDtheta(thetaDeg: number, dth = 0.05): number {

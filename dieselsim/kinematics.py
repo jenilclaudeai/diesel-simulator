@@ -91,7 +91,7 @@ class SliderCrank:
 # --------------------------------------------------------------------------
 # Cam / valve lift
 # --------------------------------------------------------------------------
-def _core_profile(u, ramp):
+def _core_profile(u, ramp, h=None):
     """
     Normalised lift for u in [0,1]:
       * raised-cosine main event sin^2(pi u)
@@ -107,20 +107,43 @@ def _core_profile(u, ramp):
     meet the flank keeps the flank (breathing within 0.1% torque), keeps
     every ramp height (the lash clearance of FINDING-017), and doubles the
     ramp speed for a given ramp_fraction.
+
+    h: a ramp height of its own, normalised by the peak lift (REVIEW-003
+    m-5). Without it height and speed were one parameter (speed ~ sqrt of
+    height), so a ramp tall enough to clear large lash was also fast, and
+    tick dominated. With h the main event is left exactly as it is -- the
+    raised cosine over [0, 1] -- and each ramp is a chord of its own span
+    s = ramp/2 of the event, ending at height h where the raised cosine
+    reaches it, u_h = asin(sqrt(h)) / pi: the opening ramp runs over
+    [u_h - s, u_h], starting before the event when s > u_h. The lift above
+    h, and so the breathing, is unchanged; below it the valve clears its
+    lash on a long, gentle ramp.
     """
     u = np.asarray(u, dtype=float)
     L = np.zeros_like(u)
     ramp = max(ramp, 1e-4)
-    h_r = 0.5 * (1.0 - math.cos(math.pi * ramp))     # lift at end of ramp
-    u_r = 0.5 * ramp                                   # where the ramp meets the flank
-    m = (u >= 0.0) & (u <= 1.0)
-    core = np.sin(np.pi * np.clip(u, 0.0, 1.0)) ** 2     # raised cosine
+    if h is None:
+        h_r = 0.5 * (1.0 - math.cos(math.pi * ramp))     # lift at end of ramp
+        u_r = 0.5 * ramp                                   # where the ramp meets the flank
+        m = (u >= 0.0) & (u <= 1.0)
+        core = np.sin(np.pi * np.clip(u, 0.0, 1.0)) ** 2     # raised cosine
+        L[m] = core[m]
+        # replace the extremities with the constant-velocity ramps
+        r1 = m & (u < u_r)
+        L[r1] = h_r * (u[r1] / u_r)
+        r2 = m & (u > 1.0 - u_r)
+        L[r2] = h_r * ((1.0 - u[r2]) / u_r)
+        return L
+    s = 0.5 * ramp
+    u_h = math.asin(math.sqrt(h)) / math.pi
+    a, b = u_h - s, 1.0 - u_h + s                          # the ramps' outer ends
+    m = (u >= a) & (u <= b)
+    core = np.sin(np.pi * np.clip(u, 0.0, 1.0)) ** 2
     L[m] = core[m]
-    # replace the extremities with the constant-velocity ramps
-    r1 = m & (u < u_r)
-    L[r1] = h_r * (u[r1] / u_r)
-    r2 = m & (u > 1.0 - u_r)
-    L[r2] = h_r * ((1.0 - u[r2]) / u_r)
+    r1 = m & (u < u_h)
+    L[r1] = h * (u[r1] - a) / s
+    r2 = m & (u > 1.0 - u_h)
+    L[r2] = h * (b - u[r2]) / s
     return L
 
 
@@ -128,7 +151,7 @@ class Cam:
     """Valve lift, velocity and acceleration versus crank angle."""
 
     def __init__(self, open_deg, close_deg, lift_max, lash, ramp=0.06,
-                 lash_ramp_lift_frac=None):
+                 lash_ramp_lift_frac=None, ramp_height=None):
         self.open_deg = open_deg % 720.0
         self.close_deg = close_deg % 720.0
         self.dur = (self.close_deg - self.open_deg) % 720.0
@@ -137,24 +160,35 @@ class Cam:
         self.lift_max = lift_max
         self.lash = lash
         self.ramp = ramp
-        # geometric lift lost to lash -> shorter effective duration
-        self.h_ramp = 0.5 * (1.0 - math.cos(math.pi * ramp)) * lift_max
+        self.ramp_height = ramp_height      # m, or None: the height follows ramp
+        if ramp_height is None:
+            # geometric lift lost to lash -> shorter effective duration
+            self.h_ramp = 0.5 * (1.0 - math.cos(math.pi * ramp)) * lift_max
+            self._h, self.pre, self._u_hi = None, 0.0, 1.0
+        else:
+            self.h_ramp = float(ramp_height)
+            self._h = self.h_ramp / lift_max
+            u_h = math.asin(math.sqrt(self._h)) / math.pi
+            # crank degrees the opening ramp starts before open_deg
+            self.pre = max(0.0, 0.5 * max(ramp, 1e-4) - u_h) * self.dur
+            self._u_hi = 1.0 - u_h + 0.5 * max(ramp, 1e-4)
 
     def _phase(self, theta_deg):
-        return ((np.asarray(theta_deg, float) - self.open_deg) % 720.0) / self.dur
+        return (((np.asarray(theta_deg, float) - self.open_deg + self.pre) % 720.0)
+                - self.pre) / self.dur
 
     def lift(self, theta_deg):
         u = self._phase(theta_deg)
-        inside = u <= 1.0
-        L = _core_profile(np.where(inside, u, 0.0), self.ramp) * self.lift_max
+        inside = u <= self._u_hi
+        L = _core_profile(np.where(inside, u, 0.0), self.ramp, self._h) * self.lift_max
         L = np.where(inside, L, 0.0)
         return np.maximum(0.0, L - self.lash)      # lash eats the ramp
 
     def cam_lift(self, theta_deg):
         """Lift at the cam (before lash) -- drives valvetrain forces."""
         u = self._phase(theta_deg)
-        inside = u <= 1.0
-        L = _core_profile(np.where(inside, u, 0.0), self.ramp) * self.lift_max
+        inside = u <= self._u_hi
+        L = _core_profile(np.where(inside, u, 0.0), self.ramp, self._h) * self.lift_max
         return np.where(inside, L, 0.0)
 
     def dlift_dtheta(self, theta_deg, dth=0.05):
@@ -187,11 +221,23 @@ class Cam:
         return self.close_deg
 
 
+# REVIEW-003 m-5: a gentle closing ramp for mechanical lash, near the
+# hydraulic presets' own ramp speeds (0.017-0.025 mm per cam degree)
+RAMP_SPEED = 0.025e-3        # m per cam degree
+
+
+def ramp_fraction_for(dur, H, speed=RAMP_SPEED):
+    """The ramp_fraction that gives a ramp of height H this speed on an event
+    of dur crank degrees (a ramp spans ramp/2 of it; a cam degree is two
+    crank degrees)."""
+    return 2.0 * (2.0 * H / speed) / dur
+
+
 def build_cams(vt: ValveTrain):
     intake = Cam(vt.ivo_deg, vt.ivc_deg, vt.intake_lift_max,
-                 vt.lash_intake, vt.ramp_fraction)
+                 vt.lash_intake, vt.ramp_fraction, ramp_height=vt.ramp_height_intake)
     exhaust = Cam(vt.evo_deg, vt.evc_deg, vt.exhaust_lift_max,
-                  vt.lash_exhaust, vt.ramp_fraction)
+                  vt.lash_exhaust, vt.ramp_fraction, ramp_height=vt.ramp_height_exhaust)
     return intake, exhaust
 
 

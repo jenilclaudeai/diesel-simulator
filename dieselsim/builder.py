@@ -124,6 +124,17 @@ def build_engine(name: str,
         valve_spring_preload=380.0 * (bore / 0.130) ** 2,
         valve_spring_rate=42e3 * (bore / 0.130),
         valve_train_eq_mass=0.34 * (bore / 0.130) ** 2.2)
+    vt = spec.valves
+    if vt.lash_exhaust > 0.0:
+        # REVIEW-003 m-5: with mechanical lash the default 6 % ramp (0.11 mm
+        # on a 12.7 L) sat far under the lash, so the valves landed on the
+        # flank (truck127, roster A: 0.65 m/s at idle). The ramps get their
+        # own heights, 1.25 x the lash, at RAMP_SPEED on the exhaust, in
+        # front of the unchanged main event.
+        from .kinematics import ramp_fraction_for
+        vt.ramp_height_intake = 1.25 * vt.lash_intake
+        vt.ramp_height_exhaust = 1.25 * vt.lash_exhaust
+        vt.ramp_fraction = ramp_fraction_for((vt.evc_deg - vt.evo_deg) % 720.0, vt.ramp_height_exhaust)
 
     # ---- fuelling: size the nozzle to deliver rated fuel in ~25 deg ----
     mdot_fuel = peak_power * 1e3 / (eta_brake_rated * LHV)     # kg/s

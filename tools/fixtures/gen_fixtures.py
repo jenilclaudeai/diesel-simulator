@@ -78,7 +78,8 @@ def kinematics_inputs():
         cyc = DieselEngine(preset=key).cycle
         for cam, which in ((cyc.cam_int, "intake"), (cyc.cam_exh, "exhaust")):
             cams.append(dict(name=f"{key} {which}", open_deg=cam.open_deg, close_deg=cam.close_deg,
-                             lift_max=cam.lift_max, lash=cam.lash, ramp=cam.ramp))
+                             lift_max=cam.lift_max, lash=cam.lash, ramp=cam.ramp,
+                             ramp_height=cam.ramp_height))
     g = DieselEngine(preset="crdi15").spec.geom
     cranks.append(dict(name="crdi15, 0.6 mm pin offset", a=g.crank_radius, l=g.conrod, e=0.6e-3,
                        Ap=g.piston_area, Vc=g.clearance_volume))
@@ -104,7 +105,8 @@ def kinematics_outputs(inp):
                                   d2x_dtheta2=lst(sc.d2x_dtheta2(th)), volume=lst(sc.volume(th)),
                                   dV_dtheta=lst(sc.dV_dtheta(th)), beta=lst(sc.beta(th))))
     for c in inp["cams"]:
-        cam = Cam(c["open_deg"], c["close_deg"], c["lift_max"], c["lash"], c["ramp"])
+        cam = Cam(c["open_deg"], c["close_deg"], c["lift_max"], c["lash"], c["ramp"],
+                  ramp_height=c.get("ramp_height"))
         out["cams"].append(dict(h_ramp=cam.h_ramp, dur=cam.dur, lift=lst(cam.lift(deg)),
                                 cam_lift=lst(cam.cam_lift(deg)), dlift_dtheta=lst(cam.dlift_dtheta(deg)),
                                 d2lift_dtheta2=lst(cam.d2lift_dtheta2(deg)),
@@ -174,7 +176,7 @@ def friction_engine_view(eng):
     cams = {}
     for name, cam in (("intake", eng.cycle.cam_int), ("exhaust", eng.cycle.cam_exh)):
         cams[name] = dict(open_deg=cam.open_deg, close_deg=cam.close_deg, lift_max=cam.lift_max,
-                          lash=cam.lash, ramp=cam.ramp)
+                          lash=cam.lash, ramp=cam.ramp, ramp_height=cam.ramp_height)
     return {"spec": d, "cams": cams,
             "oil": {k: float(v) for k, v in dataclasses.asdict(eng.oil.cond).items()},
             "wear": {k: float(v) for k, v in dataclasses.asdict(eng.wear.state).items()}}

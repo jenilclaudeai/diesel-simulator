@@ -33,6 +33,7 @@ def render(eng, rpm, load, name):
     op = eng.operating_point(rpm, load=load, n_cycles=9)
     snd = EngineSound(eng.spec)
     snd.wear = eng.wear
+    snd.T_coolant = eng.T_coolant        # FINDING-023: the cold clearance
     y, parts = snd.render(op, duration=DUR, mic=MIC, seed=SEED)
     snd.write_wav(os.path.join(OUT, name + ".wav"), y)
     f, P = snd.spectrum(y)
