@@ -1,0 +1,15 @@
+{
+  "key": "truck127",
+  "name": "12.7 L six, 530 hp",
+  "displacement": 12.7,
+  "n_cyl": 6,
+  "rated_rpm": 1800,
+  "peak_torque": 2400,
+  "peak_power": 390,
+  "plateau": [
+    1000,
+    1400
+  ],
+  "boost_map_rise": 0.12,
+  "afr_limit": 18.0
+}

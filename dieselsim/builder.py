@@ -68,6 +68,7 @@ def build_engine(name: str,
                  vgt: bool = None,
                  rail_bar: float = None,
                  afr_limit: float = None,
+                 boost_map_rise: float = None,
                  firing_order: tuple = None,
                  eta_brake_rated: float = 0.42,
                  ve_rated: float = 1.05,
@@ -160,7 +161,11 @@ def build_engine(name: str,
             vgt_min_frac=0.32 if vgt else 0.55,
             wastegate_pset=pr * 1.05,
             comp_eff_peak=0.775, turb_eff_peak=0.755)
-        spec.boost_map_rise = 0.45 if vgt else 1.0
+        # how early the boost target (and the open-loop fuel schedule) rises
+        # with rpm: lower is earlier. A VGT engine that must hold torque from
+        # low in its plateau needs it lower than the default (Phase 5 roster:
+        # below the plateau these engines were air-limited at their target)
+        spec.boost_map_rise = boost_map_rise if boost_map_rise is not None else (0.45 if vgt else 1.0)
     else:
         spec.turbo = Turbo(enabled=False)
 

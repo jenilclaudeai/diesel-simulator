@@ -44,7 +44,7 @@ from dieselsim.engine import DieselEngine  # noqa: E402
 from dieselsim.kinematics import Cam, SliderCrank  # noqa: E402
 
 OUT = os.path.join(ROOT, "web", "physics", "fixtures")
-TOL = {"kinematics": 1e-12, "thermo": 1e-10, "friction": 1e-6, "live": 1e-6, "sound": 1e-12}
+TOL = {"kinematics": 1e-12, "thermo": 1e-10, "friction": 1e-6, "live": 1e-6, "sound": 1e-12, "vehicles": 0.0}
 EPS = float(np.finfo(float).eps)
 # Finite-difference outputs are compared at the rounding bound propagated
 # through their stencil, not at the module tolerance. A lift sample may
@@ -550,11 +550,28 @@ def sound_outputs(inp):
             "synth": {"y": lst(np.concatenate(y)), "last_parts": parts}}
 
 
+# ------------------------------------------------------------------ vehicles
+def vehicles_inputs():
+    """Every vehicle the live loop knows, under every gearbox (Phase 5: the
+    Enjoy roster added three). Plain data, duplicated in TypeScript, so the
+    two copies are held together here."""
+    return {"keys": ["hd_i6", "ld_i4", "crdi15", "crdi_1p5", "single", "hatch15", "crdi22", "truck127"],
+            "trans": ["tc", "dct", "manual"]}
+
+
+def vehicles_outputs(inp):
+    from dieselsim.live import Vehicle, _finish_vehicle
+    return {k: {t: {kk: (list(vv) if isinstance(vv, (list, tuple)) else vv)
+                    for kk, vv in vars(_finish_vehicle(Vehicle(k, t))).items()}
+                for t in inp["trans"]} for k in inp["keys"]}
+
+
 MODULES = {"kinematics": (kinematics_inputs, kinematics_outputs),
            "thermo": (thermo_inputs, thermo_outputs),
            "friction": (friction_inputs, friction_outputs),
            "live": (live_inputs, live_outputs),
-           "sound": (sound_inputs, sound_outputs)}
+           "sound": (sound_inputs, sound_outputs),
+           "vehicles": (vehicles_inputs, vehicles_outputs)}
 
 
 def compare(a, b, tol, path=""):
@@ -644,6 +661,11 @@ def main():
             now = gen_out(fx["inputs"])
             if name == "live":
                 worst, where = compare_live(now, fx["outputs"], TOL[name])
+            elif name == "vehicles":
+                # plain data with strings (names, gearbox): exact equality
+                diff = [f"{k}/{t}/{f}" for k in fx["outputs"] for t in fx["outputs"][k]
+                        for f in fx["outputs"][k][t] if now.get(k, {}).get(t, {}).get(f) != fx["outputs"][k][t][f]]
+                worst, where = (0.0, "") if not diff and now == fx["outputs"] else (math.inf, diff[0] if diff else "keys")
             elif name == "sound":
                 # the synth at its own bound (see sound_inputs), reported on the module's scale
                 ts = fx["inputs"]["synth"]["tolerance_rel"]

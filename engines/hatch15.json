@@ -1,0 +1,15 @@
+{
+  "key": "hatch15",
+  "name": "1.5 L four, 115 ps",
+  "displacement": 1.5,
+  "n_cyl": 4,
+  "rated_rpm": 4000,
+  "peak_torque": 260,
+  "peak_power": 85,
+  "plateau": [
+    2000,
+    2750
+  ],
+  "boost_map_rise": 0.12,
+  "afr_limit": 16.0
+}

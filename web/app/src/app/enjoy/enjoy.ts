@@ -2,12 +2,14 @@ import { ChangeDetectionStrategy, Component, computed, HostListener, OnDestroy, 
 import { RouterLink } from '@angular/router';
 import type { Transmission } from '@dieselsim/physics';
 import { releaseFocus } from '../drive/drive';
-import { controlKey, DRIVE_PRESETS, MIC_KEYS, MICS } from '../drive/drive-keys';
+import { controlKey, MIC_KEYS, MICS } from '../drive/drive-keys';
 import { LiveSession } from '../drive/live-session';
 import type { Pedals } from '../drive/protocol';
 import { avgL100, nowL100, rangeKm } from './economy';
 import { Gauge, speedScale, tachScale } from './gauge';
+import { derateLit } from './lamps';
 import { Pedal } from './pedal';
+import { ROSTER } from './roster';
 
 const fmt0 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 const PHASE = ['', 'shifting: torque phase', 'shifting: inertia phase'];
@@ -27,8 +29,8 @@ const PHASE = ['', 'shifting: torque phase', 'shifting: inertia phase'];
 })
 export class EnjoyPage implements OnDestroy {
   protected readonly fmt0 = fmt0;
-  protected readonly presets = DRIVE_PRESETS;
-  protected readonly preset = signal('crdi15');
+  protected readonly presets = ROSTER;
+  protected readonly preset = signal(ROSTER[0]!.key);
   protected readonly manual = signal(false);
   private readonly s = new LiveSession();
   protected readonly status = this.s.status;
@@ -53,7 +55,7 @@ export class EnjoyPage implements OnDestroy {
       { key: 'stall', text: 'Stalled', on: s.stalled, warn: true },
       { key: 'stopped', text: 'Engine off', on: s.engine_stopped, warn: true },
       { key: 'hot', text: 'Overheat', on: !!s.overheat || s.T_coolant >= i.T_warn, warn: true },
-      { key: 'derate', text: 'Derate', on: s.derate < 0.999, warn: true },
+      { key: 'derate', text: 'Derate', on: derateLit(s.derate, s.derate_heat), warn: true },
       { key: 'fuel', text: s.out_of_fuel ? 'Out of fuel' : 'Low fuel', on: lowFuel, warn: true },
       { key: 'fan', text: 'Fan', on: s.fan_on, warn: false },
       { key: 'cruise', text: 'Cruise', on: s.cruise, warn: false },

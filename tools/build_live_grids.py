@@ -34,12 +34,17 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from dieselsim.acoustics import EngineSound  # noqa: E402
 from dieselsim.bridge import grid_hash  # noqa: E402
+from dieselsim.builder import load_engine_dir  # noqa: E402
 from dieselsim.config import PRESETS  # noqa: E402
 from dieselsim.engine import DieselEngine  # noqa: E402
 from dieselsim.grid import solve_cell  # noqa: E402
 from dieselsim.livesound import SOURCE_KEYS  # noqa: E402  (the six the synth reads)
 
 OUT = os.path.join(os.path.dirname(__file__), "..", "web", "app", "public", "grids")
+# the Enjoy roster (ADR-012) is built with builder.py from engines/*.json:
+# register it here, so this process and every spawned worker know its keys
+ENGINES = os.path.join(os.path.dirname(__file__), "..", "engines")
+load_engine_dir(ENGINES)
 N_RPM, N_LOAD, T_COLD = 8, 6, 273.0
 
 
@@ -120,6 +125,13 @@ def build(key, pool, ghash):
             "src_f32": col("warm", 2, "f32"), "src_cold_f32": col("cold", 2, "f32"),
             "src_meta": col("warm", 2, "meta"), "src_meta_cold": col("cold", 2, "meta"),
             "unsettled_cells": unsettled, "build_s": round(time.time() - t0)}
+    # a roster engine's grid depends on its engines/<key>.json, which the grid
+    # hash (dieselsim/ only) does not cover: record the file it was built from
+    ef = os.path.join(ENGINES, f"{key}.json")
+    if os.path.exists(ef):
+        import hashlib
+        with open(ef, "rb") as fh:
+            data["engine_file_sha256"] = hashlib.sha256(fh.read()).hexdigest()
     data.update(annotation(key))
     os.makedirs(OUT, exist_ok=True)
     path = os.path.join(OUT, f"{key}.json")

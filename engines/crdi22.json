@@ -1,6 +1,6 @@
 {
   "key": "crdi22",
-  "name": "2.2 CRDi",
+  "name": "2.2 L four, 150 ps",
   "displacement": 2.2,
   "n_cyl": 4,
   "rated_rpm": 3800,
@@ -9,5 +9,7 @@
   "plateau": [
     1750,
     2750
-  ]
+  ],
+  "boost_map_rise": 0.12,
+  "afr_limit": 16.0
 }

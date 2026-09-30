@@ -165,7 +165,7 @@ class Vehicle:
         self.launch_rpm = 2000.0
         self.fuel_tank_L = 60.0
         self.clutch_cap_max = 0.0     # 0 -> derived from engine torque
-        if preset == "hd_i6":                     # tractor unit, laden
+        if preset in ("hd_i6", "truck127"):       # tractor unit, laden (truck127: Enjoy roster, ADR-012)
             self.name = "40 t tractor-trailer"
             self.fuel_tank_L = 400.0
             self.stall_rpm = 1900.0
@@ -216,6 +216,39 @@ class Vehicle:
             self.J_wheel = 3.6
             self.TR_stall = 1.85
             self.stall_rpm = 2100.0
+            self.tc_diameter_gain = 1.00
+            self.v_lock_min = 9.0
+        elif preset == "hatch15":                 # Enjoy roster (ADR-012): hatchback, 6-speed
+            self.name = "1.3 t hatchback, 6-speed"
+            self.fuel_tank_L = 45.0
+            self.mass = 1300.0
+            self.r_wheel = 0.303                  # 195/55 R16
+            self.gears = [3.73, 2.05, 1.32, 0.97, 0.76, 0.63]
+            self.final = 3.94
+            self.CdA = 0.64
+            self.Crr = 0.0092
+            self.eta = 0.94
+            self.launch_rpm = 2100.0              # its torque arrives at 2000 rpm
+            self.J_trans = 0.065
+            self.J_wheel = 3.3
+            self.TR_stall = 1.90
+            self.stall_rpm = 2100.0
+            self.tc_diameter_gain = 1.00
+            self.v_lock_min = 9.0
+        elif preset == "crdi22":                  # Enjoy roster (ADR-012): SUV, 8-speed auto
+            self.name = "1.9 t SUV, 8-speed auto"
+            self.fuel_tank_L = 65.0
+            self.mass = 1900.0
+            self.r_wheel = 0.355                  # 235/60 R18
+            self.gears = [4.71, 3.14, 2.11, 1.67, 1.29, 1.00, 0.84, 0.67]
+            self.final = 3.20
+            self.CdA = 0.95
+            self.Crr = 0.0110
+            self.eta = 0.93
+            self.J_trans = 0.11
+            self.J_wheel = 6.5
+            self.TR_stall = 2.00
+            self.stall_rpm = 2000.0
             self.tc_diameter_gain = 1.00
             self.v_lock_min = 9.0
         else:                                     # small utility tractor

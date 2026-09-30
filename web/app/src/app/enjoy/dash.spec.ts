@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { avgL100, nowL100, rangeKm } from './economy';
 import { dialMax, gaugeAngle, speedScale, SWEEP, tachScale, type Scale } from './gauge';
+import { DERATE_LAMP, derateLit } from './lamps';
 
 describe('gaugeAngle', () => {
   it('sweeps 240 degrees from zero to full scale, straight up at half', () => {
@@ -64,5 +65,18 @@ describe('economy (steady-state, FINDING-009)', () => {
   it('estimates range from the tank at the trip average', () => {
     expect(rangeKm(40, 0.5, 10)).toBeCloseTo(800, 9);
     expect(rangeKm(40, 0, 0.01)).toBeNull();
+  });
+});
+
+describe('derateLit', () => {
+  it('stays dark for the charge-density dip of ordinary driving (it once lit at 0.9992)', () => {
+    expect(derateLit(1, 1)).toBe(false);
+    expect(derateLit(0.9992, 1)).toBe(false);
+    expect(derateLit(DERATE_LAMP, 1)).toBe(false);
+  });
+  it('lights for a real charge-air loss, and for any overheat derate', () => {
+    expect(derateLit(DERATE_LAMP - 1e-9, 1)).toBe(true);
+    expect(derateLit(0.9, 1)).toBe(true);
+    expect(derateLit(0.999, 0.999)).toBe(true);
   });
 });

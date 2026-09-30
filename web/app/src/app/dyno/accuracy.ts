@@ -10,7 +10,7 @@ export interface PresetAccuracy {
   governedNm: number;
 }
 
-export const ACCURACY_SOLVER = '226abeff0a5deedd2a6d55763aa369524fb184197ef81076814e9de7d7828e1f';
+export const ACCURACY_SOLVER = 'de5d11f0f3f075147411746e057c341bc44cf1f6adefb2bbb20eb112babfe27b';
 
 export const ACCURACY: Record<string, PresetAccuracy> = {
   crdi15: { worstPct: -5.8, worstRpm: 1650, governedNm: 1.8 },
