@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-09-30 (session 5, part 10: the Enjoy dashboard; #72–#75)
+**Updated:** 2026-09-30 (session 5, part 11: roster A on `/enjoy`; #72–#76)
 **Phase:** 1, 2, 3 and **4 exit-ready** (REVIEW-003 to -006). The owner signed
 off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
 - FINDING-022 is fixed (option A, #64).
@@ -33,7 +33,67 @@ off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
   produced no click, so a manual could not be shifted on a phone. Paddles
   now act on `pointerdown`. `e2e:enjoy` is 14/14 with 11 of 11 mutants
   caught; the dial scales carry property tests.
-- **Next:** the roster (A first), then a real Android phone.
+- ~~**Next:** the roster (A first), then a real Android phone.~~ Roster A
+  is done (#76, below); next is a real Android phone, then roster B.
+
+**Roster A on `/enjoy` (#76, stacked on #75), part 11:**
+- **The engines.** Three builder engines, each with its own vehicle:
+  - `hatch15`: 1.5 L four, 115 ps, in a 1.3 t hatchback with a 6-speed;
+  - `crdi22`: 2.2 L four, 150 ps, in a 1.9 t SUV with an 8-speed automatic;
+  - `truck127`: 12.7 L six, 530 hp, in the 40 t tractor-trailer.
+  - `engines/ROSTER.md` records `verify()` for each, as ADR-008 requires:
+    peaks within 0.7% (torque) and 2.0% (power); every plateau point ≥ 96.6%
+    of the cap.
+- **Tuning.** Straight out of the builder, every engine was air-limited at
+  its boost target on the low plateau (77–86% of the cap).
+  - A new `build_engine(boost_map_rise=)` parameter (default unchanged),
+    plus a richer `afr_limit` per engine, fixed it.
+  - hatch15's brochure plateau moved from 1,750 to 2,000 rpm: no setting
+    held 1,750 (best 89.3%).
+  - `test_roster_engines_make_their_numbers` guards the plateau start and
+    rated power; the untuned crdi22 fails it (83.2%).
+- **Grids.** Three new converged grids (731 / 835 / 1,191 s).
+  - Unsettled cells: hatch15 1, crdi22 2, **truck127 13** (of 96). The page
+    shows the count.
+  - Each grid records its engine file's SHA-256, because `engines/*.json`
+    is outside the grid hash. `test_roster_grids_match_their_engine_files`
+    catches a grid left stale by an edited engine file.
+  - The five dev grids and the dyno's accuracy table were **re-stamped**,
+    not rebuilt, 226abeff… → de5d11f0…. Proof: the only `dieselsim/`
+    changes are `builder.py`, which the cell solve does not import (the
+    static import walk), and `live.py`, which is excluded from the hash.
+- **Vehicles are held Python ↔ TypeScript field for field**: a new
+  `vehicles` fixture covers all 8 keys × tc/dct/manual, exact. 8/8 pass;
+  a one-ratio mutant is caught.
+- **Two dashboard bugs, found by the roster:**
+  - **The Derate lamp lit in ordinary driving.** It tested `derate < 0.999`.
+    But `derate` includes a continuous charge-density term (hatch15 idles at
+    0.9992 once the charge air warms). The lamp now means protection: any
+    overheat derate, or a charge-air loss over 5% (`lamps.ts`, unit-tested
+    on both edges).
+  - **The stall check only ever worked on crdi15.** It released the clutch
+    in 1st at idle, and a hatchback does not stall that way. Measured in
+    Python: the engine dips to 369 rpm and creeps off at 6.1 km/h; with
+    the brake on, it stalls at 0.53 s. The e2e now brakes and clutches,
+    shifts, then lets the clutch up with the brake held. It also checks
+    that no other lamp is lit.
+- **Correction to part 10's e2e.** The two-thumb shift "lifted" the paddle
+  finger with a `touchMove` that left that point out. **CDP keeps an
+  omitted point pressed**: the clutch read 1.00 after its finger was
+  "lifted" this way. The paddle check was still valid, because the paddle
+  acts on press. The stall step worked only because `touchEnd` lifts every
+  finger. The e2e now lifts all fingers and re-presses the brake at once;
+  the comment in `enjoy.e2e.mjs` says why.
+- **Mutation runs.**
+  - Unit: 4 of 4 caught on `derateLit` (the old rule, heat ignored, the
+    edge, never lit).
+  - e2e: 3 of 4 caught (the worker ignores the brake; a dead Stalled lamp;
+    the stall scenario without the brake).
+  - **Survived: the old Derate rule, in the e2e.** At the stall, derate is
+    about 1, so only the unit test guards that rule.
+  - One mutant was discarded as invalid and redone. It released the brake
+    together with the clutch; the brake springs back over 0.45 s and was
+    still on when the clutch bit, so the engine stalled.
 
 **Main has everything** (checked 2026-09-30 by content: `main` against the
 tested top of each stack, 0 lines differ):
@@ -42,7 +102,10 @@ tested top of each stack, 0 lines differ):
   because their branches were deleted before merging (deleting a PR's head
   or base branch makes GitHub close it).
 
-**No PR is open.** Remote branches: `main`, and `fix/steady-state-controllers`
+~~**No PR is open.**~~ **Open, a stack, merge in order:** #72
+(`docs/status-main` → `main`) → #73 → #74 → #75 → #76 (`feat/roster-a`).
+Retarget each child to `main` after its parent merges, or merge top-down.
+Remote branches besides those: `main`, and `fix/steady-state-controllers`
 (kept; the only copy of the FINDING-013 option A experiment).
 
 The table below is the history of the Phase 3–4 stacks.
@@ -713,19 +776,20 @@ claim is corrected in PROJECT_CONTEXT §1.3 (#46). Kept as history.)*
 ## Tests
 
 ```
-python3 tests/test_physics.py                    # top of the stack: 62 passed, 0 failed, 3 known with scipy; 57 + 4 skipped without
+python3 tests/test_physics.py                    # top of the stack (#76): 64 passed, 0 failed, 3 known with scipy; 59 + 4 skipped without
 python3 tools/audit_dead_signals.py              # 0 dead, 2 frozen (the h_ring clamp, known), 0 tiny
 python3 tools/validate_table.py [--aged]         # PROJECT_CONTEXT §1.5 re-check: 12 of 12 in band
 python3 tools/fixtures/gen_fixtures.py --check   # golden fixtures current (regenerate without --check)
 cd web/physics && npm ci && npm test             # TypeScript ports vs fixtures: 5 checks
 cd tools/pyodide && npm ci && npm run suite      # the same physics suite under Pyodide
 cd web/solver && npm ci && npm test              # 20 cache tests + 18 round-trip checks through a real worker
-cd web/app && npm test -- --watch=false          # 28 unit tests (vitest)
+cd web/app && npm test -- --watch=false          # 42 unit tests (vitest)
 cd web/app && npm run build:pages                # never plain `build`
 cd web/app && CHROME_PATH=... npm run e2e        # dyno pull in Chrome vs native (computes its own reference)
 cd web/app && CHROME_PATH=... npm run e2e:grid   # full 8 x 6 grid in Chrome vs native, cell for cell (~9 min)
 cd web/app && CHROME_PATH=... npm run e2e:drive  # /drive: prebuilt grid, 60 Hz, 60 s script vs native Python
-cd web/physics && npm test                       # 51 checks: fixture ports, 7 live drives, the synth (sound.json)
+cd web/physics && npm test                       # 59 checks: fixture ports, 7 live drives, the synth, 8 vehicles
+cd web/app && CHROME_PATH=... npm run e2e:enjoy  # /enjoy: multi-touch on an emulated landscape Pixel, 14 checks
 cd web/app && CHROME_PATH=... npm run e2e:sound  # /drive with sound: worklet output, firing harmonics, pitch, mics
 python3 tools/fixtures/gen_fixtures.py --only live   # regenerate live drives after a live.py change (~4 min)
 python3 tools/build_live_grids.py                # rebuild the prebuilt converged grids after a SOLVER change (~57 min)
@@ -764,8 +828,9 @@ Session 4's branch table is in git history.
 
 ## Next actions
 
-1. **Owner:** merge #50, then #51 → #58, then #59 → #64, retargeting each
-   child to `main`.
+1. ~~**Owner:** merge #50, then #51 → #58, then #59 → #64, retargeting each
+   child to `main`.~~ Done (#50, #65, #71). **Now: merge #72 → #76 in
+   order**, retargeting each child to `main`.
 2. **Owner: listen.** On `/drive`: Sound on, keys 1–5 for the mics, "Record
    10 s (WAV)". Or `python3 play.py`. Listen for:
    - `hd_i6`'s tick dominance (13×);
@@ -777,8 +842,10 @@ Session 4's branch table is in git history.
    Then pick an option for 023 (recommended: A, a temperature-dependent
    clearance), which means one ~70 min grid rebuild. A ramp-height parameter
    separate from `ramp_fraction` is still open for the same review.
-3. **Phase 5 — Enjoy mode:** the roster (OPEN-F), the dashboard, and the
-   steady-state economy label. Check live friction's cost and the synth's on a
+3. **Phase 5 — Enjoy mode:** ~~the roster (OPEN-F), the dashboard, and the
+   steady-state economy label~~ roster A, the dashboard and the label are
+   done (#75, #76). Next: roster B (`v8hd`, an old NA single), and truck127's
+   13 unsettled cells, if they show on the dials. Check live friction's cost and the synth's on a
    mid-range phone (REVIEW-005 m-5, REVIEW-006 m-1).
 4. Follow-ups:
    - a TCU engine-speed match on converter downshifts (REVIEW-005 m-3);

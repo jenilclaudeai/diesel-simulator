@@ -1448,6 +1448,59 @@ def test_live_sound_follows_the_engine():
           + f"boundary power {ic.get('Pb', 0.0) / iw.get('Pb', 1.0):.2f}x" + ("" if "Pb" in ic else " (no live friction sent)"))
 
 
+ENGINES_DIR = os.path.join(os.path.dirname(__file__), "..", "engines")
+ROSTER = ("hatch15", "crdi22", "truck127")        # Enjoy mode, roster A (ADR-012)
+
+
+def test_roster_engines_make_their_numbers():
+    """ADR-008/012: each Enjoy roster engine, built by builder.py from its
+    engines/<key>.json brochure, still delivers it: at the start of its
+    torque plateau at least 95% of the rating cap (the low end is where the
+    builder falls short: 77-85% before tuning), and at rated speed within 3%
+    of its brochure power. Fresh engine per point. The full verify() record
+    is in engines/ROSTER.md. SKIP where engines/ is absent (Pyodide)."""
+    import json
+    if not os.path.isdir(ENGINES_DIR):
+        RESULTS.append(("SKIP", "roster engines make their numbers", None, None, "engines/ not present"))
+        return
+    from dieselsim.builder import load_engine_dir
+    load_engine_dir(ENGINES_DIR)
+    notes, ok = [], True
+    for key in ROSTER:
+        with open(os.path.join(ENGINES_DIR, f"{key}.json")) as fh:
+            d = json.load(fh)
+        lo = float(d["plateau"][0])
+        e = DieselEngine(preset=key)
+        T = e.operating_point(lo, load=1.0, n_cycles=9).torque
+        frac = T / e.torque_cap(lo)
+        P = DieselEngine(preset=key).operating_point(float(d["rated_rpm"]), load=1.0, n_cycles=9).power / 1e3
+        good = frac >= 0.95 and abs(P / d["peak_power"] - 1.0) <= 0.03
+        ok = ok and good
+        notes.append(f"{key} {100 * frac:.1f}% at {lo:.0f} rpm, {P:.1f}/{d['peak_power']} kW")
+    check("roster engines make their brochure numbers (ADR-008/012)", 1.0 if ok else 0.0, 1.0, 0.0, "; ".join(notes))
+
+
+def test_roster_grids_match_their_engine_files():
+    """A roster grid depends on engines/<key>.json, which the grid hash
+    (dieselsim/ only) does not cover: build_live_grids records the file's
+    sha256, and it must still match, or a retuned engine drives a stale grid
+    unnoticed. SKIP where the grids or engines/ are absent (Pyodide)."""
+    import hashlib
+    import json
+    if _no_prebuilt_grids("roster grids match their engine files") or not os.path.isdir(ENGINES_DIR):
+        return
+    bad = []
+    for key in ROSTER:
+        with open(os.path.join(GRID_DIR, f"{key}.json")) as fh:
+            recorded = json.load(fh).get("engine_file_sha256")
+        with open(os.path.join(ENGINES_DIR, f"{key}.json"), "rb") as fh:
+            now = hashlib.sha256(fh.read()).hexdigest()
+        if recorded != now:
+            bad.append(f"{key} ({'none recorded' if recorded is None else recorded[:12]} vs {now[:12]})")
+    check("roster grids were built from the current engine files", 1.0 if not bad else 0.0, 1.0, 0.0,
+          f"stale: {', '.join(bad)}" if bad else f"{len(ROSTER)} of {len(ROSTER)} match")
+
+
 def main():
     for fn in (test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
@@ -1492,7 +1545,9 @@ def main():
                test_livesound_matches_render,
                test_intake_and_boost_levels_carry_physics,
                test_grid_sources_warm_and_cold,
-               test_live_sound_follows_the_engine):
+               test_live_sound_follows_the_engine,
+               test_roster_engines_make_their_numbers,
+               test_roster_grids_match_their_engine_files):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001

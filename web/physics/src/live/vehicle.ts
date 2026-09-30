@@ -28,6 +28,7 @@ export function vehicleFor(preset: string, trans: Transmission = "dct"): Vehicle
   const base = { trans, launch_rpm: 2000.0, fuel_tank_L: 60.0, clutch_cap_max: 0.0 };
   switch (preset) {
     case "hd_i6": // tractor unit, laden
+    case "truck127": // the same, for the Enjoy roster's 12.7 L six (ADR-012)
       return { ...base, name: "40 t tractor-trailer", fuel_tank_L: 400.0, stall_rpm: 1900.0, mass: 24000.0,
         r_wheel: 0.506, gears: [3.49, 1.86, 1.41, 1.0, 0.75, 0.65], final: 3.7, CdA: 8.0, Crr: 0.0068,
         eta: 0.94, J_trans: 0.6, J_wheel: 46.0, TR_stall: 1.95, tc_diameter_gain: 1.0, v_lock_min: 8.0 };
@@ -40,6 +41,15 @@ export function vehicleFor(preset: string, trans: Transmission = "dct"): Vehicle
         gears: [3.62, 2.05, 1.36, 1.0, 0.79, 0.67, 0.58], final: 4.3, CdA: 0.7, Crr: 0.0092, eta: 0.94,
         launch_rpm: 2100.0, J_trans: 0.07, J_wheel: 3.6, TR_stall: 1.85, stall_rpm: 2100.0,
         tc_diameter_gain: 1.0, v_lock_min: 9.0 };
+    case "hatch15": // Enjoy roster (ADR-012): hatchback, 6-speed
+      return { ...base, name: "1.3 t hatchback, 6-speed", fuel_tank_L: 45.0, mass: 1300.0, r_wheel: 0.303,
+        gears: [3.73, 2.05, 1.32, 0.97, 0.76, 0.63], final: 3.94, CdA: 0.64, Crr: 0.0092, eta: 0.94,
+        launch_rpm: 2100.0, J_trans: 0.065, J_wheel: 3.3, TR_stall: 1.9, stall_rpm: 2100.0,
+        tc_diameter_gain: 1.0, v_lock_min: 9.0 };
+    case "crdi22": // Enjoy roster (ADR-012): SUV, 8-speed auto
+      return { ...base, name: "1.9 t SUV, 8-speed auto", fuel_tank_L: 65.0, mass: 1900.0, r_wheel: 0.355,
+        gears: [4.71, 3.14, 2.11, 1.67, 1.29, 1.0, 0.84, 0.67], final: 3.2, CdA: 0.95, Crr: 0.011, eta: 0.93,
+        J_trans: 0.11, J_wheel: 6.5, TR_stall: 2.0, stall_rpm: 2000.0, tc_diameter_gain: 1.0, v_lock_min: 9.0 };
     default: // small utility tractor
       return { ...base, name: "3 t utility tractor", fuel_tank_L: 60.0, stall_rpm: 1800.0, mass: 3000.0,
         r_wheel: 0.42, gears: [4.5, 2.2, 1.3, 0.9], final: 4.1, CdA: 2.4, Crr: 0.018, eta: 0.88,

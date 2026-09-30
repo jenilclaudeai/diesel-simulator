@@ -3,6 +3,7 @@
 //
 //   npm run build:pages && CHROME_PATH=/path/to/chrome npm run e2e:enjoy
 //
+// Engines: the Enjoy roster (ADR-012), starting on the hatchback.
 // 1. One tap starts the engine and the sound.
 // 2. Holding the throttle high revs the engine and moves the car; lifting
 //    it returns the throttle to 0 (a real pedal, not the keyboard's sticky one).
@@ -163,27 +164,34 @@ await page.waitForSelector("button.start");              // re-rendered: tapping
 await tapEl("button.start");
 await page.waitForFunction(() => globalThis.__enjoy.view()?.trans === "manual", { timeout: 30_000 });
 await sleep(800);
-// two thumbs: the left holds the clutch down, the right taps the + paddle
-const clutch = await at(".clutch .pedal", 0.95), plus = await at("button.paddle.plus", 0.5);
-await touch("touchStart", [clutch]);
+// brake and clutch held, then a tap on the + paddle; then the clutch comes up
+// with the brake still on, which must stall it (a light car on the flat may
+// otherwise idle away in 1st: the roster hatchback does)
+const brake = await at(".brake .pedal", 0.95), clutch = await at(".clutch .pedal", 0.95), plus = await at("button.paddle.plus", 0.5);
+await touch("touchStart", [brake]);
+await touch("touchStart", [brake, clutch]);
 await sleep(300);
-await touch("touchStart", [clutch, plus]);                // second finger down on the paddle
-await sleep(60);
-await touch("touchMove", [clutch]);                       // ... and up again (the clutch stays down)
+await touch("touchStart", [brake, clutch, plus]);         // a third finger on the paddle (it acts on press)
 await sleep(400);
 const shifted = await view();
-await touch("touchEnd", []);                              // clutch up, no throttle
+// CDP cannot lift one finger of several: a touchMove that leaves a point out
+// keeps it pressed (measured: the clutch stayed at 1.00), and touchEnd lifts
+// them all. So lift all three and put the brake straight back down
+await touch("touchEnd", []);
+await touch("touchStart", [brake]);
 check("with the clutch held, the paddle shifts (two thumbs)", shifted.gear !== "N",
   `gear ${shifted.gear}, clutch ${shifted.clutch.toFixed(2)}`);
 await page.waitForFunction(() => globalThis.__enjoy.view()?.stalled, { timeout: 8000 }).catch(() => {});
+await touch("touchEnd", []);
 const stall = await page.evaluate(() => ({ stalled: globalThis.__enjoy.view().stalled, gear: globalThis.__enjoy.view().gear,
   lit: document.querySelector(".lamp.stall")?.classList.contains("on"), others: [...document.querySelectorAll(".lamp.on")].map(l => l.textContent.trim()) }));
-check("a stalled manual lights the Stalled lamp", stall.stalled && stall.lit,
+check("a stalled manual lights the Stalled lamp, and no lamp lights falsely",
+  stall.stalled && stall.lit && stall.others.every(t => t === "Stalled"),
   `stalled ${stall.stalled} in gear ${stall.gear}; lit: ${stall.others.join(", ") || "none"}`);
 
 // the dial scale follows the vehicle
 const hatchTop = d.speedTop;
-await page.select('select[aria-label="Engine"]', "hd_i6");
+await page.select('select[aria-label="Engine"]', "truck127");      // the roster's truck (ADR-012)
 await page.waitForSelector("button.start");
 await tapEl("button.start");
 await page.waitForFunction(() => globalThis.__enjoy.view(), { timeout: 60_000 });

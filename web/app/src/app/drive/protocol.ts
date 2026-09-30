@@ -46,6 +46,7 @@ export interface LiveView {
   // the dashboard (Phase 5)
   tank_L: number; out_of_fuel: boolean; fuel_kg_h: number;
   fan_on: boolean; T_charge: number; derate: number; engine_stopped: boolean;
+  derate_heat: number;  // the overheat part of derate (engine protection); the rest is charge-air density
 }
 
 /** What the dashboard needs once per engine: its scales and limits. */

@@ -31,6 +31,7 @@ function view(): LiveView {
     phase: gb.phase, auto: gb.auto,
     tank_L: e.tank_L, out_of_fuel: e.out_of_fuel, fuel_kg_h: e.fuel_kg_h,
     fan_on: e.fan_on, T_charge: e.T_charge, derate: e.derate, engine_stopped: e.engine_stopped,
+    derate_heat: e.derate_heat,
   };
 }
 
