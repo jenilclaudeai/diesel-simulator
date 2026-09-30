@@ -207,9 +207,11 @@ sources). Moved here from Phase 1 by the owner's decision.
 - The drive page plays it in an AudioWorklet (Sound on, five mics, Record
   WAV).
 - Criteria 1 and 2 are met, and CI checks both.
-- **Criterion 3, the owner's listening sign-off, is open.** FINDINGs 022
-  (intake and boost levels normalised away) and 023 (the slap input pinned
-  on a clamp) wait on it, so that one grid rebuild covers both.
+- **Criterion 3 is met.** The owner signed off by ear on 2026-09-30 ("Yes
+  it sounds right to me"; REVIEW-006). FINDING-022 was fixed first (#64).
+  FINDING-023 (the slap input pinned on a clamp) stays open as a known
+  defect, for later.
+- *(Was: "Criterion 3, the owner's listening sign-off, is open.")*
 
 ---
 

@@ -1,19 +1,26 @@
 # Status
 
-**Updated:** 2026-09-29 (session 5, part 7: play.py on the prebuilt grids; Phase 5 proposal; #66–#70)
-**Phase:** 1, 2 and 3 **exit-ready** (REVIEW-003, -004, -005). Phase 4 (audio)
-is **built and measured** (REVIEW-006).
-- **FINDING-022 is fixed** (the owner chose option A; #64).
+**Updated:** 2026-09-30 (session 5, part 8: everything is on `main`)
+**Phase:** 1, 2, 3 and **4 exit-ready** (REVIEW-003 to -006). The owner signed
+off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
+- FINDING-022 is fixed (option A, #64).
 - Still waiting on the owner:
-  - the listening sign-off (PLAN's third criterion);
-  - an option for FINDING-023, which will need its own ~70 min grid rebuild.
+  - an option for FINDING-023 (cold slap), a model improvement for later
+    that needs its own ~70 min grid rebuild;
+  - the Phase 5 decisions in `reviews/PROPOSAL-phase5.md`: the roster, the
+    touch layout, the route, the phone.
 
-**Main:** everything up to #50 (Phases 1–2) is on `main`. #51–#64 were all
-merged on 2026-09-28, but bottom-up into their parent branches, so none
-reached `main`. It is the same trap as #41–#49. **#65 lands them all in one
-merge** from `docs/phase4-exit`, where #64 merged. A trial merge into
-`main` is identical to the tested top of the stack (0 lines differ). Once #65
-is merged, every branch but `main` can be deleted; see "Branches" below.
+**Main has everything** (checked 2026-09-30 by content: `main` against the
+tested top of each stack, 0 lines differ):
+- #50 landed #41–#49 (Phases 1 and 2); #65 landed #51–#64 (Phases 3 and 4).
+- **#71 landed #66–#70.** Those five were *closed unmerged* on 2026-09-29,
+  because their branches were deleted before merging (deleting a PR's head
+  or base branch makes GitHub close it).
+
+**No PR is open.** Remote branches: `main`, and `fix/steady-state-controllers`
+(kept; the only copy of the FINDING-013 option A experiment).
+
+The table below is the history of the Phase 3–4 stacks.
 
 | PR | branch | what |
 |---|---|---|
