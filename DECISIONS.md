@@ -451,8 +451,8 @@ for little added rigour.
 
 ### OPEN-F — Enjoy mode roster contents
 
-Which engines, and how many? Opened by ADR-008. Needed before Phase 5, not
-before Phase 1.
+**Resolved by ADR-012 (2026-09-30).** *Was:* Which engines, and how many?
+Opened by ADR-008. Needed before Phase 5, not before Phase 1.
 
 ---
 
@@ -780,3 +780,48 @@ and coolant temperatures.
     closed in real time.
 - The TypeScript loop matches Python on the two ADR-011 fixture drives:
   per step 1.0e-14, every event on the same step, final values within 2e-15.
+
+---
+
+## ADR-012 — Enjoy mode: the roster, touch pedals, `/enjoy`, judged on a mid-range Android
+
+**Status:** Accepted (2026-09-30), resolving OPEN-F. The owner chose each
+recommendation in `reviews/PROPOSAL-phase5.md`.
+
+### Decision
+
+1. **Roster B, delivered as A first.**
+   - A: a 1.5 L I4 hatchback; a 2.2 L I4 SUV (`engines/crdi22.json`); a
+     12.7 L I6 truck.
+   - B adds: a 15 L V8 truck (`engines/v8hd.json`), and an old naturally
+     aspirated single-cylinder.
+   - Each is built with `builder.py` from brochure numbers (ADR-008), gets
+     its own vehicle, is tuned until `verify()` holds its plateau, and ships
+     a converged warm/cold grid.
+2. **Touch controls: pedals, plus paddles along the top.**
+   - Throttle on the right edge and brake on the left, each pressed harder
+     by sliding up.
+   - Shift-up and shift-down paddles in the top corners.
+   - A clutch beside the brake for the manual.
+   - The throttle follows the finger and returns to zero when released.
+     Brake and clutch spring back as the keyboard's do (`pedal_return`).
+   - The keys keep working.
+3. **A new `/enjoy` page:** the dashboard and the touch controls, nothing to
+   configure. `/drive` stays as the engineering page.
+4. **The exit is judged on a real mid-range Android phone in Chrome.**
+
+### Rationale
+
+The roster spans characters that *sound* different: 1, 4, 6 and 8
+cylinders, and one engine with no turbo. It starts with the three engines
+whose vehicles mostly exist. Touch is what makes the app drivable on a phone
+at all: measured on 2026-09-29, `/drive` had no touch controls. Chrome on
+Android is the engine every test here already runs.
+
+### Consequences
+
+- Touch input is UI and worker plumbing only. It sets the same loop fields
+  the keys do, so the Python reference and the fixtures are unaffected.
+- Every roster engine costs a vehicle (Python + TypeScript + fixture), a
+  tuning pass, and a converged grid (3.5–15 min, ~1 MB gzip).
+- FINDING-023 (cold slap) is best settled before the roster is tuned by ear.

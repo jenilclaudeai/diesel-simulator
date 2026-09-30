@@ -7,8 +7,9 @@ off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
 - Still waiting on the owner:
   - an option for FINDING-023 (cold slap), a model improvement for later
     that needs its own ~70 min grid rebuild;
-  - the Phase 5 decisions in `reviews/PROPOSAL-phase5.md`: the roster, the
-    touch layout, the route, the phone.
+  - *(the Phase 5 decisions are made: ADR-012, 2026-09-30: roster B as A
+    first; touch pedals with top paddles; a new `/enjoy`; judged on a
+    mid-range Android)*
 
 **Main has everything** (checked 2026-09-30 by content: `main` against the
 tested top of each stack, 0 lines differ):

@@ -104,7 +104,7 @@ raising no error.** `tools/audit_dead_signals.py` exists to catch the next.
 
 ## Decisions
 
-`DECISIONS.md` holds ADR-001 to ADR-010. Don't reopen one without a
+`DECISIONS.md` holds ADR-001 to ADR-012. Don't reopen one without a
 measured reason. The ones most easily undone by accident: the Python solver
 runs **unmodified** under Pyodide (ADR-001); audio is a TypeScript
 AudioWorklet with no `SharedArrayBuffer`, so no COOP/COEP headers, so GitHub
