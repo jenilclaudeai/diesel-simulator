@@ -252,6 +252,15 @@ class Tribology:
 # --------------------------------------------------------------------------
 # Thermal boundary
 # --------------------------------------------------------------------------
+# engine._apply_thermal_state: how many kelvin each wall moves per kelvin of
+# coolant away from the warm reference, at which the spec's own wall
+# temperatures are given. Shared with the slap clearance (acoustics.py,
+# FINDING-023), so the two cannot disagree.
+T_COOLANT_REF = 361.0
+WALL_FOLLOW = {"piston_T": 0.72, "head_T": 0.85, "liner_T_top": 0.88,
+               "liner_T_bot": 0.95, "port_T_exh": 0.45}
+
+
 @dataclass
 class Thermal:
     coolant_T: float = 361.0        # K (88 C)

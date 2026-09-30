@@ -631,6 +631,53 @@ def test_mech_levels_carry_physics():
           f"(each must exceed +1%)")
 
 
+def test_cold_slap_follows_clearance():
+    """FINDING-023 option A: slap reads the running skirt clearance, which a
+    cold engine opens (an aluminium piston shrinks more than its iron bore),
+    instead of the skirt film, which sat on its 0.32 x clearance cap in every
+    cold cell. Checked at each place the synth's input is made: the formula
+    (warm reference, a hand value at 273 K, falling with temperature, the
+    floor); EngineSound.build_sources; grid.solve_cell's cold cell; and the
+    live loop's sound_inputs(), whose prebuilt-grid part SKIPs without one."""
+    from dieselsim.acoustics import (ALPHA_BORE, ALPHA_PISTON, EngineSound,
+                                     running_skirt_clearance as clr)
+    from dieselsim.grid import solve_cell
+    eng = DieselEngine(preset="crdi15")
+    c, b = eng.wear.eff_skirt_clearance(), eng.spec.geom.bore
+    # by hand: the piston moves 0.72 K and the liner mean 0.55*0.88 + 0.45*0.95
+    # per K of coolant (_apply_thermal_state)
+    hand = c + b * 88.0 * (ALPHA_PISTON * 0.72 - ALPHA_BORE * (0.55 * 0.88 + 0.45 * 0.95))
+    Ts = [250.0 + 5.0 * k for k in range(31)]
+    falls = all(clr(c, b, t1) > clr(c, b, t2) for t1, t2 in zip(Ts, Ts[1:]))
+    parts = {"warm reference is c_ref": clr(c, b, 361.0) == c,
+             "273 K by hand": abs(clr(c, b, 273.0) / hand - 1.0) < 1e-12,
+             "falls with temperature": falls,
+             "floored at c_ref / 4": clr(c, b, 900.0) == 0.25 * c}
+    op = eng.operating_point(800.0, load=0.2, n_cycles=9)
+    snd = EngineSound(eng.spec)
+    snd.wear = eng.wear
+    warm = snd.build_sources(op)["_meta"]["skirt_clr"]
+    snd.T_coolant = 273.0
+    cold = snd.build_sources(op)["_meta"]["skirt_clr"]
+    parts["build_sources reads it"] = warm == c and cold == clr(c, b, 273.0)
+    src, _ = solve_cell(eng.spec, 800.0, 0.2, T_coolant=273.0)
+    parts["a cold grid cell carries it"] = src["_meta"]["skirt_clr"] == clr(c, b, 273.0)
+    note = f"crdi15: {c * 1e6:.1f} um warm, {clr(c, b, 273.0) * 1e6:.1f} um at 273 K (by hand {hand * 1e6:.1f})"
+    if not _no_prebuilt_grids("the live loop sends the running clearance"):
+        from dieselsim.live import LiveEngine
+        live = LiveEngine(_prebuilt_grid("crdi15"), "crdi15")
+        got = {}
+        for T in (273.0, 361.0):
+            live.T_coolant, live.T_oil = T, T
+            live._update_friction()
+            got[T] = live.sound_inputs()["skirt_clr"]
+        parts["the live loop sends it"] = got[273.0] == clr(c, b, 273.0) and got[361.0] == c
+        note += f"; live cold/warm {got[273.0] / got[361.0]:.3f}x"
+    bad = [k for k, ok in parts.items() if not ok]
+    check("slap follows the running skirt clearance (FINDING-023)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ") + note)
+
+
 def test_flat_tappet_wears_more_than_roller():
     """FINDING-015 item 2: with the flat-faced follower's own sliding and
     entrainment speeds, a flat tappet's cam boundary power per cylinder is
@@ -1362,7 +1409,10 @@ def test_grid_sources_warm_and_cold():
     that node's cell exactly; and a cold cell's skirt film -- FINDING-017's
     stand-in for slap clearance -- is never thinner than the warm one's.
     (First written as "thicker": false in 115 of 240 cells, where both sit
-    on the film's clamp. That clamp is FINDING-023, recorded below.)"""
+    on the film's clamp. That clamp is FINDING-023, recorded below.)
+    Since FINDING-023 option A the slap input is the running clearance:
+    every cold cell's is the warm one's opened by the cold (the same factor
+    in every cell of a grid), and none sits on the old film cap."""
     if _no_prebuilt_grids("prebuilt grids carry warm and cold sound sources"):
         return
     import numpy as np
@@ -1403,9 +1453,12 @@ def test_grid_sources_warm_and_cold():
           f"differ; cold/warm skirt film {min(ratio):.2f}..{max(ratio):.2f} over {len(ratio)} cells; "
           f"cold combustion identical to warm in {twins}")
     cells = len(ratio)
-    known("the slap input (skirt film) is off its clamp in cold cells (FINDING-023)",
-          pinned["cold"] == cells,
-          f"on 0.32 x clearance: {pinned['cold']} of {cells} cold cells, {pinned['warm']} of {cells} warm")
+    # was known("the slap input (skirt film) is off its clamp in cold cells
+    # (FINDING-023)", pinned["cold"] == cells, ...): 240 of 240 cold cells on it
+    check("the slap input opens in every cold cell, off the old film cap (FINDING-023)",
+          1.0 if (min(ratio) > 1.3 and pinned["cold"] == 0 and pinned["warm"] == 0) else 0.0, 1.0, 0.0,
+          f"cold/warm {min(ratio):.3f}..{max(ratio):.3f} over {cells} cells; on 0.32 x clearance: "
+          f"{pinned['cold']} cold, {pinned['warm']} warm")
 
 
 def test_live_sound_follows_the_engine():
@@ -1523,6 +1576,7 @@ def main():
                test_render_transient_has_no_seams,
                test_theta_global_axis,
                test_mech_levels_carry_physics,
+               test_cold_slap_follows_clearance,
                test_flat_tappet_wears_more_than_roller,
                test_closing_ramps_clear_the_lash,
                test_cam_wear_calibration,

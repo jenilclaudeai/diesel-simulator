@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from . import thermo
-from .config import EngineSpec, get_preset
+from .config import T_COOLANT_REF, WALL_FOLLOW, EngineSpec, get_preset
 from .cycle import CycleSolver, CycleResult
 from .friction import FrictionModel
 from .kinematics import SliderCrank
@@ -551,12 +551,12 @@ class DieselEngine:
         """
         t = self.spec.thermal
         p0, h0, lt0, lb0, pe0 = self._th0
-        f = (self.T_coolant - 361.0)
-        t.piston_T = p0 + 0.72 * f
-        t.head_T = h0 + 0.85 * f
-        t.liner_T_top = lt0 + 0.88 * f
-        t.liner_T_bot = lb0 + 0.95 * f
-        t.port_T_exh = pe0 + 0.45 * f
+        f = (self.T_coolant - T_COOLANT_REF)
+        t.piston_T = p0 + WALL_FOLLOW["piston_T"] * f
+        t.head_T = h0 + WALL_FOLLOW["head_T"] * f
+        t.liner_T_top = lt0 + WALL_FOLLOW["liner_T_top"] * f
+        t.liner_T_bot = lb0 + WALL_FOLLOW["liner_T_bot"] * f
+        t.port_T_exh = pe0 + WALL_FOLLOW["port_T_exh"] * f
 
     def _update_thermal(self, op: OperatingPoint, dt_s: float):
         """

@@ -1113,7 +1113,7 @@ class LiveEngine:
         self.fmep_live = 0.0
         self.P_mech = 0.0          # friction heat into the oil [W]
         # the live friction's sound inputs (Phase 4), held like T_fric:
-        # boundary friction power, skirt film, valve seating speed
+        # boundary friction power, skirt clearance (FINDING-023), valve seating speed
         self.Pb_live = 0.0
         self.skirt_live = 0.0
         self.vseat_live = 0.0
@@ -1137,6 +1137,7 @@ class LiveEngine:
         less than a quarter of idle: the model divides by speed, and a
         stopped engine's friction is handled where it is used.
         """
+        from .acoustics import running_skirt_clearance
         from .grid import cell_friction
         g, e = self.g, self._eng
         e.T_coolant = self.T_coolant
@@ -1151,7 +1152,9 @@ class LiveEngine:
         self.T_fric = self.fmep_live * g.k_torque
         # acoustics.build_sources' definitions, at the live oil and coolant
         self.Pb_live = float(fr["Pb_rings"] + fr["Pb_skirt"] + fr["Pb_rods"] + fr["Pb_mains"] + fr["Pb_pin"])
-        self.skirt_live = float(fr["h_skirt"])
+        # FINDING-023: slap follows the running clearance, not the film
+        self.skirt_live = running_skirt_clearance(e.wear.eff_skirt_clearance(), self.spec.geom.bore,
+                                                  self.T_coolant)
         self.vseat_live = float(fr["v_seating"])
 
     def sound_inputs(self):

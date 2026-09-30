@@ -28,6 +28,8 @@ import wave
 from dataclasses import dataclass, field
 
 import numpy as np
+
+from .config import T_COOLANT_REF, WALL_FOLLOW
 class _LazySignal:
     """
     scipy.signal, imported on first use rather than at module import.
@@ -54,6 +56,34 @@ signal = _LazySignal()
 
 C_AIR_STP = 343.0
 RHO_AIR = 1.20
+
+# ---- piston slap: the running skirt clearance (FINDING-023 option A) ----
+# Slap follows how loose the piston is in its bore. It used to read the skirt
+# oil film, which is capped at 0.32 x the clearance (a film cannot be thicker
+# than its gap) and sat on that cap in every cold cell. The clearance itself
+# opens as the engine cools: an aluminium piston shrinks about twice as much
+# as the iron bore around it. The film stays in the friction model.
+ALPHA_PISTON = 21e-6     # 1/K, Al-Si piston alloy (typically 19-22e-6)
+ALPHA_BORE = 11e-6       # 1/K, grey cast iron bore (typically 10.5-12e-6)
+# the slap level's reference: 30 um of film was the level's reference, and a
+# film on its cap is 0.32 x the clearance, so a cell whose film sat on the
+# cap keeps its old slap level exactly at the warm reference
+SLAP_CLR_REF = 30e-6 / 0.32
+
+
+def running_skirt_clearance(c_ref: float, bore: float, T_coolant: float) -> float:
+    """Diametral piston-skirt clearance [m] at this coolant temperature.
+
+    c_ref is the clearance at the warm reference coolant (T_COOLANT_REF), as
+    the friction model uses it (wear included). The piston and the bore move
+    with the coolant as engine._apply_thermal_state moves them: the piston by
+    its crown-mean share, the bore by friction.py's liner mean (0.55 top,
+    0.45 bottom). Hotter than the reference the gap closes, floored at a
+    quarter of c_ref (a piston is designed never to seize at its rating)."""
+    f = T_coolant - T_COOLANT_REF
+    dT_piston = WALL_FOLLOW["piston_T"] * f
+    dT_bore = (0.55 * WALL_FOLLOW["liner_T_top"] + 0.45 * WALL_FOLLOW["liner_T_bot"]) * f
+    return max(c_ref - bore * (ALPHA_PISTON * dT_piston - ALPHA_BORE * dT_bore), 0.25 * c_ref)
 
 
 # ==========================================================================
@@ -184,6 +214,9 @@ class EngineSound:
         self.grid = np.arange(0.0, 720.0, dtheta)
         self._rng = np.random.default_rng(12345)
         self.wear = None          # attach a WearModel to hear the engine age
+        # the coolant the walls were solved at (grid.solve_cell attaches the
+        # engine's, as it does the wear); None is the warm reference
+        self.T_coolant = None
 
         # ---- reference scales for physical source levels (FINDING-004) ----
         # Each source is normalised to unit std for its SHAPE, then scaled by
@@ -323,9 +356,16 @@ class EngineSound:
             v_seating=op.friction.get("v_seating", 1.0),
             Pb=sum(op.friction.get(k, 0.0) for k in
                    ("Pb_rings", "Pb_skirt", "Pb_rods", "Pb_mains", "Pb_pin")),
-            skirt_clr=op.friction.get("h_skirt", 40e-6),
+            skirt_clr=self.skirt_clearance(),
         )
         return src
+
+    def skirt_clearance(self) -> float:
+        """The slap input: the running skirt clearance [m] (FINDING-023)."""
+        c_ref = (self.wear.eff_skirt_clearance() if self.wear is not None
+                 else self.spec.trib.skirt_clearance_new)
+        T_c = T_COOLANT_REF if self.T_coolant is None else self.T_coolant
+        return running_skirt_clearance(c_ref, self.spec.geom.bore, T_c)
 
     def wear_lash(self, which: str) -> float:
         """Lash growth [m] if a wear model has been attached, else 0."""
@@ -474,7 +514,8 @@ class EngineSound:
         # carries its own physical level, and the sub-mix is not
         # renormalised:
         #   tick      (v_seating / ref)^2   impulse energy ~ seating velocity^2
-        #   slap      (skirt_clr / 30 um)^0.6
+        #   slap      (skirt_clr / SLAP_CLR_REF)^0.6, the running clearance
+        #             (FINDING-023; was the skirt film over 30 um)
         #   injector  fixed reference level
         tick = sample("valve")
         tick = _resonator(tick, 3100.0, 26.0, fs, 1.0) + \
@@ -486,7 +527,7 @@ class EngineSound:
         slap = _resonator(slap, 900.0, 9.0, fs, 1.0) + \
             0.7 * _resonator(slap, 1750.0, 12.0, fs, 1.0)
         a_tick = (max(meta["v_seating"], 1e-6) / self._ref_vseat) ** 2
-        a_slap = (max(meta["skirt_clr"], 1e-9) / 30e-6) ** 0.6
+        a_slap = (max(meta["skirt_clr"], 1e-9) / SLAP_CLR_REF) ** 0.6
         out["mech"] = (a_tick * tick / (np.std(tick) + 1e-12)
                        + 0.75 * inj / (np.std(inj) + 1e-12)
                        + 0.9 * a_slap * slap / (np.std(slap) + 1e-12))

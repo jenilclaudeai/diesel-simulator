@@ -147,6 +147,7 @@ def solve_cell(spec, rpm, load, n_cycles=GRID_CYCLES, fs=44100,
     op = eng.operating_point(float(rpm), load=float(load), n_cycles=n_cycles)
     snd = EngineSound(eng.spec, fs=fs)
     snd.wear = eng.wear
+    snd.T_coolant = eng.T_coolant
     sd = snd.build_sources(op)
     tr = op.cycle.traces
     sd["p_cyl"] = np.interp(snd.grid, tr.theta, tr.p[0], period=720.0)

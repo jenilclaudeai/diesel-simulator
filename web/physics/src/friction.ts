@@ -68,6 +68,9 @@ export class FrictionModel {
     this.sigma_cam = composite_roughness(0.15e-6, 0.2e-6);
   }
 
+  /** wear.py eff_skirt_clearance: the warm reference's diametral clearance [m]. */
+  eff_skirt_clearance(w: WearState): number { return this.eff(w).skirt; }
+
   // ---- wear.py "effective" parameters ----
   private eff(w: WearState) {
     const t = this.spec.trib, vt = this.spec.valves;
