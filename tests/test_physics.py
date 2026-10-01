@@ -1619,6 +1619,39 @@ def test_custom_engine_json():
           + f"; vehicles {', '.join(f'{k}={v}' for k, v in names.items())}")
 
 
+def test_describe_engine():
+    """ADR-014 step 2: the bridge describes an engine for the UI without a
+    solve. A preset reads as runtime_info's preset_info says; a custom engine
+    reports the builder's own idle and max rpm (not a copy of its rules in
+    TypeScript) and the brochure numbers it was asked for; numbers the
+    builder rejects are an invalid request, not a crash."""
+    import json
+    from dieselsim import bridge
+    from dieselsim.builder import from_dict
+    d = {"name": "2.0 L four", "displacement": 2.0, "n_cyl": 4, "rated_rpm": 4000,
+         "peak_torque": 320, "peak_power": 103, "plateau": [1750, 2500], "vehicle": "crdi15"}
+    preset = json.loads(bridge.describe_engine(json.dumps({"engine": {"preset": "crdi15"}})))
+    info = json.loads(bridge.runtime_info())["preset_info"]["crdi15"]
+    custom = json.loads(bridge.describe_engine(json.dumps({"engine": {"headline": d}})))
+    spec = from_dict(d)
+    try:
+        bridge.describe_engine(json.dumps({"engine": {"headline": dict(d, n_cyl="four")}}))
+        rejected = "accepted"
+    except bridge.RequestError as e:
+        rejected = f"RequestError: {e}"
+    except Exception as e:                       # noqa: BLE001
+        rejected = f"{type(e).__name__}: {e}"
+    parts = {"preset as preset_info": all(preset[k] == v for k, v in info.items()),
+             "custom: builder's idle/max rpm": (custom["idle_rpm"], custom["max_rpm"]) == (float(spec.idle_rpm), float(spec.max_rpm)),
+             "custom: requested numbers": custom.get("requested") == {"peak_torque": 320.0, "peak_power_kw": 103.0,
+                                                                      "plateau": [1750.0, 2500.0]},
+             "bad numbers are an invalid request": rejected.startswith("RequestError")}
+    bad = [k for k, ok in parts.items() if not ok]
+    check("describe_engine for the UI (ADR-014)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ")
+          + f"custom idle {custom['idle_rpm']:.0f} / max {custom['max_rpm']:.0f} rpm; bad numbers: {rejected[:80]}")
+
+
 def test_roster_engines_make_their_numbers():
     """ADR-008/012: each Enjoy roster engine, built by builder.py from its
     engines/<key>.json brochure, still delivers it: at the start of its
@@ -1693,6 +1726,7 @@ def main():
                test_cold_slap_follows_clearance,
                test_ramps_have_their_own_height,
                test_custom_engine_json,
+               test_describe_engine,
                test_flat_tappet_wears_more_than_roller,
                test_closing_ramps_clear_the_lash,
                test_cam_wear_calibration,

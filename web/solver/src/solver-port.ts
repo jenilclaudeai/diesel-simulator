@@ -29,6 +29,11 @@ export interface PresetInfo {
   n_cyl: number;
 }
 
+/** describeEngine's answer: a preset's info, or a custom engine's (ADR-014) with what it was asked for. */
+export interface EngineInfo extends PresetInfo {
+  requested?: { peak_torque: number; peak_power_kw: number; plateau: [number, number] | null };
+}
+
 export interface RuntimeInfo {
   /** SHA-256 of the dieselsim sources actually loaded — the physics version */
   source_hash: string;
@@ -123,6 +128,8 @@ export interface SolverPort {
   /** Resolves once the runtime is loaded. Safe to call repeatedly. */
   ready(): Promise<RuntimeInfo>;
   solvePoint(req: PointRequest): Promise<PointResult>;
+  /** Name, rpm range and (for a custom engine) the brochure numbers, without a solve. */
+  describeEngine(engine: EngineRef): Promise<EngineInfo>;
   buildGrid(req: GridRequest, opts?: GridOptions): Promise<Grid>;
   dispose(): void;
 }

@@ -85,8 +85,19 @@ if (!(await page.$("select:not([disabled])"))) {
   await page.screenshot({ path: path.join(out, "grid-failed.png"), fullPage: true });
   process.exit(1);
 }
-const engines = await page.$$eval("select option", o => o.map(x => x.textContent.trim()));
+const engines = await page.$$eval("select option", o => o.map(x => x.textContent.trim()).filter(t => t !== "Custom engine…"));
 check("grid page boots Python in its worker", engines.length === 5, `engine list from the solver: ${engines.join(" | ")}`);
+
+// ADR-014: a custom engine, described by the builder (its build path is the Dyno's; not built here, ~9 min)
+await page.select("select", "__custom");
+await page.waitForFunction(() => { const b = document.querySelector("button.run"); return (b && !b.disabled) || document.querySelector(".status .err"); },
+  { timeout: 60_000, polling: 250 }).catch(() => {});
+const customHead = await page.$eval("h1", e => e.textContent.trim());
+const customReady = await page.$eval("button.run", b => !b.disabled);
+check("a custom engine is described by the builder, ready to build", customHead === "2.0 L four, 140 ps" && customReady,
+  `heading "${customHead}", build button ${customReady ? "enabled" : "disabled"}`);
+await page.select("select", "crdi15");
+await page.waitForFunction(() => document.querySelector("h1")?.textContent.trim() !== "2.0 L four, 140 ps", { timeout: 10_000 }).catch(() => {});
 
 // progress: the status line must move through the cells while building
 const seen = new Set();

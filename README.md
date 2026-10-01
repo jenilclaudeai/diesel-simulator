@@ -234,8 +234,13 @@ Write the numbers as JSON, in the same format as the Enjoy roster
 - The other keys are `builder.build_engine`'s parameters. The roster files
   show the optional tuning, such as `afr_limit` and `boost_map_rise`.
 
-Check what the engine actually makes. The builder sizes the hardware, but
-the solver decides what it delivers:
+**In the app**, choose "Custom engine…" on the Dyno or Grid page. You can
+type the numbers in, or import and export the same JSON. A dyno pull then
+shows what the engine achieves against what you asked for, solved in your
+browser.
+
+**In Python**, check what the engine actually makes. The builder sizes the
+hardware, but the solver decides what it delivers:
 
 ```python
 from dieselsim.builder import from_dict, verify

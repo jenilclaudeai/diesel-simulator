@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import type { Grid, GridProgress, PresetInfo } from '@dieselsim/solver';
+import type { EngineInfo, EngineRef, Grid, GridProgress, PresetInfo } from '@dieselsim/solver';
+import { type CustomEngine, EXAMPLE_ENGINE, headline } from '../engine/custom-engine';
+import { EngineForm } from '../engine/engine-form';
 import { describe, SolverService } from '../solver/solver.service';
 import { gridAxes, N_LOAD, N_RPM } from './grid-axes';
 
@@ -11,7 +13,7 @@ const fmt2 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2, minimu
 
 @Component({
   selector: 'app-grid',
-  imports: [RouterLink],
+  imports: [RouterLink, EngineForm],
   templateUrl: './grid.html',
   styleUrl: '../dyno/dyno.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -25,6 +27,11 @@ export class GridPage implements OnInit {
   protected readonly N_LOAD = N_LOAD;
 
   protected readonly engine = signal('crdi15');
+  /** ADR-014: the "Custom engine" choice, its numbers, and the builder's description of it */
+  protected readonly CUSTOM = '__custom';
+  protected readonly custom = signal<CustomEngine>(EXAMPLE_ENGINE);
+  protected readonly customInfo = signal<EngineInfo | undefined>(undefined);
+  protected readonly isCustom = computed(() => this.engine() === this.CUSTOM);
   protected readonly grid = signal<Grid | undefined>(undefined);
   protected readonly running = signal(false);
   protected readonly progress = signal<GridProgress | undefined>(undefined);
@@ -35,7 +42,8 @@ export class GridPage implements OnInit {
     const info = this.solver.info();
     return info ? info.presets.map(k => ({ key: k, ...info.preset_info[k]! })) : [];
   });
-  protected readonly spec = computed<PresetInfo | undefined>(() => this.solver.info()?.preset_info[this.engine()]);
+  protected readonly spec = computed<PresetInfo | undefined>(() =>
+    this.isCustom() ? this.customInfo() : this.solver.info()?.preset_info[this.engine()]);
   protected readonly axes = computed(() => { const s = this.spec(); return s ? gridAxes(s) : undefined; });
 
   /** rows = loads (full load on top), columns = speeds */
@@ -62,6 +70,28 @@ export class GridPage implements OnInit {
     this.grid.set(undefined);
     this.elapsedS.set(undefined);
     this.runError.set(undefined);
+    if (key === this.CUSTOM) void this.describeCustom();
+  }
+
+  protected customChanged(e: CustomEngine): void {
+    this.custom.set(e);
+    this.grid.set(undefined);
+    this.elapsedS.set(undefined);
+    void this.describeCustom();
+  }
+
+  private async describeCustom(): Promise<void> {
+    this.customInfo.set(undefined);
+    this.runError.set(undefined);
+    try {
+      this.customInfo.set(await this.solver.describeEngine({ headline: headline(this.custom()) }));
+    } catch (e) {
+      this.runError.set(describe(e));
+    }
+  }
+
+  private engineRef(): EngineRef {
+    return this.isCustom() ? { headline: headline(this.custom()) } : { preset: this.engine() };
   }
 
   protected async build(): Promise<void> {
@@ -74,7 +104,7 @@ export class GridPage implements OnInit {
     const t0 = performance.now();
     try {
       const g = await this.solver.buildGrid(
-        { engine: { preset: this.engine() }, rpms: axes.rpms, loads: axes.loads },
+        { engine: this.engineRef(), rpms: axes.rpms, loads: axes.loads },
         { onProgress: p => this.progress.set(p) });
       this.grid.set(g);
       this.elapsedS.set((performance.now() - t0) / 1000);

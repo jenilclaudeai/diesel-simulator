@@ -7,7 +7,7 @@
 import type { Endpoint, Reply, Request } from "./protocol.js";
 import {
   SolverError,
-  type Grid, type GridOptions, type GridRequest, type PointRequest,
+  type EngineInfo, type EngineRef, type Grid, type GridOptions, type GridRequest, type PointRequest,
   type PointResult, type RuntimeInfo, type SolverPort,
 } from "./solver-port.js";
 
@@ -36,6 +36,11 @@ export class WorkerSolver implements SolverPort {
     return this.call<PointResult>({ type: "solvePoint", req });
   }
 
+  async describeEngine(engine: EngineRef): Promise<EngineInfo> {
+    await this.ready();
+    return this.call<EngineInfo>({ type: "describeEngine", engine });
+  }
+
   async buildGrid(req: GridRequest, opts: GridOptions = {}): Promise<Grid> {
     if (opts.signal?.aborted) throw new SolverError("cancelled", "aborted before start");
     await this.ready();
@@ -59,6 +64,7 @@ export class WorkerSolver implements SolverPort {
 
   private call<T>(body: Omit<Extract<Request, { type: "init" }>, "id"> |
                         Omit<Extract<Request, { type: "solvePoint" }>, "id"> |
+                        Omit<Extract<Request, { type: "describeEngine" }>, "id"> |
                         Omit<Extract<Request, { type: "buildGrid" }>, "id">,
                   onProgress?: GridOptions["onProgress"]): Promise<T> {
     if (this.disposed) return Promise.reject(new SolverError("cancelled", "solver disposed"));
