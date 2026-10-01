@@ -87,8 +87,12 @@ class Adr011Grid(PerfGrid):
     @classmethod
     def from_json(cls, gj, spec=None):
         """A grid as tools/build_live_grids.py writes it (arrays as float32
-        base64); `spec` defaults to the preset's."""
+        base64); `spec` defaults to the engine it records (a custom engine's
+        JSON, ADR-014) or else its preset's."""
         import base64
+        if spec is None and gj.get("engine_json"):
+            from .builder import from_dict
+            spec = from_dict(gj["engine_json"])
         if spec is None:
             from .engine import DieselEngine
             spec = DieselEngine(preset=gj["preset"]).spec
@@ -154,6 +158,12 @@ class Adr011Grid(PerfGrid):
 # ==========================================================================
 # vehicle, torque converter and gearbox
 # ==========================================================================
+# The vehicles a grid can name (ADR-014: a custom engine's "vehicle"). They
+# are keyed by the engine each was first made for; "tractor" is the
+# fallback every other key gets.
+VEHICLE_KEYS = ("hatch15", "crdi15", "ld_i4", "crdi22", "hd_i6", "tractor")
+
+
 class Vehicle:
     """Everything downstream of the flywheel."""
 

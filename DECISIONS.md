@@ -854,3 +854,66 @@ says so), and every finding names its lenses. The ADR records the practice.
 - No change in how work is done; `DECISIONS.md` now agrees with CLAUDE.md,
   and no open decision remains in it.
 - Revisit if a review misses something a lens would have caught at the time.
+
+---
+
+## ADR-014 — Custom engines: from brochure numbers or JSON, drivable
+
+**Status:** Accepted (2026-10-01). The owner chose each option below.
+
+### Decision
+
+1. **A custom engine is the roster's JSON format** (`engines/*.json`:
+   brochure numbers for `builder.build_engine`, plus its optional tuning),
+   with one addition: `vehicle`, the key of an existing vehicle
+   (`live.Vehicle`). The app builds the engine from a form or an imported
+   file, and exports the same JSON. The browser's solver already takes it,
+   as `{"headline": ...}` (ADR-010).
+2. **Dyno and Grid run it in the browser**, showing achieved against
+   requested, as `builder.verify()` does.
+3. **It can be driven.** Driving needs the same converged warm+cold
+   **8×6** grid as the roster (the owner's choice over a coarser 6×5), by
+   either of two paths:
+   - **built in the browser** by a pool of solver workers, with progress,
+     resumable, and cached per engine (by spec hash, as ADR-007 expected);
+   - **built natively** from the JSON with one command, and imported into
+     the app as a file. This is the path for phones.
+
+### Rationale
+
+Measured 2026-10-01 on `hatch15`, single-threaded. Native: a row's fuel
+calibration takes 75 s and a converged cell about 18 s. Under Pyodide those
+are 199 s and about 50 s, 2.65× slower. A full grid (8 rows, 96 cells) is
+therefore:
+
+| where | time |
+|---|---|
+| one browser worker | ~105 min |
+| 4 workers | ~26 min |
+| 8 workers | ~13 min |
+| native, 6 cores | ~15 min |
+| a phone | hours (not measured) |
+
+No single path serves every device, so the app offers both. A coarser grid
+would have cut the wait by about 40%, at the price of a second grid shape
+to support and a coarser map; the owner kept one shape.
+
+### Consequences
+
+- The worker and `LiveEngine` take the vehicle from the grid file (a
+  roster key still maps to its own vehicle). A custom grid must name one of
+  the known vehicles (`live.VEHICLE_KEYS`, held to TypeScript by the
+  vehicles fixture). The build tool and the app refuse one that doesn't,
+  rather than letting it fall through to the default vehicle.
+- A custom grid records its engine JSON and its SHA-256, as roster grids
+  do, so a grid is never paired with the wrong engine.
+- A custom engine is `verify()`-checked the same way as roster ones, but it
+  is the user's engine: the app shows its achieved figures and does not
+  refuse an engine that misses its brochure.
+- ADR-007's project file can later carry the same engine JSON.
+
+### Revisit when
+
+The browser build proves too slow in practice on the machines people use
+(measure on a real laptop first), or phones become the main way people
+build engines.

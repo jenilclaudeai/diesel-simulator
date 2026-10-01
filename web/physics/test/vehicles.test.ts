@@ -4,12 +4,12 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { finishVehicle, vehicleFor, type Transmission } from "../src/live/vehicle.js";
+import { finishVehicle, vehicleFor, VEHICLE_KEYS, type Transmission } from "../src/live/vehicle.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fx = JSON.parse(readFileSync(path.resolve(here, "..", "..", "fixtures", "vehicles.json"), "utf8")) as {
   meta: { physics_hash: string };
-  inputs: { keys: string[]; trans: Transmission[] };
+  inputs: { keys: string[]; trans: Transmission[]; vehicle_keys: string[] };
   outputs: Record<string, Record<string, Record<string, unknown>>>;
 };
 let failed = 0, passed = 0;
@@ -29,5 +29,8 @@ for (const key of fx.inputs.keys) {
   check(`vehicle ${key} matches Python under ${fx.inputs.trans.join("/")}`, bad.length === 0,
     bad.length ? `differ: ${bad.slice(0, 4).join(", ")}` : `${fields} fields x ${fx.inputs.trans.length}`);
 }
+check("the vehicles a custom engine may name match Python's (ADR-014)",
+  JSON.stringify([...VEHICLE_KEYS]) === JSON.stringify(fx.inputs.vehicle_keys),
+  `${VEHICLE_KEYS.join(", ")} vs ${fx.inputs.vehicle_keys.join(", ")}`);
 console.log(`\n${passed} passed, ${failed} failed  (physics ${fx.meta.physics_hash.slice(0, 12)})`);
 process.exit(failed ? 1 : 0);

@@ -4,7 +4,8 @@ import type { Transmission } from '@dieselsim/physics';
 import { releaseFocus } from '../drive/drive';
 import { controlKey, MIC_KEYS, MICS } from '../drive/drive-keys';
 import { LiveSession } from '../drive/live-session';
-import type { Pedals } from '../drive/protocol';
+import { IMPORTED, readGridFile } from '../drive/grid-file';
+import type { GridFile, Pedals } from '../drive/protocol';
 import { avgL100, nowL100, rangeKm } from './economy';
 import { Gauge, speedScale, tachScale } from './gauge';
 import { derateLit } from './lamps';
@@ -31,6 +32,10 @@ export class EnjoyPage implements OnDestroy {
   protected readonly fmt0 = fmt0;
   protected readonly presets = ROSTER;
   protected readonly preset = signal(ROSTER[0]!.key);
+  /** A custom engine's grid, imported from a file (ADR-014). */
+  protected readonly imported = signal<GridFile | undefined>(undefined);
+  protected readonly importError = signal<string | undefined>(undefined);
+  protected readonly IMPORTED = IMPORTED;
   protected readonly manual = signal(false);
   private readonly s = new LiveSession();
   protected readonly status = this.s.status;
@@ -78,6 +83,7 @@ export class EnjoyPage implements OnDestroy {
     if (typeof location !== 'undefined' && location.search.includes('e2e')) {
       (globalThis as Record<string, unknown>)['__enjoy'] = {
         view: () => this.v(), level: () => this.s.levelDb(), soundError: () => this.soundError(),
+        info: () => this.s.info(),
       };
     }
   }
@@ -92,7 +98,23 @@ export class EnjoyPage implements OnDestroy {
     releaseFocus();
     this.pedals = { throttle: null, brake: 0, clutch: 0 };
     if (!this.soundOn()) await this.s.soundStart();
-    await this.s.load(this.preset(), this.trans(), true);
+    const g = this.imported();
+    if (this.preset() === IMPORTED && g) await this.s.loadGrid(g, this.trans(), true);
+    else await this.s.load(this.preset(), this.trans(), true);
+  }
+
+  /** "Import": a custom engine's grid file (tools/build_live_grids.py --engine). */
+  protected async importGrid(input: HTMLInputElement): Promise<void> {
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    this.importError.set(undefined);
+    try {
+      this.imported.set(await readGridFile(file));
+      this.selectPreset(IMPORTED);
+    } catch (e) {
+      this.importError.set(e instanceof Error ? e.message : String(e));
+    }
   }
 
   protected stop(): void { releaseFocus(); this.s.stop(); }

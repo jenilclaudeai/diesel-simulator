@@ -39,11 +39,26 @@ export class LiveSession {
     this.stop();
     this.status.set('loading');
     this.error.set(undefined);
+    let grid: GridFile;
     try {
       const url = new URL(`grids/${preset}.json`, document.baseURI).href;
       const r = await fetch(url);
       if (!r.ok) throw new Error(`no prebuilt grid for ${preset} (HTTP ${r.status})`);
-      const grid = (await r.json()) as GridFile;
+      grid = (await r.json()) as GridFile;
+    } catch (e) {
+      this.error.set(e instanceof Error ? e.message : String(e));
+      this.status.set('error');
+      return;
+    }
+    await this.loadGrid(grid, trans, run);
+  }
+
+  /** Load a grid already in hand (an imported custom engine, ADR-014). */
+  async loadGrid(grid: GridFile, trans: Transmission, run: boolean): Promise<void> {
+    this.stop();
+    this.status.set('loading');
+    this.error.set(undefined);
+    try {
       this.gridStatus.set({ converged: grid.converged, unsettled: grid.unsettled_cells,
         stale: grid.grid_hash !== GRID_VERSION, cells: 2 * grid.rpms.length * grid.loads.length });
       const w = new Worker(new URL('./live.worker', import.meta.url), { type: 'module' });
@@ -59,7 +74,7 @@ export class LiveSession {
         });
       });
       this.grid = grid;
-      this.preset = preset;
+      this.preset = grid.preset;
       this.wireSound();
       if (run) w.postMessage({ type: 'run' });
       this.status.set('driving');
@@ -81,6 +96,9 @@ export class LiveSession {
     this.worker?.terminate();
     this.worker = undefined;
     this.v.set(undefined);
+    // the next engine's info replaces it; until then the last engine's must
+    // not stand in for it (the dials' scales, the vehicle)
+    this.info.set(undefined);
     if (this.status() === 'driving') this.status.set('idle');
   }
 

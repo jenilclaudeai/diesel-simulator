@@ -24,6 +24,10 @@ export interface Vehicle {
   v_lock_min: number;     // m/s before lockup allowed
 }
 
+/** The vehicles a custom engine may name (ADR-014; live.VEHICLE_KEYS). Every
+ *  other key gets the "tractor" fallback. */
+export const VEHICLE_KEYS = ["hatch15", "crdi15", "ld_i4", "crdi22", "hd_i6", "tractor"] as const;
+
 export function vehicleFor(preset: string, trans: Transmission = "dct"): Vehicle {
   const base = { trans, launch_rpm: 2000.0, fuel_tank_L: 60.0, clutch_cap_max: 0.0 };
   switch (preset) {

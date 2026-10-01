@@ -2,8 +2,9 @@ import { ChangeDetectionStrategy, Component, computed, HostListener, OnDestroy, 
 import { RouterLink } from '@angular/router';
 import type { Transmission } from '@dieselsim/physics';
 import { controlKey, DRIVE_PRESETS, KEY_HELP, MIC_KEYS, MICS } from './drive-keys';
+import { IMPORTED, readGridFile } from './grid-file';
 import { LiveSession } from './live-session';
-import type { DriveScript } from './protocol';
+import type { DriveScript, GridFile } from './protocol';
 
 const fmt0 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 const fmt1 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
@@ -36,6 +37,10 @@ export class DrivePage implements OnDestroy {
   protected readonly keyHelp = KEY_HELP;
   protected readonly mics = MICS;
   protected readonly preset = signal('crdi15');
+  /** A custom engine's grid, imported from a file (ADR-014). */
+  protected readonly imported = signal<GridFile | undefined>(undefined);
+  protected readonly importError = signal<string | undefined>(undefined);
+  protected readonly IMPORTED = IMPORTED;
   protected readonly trans = signal<Transmission>('tc');
   private readonly s = new LiveSession();
   protected readonly status = this.s.status;
@@ -56,6 +61,7 @@ export class DrivePage implements OnDestroy {
     if (typeof location !== 'undefined' && location.search.includes('e2e')) {
       (globalThis as Record<string, unknown>)['__drive'] = {
         load: (preset: string, trans: Transmission) => this.s.load(preset, trans, false),
+        info: () => this.s.info(),
         script: (script: DriveScript, init: Record<string, number> = {}) => this.s.runScript(script, init),
         key: (key: string, down: boolean) => this.s.key(key, down),
         run: () => this.s.run(),
@@ -75,7 +81,23 @@ export class DrivePage implements OnDestroy {
 
   protected async start(): Promise<void> {
     releaseFocus();
-    await this.s.load(this.preset(), this.trans(), true);
+    const g = this.imported();
+    if (this.preset() === IMPORTED && g) await this.s.loadGrid(g, this.trans(), true);
+    else await this.s.load(this.preset(), this.trans(), true);
+  }
+
+  /** "Import grid": a custom engine's grid file (tools/build_live_grids.py --engine). */
+  protected async importGrid(input: HTMLInputElement): Promise<void> {
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    this.importError.set(undefined);
+    try {
+      this.imported.set(await readGridFile(file));
+      this.selectPreset(IMPORTED);
+    } catch (e) {
+      this.importError.set(e instanceof Error ? e.message : String(e));
+    }
   }
 
   protected stop(): void { this.s.stop(); }

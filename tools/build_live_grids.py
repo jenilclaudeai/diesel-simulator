@@ -19,8 +19,15 @@ Each file also carries what the TypeScript loop needs to run it without
 Python: the live spec and the friction model's engine view (spec with its
 derived geometry, cams, oil condition, wear state).
 
-Run:  python3 tools/build_live_grids.py [preset ...]      (~9 min per grid, 6 cores)
+A custom engine (ADR-014) is an engine JSON in the roster's format, plus
+"vehicle" (one of live.VEHICLE_KEYS). Its grid also records the JSON and its
+SHA-256, and goes to out/grids/<key>.json unless --out says otherwise; the
+app's "Import grid" reads it.
+
+Run:  python3 tools/build_live_grids.py [preset ...]      (~15 min per grid, 6 cores)
+      python3 tools/build_live_grids.py --engine my.json [--out my.grid.json]
       python3 tools/build_live_grids.py --annotate        (add spec + engine view to existing files)
+      --size RxL (e.g. 2x2): a smaller grid, for smoke tests only
 """
 import base64
 import json
@@ -34,10 +41,11 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from dieselsim.acoustics import EngineSound  # noqa: E402
 from dieselsim.bridge import grid_hash  # noqa: E402
-from dieselsim.builder import load_engine_dir  # noqa: E402
+from dieselsim.builder import from_dict, load_engine_dir  # noqa: E402
 from dieselsim.config import PRESETS  # noqa: E402
 from dieselsim.engine import DieselEngine  # noqa: E402
 from dieselsim.grid import solve_cell  # noqa: E402
+from dieselsim.live import VEHICLE_KEYS  # noqa: E402
 from dieselsim.livesound import SOURCE_KEYS  # noqa: E402  (the six the synth reads)
 
 OUT = os.path.join(os.path.dirname(__file__), "..", "web", "app", "public", "grids")
@@ -48,9 +56,33 @@ load_engine_dir(ENGINES)
 N_RPM, N_LOAD, T_COLD = 8, 6, 273.0
 
 
+def make_engine(edef):
+    """edef: a preset key, or a custom engine's JSON dict (ADR-014). Tasks
+    carry it, so spawned workers can build an engine no registry knows."""
+    return DieselEngine(spec=from_dict(edef)) if isinstance(edef, dict) else DieselEngine(preset=edef)
+
+
+def custom_engine(path):
+    """(key, engine JSON, SHA-256 of the file) for --engine, or SystemExit
+    with the reason: an unknown vehicle, or numbers the builder rejects."""
+    import hashlib
+    with open(path, "rb") as fh:
+        raw = fh.read()
+    d = json.loads(raw)
+    key = d.get("key") or os.path.splitext(os.path.basename(path))[0]
+    if d.get("vehicle") not in VEHICLE_KEYS:
+        raise SystemExit(f"{path}: \"vehicle\" must be one of {', '.join(VEHICLE_KEYS)} "
+                         f"(got {d.get('vehicle')!r})")
+    try:
+        from_dict(d)
+    except (TypeError, ValueError) as e:
+        raise SystemExit(f"{path}: the builder cannot make this engine: {e}")
+    return key, d, hashlib.sha256(raw).hexdigest()
+
+
 def row_limit(task):
-    key, rpm = task
-    eng = DieselEngine(preset=key)
+    edef, rpm = task
+    eng = make_engine(edef)
     eng.converged_mode = True
     return eng.fuel_limit(float(rpm))
 
@@ -60,8 +92,8 @@ def b64f32(a):
 
 
 def cell(task):
-    key, rpm, load, flim, T_cool = task
-    spec = DieselEngine(preset=key).spec
+    edef, rpm, load, flim, T_cool = task
+    spec = make_engine(edef).spec
     src, perf = solve_cell(spec, rpm, load, converged=True, fuel_limit=flim, T_coolant=T_cool)
     sound = {"f32": {k: b64f32(src[k]) for k in SOURCE_KEYS},
              "meta": {k: float(v) for k, v in src["_meta"].items()}}
@@ -84,11 +116,11 @@ def _gen_fixtures():
     return _GF[0]
 
 
-def annotation(key):
-    """The live spec and engine view for a preset, as the TypeScript loop reads them."""
+def annotation(edef):
+    """The live spec and engine view for an engine, as the TypeScript loop reads them."""
     import dataclasses
     gf = _gen_fixtures()
-    eng = DieselEngine(preset=key)
+    eng = make_engine(edef)
     live_spec = json.loads(json.dumps(dataclasses.asdict(eng.spec), default=float))
     live_spec["geom"]["displacement"] = eng.spec.geom.displacement
     return {"spec": live_spec, "engine_view": gf.friction_engine_view(eng)}
@@ -97,23 +129,25 @@ def annotation(key):
 def annotate(path):
     with open(path) as fh:
         data = json.load(fh)
-    data.update(annotation(data["preset"]))
+    data.update(annotation(data.get("engine_json") or data["preset"]))
     with open(path, "w") as fh:
         json.dump(data, fh, separators=(",", ":"))
         fh.write("\n")
     print(f"annotated {os.path.relpath(path)}")
 
 
-def build(key, pool, ghash):
-    spec = DieselEngine(preset=key).spec
-    rpms = [float(x) for x in np.linspace(spec.idle_rpm, spec.max_rpm, N_RPM)]
-    loads = [float(x) for x in np.linspace(0.0, 1.0, N_LOAD)]
+def build(key, pool, ghash, edef=None, out_path=None, extra=None, size=(N_RPM, N_LOAD)):
+    edef = edef or key
+    n_rpm, n_load = size
+    spec = make_engine(edef).spec
+    rpms = [float(x) for x in np.linspace(spec.idle_rpm, spec.max_rpm, n_rpm)]
+    loads = [float(x) for x in np.linspace(0.0, 1.0, n_load)]
     t0 = time.time()
-    flims = pool.map(row_limit, [(key, r) for r in rpms])
+    flims = pool.map(row_limit, [(edef, r) for r in rpms])
     grids = {}
     for tag, T in (("warm", None), ("cold", T_COLD)):
-        cells = pool.map(cell, [(key, r, l, f, T) for r, f in zip(rpms, flims) for l in loads])
-        grids[tag] = [cells[i * N_LOAD:(i + 1) * N_LOAD] for i in range(N_RPM)]
+        cells = pool.map(cell, [(edef, r, l, f, T) for r, f in zip(rpms, flims) for l in loads])
+        grids[tag] = [cells[i * n_load:(i + 1) * n_load] for i in range(n_rpm)]
     unsettled = sum(1 for tag in grids for row in grids[tag] for p, _, _ in row if p.get("settled", 1.0) < 0.5)
     col = lambda tag, n, k=None: [[c[n] if k is None else c[n][k] for c in row] for row in grids[tag]]  # noqa: E731
     data = {"preset": key, "name": spec.name, "grid_hash": ghash, "converged": True,
@@ -132,13 +166,14 @@ def build(key, pool, ghash):
         import hashlib
         with open(ef, "rb") as fh:
             data["engine_file_sha256"] = hashlib.sha256(fh.read()).hexdigest()
-    data.update(annotation(key))
-    os.makedirs(OUT, exist_ok=True)
-    path = os.path.join(OUT, f"{key}.json")
+    data.update(extra or {})
+    data.update(annotation(edef))
+    path = out_path or os.path.join(OUT, f"{key}.json")
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "w") as fh:
         json.dump(data, fh, separators=(",", ":"))
         fh.write("\n")
-    print(f"{key}: {2 * N_RPM * N_LOAD} converged cells in {data['build_s']} s, {unsettled} unsettled "
+    print(f"{key}: {2 * n_rpm * n_load} converged cells in {data['build_s']} s, {unsettled} unsettled "
           f"(period-averaged), {os.path.getsize(path) / 1024:.0f} KiB -> {os.path.relpath(path)}", flush=True)
 
 
@@ -148,13 +183,30 @@ def main():
             if f.endswith(".json"):
                 annotate(os.path.join(OUT, f))
         return
-    keys = [a for a in sys.argv[1:] if not a.startswith("-")] or sorted(PRESETS)
+    args = sys.argv[1:]
+
+    def opt(name):
+        if name not in args:
+            return None
+        i = args.index(name)
+        val = args[i + 1]
+        del args[i:i + 2]
+        return val
+    engine_path, out_path, size = opt("--engine"), opt("--out"), opt("--size")
+    size = tuple(int(x) for x in size.split("x")) if size else (N_RPM, N_LOAD)
+    custom = custom_engine(engine_path) if engine_path else None
+    keys = [a for a in args if not a.startswith("-")] or ([] if custom else sorted(PRESETS))
     # the hash of the tree the workers import, taken before they start
     ghash = grid_hash()
     _gen_fixtures()
     with get_context("spawn").Pool(min(6, os.cpu_count() or 1)) as pool:
         for key in keys:
-            build(key, pool, ghash)
+            build(key, pool, ghash, size=size)
+        if custom:
+            key, d, sha = custom
+            build(key, pool, ghash, edef=d, size=size,
+                  out_path=out_path or os.path.join(os.path.dirname(__file__), "..", "out", "grids", f"{key}.json"),
+                  extra={"custom": True, "vehicle": d["vehicle"], "engine_json": d, "engine_file_sha256": sha})
 
 
 if __name__ == "__main__":
