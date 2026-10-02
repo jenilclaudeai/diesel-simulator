@@ -1652,6 +1652,39 @@ def test_describe_engine():
           + f"custom idle {custom['idle_rpm']:.0f} / max {custom['max_rpm']:.0f} rpm; bad numbers: {rejected[:80]}")
 
 
+def test_live_grid_pieces_match_the_shipped_grid():
+    """ADR-014 step 3: a browser worker builds a drivable grid from the
+    bridge's pieces, and tools/build_live_grids.py now builds with the same
+    ones. A cell solved through bridge.live_cell, on the shipped crdi15
+    grid's own row fuel, must equal that grid's cell exactly (perf, pressure
+    trace, sources), warm and cold; and the plan's axes must be the grid's.
+    (The refactored tool also rebuilt a 2 x 2 custom grid identical to the
+    old code's, 0 of 24 fields differing.)"""
+    if _no_prebuilt_grids("bridge pieces match the shipped grid"):
+        return
+    import json
+    from dieselsim import bridge
+    with open(os.path.join(os.path.dirname(__file__), "..", "web", "app", "public", "grids", "crdi15.json")) as fh:
+        g = json.load(fh)
+    plan = json.loads(bridge.live_grid_plan(json.dumps({"engine": {"preset": "crdi15"}})))
+    i, j = 2, 3
+    bad = []
+    if plan["rpms"] != g["rpms"] or plan["loads"] != g["loads"]:
+        bad.append("plan axes")
+    for cold, sfx in ((False, ""), (True, "_cold")):
+        c = json.loads(bridge.live_cell(json.dumps({"engine": {"preset": "crdi15"}, "rpm": g["rpms"][i],
+                                                    "load": g["loads"][j], "fuel_limit": g["fuel_limits"][i],
+                                                    "cold": cold})))
+        if c["perf"] != g["perf" + sfx][i][j]:
+            bad.append(f"perf{sfx}")
+        if c["p_cyl_f32"] != g["p_cyl" + sfx + "_f32"][i][j]:
+            bad.append(f"p_cyl{sfx}")
+        if c["src_f32"] != g["src" + sfx + "_f32"][i][j] or c["meta"] != g["src_meta" + sfx][i][j]:
+            bad.append(f"sources{sfx}")
+    check("a cell built from the bridge's pieces equals the shipped grid's (ADR-014 step 3)", float(len(bad)), 0.0, 0.0,
+          f"differ: {', '.join(bad)}" if bad else f"crdi15 cell [{i}][{j}], warm and cold: perf, trace and sources identical")
+
+
 def test_roster_engines_make_their_numbers():
     """ADR-008/012: each Enjoy roster engine, built by builder.py from its
     engines/<key>.json brochure, still delivers it: at the start of its
@@ -1727,6 +1760,7 @@ def main():
                test_ramps_have_their_own_height,
                test_custom_engine_json,
                test_describe_engine,
+               test_live_grid_pieces_match_the_shipped_grid,
                test_flat_tappet_wears_more_than_roller,
                test_closing_ramps_clear_the_lash,
                test_cam_wear_calibration,
