@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-10-02 (session 5, part 16: custom engines, step 3b, drivable from the app; #81 → #82)
+**Updated:** 2026-10-03 (session 5, part 17: a full browser build measured; the Derate lamp; custom e2e in CI; #81 → #82 → #83)
 **Phase:** 1, 2, 3 and **4 exit-ready** (REVIEW-003 to -006). The owner signed
 off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
 - FINDING-022 is fixed (option A, #64).
@@ -138,8 +138,30 @@ tested top (`be26576`), 0 lines differ.
     there and passed here. `poolSize` moved to `solver/pool-size.ts`.
     Reproduced locally by running the units with the file moved aside:
     56/56.
-- **Not measured yet:** a full 8×6 build in a real browser on a laptop.
-  ADR-014's ~26 min on 4 workers is extrapolated from Node.
+- ~~**Not measured yet:** a full 8×6 build in a real browser on a laptop.
+  ADR-014's ~26 min on 4 workers is extrapolated from Node.~~ Measured in
+  part 17: **21.5 min** on 6 workers.
+
+**Part 17 (#83, stacked on #82). The owner's three choices of 2026-10-03:**
+- **A full 8×6 drivable grid measured in real headless Chrome: 21.5 min**,
+  the page's 6 workers on this 8-core, 8 GB Mac.
+  - The ETA ran pessimistic during the row phase (17 min left at 9.5 min,
+    when 12 remained) and was accurate during the cells.
+- **The Derate lamp lights on hot charge air (> 80 °C) or any overheat
+  derate**, not on the fuel cut (`lamps.ts`, with its history in the
+  comment).
+  - The new e2e check holds the truck flat out from a standstill until the
+    model cuts fuel: charge air 57 °C, derate 0.943, lamp dark.
+  - The previous 5% rule lights it there; that mutant is caught (59 °C,
+    "lit: Derate"). Unit mutants 2 of 2.
+  - Two mistakes of mine in the new check, both fixed before it passed: my
+    first "full throttle" pressed 5% of the pedal, and the stall test had
+    left the gearbox in Manual (the truck revved in neutral).
+- **`e2e:custom` runs in CI** as its own job, `web-custom-e2e`, so it does
+  not lengthen the others. With CI's 2 cores the pool is one worker, ~15–20
+  min.
+- **Next: roster B**, the 15 L V8 truck and an old naturally aspirated
+  single (ADR-012).
 
 **Part 14: custom engines, step 2 of 3, the form (#80, stacked on #79):**
 - **"Custom engine…" on Dyno and Grid.** A form for the brochure numbers,
@@ -319,8 +341,8 @@ tested top of each stack, 0 lines differ):
 tested top, 0 lines differ.)* ~~**Open now:** #77 (`docs/decisions-023-ramp` →
 `main`) → #78 (`feat/slap-and-ramp`) → #79 (`feat/custom-engines`) → #80
 (`feat/custom-engine-form`).~~ *(All merged 2026-10-02.)* **Open now:** #81
-(`feat/browser-grid-build` → `main`) → #82 (`feat/drivable-grid-ui`). Merge
-#81, then retarget #82 to `main`.
+(`feat/browser-grid-build` → `main`) → #82 (`feat/drivable-grid-ui`) → #83
+(`feat/derate-lamp-ci`). Merge in order, retargeting each child to `main`.
 Remote branches besides those: `main`, and `fix/steady-state-controllers`
 (kept; the only copy of the FINDING-013 option A experiment).
 
@@ -1006,7 +1028,8 @@ cd web/app && CHROME_PATH=... npm run e2e        # dyno pull in Chrome vs native
 cd web/app && CHROME_PATH=... npm run e2e:grid   # full 8 x 6 grid in Chrome vs native, cell for cell (~9 min)
 cd web/app && CHROME_PATH=... npm run e2e:drive  # /drive: prebuilt grid, 60 Hz, 60 s script vs native Python
 cd web/physics && npm test                       # 60 checks: fixture ports, 7 live drives, the synth, 8 vehicles + their keys
-cd web/app && CHROME_PATH=... npm run e2e:enjoy  # /enjoy: multi-touch on an emulated landscape Pixel, 16 checks
+cd web/app && CHROME_PATH=... npm run e2e:enjoy  # /enjoy: multi-touch on an emulated landscape Pixel, 17 checks
+cd web/app && CHROME_PATH=... npm run e2e:custom # a custom engine built, stopped, resumed, saved and driven (CI: own job)
 cd web/app && CHROME_PATH=... npm run e2e:sound  # /drive with sound: worklet output, firing harmonics, pitch, mics
 python3 tools/fixtures/gen_fixtures.py --only live   # regenerate live drives after a live.py change (~4 min)
 python3 tools/build_live_grids.py                # rebuild the prebuilt converged grids after a SOLVER change (~57 min)
@@ -1048,8 +1071,8 @@ Session 4's branch table is in git history.
 1. ~~**Owner:** merge #50, then #51 → #58, then #59 → #64, retargeting each
    child to `main`.~~ Done (#50, #65, #71). ~~**Now: merge #72 → #76 in
    order**~~ done 2026-09-30. ~~**Now: merge #77 → #78 → #79 → #80 in order**~~
-   done 2026-10-02. **Now: merge #81, then retarget #82 to `main` and merge
-   it.**
+   done 2026-10-02. **Now: merge #81 → #82 → #83 in order**, retargeting
+   each child to `main` after its parent merges.
 2. **Owner: listen.** On `/drive`: Sound on, keys 1–5 for the mics, "Record
    10 s (WAV)". Or `python3 play.py`. Listen for:
    - `hd_i6`'s tick dominance (13×);

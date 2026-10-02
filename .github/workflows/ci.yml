@@ -11,6 +11,9 @@
 #   web-app          the Angular app: unit tests and the GitHub Pages build
 #   web-e2e          the Pages build in real headless Chrome: Python boots in the
 #                    page's worker and a dyno pull matches native Python
+#   web-custom-e2e   a custom engine end to end in Chrome (ADR-014): its
+#                    drivable grid built by the page's worker pool, stopped,
+#                    resumed, saved, and driven on /enjoy
 name: CI
 
 on:
@@ -236,5 +239,41 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: grid-e2e-screenshots
+          path: web/app/e2e/out/
+          if-no-files-found: ignore
+
+  # ADR-014, owner's choice (2026-10-03): the custom-engine flow on every PR,
+  # as its own job so it does not lengthen the others. A 2 x 2 grid through
+  # the e2e-only ?gridsize hook; on CI's 2 cores the pool is one worker,
+  # ~15 min. No native reference needed.
+  web-custom-e2e:
+    name: custom engine in Chrome (e2e)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: web/app
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            web/app/package-lock.json
+            web/solver/package-lock.json
+      - run: npm ci
+        working-directory: web/solver
+      - run: npm ci
+      - run: npm run build:pages
+      - name: custom-engine e2e in headless Chrome
+        run: npm run e2e:custom
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+      - name: keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: custom-e2e-screenshots
           path: web/app/e2e/out/
           if-no-files-found: ignore
