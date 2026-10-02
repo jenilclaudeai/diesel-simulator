@@ -8,6 +8,7 @@ import type { PerfGrid } from "./grid.js";
 import { Adr011Grid } from "./adr011.js";
 import { FrictionModel, type EngineView, type FrictionSpec, type WearState } from "../friction.js";
 import { Oil } from "../lubrication.js";
+import { running_skirt_clearance, T_COOLANT_REF, WALL_FOLLOW } from "../slap.js";
 import { finishVehicle, vehicleFor, type Transmission, type Vehicle } from "./vehicle.js";
 
 export class LiveEngine {
@@ -63,7 +64,7 @@ export class LiveEngine {
   P_mech = 0.0;     // friction heat into the oil [W]
   // the live friction's sound inputs (Phase 4), held like T_fric
   Pb_live = 0.0;    // boundary friction power [W]
-  skirt_live = 0.0; // skirt film [m]
+  skirt_live = 0.0; // running skirt clearance [m] (FINDING-023)
   vseat_live = 0.0; // valve seating speed [m/s]
   _frame = 0;
   private fric?: FrictionModel;
@@ -110,9 +111,9 @@ export class LiveEngine {
   update_friction(): void {
     const g = this.g as Adr011Grid, fs = this.fspec!;
     // _apply_thermal_state: the walls follow the coolant (only the liner is read here)
-    const f = this.T_coolant - 361.0;
-    fs.thermal.liner_T_top = this.th0!.liner_T_top + 0.88 * f;
-    fs.thermal.liner_T_bot = this.th0!.liner_T_bot + 0.95 * f;
+    const f = this.T_coolant - T_COOLANT_REF;
+    fs.thermal.liner_T_top = this.th0!.liner_T_top + WALL_FOLLOW.liner_T_top * f;
+    fs.thermal.liner_T_bot = this.th0!.liner_T_bot + WALL_FOLLOW.liner_T_bot * f;
     this.oil!.cond.T_oil = this.T_oil;
     const rpm = Math.max(this.rpm, 0.25 * this.spec.idle_rpm);
     const p = g.blendPerfT(rpm, this.load_eff, this.T_coolant);
@@ -123,7 +124,8 @@ export class LiveEngine {
     this.T_fric = this.fmep_live * g.k_torque;
     // acoustics.build_sources' definitions, at the live oil and coolant
     this.Pb_live = r["Pb_rings"]! + r["Pb_skirt"]! + r["Pb_rods"]! + r["Pb_mains"]! + r["Pb_pin"]!;
-    this.skirt_live = r["h_skirt"]!;
+    // FINDING-023: slap follows the running clearance, not the film
+    this.skirt_live = running_skirt_clearance(this.fric!.eff_skirt_clearance(this.wear!), fs.geom.bore, this.T_coolant);
     this.vseat_live = r["v_seating"]!;
   }
 

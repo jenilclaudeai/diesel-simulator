@@ -185,6 +185,10 @@ ramp to clear large lash (item 2) also sped it up (0.074 mm per cam degree
 on `hd_i6`). A real cam clears lash with a long, gentle ramp: its height and
 speed are independent. That needs a ramp-height parameter separate from
 `ramp_fraction`, which is a sound-design change for Phase 4, judged by ear.
+*(Built 2026-09-30 as REVIEW-003 m-5: `ramp_height_intake/_exhaust`; see
+REVIEW-003. The builder note above ("builder.py engines with mechanical
+lash still get the default 6 % ramp") turned out to matter: the roster's
+`truck127` was on its flank until that change.)*
 
 Test `test_seating_on_ramp_is_ramp_speed`: `hd_i6`'s exhaust seats at its
 numerical ramp slope, and a cam with lash twice its ramp keeps the penalty.

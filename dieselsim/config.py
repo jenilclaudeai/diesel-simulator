@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 
 # --------------------------------------------------------------------------
@@ -106,6 +106,13 @@ class ValveTrain:
 
     # cam ramp: fraction of the event used for the constant-velocity ramp.
     ramp_fraction: float = 0.06
+    # a ramp height of its own [m at the valve] (REVIEW-003 m-5). None: the
+    # height follows ramp_fraction (the ramp ends where the flank reaches
+    # it). Set, the ramp speed is height / span: the ramps (span
+    # ramp_fraction / 2 of the event each) reach that height where the main
+    # event's raised cosine does, and the event above it is unchanged.
+    ramp_height_intake: Optional[float] = None
+    ramp_height_exhaust: Optional[float] = None
 
 
 # --------------------------------------------------------------------------
@@ -252,6 +259,15 @@ class Tribology:
 # --------------------------------------------------------------------------
 # Thermal boundary
 # --------------------------------------------------------------------------
+# engine._apply_thermal_state: how many kelvin each wall moves per kelvin of
+# coolant away from the warm reference, at which the spec's own wall
+# temperatures are given. Shared with the slap clearance (acoustics.py,
+# FINDING-023), so the two cannot disagree.
+T_COOLANT_REF = 361.0
+WALL_FOLLOW = {"piston_T": 0.72, "head_T": 0.85, "liner_T_top": 0.88,
+               "liner_T_bot": 0.95, "port_T_exh": 0.45}
+
+
 @dataclass
 class Thermal:
     coolant_T: float = 361.0        # K (88 C)
@@ -395,7 +411,15 @@ def heavy_truck_i6() -> EngineSpec:
     # under 550 um of exhaust lash, seating ran 12x the on-ramp speed and
     # valve clatter drowned this engine's sound. 15.5 % gives ramps of
     # >= 1.25 x the lash on both cams (exhaust 0.69 mm, intake 0.68 mm).
-    spec.valves.ramp_fraction = 0.155
+    # spec.valves.ramp_fraction = 0.155      (was, until REVIEW-003 m-5)
+    # REVIEW-003 m-5: that ramp was tall AND fast (0.074-0.083 mm per cam
+    # degree), so tick dominated. The ramps now have their own heights,
+    # 1.25 x the lash, at 0.025 mm per cam degree on the exhaust (0.015 on
+    # the intake), in front of the unchanged main event (the lift above the
+    # ramp, and so the breathing, is as it was).
+    v = spec.valves
+    v.ramp_height_intake, v.ramp_height_exhaust = 1.25 * v.lash_intake, 1.25 * v.lash_exhaust
+    v.ramp_fraction = 0.449
     # full load today peaks at 179 bar and 925 K (session 5 survey)
     spec.p_max_limit = 220e5
     spec.T_exh_limit = 1023.0
@@ -666,7 +690,12 @@ def industrial_single() -> EngineSpec:
         valve_train_eq_mass=0.09,
         # FINDING-017 item 2: ramps >= 1.25 x the lash on both cams
         # (exhaust 0.32 mm over 0.25 mm lash; the default 6 % gave 69 um)
-        ramp_fraction=0.13)
+        # ramp_fraction=0.13)   (was, until REVIEW-003 m-5: 0.042-0.047 mm
+        # per cam degree). Now the heights are their own, 1.25 x the lash,
+        # at 0.025 mm per cam degree on the exhaust (0.022 intake), in front
+        # of the unchanged main event.
+        ramp_height_intake=0.25e-3, ramp_height_exhaust=0.3125e-3,
+        ramp_fraction=0.211)
     spec.air = AirPath(intake_plenum_vol=0.8e-3, exhaust_manifold_vol=0.4e-3,
                        runner_length_int=0.16, runner_length_exh=0.20,
                        intake_pipe_length=0.30, airbox_volume=2.5e-3,

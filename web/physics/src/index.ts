@@ -10,4 +10,5 @@ export { vehicleFor, finishVehicle, type Transmission, type Vehicle } from "./li
 export { Driveline, Gearbox, LaunchClutch, ManualClutch, TorqueConverter } from "./live/driveline.js";
 export { LiveEngine, handleKey, pedalReturn, type LiveState } from "./live/engine.js";
 export { BLOCK, FS } from "./audio/dsp.js";
+export { running_skirt_clearance, SLAP_CLR_REF } from "./slap.js";
 export { LiveSynth, MICS, type Mic, type Part, type SoundSpec } from "./audio/synth.js";

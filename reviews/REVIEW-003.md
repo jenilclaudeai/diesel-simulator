@@ -168,6 +168,15 @@ fix needs a ramp-height parameter separate from `ramp_fraction`; judge it by
 ear in Phase 4. *(PHY2, USR)*
 *(2026-09-30: the owner chose to build it, in the same grid rebuild as
 FINDING-023 option A, judged by ear on a before/after pair.)*
+*(**Built 2026-09-30, `feat/slap-and-ramp`:**
+- `ValveTrain.ramp_height_intake/_exhaust`: the ramps run to their own
+  height (1.25× the lash) at 0.025 mm per cam degree, in front of the
+  unchanged main event, so breathing is kept (lift-area within 0.1%).
+- Tick ÷ loudest other: `hd_i6` 13.0× → 1.00×, `single` 10.6× → 2.98×;
+  `crdi15` unchanged at 2.30× (`tools/tick_dominance.py`, now committed).
+- Found on the way: the roster's `truck127` was at 224×, its valves on the
+  flank (`engines/ROSTER.md`), now 0.90×.
+- Awaiting the owner's ear.)*
 
 **N-1 — the owner has not listened** to any audio change since FINDING-004.
 That is now a Phase 4 exit criterion, not a Phase 1 one, by decision.

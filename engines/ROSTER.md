@@ -46,6 +46,28 @@ turbo sizing does not deliver the air there. It holds from 2,000 (96.7%).
 That is a small turbo engine whose torque arrives a little later, stated
 honestly rather than forced by a third knob.
 
+## Correction (2026-09-30): truck127's valves landed on the flank
+
+Roster A shipped (#76) with `truck127` given the builder's default 6% cam
+ramp: 113 µm under 550 µm of exhaust lash. Its valves therefore landed on
+the steep flank:
+- 0.65 m/s seating at idle;
+- valve tick 224× its loudest other mechanical source at 1200 rpm, half load.
+
+FINDING-017 had warned that builder engines with lash could land off the
+ramp, and I did not check. The lash test only looked at the presets.
+
+REVIEW-003 m-5 fixed it. Every builder engine with lash now gets ramps
+1.25× its lash tall, at 0.025 mm per cam degree, in front of the unchanged
+main event: 0.045 m/s at idle, tick 0.90×, and 26 dB quieter overall at
+idle. The lash test now covers the roster engines.
+
+`verify()` re-run after the change: peak 2,393.6 N·m and 383.3 kW, the
+same, and the plateau points the same (99.8 / 97.4 / 99.8 / 99.9%). Only
+two points moved: 700 rpm 1,780.6 → 1,781.3 N·m, and 1,100 rpm
+2,363.2 → 2,363.4. The table below stands. (The ramps change only the lift
+below 1.25× the lash; the valves clear it 9° earlier, at very small lift.)
+
 ## verify() after tuning
 
 **hatch15:** achieved 261.9 N·m (100.7%), 83.3 kW (98.0%). Plateau: 96.7%

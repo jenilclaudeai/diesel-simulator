@@ -34,7 +34,7 @@ import math
 
 import numpy as np
 
-from .acoustics import C_AIR_STP, MICS, SPL_CAL
+from .acoustics import C_AIR_STP, MICS, SLAP_CLR_REF, SPL_CAL
 
 FS = 44100
 BLOCK = 128                 # the AudioWorklet render quantum
@@ -293,7 +293,8 @@ class LiveSynth:
     current set glides to it with time constant SRC_TAU.
     block(rpm, live): the next BLOCK samples at `rpm` (ramped from the last
     block's), with live values from the real-time loop -- boost, turbo_rpm,
-    load, Pb (boundary friction power) and skirt_clr (skirt film) -- that
+    load, Pb (boundary friction power) and skirt_clr (the running skirt
+    clearance, FINDING-023; was the skirt film) -- that
     override the grid's meta, so a cold engine sounds cold (ADR-011).
     """
 
@@ -451,7 +452,7 @@ class LiveSynth:
         sl = self._sample("slap", theta)
         sl = self.slapr[0].process(sl) + 0.7 * self.slapr[1].process(sl)
         a_tick = (max(meta["v_seating"], 1e-6) / self.ref_vseat) ** 2
-        a_slap = (max(meta["skirt_clr"], 1e-9) / 30e-6) ** 0.6
+        a_slap = (max(meta["skirt_clr"], 1e-9) / SLAP_CLR_REF) ** 0.6
         out["mech"] = (a_tick * self.norm["tick"](tk) + 0.75 * self.norm["inj"](ij)
                        + 0.9 * a_slap * self.norm["slap"](sl))
 

@@ -100,6 +100,15 @@ def known(name, cond, note):
 #   hd_i6  1700/1.0  torque 2311.359 -> 2313.377, bsfc 214.29 -> 214.10, p_max 178.17 -> 178.84
 # hd_i6 still reproduces the documented 2310 N.m and stays in the 160-200 bar band.
 #
+# Re-baselined 2026-09-30 for REVIEW-003 m-5 (hd_i6's ramps have their own
+# height, 1.25 x the lash, and run 3x slower, in front of the unchanged main
+# event). The lift above the ramp is exactly as it was; the valves clear
+# their lash on the gentle ramp 4.8 (intake) and 7.1 (exhaust) crank degrees
+# earlier, at very small lift:
+#   hd_i6  1700/1.0  torque 2313.377 -> 2313.603 (+0.0098%), bsfc 214.101 -> 214.080, p_max 178.837 -> 178.839
+# (A first design narrowed the flank instead, losing 14-17% of hd_i6's
+# lift-area; it was replaced before any baseline moved.)
+#
 # Tolerance tightened 0.5% -> 1e-5 at the Phase 1 exit (REVIEW-003), values
 # now stored to 9 significant figures. 0.5% let PR #37's -0.09% move pass
 # unrecorded. 1e-5 is the SolverPort's bound for the same reason: the
@@ -110,7 +119,7 @@ GOLDEN_TOL = 1e-5
 GOLDEN = {
     ("crdi15", 1800, 0.6): dict(torque=122.580341, bsfc=238.524968, pmax=130.046491),
     ("crdi15", 3000, 1.0): dict(torque=216.888323, bsfc=214.552248, pmax=152.273735),
-    ("hd_i6", 1700, 1.0): dict(torque=2313.377013, bsfc=214.100932, pmax=178.836788),
+    ("hd_i6", 1700, 1.0): dict(torque=2313.603180, bsfc=214.080003, pmax=178.839201),
 }
 
 
@@ -514,14 +523,17 @@ def test_cam_film_and_time_base():
     opens against: 577.8 W crank time base, 597.2 W with the cam time base
     mutated back (velocity, roller slip and inertia), still 3.4% apart.
     Re-pinned for FINDING-018 (no lift step, so no inertia spike at the
-    junction): 572.7 W; cam-time-base mutant 588.9 W, 2.8% apart."""
+    junction): 572.7 W; cam-time-base mutant 588.9 W, 2.8% apart.
+    Re-pinned for REVIEW-003 m-5 (hd_i6's ramps 3x slower, their own
+    height): 560.4 W; cam-time-base mutant (inertia and roller speeds at cam
+    speed) 585.8 W, 4.5% apart."""
     shares = {}
     for preset, rpm, load in (("hd_i6", 1400, 0.6), ("single", 2000, 0.8)):
         f = DieselEngine(preset=preset).operating_point(rpm, load=load, n_cycles=9).friction
         shares[preset] = f["Pb_valvetrain"] / f["P_valvetrain"]
         if preset == "hd_i6":
             check("hd_i6 valvetrain friction power (crank time base)",
-                  f["P_valvetrain"], 572.7, 0.01)
+                  f["P_valvetrain"], 560.4, 0.01)
     check("cam boundary friction is a material share of valvetrain friction",
           1.0 if min(shares.values()) > 1e-2 else 0.0, 1.0, 0.0,
           ", ".join(f"{k} {v:.3f}" for k, v in shares.items()) + " (must exceed 0.01)")
@@ -631,6 +643,53 @@ def test_mech_levels_carry_physics():
           f"(each must exceed +1%)")
 
 
+def test_cold_slap_follows_clearance():
+    """FINDING-023 option A: slap reads the running skirt clearance, which a
+    cold engine opens (an aluminium piston shrinks more than its iron bore),
+    instead of the skirt film, which sat on its 0.32 x clearance cap in every
+    cold cell. Checked at each place the synth's input is made: the formula
+    (warm reference, a hand value at 273 K, falling with temperature, the
+    floor); EngineSound.build_sources; grid.solve_cell's cold cell; and the
+    live loop's sound_inputs(), whose prebuilt-grid part SKIPs without one."""
+    from dieselsim.acoustics import (ALPHA_BORE, ALPHA_PISTON, EngineSound,
+                                     running_skirt_clearance as clr)
+    from dieselsim.grid import solve_cell
+    eng = DieselEngine(preset="crdi15")
+    c, b = eng.wear.eff_skirt_clearance(), eng.spec.geom.bore
+    # by hand: the piston moves 0.72 K and the liner mean 0.55*0.88 + 0.45*0.95
+    # per K of coolant (_apply_thermal_state)
+    hand = c + b * 88.0 * (ALPHA_PISTON * 0.72 - ALPHA_BORE * (0.55 * 0.88 + 0.45 * 0.95))
+    Ts = [250.0 + 5.0 * k for k in range(31)]
+    falls = all(clr(c, b, t1) > clr(c, b, t2) for t1, t2 in zip(Ts, Ts[1:]))
+    parts = {"warm reference is c_ref": clr(c, b, 361.0) == c,
+             "273 K by hand": abs(clr(c, b, 273.0) / hand - 1.0) < 1e-12,
+             "falls with temperature": falls,
+             "floored at c_ref / 4": clr(c, b, 900.0) == 0.25 * c}
+    op = eng.operating_point(800.0, load=0.2, n_cycles=9)
+    snd = EngineSound(eng.spec)
+    snd.wear = eng.wear
+    warm = snd.build_sources(op)["_meta"]["skirt_clr"]
+    snd.T_coolant = 273.0
+    cold = snd.build_sources(op)["_meta"]["skirt_clr"]
+    parts["build_sources reads it"] = warm == c and cold == clr(c, b, 273.0)
+    src, _ = solve_cell(eng.spec, 800.0, 0.2, T_coolant=273.0)
+    parts["a cold grid cell carries it"] = src["_meta"]["skirt_clr"] == clr(c, b, 273.0)
+    note = f"crdi15: {c * 1e6:.1f} um warm, {clr(c, b, 273.0) * 1e6:.1f} um at 273 K (by hand {hand * 1e6:.1f})"
+    if not _no_prebuilt_grids("the live loop sends the running clearance"):
+        from dieselsim.live import LiveEngine
+        live = LiveEngine(_prebuilt_grid("crdi15"), "crdi15")
+        got = {}
+        for T in (273.0, 361.0):
+            live.T_coolant, live.T_oil = T, T
+            live._update_friction()
+            got[T] = live.sound_inputs()["skirt_clr"]
+        parts["the live loop sends it"] = got[273.0] == clr(c, b, 273.0) and got[361.0] == c
+        note += f"; live cold/warm {got[273.0] / got[361.0]:.3f}x"
+    bad = [k for k, ok in parts.items() if not ok]
+    check("slap follows the running skirt clearance (FINDING-023)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ") + note)
+
+
 def test_flat_tappet_wears_more_than_roller():
     """FINDING-015 item 2: with the flat-faced follower's own sliding and
     entrainment speeds, a flat tappet's cam boundary power per cylinder is
@@ -657,16 +716,82 @@ def test_flat_tappet_wears_more_than_roller():
 def test_closing_ramps_clear_the_lash():
     """FINDING-017 item 2: a closing ramp shorter than the lash lands the
     valve on the steep flank (hd_i6 seated at 0.91 m/s with a 106 um ramp
-    under 550 um lash). Every preset's ramps must clear its lash."""
+    under 550 um lash). Every preset's ramps must clear its lash -- and,
+    since REVIEW-003 m-5, every roster engine's: builder.py gave its 12.7 L
+    truck the default 6 % ramp, 113 um under 550 um of lash, and this test
+    only looked at the presets, so roster A shipped with it (0.65 m/s at idle)."""
     from dieselsim.config import PRESETS
+    engines = {key: DieselEngine(preset=key) for key in sorted(PRESETS)}
+    engines.update(_roster_engines())
     bad = []
-    for key in sorted(PRESETS):
-        cyc = DieselEngine(preset=key).cycle
+    for key, eng in engines.items():
+        cyc = eng.cycle
         for cam, which in ((cyc.cam_int, "intake"), (cyc.cam_exh, "exhaust")):
             if cam.lash > 0.0 and cam.h_ramp < cam.lash:
                 bad.append(f"{key} {which}: ramp {cam.h_ramp * 1e6:.0f} um < lash {cam.lash * 1e6:.0f} um")
-    check("closing ramps clear the lash on every preset", float(len(bad)), 0.0, 0.0,
-          "; ".join(bad) or f"{len(PRESETS)} presets")
+    check("closing ramps clear the lash on every preset and roster engine", float(len(bad)), 0.0, 0.0,
+          "; ".join(bad) or f"{len(engines)} engines")
+
+
+def _roster_engines():
+    """The roster engines, built from engines/*.json without registering them
+    as presets (so other tests' sorted(PRESETS) loops are unaffected); {} when
+    engines/ is absent (Pyodide)."""
+    import json
+    from dieselsim.builder import from_dict
+    out = {}
+    for key in ROSTER:
+        path = os.path.join(ENGINES_DIR, f"{key}.json")
+        if os.path.exists(path):
+            with open(path) as fh:
+                out[key] = DieselEngine(spec=from_dict(json.load(fh)))
+    return out
+
+
+def test_ramps_have_their_own_height():
+    """REVIEW-003 m-5: with the ramp ending where the flank reaches it, ramp
+    height and speed were one parameter (speed ~ sqrt(height)), so the ramps
+    tall enough to clear large lash ran at 0.074-0.083 mm per cam degree on
+    hd_i6 and tick dominated. Every engine with lash now has ramps 1.25 x its
+    lash tall, the exhaust's at 0.025 mm per cam degree (0.5%); above the
+    ramp height its lift is the main event's raised cosine exactly, so the
+    breathing is unchanged (a first design narrowed that flank instead and
+    lost 10-17% of the valves' lift-area); it seats at the ramp's own
+    measured slope (1%); and doubling ramp_fraction at the same height
+    halves the speed without moving the height."""
+    import numpy as np
+    from dieselsim.kinematics import RAMP_SPEED, Cam
+    th = np.arange(0.0, 720.0, 0.01)
+    engines = {k: DieselEngine(preset=k) for k in ("hd_i6", "single")}
+    engines.update({k: e for k, e in _roster_engines().items() if e.spec.valves.lash_exhaust > 0.0})
+    bad, notes = [], []
+    for key, eng in engines.items():
+        vt = eng.spec.valves
+        for cam, which, ev in ((eng.cycle.cam_int, "intake", (vt.ivo_deg, vt.ivc_deg)),
+                               (eng.cycle.cam_exh, "exhaust", (vt.evo_deg, vt.evc_deg))):
+            tag = f"{key} {which}"
+            if abs(cam.h_ramp / (1.25 * cam.lash) - 1.0) > 1e-12:
+                bad.append(f"{tag} height {cam.h_ramp * 1e6:.0f} um")
+            speed = cam.h_ramp / (0.5 * cam.ramp * cam.dur / 2.0)      # m per cam degree
+            if which == "exhaust":
+                notes.append(f"{key} {speed * 1e3:.4f} mm/cam-deg")
+                if abs(speed / RAMP_SPEED - 1.0) > 0.005:
+                    bad.append(f"{tag} speed {speed * 1e3:.4f} mm/cam-deg")
+            L, v = cam.cam_lift(th), np.abs(cam.dlift_dtheta(th))
+            u = ((th - ev[0]) % 720.0) / cam.dur                # phase in the main event
+            above = (u <= 1.0) & (L >= cam.h_ramp)
+            main = cam.lift_max * np.sin(np.pi * u[above]) ** 2
+            if not above.any() or float(np.max(np.abs(L[above] - main))) > 1e-15:
+                bad.append(f"{tag} lift above the ramp is not the main event")
+            slope = float(np.median(v[(L > 1e-9) & (L < 0.9 * cam.h_ramp)]))
+            if abs(cam.seating_velocity(1.0) / slope - 1.0) > 0.01:
+                bad.append(f"{tag} seats at {cam.seating_velocity(1.0):.4g}, ramp slope {slope:.4g}")
+    cam = engines["hd_i6"].cycle.cam_exh
+    twice = Cam(cam.open_deg, cam.close_deg, cam.lift_max, cam.lash, 2.0 * cam.ramp, ramp_height=cam.ramp_height)
+    if twice.h_ramp != cam.h_ramp or abs(twice.seating_velocity(1.0) / cam.seating_velocity(1.0) - 0.5) > 1e-12:
+        bad.append("height not independent of ramp_fraction")
+    check("ramps have their own height: 1.25 x lash, 0.025 mm per cam degree, main event unchanged (REVIEW-003 m-5)",
+          float(len(bad)), 0.0, 0.0, "; ".join(bad) or f"{len(engines)} engines; exhaust " + ", ".join(notes))
 
 
 def test_cam_wear_calibration():
@@ -768,7 +893,11 @@ def test_seating_on_ramp_is_ramp_speed():
     check("hd_i6 exhaust seats at its ramp speed (lash within the ramp)",
           cam.seating_velocity(1.0), ramp_speed, 0.01,
           f"lash {cam.lash * 1e6:.0f} um, ramp {cam.h_ramp * 1e6:.0f} um")
-    off = Cam(cam.open_deg, cam.close_deg, cam.lift_max, lash=2.0 * cam.h_ramp, ramp=cam.ramp)
+    # off = Cam(cam.open_deg, cam.close_deg, cam.lift_max, lash=2.0 * cam.h_ramp, ramp=cam.ramp)
+    # (was: since REVIEW-003 m-5 hd_i6's ramp has its own height, and without
+    # it this cam would be the old profile, whose 3.6 mm ramp holds the lash)
+    off = Cam(cam.open_deg, cam.close_deg, cam.lift_max, lash=2.0 * cam.h_ramp, ramp=cam.ramp,
+              ramp_height=cam.ramp_height)
     check("lash above the ramp keeps the penalty", off.seating_velocity(1.0),
           ramp_speed * (1.0 + 2.2 * 2.0), 0.01)
 
@@ -1362,7 +1491,10 @@ def test_grid_sources_warm_and_cold():
     that node's cell exactly; and a cold cell's skirt film -- FINDING-017's
     stand-in for slap clearance -- is never thinner than the warm one's.
     (First written as "thicker": false in 115 of 240 cells, where both sit
-    on the film's clamp. That clamp is FINDING-023, recorded below.)"""
+    on the film's clamp. That clamp is FINDING-023, recorded below.)
+    Since FINDING-023 option A the slap input is the running clearance:
+    every cold cell's is the warm one's opened by the cold (the same factor
+    in every cell of a grid), and none sits on the old film cap."""
     if _no_prebuilt_grids("prebuilt grids carry warm and cold sound sources"):
         return
     import numpy as np
@@ -1403,9 +1535,12 @@ def test_grid_sources_warm_and_cold():
           f"differ; cold/warm skirt film {min(ratio):.2f}..{max(ratio):.2f} over {len(ratio)} cells; "
           f"cold combustion identical to warm in {twins}")
     cells = len(ratio)
-    known("the slap input (skirt film) is off its clamp in cold cells (FINDING-023)",
-          pinned["cold"] == cells,
-          f"on 0.32 x clearance: {pinned['cold']} of {cells} cold cells, {pinned['warm']} of {cells} warm")
+    # was known("the slap input (skirt film) is off its clamp in cold cells
+    # (FINDING-023)", pinned["cold"] == cells, ...): 240 of 240 cold cells on it
+    check("the slap input opens in every cold cell, off the old film cap (FINDING-023)",
+          1.0 if (min(ratio) > 1.3 and pinned["cold"] == 0 and pinned["warm"] == 0) else 0.0, 1.0, 0.0,
+          f"cold/warm {min(ratio):.3f}..{max(ratio):.3f} over {cells} cells; on 0.32 x clearance: "
+          f"{pinned['cold']} cold, {pinned['warm']} warm")
 
 
 def test_live_sound_follows_the_engine():
@@ -1523,6 +1658,8 @@ def main():
                test_render_transient_has_no_seams,
                test_theta_global_axis,
                test_mech_levels_carry_physics,
+               test_cold_slap_follows_clearance,
+               test_ramps_have_their_own_height,
                test_flat_tappet_wears_more_than_roller,
                test_closing_ramps_clear_the_lash,
                test_cam_wear_calibration,

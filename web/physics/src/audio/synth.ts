@@ -5,6 +5,7 @@
 // expression keeps the Python's operation order.
 import type { SourceKey, Sources } from "../live/adr011.js";
 import { SOURCE_KEYS } from "../live/adr011.js";
+import { SLAP_CLR_REF } from "../slap.js";
 import {
   BLOCK, Biquad, Chain, Comb, Delay, FS, NOISE_N, Norm, NoiseCursor, SRC_TAU,
   butter, noiseTable, peakBa, resonatorBa,
@@ -304,7 +305,7 @@ export class LiveSynth {
     this.sampleInto("inj", theta, src); pairInto(this.injr, src, 0.5, ij);
     this.sampleInto("slap", theta, src); pairInto(this.slapr, src, 0.7, sl);
     const a_tick = (Math.max(meta["v_seating"]!, 1e-6) / this.ref_vseat) ** 2;
-    const a_slap = (Math.max(meta["skirt_clr"]!, 1e-9) / 30e-6) ** 0.6;
+    const a_slap = (Math.max(meta["skirt_clr"]!, 1e-9) / SLAP_CLR_REF) ** 0.6;
     N["tick"]!.applyInto(tk, tk); N["inj"]!.applyInto(ij, ij); N["slap"]!.applyInto(sl, sl);
     const ks = 0.9 * a_slap;
     const mech = P.mech;

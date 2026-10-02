@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-09-30 (session 5, part 11: roster A on `/enjoy`; #72–#76)
+**Updated:** 2026-10-01 (session 5, part 12: FINDING-023 fixed, ramp heights, truck127's valves; #77, #78)
 **Phase:** 1, 2, 3 and **4 exit-ready** (REVIEW-003 to -006). The owner signed
 off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
 - FINDING-022 is fixed (option A, #64).
@@ -11,8 +11,64 @@ off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
   - **a ramp-height parameter** separate from `ramp_fraction` (REVIEW-003
     m-5), in the **same** rebuild of all 8 grids, judged by ear;
   - live friction's cost on low-end phones **waits for the real Android
-    check**;
+    check**. *(Correction: the option I offered, "compute it less often: 20
+    Hz instead of 60", was wrong: live friction already runs every 6th
+    frame, 10 Hz (`LiveEngine.FRICTION_EVERY`). So the 6× cost is a whole
+    frame every 6th frame, not every frame. The owner chose to wait, so
+    nothing was built on it.)*;
   - OPEN-B accepted as **ADR-013** (personas are review lenses).
+- **Decided 2026-10-01:** custom engines from the UI and JSON, **drivable**
+  (the owner's choice over Dyno/Grid only). They come after #78; see Next
+  actions.
+
+**Part 12: FINDING-023 fixed, and cam ramps with their own height
+(#78, `feat/slap-and-ramp`, stacked on #77, docs):**
+- **FINDING-023 option A.** Slap reads the running skirt clearance, which a
+  cold engine opens: Al piston 21e-6/K, iron bore 11e-6/K, the walls moving
+  with the coolant as `_apply_thermal_state` moves them. Cold opens it
+  1.55–1.83×, so slap rises +2.3 to +3.1 dB. A warm cell whose film sat on
+  its cap keeps its level exactly. The film stays in friction, so perf is
+  untouched. Details and tables are in `reviews/FINDING-023.md`.
+- **REVIEW-003 m-5.** `ramp_height_intake/_exhaust`: each ramp runs to its
+  own height (1.25× the lash) at 0.025 mm per cam degree, in front of the
+  unchanged main event.
+  - Lift-area is kept within 0.1%; `hd_i6` 1700/1.0 torque moves +0.0098%.
+  - Tick ÷ loudest other source (`tools/tick_dominance.py`, now committed):
+    `hd_i6` 13.0× → 1.00×, `single` 10.6× → 2.98×; `crdi15` unchanged at
+    2.30×.
+  - **My first design narrowed the flank instead and lost 10–17% of the
+    lift-area.** I caught it in the rendered sources (exhaust −17%, turbo
+    −31%) and replaced it before any baseline moved.
+- **Found on the way, my miss in #76: `truck127`'s valves landed on the
+  flank.** The builder gave it the default 6% ramp, 113 µm under 550 µm of
+  lash: 0.65 m/s seating, tick 224× the loudest other source. It is now
+  0.90× and 26 dB quieter at idle; its `verify()` is unchanged. The lash
+  test now covers the roster engines. See the correction in
+  `engines/ROSTER.md`.
+- **All 8 grids rebuilt once.**
+  - Unsettled cells are identical to the old grids.
+  - The dyno accuracy table's rows are unchanged; only the solver stamp
+    moved (`66de4859…`).
+  - The run also built an untuned `v8hd` grid (`load_engine_dir` found
+    roster B's engine file); I deleted it.
+- **Tests.**
+  - Python: 67 passed, 0 failed, 2 known (scipy); 62 + 4 skipped (plain).
+    The FINDING-023 known is now a passing check.
+  - Fixtures current (7 modules, 0 differences); `web/physics` 5 + 36 + 10
+    + 8; app 42 unit tests; `build:pages` OK; audit 0 / 2 / 0.
+  - Browser, on the rebuilt grids: enjoy 14/14, drive 7/7, sound 6/6,
+    dyno 13/13, grid 8/8.
+  - Mutants: FINDING-023 6 of 6, ramps 6 of 6 (the first design's flank
+    included), TypeScript 5 of 5.
+  - Re-pinned with inline reasons: the `hd_i6` golden point, and the
+    valvetrain power (its time-base mutant is still 4.5% away).
+- **For the owner's ear:** `out/listen/review003m5_*.wav`, six pairs, each
+  before → gap → after, with one gain per pair (local files, gitignored).
+- **Seen while running the app, not changed:** the Derate lamp lights on the
+  truck at full throttle and low speed (charge air 66 °C, fan off, more than
+  5% fuel pulled). It is a real modelled loss, but a real dashboard would
+  not warn at 66 °C. Candidate fix: light it only above a realistic intake
+  temperature.
   - *(the Phase 5 decisions are made: ADR-012, 2026-09-30: roster B as A
     first; touch pedals with top paddles; a new `/enjoy`; judged on a
     mid-range Android)*
@@ -108,9 +164,12 @@ tested top of each stack, 0 lines differ):
   because their branches were deleted before merging (deleting a PR's head
   or base branch makes GitHub close it).
 
-~~**No PR is open.**~~ **Open, a stack, merge in order:** #72
-(`docs/status-main` → `main`) → #73 → #74 → #75 → #76 (`feat/roster-a`).
-Retarget each child to `main` after its parent merges, or merge top-down.
+~~**No PR is open.**~~ ~~**Open, a stack, merge in order:** #72
+(`docs/status-main` → `main`) → #73 → #74 → #75 → #76 (`feat/roster-a`).~~
+*(All merged 2026-09-30, each retargeted to `main`; `main` equals the
+tested top, 0 lines differ.)* **Open now:** #77 (`docs/decisions-023-ramp` →
+`main`) → #78 (`feat/slap-and-ramp`). Merge #77 first, then retarget #78 to
+`main`.
 Remote branches besides those: `main`, and `fix/steady-state-controllers`
 (kept; the only copy of the FINDING-013 option A experiment).
 
@@ -835,8 +894,9 @@ Session 4's branch table is in git history.
 ## Next actions
 
 1. ~~**Owner:** merge #50, then #51 → #58, then #59 → #64, retargeting each
-   child to `main`.~~ Done (#50, #65, #71). **Now: merge #72 → #76 in
-   order**, retargeting each child to `main`.
+   child to `main`.~~ Done (#50, #65, #71). ~~**Now: merge #72 → #76 in
+   order**~~ done 2026-09-30. **Now: merge #77, then retarget #78 to
+   `main` and merge it.**
 2. **Owner: listen.** On `/drive`: Sound on, keys 1–5 for the mics, "Record
    10 s (WAV)". Or `python3 play.py`. Listen for:
    - `hd_i6`'s tick dominance (13×);
@@ -850,12 +910,25 @@ Session 4's branch table is in git history.
    separate from `ramp_fraction` is still open for the same review.~~
    Decided 2026-09-30: 023 option A **and** the ramp-height parameter, one
    rebuild of all 8 grids; then a before/after pair for the owner's ears.
+   **Built (#78). Listen to `out/listen/review003m5_*.wav`** (or the app on
+   the branch), and judge especially `hd_i6`'s idle tick, now 0.23× the
+   loudest other source: it may have become too quiet for a mechanical-lash
+   truck. `RAMP_SPEED` is the single knob.
 3. **Phase 5 — Enjoy mode:** ~~the roster (OPEN-F), the dashboard, and the
    steady-state economy label~~ roster A, the dashboard and the label are
    done (#75, #76). Next: roster B (`v8hd`, an old NA single), and truck127's
    13 unsettled cells, if they show on the dials. Check live friction's cost and the synth's on a
    mid-range phone (REVIEW-005 m-5, REVIEW-006 m-1).
-4. Follow-ups:
+4. **Custom engines, drivable (owner's choice, 2026-10-01), after #78:**
+   - a brochure-numbers form, plus JSON import/export in the
+     `engines/*.json` format, on Dyno and Grid, through the solver's
+     existing `{"headline": ...}` contract, showing achieved against
+     requested;
+   - then the converged warm+cold grid built in the browser so the engine
+     can be driven, plus a vehicle choice. **Measure the in-browser build
+     time first**: natively it is 15–20 min on 6 cores.
+   - ADR-007 (project JSON) and the Derate-lamp threshold ride along.
+5. Follow-ups:
    - a TCU engine-speed match on converter downshifts (REVIEW-005 m-3);
    - ~~`play.py` on `Adr011Grid` (m-6)~~ done in #69;
    - row-sharing the p_max / T_exh check;
