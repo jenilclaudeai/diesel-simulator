@@ -13,8 +13,13 @@ export type Request =
   | { type: "init"; id: number }
   | { type: "solvePoint"; id: number; req: PointRequest }
   | { type: "describeEngine"; id: number; engine: EngineRef }
+  | { type: "liveCall"; id: number; fn: LiveFn; arg: string }
   | { type: "buildGrid"; id: number; req: GridRequest }
   | { type: "cancel"; id: number };
+
+/** The bridge functions a drivable-grid build calls (ADR-014 step 3); JSON in, JSON out. */
+export const LIVE_FNS = ["live_grid_plan", "live_row_limit", "live_cell", "live_grid_assemble"] as const;
+export type LiveFn = (typeof LIVE_FNS)[number];
 
 export interface WireError {
   kind: SolverErrorKind;
@@ -23,7 +28,7 @@ export interface WireError {
 }
 
 export type Reply =
-  | { type: "result"; id: number; value: RuntimeInfo | PointResult | EngineInfo | Grid }
+  | { type: "result"; id: number; value: RuntimeInfo | PointResult | EngineInfo | Grid | string }
   | { type: "progress"; id: number; progress: GridProgress }
   | { type: "error"; id: number; error: WireError };
 

@@ -3,6 +3,7 @@
 import { Worker } from "node:worker_threads";
 import { WorkerSolver } from "../src/worker-client.js";
 import { SolverError, type GridProgress } from "../src/solver-port.js";
+import type { LiveFn } from "../src/protocol.js";
 import { sourceHash } from "../src/cache-key.js";
 import { CachedSolver } from "../src/cached-solver.js";
 import { MemoryGridCache } from "../src/grid-cache.js";
@@ -79,6 +80,13 @@ check("describeEngine: a custom engine's rpm range and requested numbers (ADR-01
 e = await expectError(solver.describeEngine({ headline: { ...MY20, n_cyl: "four" } }));
 check("a custom engine the builder cannot make is an invalid request", e?.kind === "invalid-request"
       && /cannot make this engine/.test(e.message), e?.message.slice(0, 80) ?? "no error");
+
+// ADR-014 step 3: the live-grid pieces, and only those, over the wire
+const plan = JSON.parse(await solver.liveCall("live_grid_plan", JSON.stringify({ engine: { headline: MY20 } })));
+check("liveCall: a drivable grid's plan is the roster's 8 x 6", plan.rpms.length === 8 && plan.loads.length === 6
+      && plan.rpms[0] === desc.idle_rpm && plan.T_cold === 273, `rpms ${plan.rpms[0]}..${plan.rpms.at(-1)}, loads ${plan.loads.length}`);
+e = await expectError(solver.liveCall("solve_point" as LiveFn, "{}"));
+check("liveCall refuses a bridge function that is not a live-grid piece", e?.kind === "protocol", e?.message ?? "no error");
 
 const progress: GridProgress[] = [];
 const grid = await solver.buildGrid(

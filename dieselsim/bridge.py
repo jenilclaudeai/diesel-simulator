@@ -212,3 +212,114 @@ def solve_grid_cell(req_json):
     arrays = {k: np.ascontiguousarray(src[k], dtype="<f4").tobytes()
               for k in SOURCE_KEYS}
     return out, arrays
+
+
+# ==========================================================================
+# ADR-014 step 3: a drivable grid -- converged, warm and cold -- piece by
+# piece, so a pool of browser workers can build one. tools/build_live_grids.py
+# builds with these same functions: a grid made in the browser and one made
+# natively are the same file.
+# ==========================================================================
+LIVE_N_RPM, LIVE_N_LOAD, LIVE_T_COLD = 8, 6, 273.0
+
+
+def friction_engine_view(eng):
+    """Everything FrictionModel.evaluate reads, as plain data: the spec (with
+    its derived geometry and the wall temperatures the engine's coolant has
+    set), the oil condition, the wear state and both cams. The TypeScript
+    port takes exactly this. (Moved here from tools/fixtures/gen_fixtures.py,
+    which now imports it: the browser cannot import tools/.)"""
+    import dataclasses
+    spec = eng.spec
+    d = json.loads(json.dumps(dataclasses.asdict(spec), default=float))
+    g = spec.geom
+    d["geom"].update(crank_radius=g.crank_radius, piston_area=g.piston_area, displacement=g.displacement,
+                     clearance_volume=g.clearance_volume,
+                     phase_deg=[g.phase_deg(i) for i in range(g.n_cyl)])
+    cams = {}
+    for name, cam in (("intake", eng.cycle.cam_int), ("exhaust", eng.cycle.cam_exh)):
+        cams[name] = dict(open_deg=cam.open_deg, close_deg=cam.close_deg, lift_max=cam.lift_max,
+                          lash=cam.lash, ramp=cam.ramp, ramp_height=cam.ramp_height)
+    return {"spec": d, "cams": cams,
+            "oil": {k: float(v) for k, v in dataclasses.asdict(eng.oil.cond).items()},
+            "wear": {k: float(v) for k, v in dataclasses.asdict(eng.wear.state).items()}}
+
+
+def live_annotation(spec):
+    """The live spec and engine view, as the TypeScript loop reads them."""
+    import dataclasses
+    eng = DieselEngine(spec=copy.deepcopy(spec))
+    live_spec = json.loads(json.dumps(dataclasses.asdict(eng.spec), default=float))
+    live_spec["geom"]["displacement"] = eng.spec.geom.displacement
+    return {"spec": live_spec, "engine_view": friction_engine_view(eng)}
+
+
+def _b64f32(a):
+    import base64
+    return base64.b64encode(np.asarray(a, dtype="<f4").tobytes()).decode()
+
+
+def live_grid_plan(req_json):
+    """The axes of an engine's drivable grid: its rpm rows (idle to max) and
+    loads, and the two coolant temperatures."""
+    req = json.loads(req_json)
+    spec = _resolve_spec(req.get("engine"))
+    n_rpm = int(_num(req, "n_rpm", lo=2, hi=16, default=LIVE_N_RPM))
+    n_load = int(_num(req, "n_load", lo=2, hi=12, default=LIVE_N_LOAD))
+    return json.dumps({"name": spec.name,
+                       "rpms": [float(x) for x in np.linspace(spec.idle_rpm, spec.max_rpm, n_rpm)],
+                       "loads": [float(x) for x in np.linspace(0.0, 1.0, n_load)],
+                       "T_warm": float(spec.thermal.coolant_T), "T_cold": LIVE_T_COLD})
+
+
+def live_row_limit(req_json):
+    """One rpm row's full-load fuel, from a CONVERGED calibration (every cell
+    of the row, warm and cold, solves on it)."""
+    req = json.loads(req_json)
+    eng = DieselEngine(spec=_resolve_spec(req.get("engine")))
+    eng.converged_mode = True
+    return json.dumps({"fuel_limit": float(eng.fuel_limit(_num(req, "rpm", lo=300.0, hi=10000.0)))})
+
+
+def live_cell(req_json):
+    """One converged cell on its row's fuel, warm or cold (walls at 273 K):
+    its perf, its cylinder-1 pressure trace and its six sound sources, arrays
+    as float32 base64 -- what the grid file stores."""
+    from .livesound import SOURCE_KEYS as SOUND_KEYS
+    req = json.loads(req_json)
+    spec = _resolve_spec(req.get("engine"))
+    src, perf = solve_cell(spec, _num(req, "rpm", lo=300.0, hi=10000.0), _num(req, "load", lo=0.0, hi=1.0),
+                           converged=True, fuel_limit=float(_num(req, "fuel_limit", lo=0.0)),
+                           T_coolant=LIVE_T_COLD if req.get("cold") else None)
+    return json.dumps({"perf": {k: float(v) for k, v in perf.items()}, "p_cyl_f32": _b64f32(src["p_cyl"]),
+                       "src_f32": {k: _b64f32(src[k]) for k in SOUND_KEYS},
+                       "meta": {k: float(v) for k, v in src["_meta"].items()}})
+
+
+def live_grid_assemble(req_json):
+    """The grid file, from its plan, row limits and cells (each as live_cell
+    returned it, row by row): the format tools/build_live_grids.py writes and
+    the app's Adr011Grid reads, key for key."""
+    req = json.loads(req_json)
+    spec = _resolve_spec(req.get("engine"))
+    rpms, loads = req["rpms"], req["loads"]
+    grids = {"warm": req["warm"], "cold": req["cold"]}
+    for tag, g in grids.items():
+        if len(g) != len(rpms) or any(len(row) != len(loads) for row in g):
+            raise RequestError(f"the {tag} cells do not match the {len(rpms)} x {len(loads)} plan")
+    unsettled = sum(1 for g in grids.values() for row in g for c in row if c["perf"].get("settled", 1.0) < 0.5)
+    col = lambda tag, k: [[c[k] for c in row] for row in grids[tag]]  # noqa: E731
+    from .acoustics import EngineSound
+    # the native tool passes the hash it took before its workers started
+    data = {"preset": req["key"], "name": spec.name, "grid_hash": req.get("grid_hash") or grid_hash(), "converged": True,
+            "rpms": rpms, "loads": loads, "fuel_limits": req["fuel_limits"],
+            "T_warm": spec.thermal.coolant_T, "T_cold": LIVE_T_COLD,
+            "grid_deg": [float(x) for x in EngineSound(spec).grid],
+            "perf": col("warm", "perf"), "perf_cold": col("cold", "perf"),
+            "p_cyl_f32": col("warm", "p_cyl_f32"), "p_cyl_cold_f32": col("cold", "p_cyl_f32"),
+            "src_f32": col("warm", "src_f32"), "src_cold_f32": col("cold", "src_f32"),
+            "src_meta": col("warm", "meta"), "src_meta_cold": col("cold", "meta"),
+            "unsettled_cells": unsettled, "build_s": int(req.get("build_s", 0))}
+    data.update(req.get("extra") or {})
+    data.update(live_annotation(spec))
+    return json.dumps(data, separators=(",", ":"))

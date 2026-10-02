@@ -54,6 +54,14 @@ export interface GridKeyInput {
   n_cycles?: number;
 }
 
+/**
+ * The key a drivable-grid build (ADR-014 step 3) files its finished pieces
+ * under, so a reload resumes: the physics, the engine and the grid size.
+ */
+export function liveBuildKey(solverVersion: string, engine: EngineRef, size: [number, number]): Promise<string> {
+  return sha256Hex(new TextEncoder().encode(canonicalJson({ live: 1, solver: solverVersion, engine, size })));
+}
+
 export function gridCacheKey(k: GridKeyInput): Promise<string> {
   return sha256Hex(new TextEncoder().encode(canonicalJson({
     format: GRID_FORMAT,
