@@ -1,13 +1,12 @@
 {
   "key": "v8hd",
-  "name": "V8 HD 15L",
+  "name": "15 L V8, 600 ps",
   "displacement": 15.0,
   "n_cyl": 8,
   "rated_rpm": 1900,
   "peak_torque": 2600,
   "peak_power": 440,
-  "plateau": [
-    1000,
-    1450
-  ]
+  "plateau": [1000, 1450],
+  "boost_map_rise": 0.08,
+  "afr_limit": 17.0
 }

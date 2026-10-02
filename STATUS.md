@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-10-03 (session 5, part 17: a full browser build measured; the Derate lamp; custom e2e in CI; #81 → #82 → #83)
+**Updated:** 2026-10-03 (session 5, part 18: roster B -- the 15 L V8 and the old single; #81 → #82 → #83 → #84)
 **Phase:** 1, 2, 3 and **4 exit-ready** (REVIEW-003 to -006). The owner signed
 off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
 - FINDING-022 is fixed (option A, #64).
@@ -159,9 +159,57 @@ tested top (`be26576`), 0 lines differ.
     left the gearbox in Manual (the truck revved in neutral).
 - **`e2e:custom` runs in CI** as its own job, `web-custom-e2e`, so it does
   not lengthen the others. With CI's 2 cores the pool is one worker, ~15–20
-  min.
-- **Next: roster B**, the 15 L V8 truck and an old naturally aspirated
-  single (ADR-012).
+  min. *(Correction: measured on its first run, the job took 8 min 16 s,
+  the test 460 s. My estimate was twice that.)*
+- ~~**Next: roster B**, the 15 L V8 truck and an old naturally aspirated
+  single (ADR-012).~~ Done, below.
+
+**Part 18: roster B (#84, stacked on #83). With it, ADR-012's roster is
+complete: 1, 4, 6 and 8 cylinders, and one engine with no turbo.**
+- **`v8hd`, 15 L V8, 600 ps**, in the 40 t tractor-trailer.
+  - Untuned: 80.5% of the cap at the plateau start.
+  - Tuned `boost_map_rise` 0.08 and `afr_limit` 17.0: plateau 99.6 / 96.5 /
+    99.5 / 100.0%, rated 99.9%.
+  - `verify()`: 99.7% / 97.8%.
+  - Not modelled: the cross-plane per-bank "burble". It fires evenly
+    every 90°.
+- **`single10`, a 1.0 L naturally aspirated single, 15 hp**, in the 3 t
+  utility tractor.
+  - Old-engine character from two new builder switches, `mechanical_lash`
+    and `pilot` (both default to today's behaviour), plus `rail_bar` 400.
+  - It makes its numbers untuned: plateau 99.6–100.9%, rated 100.1%.
+- **Found on the way:** the V8's file was `engines/v8_hd.json` with key
+  `v8hd`. Everything reads `<key>.json`, so the tests would have crashed
+  and the grid would have recorded no engine-file fingerprint. Renamed
+  while its grid was still building; the grid recorded the fingerprint.
+- **Grids** built (1,230 s / 271 s; 8 / 0 unsettled). The 8 older grids
+  were **re-stamped** 4838e151 → dee93a17.
+  - Proof: the only `dieselsim/` changes since their stamp are the
+    builder's new parameters, whose defaults build specs identical to the
+    old builder's for all 5 engine files, plus `live.py` and `bridge.py`
+    (both excluded).
+  - For each file, the re-stamp asserted that only the hash changed.
+- **Found by the new e2e check: the single stalled in "Auto".** The torque
+  converter was sized from 19 bar BMEP for every engine, so the 1.0 L NA
+  single got a converter for 159 N·m against its 58 N·m. At a cold start
+  it was dragged to the loop's 60 rpm floor.
+  - Now sized by aspiration (19 bar turbo, 8 bar NA) in `live.py` and
+    `driveline.ts`. Every turbo engine is unchanged (live fixtures 0 diff).
+    The single idles at 555 rpm.
+  - Guarded on both sides: `test_na_engines_idle_on_a_converter` and the
+    e2e. Python's mutant and TypeScript's both fall back to 60 rpm.
+  - **Known, recorded in the suite:** the dev preset `single` still sags
+    on the same tractor's converter (1,000 → 859 rpm in 3 s), because its
+    idle is high against the 1,800 rpm stall. The exact fix sizes each
+    converter from the engine's own full-load torque at stall; it touches
+    every engine and the live fixtures, so it is left for its own change.
+- **The records** are in `engines/ROSTER.md`. Vehicles are held Python ↔
+  TypeScript (vehicles fixture: 11/11). The e2e checks that each new engine
+  starts and idles in its own vehicle (enjoy 19/19). The roster, lash and
+  ramp tests cover all 5 engines.
+- **Tests.** Python 71 / 0 / 3 known (scipy), 66 + 4 skipped (plain);
+  fixtures current; audit 0 / 2 / 0; `web/physics` vehicles 11/11; app 56;
+  e2e enjoy 19, drive 7, dyno 15.
 
 **Part 14: custom engines, step 2 of 3, the form (#80, stacked on #79):**
 - **"Custom engine…" on Dyno and Grid.** A form for the brochure numbers,
@@ -342,7 +390,8 @@ tested top, 0 lines differ.)* ~~**Open now:** #77 (`docs/decisions-023-ramp` →
 `main`) → #78 (`feat/slap-and-ramp`) → #79 (`feat/custom-engines`) → #80
 (`feat/custom-engine-form`).~~ *(All merged 2026-10-02.)* **Open now:** #81
 (`feat/browser-grid-build` → `main`) → #82 (`feat/drivable-grid-ui`) → #83
-(`feat/derate-lamp-ci`). Merge in order, retargeting each child to `main`.
+(`feat/derate-lamp-ci`) → #84 (`feat/roster-b`). Merge in order, retargeting
+each child to `main`.
 Remote branches besides those: `main`, and `fix/steady-state-controllers`
 (kept; the only copy of the FINDING-013 option A experiment).
 
@@ -1014,7 +1063,7 @@ claim is corrected in PROJECT_CONTEXT §1.3 (#46). Kept as history.)*
 ## Tests
 
 ```
-python3 tests/test_physics.py                    # #81: 70 passed, 0 failed, 2 known with scipy; 65 + 4 skipped without
+python3 tests/test_physics.py                    # #84: 71 passed, 0 failed, 3 known with scipy; 66 + 4 skipped without
 python3 tools/audit_dead_signals.py              # 0 dead, 2 frozen (the h_ring clamp, known), 0 tiny
 python3 tools/validate_table.py [--aged]         # PROJECT_CONTEXT §1.5 re-check: 12 of 12 in band
 python3 tools/fixtures/gen_fixtures.py --check   # golden fixtures current (regenerate without --check)
@@ -1028,7 +1077,7 @@ cd web/app && CHROME_PATH=... npm run e2e        # dyno pull in Chrome vs native
 cd web/app && CHROME_PATH=... npm run e2e:grid   # full 8 x 6 grid in Chrome vs native, cell for cell (~9 min)
 cd web/app && CHROME_PATH=... npm run e2e:drive  # /drive: prebuilt grid, 60 Hz, 60 s script vs native Python
 cd web/physics && npm test                       # 60 checks: fixture ports, 7 live drives, the synth, 8 vehicles + their keys
-cd web/app && CHROME_PATH=... npm run e2e:enjoy  # /enjoy: multi-touch on an emulated landscape Pixel, 17 checks
+cd web/app && CHROME_PATH=... npm run e2e:enjoy  # /enjoy: multi-touch on an emulated landscape Pixel, 19 checks
 cd web/app && CHROME_PATH=... npm run e2e:custom # a custom engine built, stopped, resumed, saved and driven (CI: own job)
 cd web/app && CHROME_PATH=... npm run e2e:sound  # /drive with sound: worklet output, firing harmonics, pitch, mics
 python3 tools/fixtures/gen_fixtures.py --only live   # regenerate live drives after a live.py change (~4 min)
@@ -1071,7 +1120,7 @@ Session 4's branch table is in git history.
 1. ~~**Owner:** merge #50, then #51 → #58, then #59 → #64, retargeting each
    child to `main`.~~ Done (#50, #65, #71). ~~**Now: merge #72 → #76 in
    order**~~ done 2026-09-30. ~~**Now: merge #77 → #78 → #79 → #80 in order**~~
-   done 2026-10-02. **Now: merge #81 → #82 → #83 in order**, retargeting
+   done 2026-10-02. **Now: merge #81 → #82 → #83 → #84 in order**, retargeting
    each child to `main` after its parent merges.
 2. **Owner: listen.** On `/drive`: Sound on, keys 1–5 for the mics, "Record
    10 s (WAV)". Or `python3 play.py`. Listen for:
@@ -1092,10 +1141,13 @@ Session 4's branch table is in git history.
    truck. `RAMP_SPEED` is the single knob.
 3. **Phase 5 — Enjoy mode:** ~~the roster (OPEN-F), the dashboard, and the
    steady-state economy label~~ roster A, the dashboard and the label are
-   done (#75, #76). Next: roster B (`v8hd`, an old NA single), and truck127's
-   13 unsettled cells, if they show on the dials. Check live friction's cost and the synth's on a
-   mid-range phone (REVIEW-005 m-5, REVIEW-006 m-1).
-4. **Custom engines, drivable (owner's choice, 2026-10-01), after #78:**
+   done (#75, #76). ~~Next: roster B (`v8hd`, an old NA single)~~ done (#84).
+   Remaining: truck127's 13 unsettled cells, if they show on the dials; and
+   **the real Android phone check** (the Phase 5 exit, the owner's), with
+   live friction's and the synth's cost (REVIEW-005 m-5, REVIEW-006 m-1).
+4. ~~**Custom engines, drivable (owner's choice, 2026-10-01), after #78:**~~
+   Done (#79–#82, ADR-014).
+   *(Was:)*
    - a brochure-numbers form, plus JSON import/export in the
      `engines/*.json` format, on Dyno and Grid, through the solver's
      existing `{"headline": ...}` contract, showing achieved against

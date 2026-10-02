@@ -70,6 +70,8 @@ def build_engine(name: str,
                  afr_limit: float = None,
                  boost_map_rise: float = None,
                  firing_order: tuple = None,
+                 mechanical_lash: bool = None,    # None: from 4 L up (roster B's old single sets it)
+                 pilot: bool = True,              # pilot injection (an old pump engine has none)
                  eta_brake_rated: float = 0.42,
                  ve_rated: float = 1.05,
                  apply_rating: bool = True) -> EngineSpec:
@@ -113,13 +115,14 @@ def build_engine(name: str,
                       injpump_gear_teeth=max(27, int(0.27 * bore * 1000)))
 
     # ---- valve train: area follows bore --------------------------------
+    lash = displacement >= 4.0 if mechanical_lash is None else bool(mechanical_lash)
     iv = 0.325 * bore
     ev = 0.295 * bore
     spec.valves = ValveTrain(
         intake_valve_dia=iv, exhaust_valve_dia=ev,
         intake_lift_max=0.300 * iv, exhaust_lift_max=0.315 * ev,
-        lash_intake=0.0 if displacement < 4.0 else 0.30e-3,
-        lash_exhaust=0.0 if displacement < 4.0 else 0.55e-3,
+        lash_intake=0.30e-3 if lash else 0.0,
+        lash_exhaust=0.55e-3 if lash else 0.0,
         cam_base_radius=0.17 * bore, follower_radius=0.15 * bore,
         valve_spring_preload=380.0 * (bore / 0.130) ** 2,
         valve_spring_rate=42e3 * (bore / 0.130),
@@ -149,7 +152,7 @@ def build_engine(name: str,
         n_holes=n_holes, hole_dia=hole_dia, rail_pressure_max=rail,
         rail_pressure_idle=0.18 * rail,
         soi_deg_btdc=8.0 if rated_rpm < 2600 else 5.0,
-        pilot_enabled=True, pilot_fraction=0.045,
+        pilot_enabled=bool(pilot), pilot_fraction=0.045,
         pilot_advance_deg=14.0 if rated_rpm < 2600 else 16.0)
 
     # ---- turbo: sized on the air the engine must swallow ---------------

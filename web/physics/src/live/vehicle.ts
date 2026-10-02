@@ -33,6 +33,7 @@ export function vehicleFor(preset: string, trans: Transmission = "dct"): Vehicle
   switch (preset) {
     case "hd_i6": // tractor unit, laden
     case "truck127": // the same, for the Enjoy roster's 12.7 L six (ADR-012)
+    case "v8hd": // and its 15 L V8 (roster B)
       return { ...base, name: "40 t tractor-trailer", fuel_tank_L: 400.0, stall_rpm: 1900.0, mass: 24000.0,
         r_wheel: 0.506, gears: [3.49, 1.86, 1.41, 1.0, 0.75, 0.65], final: 3.7, CdA: 8.0, Crr: 0.0068,
         eta: 0.94, J_trans: 0.6, J_wheel: 46.0, TR_stall: 1.95, tc_diameter_gain: 1.0, v_lock_min: 8.0 };
