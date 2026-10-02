@@ -541,7 +541,8 @@ def vehicles_inputs():
     Enjoy roster added three). Plain data, duplicated in TypeScript, so the
     two copies are held together here."""
     from dieselsim.live import VEHICLE_KEYS
-    return {"keys": ["hd_i6", "ld_i4", "crdi15", "crdi_1p5", "single", "hatch15", "crdi22", "truck127"],
+    return {"keys": ["hd_i6", "ld_i4", "crdi15", "crdi_1p5", "single", "hatch15", "crdi22", "truck127",
+                     "v8hd", "single10"],
             "trans": ["tc", "dct", "manual"],
             # the vehicles a custom engine may name (ADR-014), held in both languages
             "vehicle_keys": list(VEHICLE_KEYS)}

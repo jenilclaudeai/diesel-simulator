@@ -217,6 +217,20 @@ check("the truck flat out: the fuel cut from a warm charge cooler does not light
   hot.v.derate < 0.95 && hot.v.T_charge < 353.15 && !hot.lit.includes("Derate"),
   `charge ${(hot.v.T_charge - 273.15).toFixed(0)} C, derate ${hot.v.derate.toFixed(3)}, lit: ${hot.lit.join(", ") || "none"}`);
 
+// ---- roster B (ADR-012): each new engine loads its grid, idles, in its vehicle ----
+for (const [key, vehicle] of [["v8hd", /40 t tractor-trailer/], ["single10", /3 t utility tractor/]]) {
+  if (await page.$("button.stop")) await tapEl("button.stop");
+  await page.select('select[aria-label="Engine"]', key);
+  await page.waitForSelector("button.start");
+  await tapEl("button.start");
+  await page.waitForFunction(() => globalThis.__enjoy.info()?.vehicle && globalThis.__enjoy.view()?.rpm > 0,
+    { timeout: 60_000 }).catch(() => {});
+  await sleep(1500);
+  const r = await page.evaluate(() => ({ info: globalThis.__enjoy.info(), rpm: globalThis.__enjoy.view()?.rpm ?? 0 }));
+  check(`roster B: ${key} starts and idles, in its own vehicle`, vehicle.test(r.info?.vehicle ?? "") && r.rpm > 400,
+    `${r.info?.vehicle}, idling at ${Math.round(r.rpm)} rpm, tach to ${r.info?.max_rpm} rpm`);
+}
+
 // ---- a custom engine's grid file (ADR-014) ----
 // the hatchback's grid, relabelled as a custom engine that drives the SUV: if
 // the worker honours the file's "vehicle", the dash reports the SUV

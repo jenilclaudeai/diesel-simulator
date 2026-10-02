@@ -105,3 +105,67 @@ at 1,750, 100.0% at 2,083, 99.9% at 2,417, 99.7% at 2,750. Max soot
 
 Above rated speed the governor pulls fuel to 4% at max rpm, so the last
 point of each full-load curve is negative torque, as intended (CLAUDE.md).
+
+---
+
+## Roster B (2026-10-03)
+
+ADR-012's second half. Measured as above: fresh engine per point, 9 cycles.
+
+| key | brochure (`engines/<key>.json`) | vehicle |
+|---|---|---|
+| `v8hd` | 15 L V8, 2,600 N·m from 1,000 to 1,450 rpm, 440 kW (600 ps) at 1,900 | 40 t tractor-trailer (the trucks' vehicle) |
+| `single10` | 1.0 L single, naturally aspirated, 58 N·m from 1,300 to 1,600 rpm, 11 kW (15 hp) at 2,200 | 3 t utility tractor |
+
+The file `engines/v8_hd.json` was renamed `v8hd.json`. Everything that
+reads a roster file looks for `<key>.json`; under the old name, the grid
+would have recorded no engine-file fingerprint and the tests would not have
+found the file.
+
+**`v8hd`, tuned.** Untuned it had the roster's low-end shortfall: 80.5% of
+the cap at 1,000 rpm, 81.2% at 1,150. Air-limited, as roster A was.
+
+| `boost_map_rise` | `afr_limit` | 1,000 | 1,150 | 1,300 | 1,450 | rated |
+|---|---|---|---|---|---|---|
+| (default) | (default) | 80.5% | 81.2% | 90.4% | 95.8% | 99.9% |
+| 0.12 | 18.0 (truck127's) | 96.9% | 91.5% | 99.9% | 100.0% | 99.9% |
+| 0.12 | 17.0 | 98.9% | 95.5% | 99.6% | 100.0% | 99.9% |
+| **0.08** | **17.0** | **99.6%** | **96.5%** | **99.5%** | **100.0%** | **99.9%** |
+
+Chosen: 0.08 / 17.0 (λ ≈ 1.17, peak 175 bar), the only setting tried that
+holds every plateau point above 96%.
+
+`verify()`: achieved 2,592.6 N·m (99.7%), 430.4 kW at 1,783 rpm (97.8%; at
+exactly 1,900 rpm, 439.6 kW, 99.9%).
+
+| rpm | 700 | 917 | 1133 | 1350 | 1567 | 1783 | 2000 |
+|---|---|---|---|---|---|---|---|
+| N·m | 2056.9 | 2491.9 | 2526.5 | 2592.6 | 2491.8 | 2304.6 | 1966.9 |
+| kW | 150.8 | 239.2 | 299.8 | 366.5 | 408.8 | 430.4 | 411.9 |
+| boost | 2.16 | 1.95 | 2.00 | 2.22 | 2.33 | 2.32 | 2.21 |
+| BSFC g/kWh | 307 | 278 | 255 | 237 | 227 | 222 | 217 |
+
+**`single10`, untuned**, with the builder's two new switches set for an old
+engine:
+- `mechanical_lash` (from 4 L up by default): the single clatters on
+  proper ramps.
+- `pilot` off: no pilot injection, as on a pump engine.
+- `rail_bar` 400: low injection pressure.
+
+It makes its numbers as built: plateau 99.6 / 99.7 / 100.9 / 100.7%; at
+rated speed 11.0 kW (100.1%). `verify()`: 58.5 N·m (100.9%), 10.8 kW at
+2,033 rpm (98.0%).
+
+| rpm | 700 | 967 | 1233 | 1500 | 1767 | 2033 | 2300 |
+|---|---|---|---|---|---|---|---|
+| N·m | 46.7 | 50.4 | 56.3 | 58.5 | 55.4 | 50.6 | 43.6 |
+| kW | 3.4 | 5.1 | 7.3 | 9.2 | 10.2 | 10.8 | 10.5 |
+| BSFC g/kWh | 403 | 303 | 267 | 255 | 249 | 247 | 249 |
+
+Its full-load AFR of 26–38 is lean for an NA diesel (real ones run ~20–25).
+The rating caps its fuel well below the smoke limit, because a 1.0 L single
+at 11 kW is a low-BMEP engine (~6 bar), as old ones were.
+
+**Not modelled:** the V8 fires evenly every 90°, but the model has no
+separate cylinder banks, so a cross-plane V8's per-bank exhaust "burble" is
+absent.

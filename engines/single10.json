@@ -1,0 +1,14 @@
+{
+  "key": "single10",
+  "name": "1.0 L single, 15 hp",
+  "displacement": 1.0,
+  "n_cyl": 1,
+  "rated_rpm": 2200,
+  "peak_torque": 58,
+  "peak_power": 11,
+  "plateau": [1300, 1600],
+  "turbocharged": false,
+  "mechanical_lash": true,
+  "pilot": false,
+  "rail_bar": 400
+}

@@ -1585,7 +1585,7 @@ def test_live_sound_follows_the_engine():
 
 
 ENGINES_DIR = os.path.join(os.path.dirname(__file__), "..", "engines")
-ROSTER = ("hatch15", "crdi22", "truck127")        # Enjoy mode, roster A (ADR-012)
+ROSTER = ("hatch15", "crdi22", "truck127", "v8hd", "single10")   # Enjoy mode, roster B (ADR-012)
 
 
 def test_custom_engine_json():
@@ -1711,6 +1711,38 @@ def test_live_grid_pieces_match_the_shipped_grid():
           + f"worst difference {worst[0]:.2e} at {worst[1] or '-'}")
 
 
+def test_na_engines_idle_on_a_converter():
+    """Roster B: the torque converter was sized from a 19 bar BMEP for every
+    engine, so the 1.0 L naturally aspirated single got one sized for
+    159 N.m against its 58 and, in "Auto", was dragged to the loop's floor
+    (60 rpm) at a cold start. Sized by aspiration (8 bar NA), it must hold
+    within 15% of idle for 3 s, warm-up not counted. Known, recorded: the dev
+    preset `single` still sags on the same tractor's converter, its idle
+    (1000 rpm) high against the 1800 rpm stall -- the exact fix sizes the
+    converter from the engine's own full-load torque at stall."""
+    if _no_prebuilt_grids("NA engines idle on a converter"):
+        return
+    import json
+    from dieselsim.builder import from_dict
+    from dieselsim.live import Adr011Grid, LiveEngine
+    grids = os.path.join(os.path.dirname(__file__), "..", "web", "app", "public", "grids")
+
+    def idle_after(key, spec=None):
+        with open(os.path.join(grids, f"{key}.json")) as fh:
+            g = Adr011Grid.from_json(json.load(fh), spec=spec)
+        e = LiveEngine(g, key, trans="tc")
+        for _ in range(180):
+            e.step(1 / 60)
+        return e.rpm, e.spec.idle_rpm
+    with open(os.path.join(ENGINES_DIR, "single10.json")) as fh:
+        r, idle = idle_after("single10", from_dict(json.load(fh)))
+    check("an NA single holds its idle on a torque converter (roster B)", 1.0 if r > 0.85 * idle else 0.0, 1.0, 0.0,
+          f"single10 at {r:.0f} rpm after 3 s (idle {idle:.0f}); with the 19 bar sizing it fell to 60")
+    r2, idle2 = idle_after("single")
+    known("the dev single sags on the tractor's converter (sized by a BMEP proxy, not its own torque)",
+          r2 < 0.9 * idle2, f"single at {r2:.0f} rpm after 3 s (idle {idle2:.0f})")
+
+
 def test_roster_engines_make_their_numbers():
     """ADR-008/012: each Enjoy roster engine, built by builder.py from its
     engines/<key>.json brochure, still delivers it: at the start of its
@@ -1787,6 +1819,7 @@ def main():
                test_custom_engine_json,
                test_describe_engine,
                test_live_grid_pieces_match_the_shipped_grid,
+               test_na_engines_idle_on_a_converter,
                test_flat_tappet_wears_more_than_roller,
                test_closing_ramps_clear_the_lash,
                test_cam_wear_calibration,

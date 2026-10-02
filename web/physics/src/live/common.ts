@@ -22,7 +22,7 @@ export interface LiveSpec {
     T_warn: number; T_derate: number; T_derate_full: number; derate_floor: number;
     allow_shutdown: boolean; T_shutdown: number; T_restart: number;
   };
-  turbo: { comp_eff_peak: number; intercooler_eff: number };
+  turbo: { comp_eff_peak: number; intercooler_eff: number; enabled?: boolean };
 }
 
 export type Perf = Record<string, number>;

@@ -116,7 +116,9 @@ export class TorqueConverter {
   eff = 0.0;
 
   constructor(spec: LiveSpec, veh: Vehicle) {
-    const T_ref = 1.05 * Math.max(0.1, (spec.geom.displacement * 1.9e6) / (4 * Math.PI));
+    // typical full-load BMEP: 19 bar turbo, 8 bar naturally aspirated (live.py; roster B's NA single)
+    const bmep = spec.turbo.enabled === false ? 0.8e6 : 1.9e6;
+    const T_ref = 1.05 * Math.max(0.1, (spec.geom.displacement * bmep) / (4 * Math.PI));
     const n_stall = veh.stall_rpm || 0.52 * spec.rated_rpm;
     const w_stall = (2.0 * Math.PI * n_stall) / 60.0;
     this.k_cap = (T_ref / w_stall ** 2) * veh.tc_diameter_gain;
