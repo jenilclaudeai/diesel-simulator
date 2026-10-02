@@ -21,12 +21,44 @@ export interface LiveCaller {
 export interface PieceStore {
   get(key: string): Promise<string | undefined>;
   put(key: string, value: string): Promise<void>;
+  /** drop every piece under a prefix: a finished build's, once its file is kept elsewhere */
+  clear(prefix: string): Promise<void>;
 }
 
 export class MemoryPieceStore implements PieceStore {
   readonly map = new Map<string, string>();
   async get(k: string) { return this.map.get(k); }
   async put(k: string, v: string) { this.map.set(k, v); }
+  async clear(prefix: string) { for (const k of [...this.map.keys()]) if (k.startsWith(prefix)) this.map.delete(k); }
+}
+
+/** The browser's piece store: IndexedDB, so a closed tab resumes its build. */
+export class IndexedDbPieceStore implements PieceStore {
+  private dbp: Promise<IDBDatabase> | undefined;
+  constructor(readonly dbName = "dieselsim-live-pieces", private readonly idb: IDBFactory = globalThis.indexedDB) {}
+  private db(): Promise<IDBDatabase> {
+    return (this.dbp ??= new Promise((ok, fail) => {
+      const open = this.idb.open(this.dbName, 1);
+      open.onupgradeneeded = () => { open.result.createObjectStore("pieces"); };
+      open.onsuccess = () => ok(open.result);
+      open.onerror = () => fail(open.error);
+    }));
+  }
+  private async tx<T>(mode: IDBTransactionMode, f: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+    const t = (await this.db()).transaction("pieces", mode);
+    const r = f(t.objectStore("pieces"));
+    return new Promise((ok, fail) => {
+      t.oncomplete = () => ok(r.result);
+      t.onerror = () => fail(t.error);
+      t.onabort = () => fail(t.error);
+    });
+  }
+  async get(k: string) { return (await this.tx("readonly", s => s.get(k))) as string | undefined; }
+  async put(k: string, v: string) { await this.tx("readwrite", s => s.put(v, k)); }
+  async clear(prefix: string) {
+    // keys are "<prefix>:...": the range [prefix, prefix + \uffff] holds exactly them
+    await this.tx("readwrite", s => s.delete(IDBKeyRange.bound(prefix, prefix + "\uffff")));
+  }
 }
 
 export interface LiveBuildProgress {

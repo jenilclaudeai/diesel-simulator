@@ -18,6 +18,7 @@
     "e2e:drive": "node e2e/drive.e2e.mjs",
     "e2e:sound": "node e2e/sound.e2e.mjs",
     "e2e:enjoy": "node e2e/enjoy.e2e.mjs",
+    "e2e:custom": "node e2e/custom.e2e.mjs",
     "perf": "node e2e/perf.mjs"
   },
   "private": true,

@@ -117,3 +117,12 @@ polyline { fill: none; stroke-linejoin: round; stroke-linecap: round; }
   background: linear-gradient(to right, var(--slate) calc(var(--f, 0) * 100%), var(--slate-faint) 0); }
 .data.keys th[scope="row"] { font-family: ui-monospace, monospace; white-space: nowrap; }
 .data.keys td { text-align: left; }
+
+/* ADR-014: the drivable-grid build */
+.drivable { margin: 0 0 1.6rem; max-width: 56rem; }
+.drivable h2 { margin: 0 0 .4rem; font-size: 1.35rem; }
+.drivable button { font: inherit; padding: .4rem .9rem; border-radius: 4px; cursor: pointer; color: var(--slate);
+  background: var(--grey-deep); border: 1px solid var(--slate-faint); }
+.drivable button:disabled { cursor: not-allowed; opacity: .55; }
+.build-status progress { width: 12rem; vertical-align: middle; margin-right: .6rem; accent-color: var(--amber); }
+.built a { color: var(--slate); font-weight: 600; }
