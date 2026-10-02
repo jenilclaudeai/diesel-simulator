@@ -3,7 +3,7 @@ import { RouterLink } from '@angular/router';
 import type { EngineInfo, EngineRef, LiveBuildProgress, PointResult, PresetInfo } from '@dieselsim/solver';
 import { engineJson, VEHICLE_NAMES } from '../engine/custom-engine';
 import { engineLibrary, MY, type MyEngine } from '../engine/my-engines';
-import { poolSize } from '../solver/solver.service';
+import { poolSize } from '../solver/pool-size';
 import { achieved, type CustomEngine, EXAMPLE_ENGINE, headline } from '../engine/custom-engine';
 import { EngineForm } from '../engine/engine-form';
 import { describe, SolverService } from '../solver/solver.service';

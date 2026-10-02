@@ -6,6 +6,7 @@ import {
   type RuntimeInfo, type SolverPort,
 } from '@dieselsim/solver';
 import { NUMPY_BUNDLED, PHYSICS_BUNDLE, PHYSICS_VERSION } from './physics-version';
+import { poolSize } from './pool-size';
 
 export type SolverStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -132,17 +133,6 @@ function newWorkerSolver(): { solver: WorkerSolver; failed: Promise<never> } {
     close: () => worker.terminate(),
   };
   return { solver: new WorkerSolver(ep), failed };
-}
-
-/**
- * How many workers a drivable-grid build uses: one per core but one (the
- * page keeps a core), at most 6 (each worker holds its own Python, ~150 MB);
- * 2 on a device that says it has under 4 GB.
- */
-export function poolSize(cores = navigator.hardwareConcurrency || 2,
-                         memGb = (navigator as Navigator & { deviceMemory?: number }).deviceMemory): number {
-  const n = Math.max(1, Math.min(6, cores - 1));
-  return memGb !== undefined && memGb < 4 ? Math.min(n, 2) : n;
 }
 
 /** Errors say what happened and what to do; they never apologise. */

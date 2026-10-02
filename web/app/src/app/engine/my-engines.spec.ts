@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { poolSize } from '../solver/solver.service';
+import { poolSize } from '../solver/pool-size';
 import { EXAMPLE_ENGINE } from './custom-engine';
 import { MemoryEngineLibrary } from './my-engines';
 

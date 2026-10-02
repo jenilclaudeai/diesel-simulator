@@ -132,6 +132,12 @@ tested top (`be26576`), 0 lines differ.
     it is the owner's call.
 - **Tests.** App units 56 (+2: the library, the pool size); e2e enjoy 16,
   drive 7, dyno 15; solver fast 20 + 8.
+  - **Found by CI:** the new spec imported `solver.service.ts`, which
+    imports the generated, gitignored `physics-version.ts`. CI runs the
+    unit tests before `prepare-assets` creates it, so the build failed
+    there and passed here. `poolSize` moved to `solver/pool-size.ts`.
+    Reproduced locally by running the units with the file moved aside:
+    56/56.
 - **Not measured yet:** a full 8×6 build in a real browser on a laptop.
   ADR-014's ~26 min on 4 workers is extrapolated from Node.
 
