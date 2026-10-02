@@ -1,0 +1,2 @@
+{"key": "my20", "name": "2.0 L four, 140 ps", "displacement": 2.0, "n_cyl": 4, "rated_rpm": 4000,
+ "peak_torque": 320, "peak_power": 103, "plateau": [1750, 2500], "vehicle": "crdi15"}

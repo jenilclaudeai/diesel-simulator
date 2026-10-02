@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "tsc -p tsconfig.json && node dist/test/cache.test.js && node dist/test/roundtrip.test.js",
-    "test:fast": "tsc -p tsconfig.json && node dist/test/cache.test.js"
+    "test": "tsc -p tsconfig.json && node dist/test/cache.test.js && node dist/test/live-grid.test.js && node dist/test/roundtrip.test.js",
+    "test:live-real": "tsc -p tsconfig.json && node dist/test/live-grid-real.test.js",
+    "test:fast": "tsc -p tsconfig.json && node dist/test/cache.test.js && node dist/test/live-grid.test.js"
   },
   "dependencies": {
     "pyodide": "314.0.7"

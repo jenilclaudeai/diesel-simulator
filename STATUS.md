@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-10-01 (session 5, part 14: custom engines, step 2 of 3, the form; #77 → #78 → #79 → #80)
+**Updated:** 2026-10-02 (session 5, part 15: custom engines, step 3a, the browser's grid build; #77–#80 merged, #81 open)
 **Phase:** 1, 2, 3 and **4 exit-ready** (REVIEW-003 to -006). The owner signed
 off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
 - FINDING-022 is fixed (option A, #64).
@@ -62,6 +62,44 @@ off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
   and achieved against requested, on Dyno and Grid; then the in-browser
   converged build with a worker pool, progress, resumable and cached.~~
   Step 2 is below; step 3 is next.
+
+**#77–#80 merged 2026-10-02**, each retargeted to `main`. `main` equals the
+tested top (`be26576`), 0 lines differ.
+
+**Part 15: custom engines, step 3a, the browser builds a drivable grid
+(#81):**
+- **The pieces are the bridge's**: `live_grid_plan`, `live_row_limit`,
+  `live_cell` and `live_grid_assemble`. `tools/build_live_grids.py` builds
+  with the same functions, so a browser grid and a native grid are the same
+  file.
+  - The refactored tool rebuilt the 2×2 custom grid identical to the old
+    code's (0 of 24 fields differ).
+  - `test_live_grid_pieces_match_the_shipped_grid`: a `crdi15` cell through
+    `live_cell` equals the shipped grid's, warm and cold. 3 of 3 mutants
+    caught.
+  - `friction_engine_view` moved into the package; the fixtures are
+    unchanged.
+- **`buildLiveGrid` in `web/solver`**: a pool of Pyodide workers.
+  - Rows first; each row's cells are released the moment its fuel limit is
+    known.
+  - Every finished piece goes to a store, so a cancelled or closed build
+    resumes.
+  - The ETA comes from the session's own pace.
+  - The worker's `liveCall` allows only the four live-grid functions.
+- **Measured: the browser's grid is the native file**, structure identical
+  (26 fields, key order, grid hash), numbers within **1.3e-13**. The 2×2
+  build took 425 s on 2 Node Pyodide workers (`npm run test:live-real`,
+  manual: ~7 min). Extrapolated, the full 8×6 takes ~27 min on 4 workers,
+  as ADR-014 estimated.
+- **Tests.** Python 70 / 0 / 2 known (scipy), 65 + 4 skipped (plain).
+  Scheduler 8/8 with fake workers (cancel and resume, a failing
+  cell, row-before-cell order, parallelism): 5 of 5 mutants caught. Round
+  trip 22/22 (+2: the plan; a non-live function refused, its mutant
+  caught). Cache 20/20.
+- **Next, step 3b (the UI):** "Build drivable grid" on the Dyno page, with
+  progress and cancel/resume (an IndexedDB piece store); saved custom
+  engines listed on `/drive` and `/enjoy`; the grid file offered as a
+  download, for moving it to a phone.
 
 **Part 14: custom engines, step 2 of 3, the form (#80, stacked on #79):**
 - **"Custom engine…" on Dyno and Grid.** A form for the brochure numbers,
@@ -238,10 +276,10 @@ tested top of each stack, 0 lines differ):
 ~~**No PR is open.**~~ ~~**Open, a stack, merge in order:** #72
 (`docs/status-main` → `main`) → #73 → #74 → #75 → #76 (`feat/roster-a`).~~
 *(All merged 2026-09-30, each retargeted to `main`; `main` equals the
-tested top, 0 lines differ.)* **Open now:** #77 (`docs/decisions-023-ramp` →
+tested top, 0 lines differ.)* ~~**Open now:** #77 (`docs/decisions-023-ramp` →
 `main`) → #78 (`feat/slap-and-ramp`) → #79 (`feat/custom-engines`) → #80
-(`feat/custom-engine-form`). Merge in order, retargeting each child to
-`main` after its parent merges.
+(`feat/custom-engine-form`).~~ *(All merged 2026-10-02.)* **Open now:** #81
+(`feat/browser-grid-build` → `main`).
 Remote branches besides those: `main`, and `fix/steady-state-controllers`
 (kept; the only copy of the FINDING-013 option A experiment).
 
@@ -913,13 +951,14 @@ claim is corrected in PROJECT_CONTEXT §1.3 (#46). Kept as history.)*
 ## Tests
 
 ```
-python3 tests/test_physics.py                    # top of the stack (#80): 69 passed, 0 failed, 2 known with scipy; 64 + 4 skipped without
+python3 tests/test_physics.py                    # #81: 70 passed, 0 failed, 2 known with scipy; 65 + 4 skipped without
 python3 tools/audit_dead_signals.py              # 0 dead, 2 frozen (the h_ring clamp, known), 0 tiny
 python3 tools/validate_table.py [--aged]         # PROJECT_CONTEXT §1.5 re-check: 12 of 12 in band
 python3 tools/fixtures/gen_fixtures.py --check   # golden fixtures current (regenerate without --check)
 cd web/physics && npm ci && npm test             # TypeScript ports vs fixtures: 5 checks
 cd tools/pyodide && npm ci && npm run suite      # the same physics suite under Pyodide
-cd web/solver && npm ci && npm test              # 20 cache tests + 18 round-trip checks through a real worker
+cd web/solver && npm ci && npm test              # 20 cache + 8 live-grid scheduler + 22 round-trip checks through a real worker
+cd web/solver && npm run test:live-real          # manual, ~7 min: a 2x2 drivable grid built by 2 Pyodide workers vs the native tool's (see the file's header)
 cd web/app && npm test -- --watch=false          # 54 unit tests (vitest)
 cd web/app && npm run build:pages                # never plain `build`
 cd web/app && CHROME_PATH=... npm run e2e        # dyno pull in Chrome vs native (computes its own reference)
@@ -967,8 +1006,8 @@ Session 4's branch table is in git history.
 
 1. ~~**Owner:** merge #50, then #51 → #58, then #59 → #64, retargeting each
    child to `main`.~~ Done (#50, #65, #71). ~~**Now: merge #72 → #76 in
-   order**~~ done 2026-09-30. **Now: merge #77 → #78 → #79 → #80 in order**,
-   retargeting each child to `main` after its parent merges.
+   order**~~ done 2026-09-30. ~~**Now: merge #77 → #78 → #79 → #80 in order**~~
+   done 2026-10-02. **Now: merge #81** (it targets `main` directly).
 2. **Owner: listen.** On `/drive`: Sound on, keys 1–5 for the mics, "Record
    10 s (WAV)". Or `python3 play.py`. Listen for:
    - `hd_i6`'s tick dominance (13×);
