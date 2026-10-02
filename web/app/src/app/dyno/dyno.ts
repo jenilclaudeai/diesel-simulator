@@ -1,6 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import type { EngineInfo, EngineRef, PointResult, PresetInfo } from '@dieselsim/solver';
+import type { EngineInfo, EngineRef, LiveBuildProgress, PointResult, PresetInfo } from '@dieselsim/solver';
+import { engineJson, VEHICLE_NAMES } from '../engine/custom-engine';
+import { engineLibrary, MY, type MyEngine } from '../engine/my-engines';
+import { poolSize } from '../solver/pool-size';
 import { achieved, type CustomEngine, EXAMPLE_ENGINE, headline } from '../engine/custom-engine';
 import { EngineForm } from '../engine/engine-form';
 import { describe, SolverService } from '../solver/solver.service';
@@ -35,6 +38,16 @@ export class Dyno implements OnInit {
   protected readonly custom = signal<CustomEngine>(EXAMPLE_ENGINE);
   protected readonly customInfo = signal<EngineInfo | undefined>(undefined);
   protected readonly isCustom = computed(() => this.engine() === this.CUSTOM);
+  /** ADR-014 step 3: building the custom engine's drivable grid in this browser */
+  protected readonly workers = poolSize();
+  protected readonly building = signal(false);
+  protected readonly buildProgress = signal<LiveBuildProgress | undefined>(undefined);
+  protected readonly buildError = signal<string | undefined>(undefined);
+  protected readonly saved = signal<MyEngine | undefined>(undefined);
+  protected readonly MY = MY;
+  protected vehicleName(k: string): string { return (VEHICLE_NAMES as Record<string, string>)[k] ?? k; }
+  private buildAbort: AbortController | undefined;
+  private savedText: string | undefined;
   protected readonly points = signal<Pt[]>([]);
   protected readonly running = signal(false);
   protected readonly progress = signal<{ n: number; of: number; rpm: number } | undefined>(undefined);
@@ -123,6 +136,7 @@ export class Dyno implements OnInit {
 
   protected customChanged(e: CustomEngine): void {
     this.custom.set(e);
+    this.saved.set(undefined);
     this.points.set([]);
     this.elapsedS.set(undefined);
     void this.describeCustom();
@@ -142,6 +156,51 @@ export class Dyno implements OnInit {
       this.runError.set(describe(e));
     }
   }
+
+  /** Build the custom engine's drivable grid here, and keep it in "My engines". */
+  protected async buildDrivable(): Promise<void> {
+    if (this.building()) return;
+    const e = this.custom();
+    this.building.set(true);
+    this.buildError.set(undefined);
+    this.saved.set(undefined);
+    this.buildAbort = new AbortController();
+    // e2e only: a small grid, so a browser test can build one in minutes
+    const m = location.search.includes('e2e') ? /gridsize=(\d+)x(\d+)/.exec(location.search) : null;
+    try {
+      const text = await this.solver.buildLiveGrid({ headline: headline(e) }, {
+        key: e.key, ...(m ? { size: [Number(m[1]), Number(m[2])] as [number, number] } : {}),
+        extra: { custom: true, vehicle: e.vehicle, engine_json: JSON.parse(engineJson(e)) },
+        onProgress: p => this.buildProgress.set(p), signal: this.buildAbort.signal,
+      });
+      const mine: MyEngine = { key: e.key, name: e.name, vehicle: e.vehicle, savedAt: Date.now(), engine: e };
+      await engineLibrary().save(mine, text);
+      this.savedText = text;
+      this.saved.set(mine);
+    } catch (err) {
+      this.buildError.set(describe(err) === 'Stopped.'
+        ? 'Stopped. What it finished is kept: build again to carry on.' : describe(err));
+    } finally {
+      this.building.set(false);
+      this.buildProgress.set(undefined);
+    }
+  }
+
+  protected cancelBuild(): void { this.buildAbort?.abort(); }
+
+  /** The grid file, for a phone or a friend: /drive and /enjoy import it. */
+  protected downloadGrid(): void {
+    const t = this.savedText, e = this.saved();
+    if (!t || !e) return;
+    const url = URL.createObjectURL(new Blob([t + '\n'], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${e.key}.grid.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
+  protected fmtMin(s: number): string { return s < 90 ? `${Math.round(s)} s` : `${Math.round(s / 60)} min`; }
 
   protected async run(): Promise<void> {
     if (this.running()) return;

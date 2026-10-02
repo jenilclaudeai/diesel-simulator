@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import type { Transmission } from '@dieselsim/physics';
 import { controlKey, DRIVE_PRESETS, KEY_HELP, MIC_KEYS, MICS } from './drive-keys';
 import { IMPORTED, readGridFile } from './grid-file';
+import { engineLibrary, MY, type MyEngine } from '../engine/my-engines';
 import { LiveSession } from './live-session';
 import type { DriveScript, GridFile } from './protocol';
 
@@ -41,6 +42,9 @@ export class DrivePage implements OnDestroy {
   protected readonly imported = signal<GridFile | undefined>(undefined);
   protected readonly importError = signal<string | undefined>(undefined);
   protected readonly IMPORTED = IMPORTED;
+  /** "Your engines": custom engines with a drivable grid, built in this browser (ADR-014) */
+  protected readonly mine = signal<MyEngine[]>([]);
+  protected readonly MY = MY;
   protected readonly trans = signal<Transmission>('tc');
   private readonly s = new LiveSession();
   protected readonly status = this.s.status;
@@ -57,6 +61,11 @@ export class DrivePage implements OnDestroy {
   private readonly held = new Set<string>();
 
   constructor() {
+    void engineLibrary().list().then(list => {
+      this.mine.set(list);
+      const want = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('engine') : null;
+      if (want?.startsWith(MY) && list.some(e => MY + e.key === want)) this.preset.set(want);
+    }).catch(() => { /* no saved engines: the roster still works */ });
     // e2e hook (only with ?e2e): run a frame-exact script through the real worker
     if (typeof location !== 'undefined' && location.search.includes('e2e')) {
       (globalThis as Record<string, unknown>)['__drive'] = {
@@ -82,8 +91,13 @@ export class DrivePage implements OnDestroy {
   protected async start(): Promise<void> {
     releaseFocus();
     const g = this.imported();
-    if (this.preset() === IMPORTED && g) await this.s.loadGrid(g, this.trans(), true);
-    else await this.s.load(this.preset(), this.trans(), true);
+    const p = this.preset();
+    if (p === IMPORTED && g) await this.s.loadGrid(g, this.trans(), true);
+    else if (p.startsWith(MY)) {
+      const saved = await engineLibrary().grid(p.slice(MY.length)).catch(() => undefined);
+      if (saved) await this.s.loadGrid(saved, this.trans(), true);
+      else this.s.error.set('that engine is no longer saved in this browser');
+    } else await this.s.load(p, this.trans(), true);
   }
 
   /** "Import grid": a custom engine's grid file (tools/build_live_grids.py --engine). */

@@ -5,6 +5,7 @@ import { releaseFocus } from '../drive/drive';
 import { controlKey, MIC_KEYS, MICS } from '../drive/drive-keys';
 import { LiveSession } from '../drive/live-session';
 import { IMPORTED, readGridFile } from '../drive/grid-file';
+import { engineLibrary, MY, type MyEngine } from '../engine/my-engines';
 import type { GridFile, Pedals } from '../drive/protocol';
 import { avgL100, nowL100, rangeKm } from './economy';
 import { Gauge, speedScale, tachScale } from './gauge';
@@ -36,6 +37,9 @@ export class EnjoyPage implements OnDestroy {
   protected readonly imported = signal<GridFile | undefined>(undefined);
   protected readonly importError = signal<string | undefined>(undefined);
   protected readonly IMPORTED = IMPORTED;
+  /** "Your engines": custom engines with a drivable grid, built in this browser (ADR-014) */
+  protected readonly mine = signal<MyEngine[]>([]);
+  protected readonly MY = MY;
   protected readonly manual = signal(false);
   private readonly s = new LiveSession();
   protected readonly status = this.s.status;
@@ -80,6 +84,11 @@ export class EnjoyPage implements OnDestroy {
   private readonly held = new Set<string>();
 
   constructor() {
+    void engineLibrary().list().then(list => {
+      this.mine.set(list);
+      const want = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('engine') : null;
+      if (want?.startsWith(MY) && list.some(e => MY + e.key === want)) this.preset.set(want);
+    }).catch(() => { /* no saved engines: the roster still works */ });
     if (typeof location !== 'undefined' && location.search.includes('e2e')) {
       (globalThis as Record<string, unknown>)['__enjoy'] = {
         view: () => this.v(), level: () => this.s.levelDb(), soundError: () => this.soundError(),
@@ -99,8 +108,13 @@ export class EnjoyPage implements OnDestroy {
     this.pedals = { throttle: null, brake: 0, clutch: 0 };
     if (!this.soundOn()) await this.s.soundStart();
     const g = this.imported();
-    if (this.preset() === IMPORTED && g) await this.s.loadGrid(g, this.trans(), true);
-    else await this.s.load(this.preset(), this.trans(), true);
+    const p = this.preset();
+    if (p === IMPORTED && g) await this.s.loadGrid(g, this.trans(), true);
+    else if (p.startsWith(MY)) {
+      const saved = await engineLibrary().grid(p.slice(MY.length)).catch(() => undefined);
+      if (saved) await this.s.loadGrid(saved, this.trans(), true);
+      else this.s.error.set('that engine is no longer saved in this browser');
+    } else await this.s.load(p, this.trans(), true);
   }
 
   /** "Import": a custom engine's grid file (tools/build_live_grids.py --engine). */

@@ -1,10 +1,12 @@
 import { Injectable, signal } from '@angular/core';
 import {
-  CachedSolver, IndexedDbGridCache, SolverError, WorkerSolver,
+  buildLiveGrid, CachedSolver, IndexedDbGridCache, IndexedDbPieceStore, liveBuildKey, SolverError, WorkerSolver,
+  type LiveBuildProgress,
   type EngineInfo, type EngineRef, type Endpoint, type Grid, type GridOptions, type GridRequest, type PointRequest, type PointResult,
   type RuntimeInfo, type SolverPort,
 } from '@dieselsim/solver';
 import { NUMPY_BUNDLED, PHYSICS_BUNDLE, PHYSICS_VERSION } from './physics-version';
+import { poolSize } from './pool-size';
 
 export type SolverStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -49,6 +51,37 @@ export class SolverService {
     return this.port!.buildGrid(req, opts);
   }
 
+  /**
+   * A custom engine's drivable grid, built in this browser by a pool of solver
+   * workers (ADR-014 step 3): the grid file's JSON. Pieces are kept in
+   * IndexedDB as they finish, so a closed tab or a cancel resumes; they are
+   * dropped once the file is returned (the caller keeps the file).
+   */
+  async buildLiveGrid(engine: EngineRef, opts: { key: string; extra?: Record<string, unknown>; size?: [number, number];
+                                                 workers?: number; onProgress?: (p: LiveBuildProgress) => void;
+                                                 signal?: AbortSignal }): Promise<string> {
+    const n = opts.workers ?? poolSize();
+    const pool = Array.from({ length: n }, () => newWorkerSolver());
+    // a pool worker that fails to start fails the build, as the main worker would
+    const failed = Promise.race(pool.map(p => p.failed));
+    const size = opts.size ?? [8, 6];
+    const resumable = this.cacheAvailable && !!globalThis.indexedDB;
+    const store = resumable ? new IndexedDbPieceStore() : undefined;
+    const storeKey = resumable ? await liveBuildKey(PHYSICS_VERSION, engine, size) : undefined;
+    try {
+      const build = buildLiveGrid(engine, pool.map(p => p.solver), {
+        key: opts.key, size, ...(opts.extra ? { extra: opts.extra } : {}), ...(store ? { store } : {}),
+        ...(storeKey ? { storeKey } : {}), ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
+        ...(opts.signal ? { signal: opts.signal } : {}),
+      });
+      const text = await Promise.race([build, failed]);
+      if (store && storeKey) await store.clear(storeKey).catch(() => { /* space is reclaimed next time */ });
+      return text;
+    } finally {
+      for (const p of pool) p.solver.dispose();
+    }
+  }
+
   private async boot(): Promise<RuntimeInfo> {
     this.status.set('loading');
     try {
@@ -61,19 +94,7 @@ export class SolverService {
           'The Drive page works without it. To fix it, follow the warning npm start printed ' +
           '(a proxy setting, or PYODIDE_WHEEL_DIR), then restart it.');
       }
-      const worker = new Worker(new URL('./solver.worker', import.meta.url), {
-        type: 'module',
-        name: JSON.stringify({ assetBase: new URL('.', document.baseURI).href, bundle: PHYSICS_BUNDLE }),
-      });
-      const workerFailed = new Promise<never>((_, reject) =>
-        worker.addEventListener('error', e =>
-          reject(new SolverError('load', `the solver worker failed to start: ${e.message || 'script error'}`))));
-      const ep: Endpoint = {
-        post: (m, t) => worker.postMessage(m, t ?? []),
-        listen: h => worker.addEventListener('message', e => h(e.data)),
-        close: () => worker.terminate(),
-      };
-      const inner = new WorkerSolver(ep);
+      const { solver: inner, failed: workerFailed } = newWorkerSolver();
       this.port = this.cacheAvailable
         ? new CachedSolver(inner, new IndexedDbGridCache(), PHYSICS_VERSION)
         : inner;
@@ -94,6 +115,24 @@ export class SolverService {
       throw e;
     }
   }
+}
+
+/** A solver worker on this page's own physics bundle. */
+function newWorkerSolver(): { solver: WorkerSolver; failed: Promise<never> } {
+  const worker = new Worker(new URL('./solver.worker', import.meta.url), {
+    type: 'module',
+    name: JSON.stringify({ assetBase: new URL('.', document.baseURI).href, bundle: PHYSICS_BUNDLE }),
+  });
+  const failed = new Promise<never>((_, reject) =>
+    worker.addEventListener('error', e =>
+      reject(new SolverError('load', `the solver worker failed to start: ${e.message || 'script error'}`))));
+  failed.catch(() => { /* observed by whoever races it */ });
+  const ep: Endpoint = {
+    post: (m, t) => worker.postMessage(m, t ?? []),
+    listen: h => worker.addEventListener('message', e => h(e.data)),
+    close: () => worker.terminate(),
+  };
+  return { solver: new WorkerSolver(ep), failed };
 }
 
 /** Errors say what happened and what to do; they never apologise. */
