@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { avgL100, nowL100, rangeKm } from './economy';
 import { dialMax, gaugeAngle, speedScale, SWEEP, tachScale, type Scale } from './gauge';
-import { DERATE_LAMP, derateLit } from './lamps';
+import { derateLit, T_CHARGE_LAMP } from './lamps';
 
 describe('gaugeAngle', () => {
   it('sweeps 240 degrees from zero to full scale, straight up at half', () => {
@@ -69,14 +69,15 @@ describe('economy (steady-state, FINDING-009)', () => {
 });
 
 describe('derateLit', () => {
-  it('stays dark for the charge-density dip of ordinary driving (it once lit at 0.9992)', () => {
-    expect(derateLit(1, 1)).toBe(false);
-    expect(derateLit(0.9992, 1)).toBe(false);
-    expect(derateLit(DERATE_LAMP, 1)).toBe(false);
+  const C = (c: number) => c + 273.15;
+  it('stays dark in ordinary hard driving: the truck at full throttle and low speed, 66 °C charge air', () => {
+    expect(derateLit(C(66), 1)).toBe(false);
+    expect(derateLit(C(25), 1)).toBe(false);
+    expect(derateLit(T_CHARGE_LAMP, 1)).toBe(false);
   });
-  it('lights for a real charge-air loss, and for any overheat derate', () => {
-    expect(derateLit(DERATE_LAMP - 1e-9, 1)).toBe(true);
-    expect(derateLit(0.9, 1)).toBe(true);
-    expect(derateLit(0.999, 0.999)).toBe(true);
+  it('lights for genuinely hot charge air, and for any overheat derate', () => {
+    expect(derateLit(T_CHARGE_LAMP + 1e-9, 1)).toBe(true);
+    expect(derateLit(C(95), 1)).toBe(true);
+    expect(derateLit(C(30), 0.999)).toBe(true);
   });
 });
