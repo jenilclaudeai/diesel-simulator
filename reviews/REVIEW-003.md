@@ -166,6 +166,8 @@ key loop. It is carried to Phase 3, whose port needs a test for it. *(QA2)*
 Their ramps are steep, because ramp speed scales with `ramp_fraction`. The
 fix needs a ramp-height parameter separate from `ramp_fraction`; judge it by
 ear in Phase 4. *(PHY2, USR)*
+*(2026-09-30: the owner chose to build it, in the same grid rebuild as
+FINDING-023 option A, judged by ear on a before/after pair.)*
 
 **N-1 — the owner has not listened** to any audio change since FINDING-004.
 That is now a Phase 4 exit criterion, not a Phase 1 one, by decision.

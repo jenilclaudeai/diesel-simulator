@@ -4,9 +4,15 @@
 **Phase:** 1, 2, 3 and **4 exit-ready** (REVIEW-003 to -006). The owner signed
 off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
 - FINDING-022 is fixed (option A, #64).
-- Still waiting on the owner:
-  - an option for FINDING-023 (cold slap), a model improvement for later
-    that needs its own ~70 min grid rebuild;
+- ~~Still waiting on the owner: an option for FINDING-023 (cold slap), a model
+  improvement for later that needs its own ~70 min grid rebuild;~~
+- **Decided 2026-09-30 (part 12):**
+  - FINDING-023 **option A**: slap from a temperature-dependent clearance;
+  - **a ramp-height parameter** separate from `ramp_fraction` (REVIEW-003
+    m-5), in the **same** rebuild of all 8 grids, judged by ear;
+  - live friction's cost on low-end phones **waits for the real Android
+    check**;
+  - OPEN-B accepted as **ADR-013** (personas are review lenses).
   - *(the Phase 5 decisions are made: ADR-012, 2026-09-30: roster B as A
     first; touch pedals with top paddles; a new `/enjoy`; judged on a
     mid-range Android)*
@@ -714,12 +720,12 @@ a miscount, not a change.)*
 | 015 | cam film ~780× too thick (pressure-viscosity counted twice) + two kinematic errors — why cam wear is negligible | **fixed (#28, #35); wear calibrated (#38)**. *(Was: "measured, not fixed — PR #25".)* |
 | 016 | FINDING-001/002 guards rode a 1° ignition-delay step; the real response (~0.2° over 90 K) is quantised by the 1° crank step | **fixed** — PR #27 (ignition resolved within the step) |
 | 017 | slap and tick normalised away in the mechanical sub-mix; mechanical-lash presets seat valves off the closing ramp | **fixed (#34, #37, #43)**; by-ear sign-off in Phase 4 |
-| 018 | cam lift stepped 4× where the ramps meet the flank (2.0 mm on `hd_i6`), since the first commit | **fixed with option C′ (#42) — owner to confirm** |
+| 018 | cam lift stepped 4× where the ramps meet the flank (2.0 mm on `hd_i6`), since the first commit | **fixed with option C′ (#42), confirmed by the owner (session 5, part 2)**. *(Was: "owner to confirm", left stale in this table after the confirmation.)* |
 | 019 | the aged `crdi15`'s torque gain | a fast-path artifact, not a wear bug; `durability_run` moved to 9 cycles (#45) |
 | 020 | the converter's lock-up clutch was numerically unstable, pinned at its clamp (bug #11's jolts) | **fixed (#54)** |
 | 021 | `play.py`'s real-time sound was a stale copy; slap, exhaust flow and seating moved it 0.0000% | **fixed (#59)** |
 | 022 | intake loudness and turbo boost term normalised away in `render()`, so also in the synth | **fixed with option A (#64)**. *(Was: "open: known defect, the owner's call with the listening review".)* |
-| 023 | the synth's slap input (skirt film) sits on its clamp in 240/240 cold cells, 115/240 warm | **open**: known defect; the owner chose to do it after 022, in its own rebuild |
+| 023 | the synth's slap input (skirt film) sits on its clamp in 240/240 cold cells, 115/240 warm | **open, option A chosen (2026-09-30)**, with the ramp-height parameter in one rebuild. *(Was:)* known defect; the owner chose to do it after 022, in its own rebuild |
 
 ### Still open inside those
 
@@ -839,9 +845,11 @@ Session 4's branch table is in git history.
      rising with boost;
    - cold slap, which FINDING-023 still caps.
 
-   Then pick an option for 023 (recommended: A, a temperature-dependent
+   ~~Then pick an option for 023 (recommended: A, a temperature-dependent
    clearance), which means one ~70 min grid rebuild. A ramp-height parameter
-   separate from `ramp_fraction` is still open for the same review.
+   separate from `ramp_fraction` is still open for the same review.~~
+   Decided 2026-09-30: 023 option A **and** the ramp-height parameter, one
+   rebuild of all 8 grids; then a before/after pair for the owner's ears.
 3. **Phase 5 — Enjoy mode:** ~~the roster (OPEN-F), the dashboard, and the
    steady-state economy label~~ roster A, the dashboard and the label are
    done (#75, #76). Next: roster B (`v8hd`, an old NA single), and truck127's
