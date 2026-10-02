@@ -79,6 +79,12 @@ tested top (`be26576`), 0 lines differ.
     caught.
   - `friction_engine_view` moved into the package; the fixtures are
     unchanged.
+  - **Correction, found by CI:** I first wrote that test as exact equality.
+    It held on the Mac that built the grids and failed on CI's Linux
+    runners (perf and sources differ; the trace does not), from floating
+    point across platforms, which the golden points already allow for. It
+    is now held to `GOLDEN_TOL` (1e-5) and prints the worst difference.
+    Both physics mutants still fail it by far: 7.5e-2 and 1.4.
 - **`buildLiveGrid` in `web/solver`**: a pool of Pyodide workers.
   - Rows first; each row's cells are released the moment its fuel limit is
     known.

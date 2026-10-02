@@ -1656,10 +1656,14 @@ def test_live_grid_pieces_match_the_shipped_grid():
     """ADR-014 step 3: a browser worker builds a drivable grid from the
     bridge's pieces, and tools/build_live_grids.py now builds with the same
     ones. A cell solved through bridge.live_cell, on the shipped crdi15
-    grid's own row fuel, must equal that grid's cell exactly (perf, pressure
-    trace, sources), warm and cold; and the plan's axes must be the grid's.
+    grid's own row fuel, must equal that grid's cell (perf, pressure trace,
+    sources), warm and cold; and the plan's axes must be the grid's.
     (The refactored tool also rebuilt a 2 x 2 custom grid identical to the
-    old code's, 0 of 24 fields differing.)"""
+    old code's, 0 of 24 fields differing.)
+    First written as exact equality: it held on the Mac that built the
+    grids and failed on CI's Linux (perf and sources differ, the trace does
+    not) -- floating point across platforms, which the golden points allow
+    for with GOLDEN_TOL. Now held to GOLDEN_TOL, the worst difference said."""
     if _no_prebuilt_grids("bridge pieces match the shipped grid"):
         return
     import json
@@ -1667,22 +1671,44 @@ def test_live_grid_pieces_match_the_shipped_grid():
     with open(os.path.join(os.path.dirname(__file__), "..", "web", "app", "public", "grids", "crdi15.json")) as fh:
         g = json.load(fh)
     plan = json.loads(bridge.live_grid_plan(json.dumps({"engine": {"preset": "crdi15"}})))
+    import base64
+    import numpy as np
     i, j = 2, 3
-    bad = []
+    bad, worst = [], [0.0, ""]
+
+    def near(a, b, what):
+        # numbers relative, float32 arrays (base64) relative to their peak
+        if isinstance(a, str):
+            x, y = (np.frombuffer(base64.b64decode(v), dtype="<f4").astype(float) for v in (a, b))
+            if x.shape != y.shape:
+                return False
+            r = float(np.max(np.abs(x - y)) / max(float(np.max(np.abs(y))), 1e-30)) if x.size else 0.0
+        else:
+            r = abs(a - b) / max(abs(b), 1e-12) if abs(a - b) > 1e-15 else 0.0
+        if r > worst[0]:
+            worst[0], worst[1] = r, what
+        return r <= GOLDEN_TOL
+
+    def same(a, b, what):
+        if isinstance(a, dict):
+            return a.keys() == b.keys() and all(same(a[k], b[k], f"{what}.{k}") for k in a)
+        return near(a, b, what)
     if plan["rpms"] != g["rpms"] or plan["loads"] != g["loads"]:
         bad.append("plan axes")
     for cold, sfx in ((False, ""), (True, "_cold")):
         c = json.loads(bridge.live_cell(json.dumps({"engine": {"preset": "crdi15"}, "rpm": g["rpms"][i],
                                                     "load": g["loads"][j], "fuel_limit": g["fuel_limits"][i],
                                                     "cold": cold})))
-        if c["perf"] != g["perf" + sfx][i][j]:
+        if not same(c["perf"], g["perf" + sfx][i][j], f"perf{sfx}"):
             bad.append(f"perf{sfx}")
-        if c["p_cyl_f32"] != g["p_cyl" + sfx + "_f32"][i][j]:
+        if not same(c["p_cyl_f32"], g["p_cyl" + sfx + "_f32"][i][j], f"p_cyl{sfx}"):
             bad.append(f"p_cyl{sfx}")
-        if c["src_f32"] != g["src" + sfx + "_f32"][i][j] or c["meta"] != g["src_meta" + sfx][i][j]:
+        if not (same(c["src_f32"], g["src" + sfx + "_f32"][i][j], f"src{sfx}")
+                and same(c["meta"], g["src_meta" + sfx][i][j], f"meta{sfx}")):
             bad.append(f"sources{sfx}")
     check("a cell built from the bridge's pieces equals the shipped grid's (ADR-014 step 3)", float(len(bad)), 0.0, 0.0,
-          f"differ: {', '.join(bad)}" if bad else f"crdi15 cell [{i}][{j}], warm and cold: perf, trace and sources identical")
+          (f"differ beyond {GOLDEN_TOL}: {', '.join(bad)}; " if bad else f"crdi15 cell [{i}][{j}], warm and cold: ")
+          + f"worst difference {worst[0]:.2e} at {worst[1] or '-'}")
 
 
 def test_roster_engines_make_their_numbers():
