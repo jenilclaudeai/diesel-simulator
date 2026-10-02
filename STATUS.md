@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-10-02 (session 5, part 15: custom engines, step 3a, the browser's grid build; #77–#80 merged, #81 open)
+**Updated:** 2026-10-02 (session 5, part 16: custom engines, step 3b, drivable from the app; #81 → #82)
 **Phase:** 1, 2, 3 and **4 exit-ready** (REVIEW-003 to -006). The owner signed
 off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
 - FINDING-022 is fixed (option A, #64).
@@ -84,7 +84,8 @@ tested top (`be26576`), 0 lines differ.
     runners (perf and sources differ; the trace does not), from floating
     point across platforms, which the golden points already allow for. It
     is now held to `GOLDEN_TOL` (1e-5) and prints the worst difference.
-    Both physics mutants still fail it by far: 7.5e-2 and 1.4.
+    Both physics mutants still fail it by far: 7.5e-2 and 1.4. Measured on
+    CI's Linux: **8.95e-13** (at `perf.osc_spread`).
 - **`buildLiveGrid` in `web/solver`**: a pool of Pyodide workers.
   - Rows first; each row's cells are released the moment its fuel limit is
     known.
@@ -102,10 +103,37 @@ tested top (`be26576`), 0 lines differ.
   cell, row-before-cell order, parallelism): 5 of 5 mutants caught. Round
   trip 22/22 (+2: the plan; a non-live function refused, its mutant
   caught). Cache 20/20.
-- **Next, step 3b (the UI):** "Build drivable grid" on the Dyno page, with
+- ~~**Next, step 3b (the UI):** "Build drivable grid" on the Dyno page, with
   progress and cancel/resume (an IndexedDB piece store); saved custom
   engines listed on `/drive` and `/enjoy`; the grid file offered as a
-  download, for moving it to a phone.
+  download, for moving it to a phone.~~ Done, below.
+
+**Part 16: custom engines, step 3b, drivable from the app (#82, stacked on
+#81). With this, ADR-014 is complete:**
+- **"Build drivable grid" on the Dyno page.**
+  - The page's pool of solver workers builds the grid: cores − 1, at most
+    6; 2 on a device reporting under 4 GB.
+  - It shows progress, an ETA and a Stop button. Pieces are kept in
+    IndexedDB, so a stopped or closed build carries on; they are dropped
+    once the file is saved.
+- **"Your engines"** (`engine/my-engines.ts`, IndexedDB).
+  - Saved engines appear in `/drive`'s and `/enjoy`'s engine lists.
+  - "Drive it" opens `/enjoy` (or `/drive`) with the engine chosen
+    (`?engine=my:<key>`).
+  - "Download grid file" is there for a phone or a friend.
+- **`e2e:custom`** (manual, ~5 min): a 2×2 grid built in Chrome through the
+  e2e-only `?gridsize` hook.
+  - Stopped at 2 of 10, then resumed: "8 of 10 (8 from before)".
+  - Saved, then driven on `/enjoy` in its own 1.5 t compact, idling at
+    800 rpm.
+  - 3 of 3 mutants caught: no resume; not saved; `/enjoy` ignoring the
+    link.
+  - Not in CI: with CI's 2 cores the pool is 1 worker, about 15 min. Adding
+    it is the owner's call.
+- **Tests.** App units 56 (+2: the library, the pool size); e2e enjoy 16,
+  drive 7, dyno 15; solver fast 20 + 8.
+- **Not measured yet:** a full 8×6 build in a real browser on a laptop.
+  ADR-014's ~26 min on 4 workers is extrapolated from Node.
 
 **Part 14: custom engines, step 2 of 3, the form (#80, stacked on #79):**
 - **"Custom engine…" on Dyno and Grid.** A form for the brochure numbers,
@@ -285,7 +313,8 @@ tested top of each stack, 0 lines differ):
 tested top, 0 lines differ.)* ~~**Open now:** #77 (`docs/decisions-023-ramp` →
 `main`) → #78 (`feat/slap-and-ramp`) → #79 (`feat/custom-engines`) → #80
 (`feat/custom-engine-form`).~~ *(All merged 2026-10-02.)* **Open now:** #81
-(`feat/browser-grid-build` → `main`).
+(`feat/browser-grid-build` → `main`) → #82 (`feat/drivable-grid-ui`). Merge
+#81, then retarget #82 to `main`.
 Remote branches besides those: `main`, and `fix/steady-state-controllers`
 (kept; the only copy of the FINDING-013 option A experiment).
 
@@ -1013,7 +1042,8 @@ Session 4's branch table is in git history.
 1. ~~**Owner:** merge #50, then #51 → #58, then #59 → #64, retargeting each
    child to `main`.~~ Done (#50, #65, #71). ~~**Now: merge #72 → #76 in
    order**~~ done 2026-09-30. ~~**Now: merge #77 → #78 → #79 → #80 in order**~~
-   done 2026-10-02. **Now: merge #81** (it targets `main` directly).
+   done 2026-10-02. **Now: merge #81, then retarget #82 to `main` and merge
+   it.**
 2. **Owner: listen.** On `/drive`: Sound on, keys 1–5 for the mics, "Record
    10 s (WAV)". Or `python3 play.py`. Listen for:
    - `hd_i6`'s tick dominance (13×);
