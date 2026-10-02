@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import type { PointResult, PresetInfo } from '@dieselsim/solver';
+import type { EngineInfo, EngineRef, PointResult, PresetInfo } from '@dieselsim/solver';
+import { achieved, type CustomEngine, EXAMPLE_ENGINE, headline } from '../engine/custom-engine';
+import { EngineForm } from '../engine/engine-form';
 import { describe, SolverService } from '../solver/solver.service';
 import { dualAxis } from './axis';
 import { accuracyNote } from './accuracy-note';
@@ -16,7 +18,7 @@ const fmt2 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2, minimu
 
 @Component({
   selector: 'app-dyno',
-  imports: [RouterLink],
+  imports: [RouterLink, EngineForm],
   templateUrl: './dyno.html',
   styleUrl: './dyno.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -28,6 +30,11 @@ export class Dyno implements OnInit {
   protected readonly fmt2 = fmt2;
 
   protected readonly engine = signal('crdi15');
+  /** ADR-014: the "Custom engine" choice, its numbers, and the builder's description of it */
+  protected readonly CUSTOM = '__custom';
+  protected readonly custom = signal<CustomEngine>(EXAMPLE_ENGINE);
+  protected readonly customInfo = signal<EngineInfo | undefined>(undefined);
+  protected readonly isCustom = computed(() => this.engine() === this.CUSTOM);
   protected readonly points = signal<Pt[]>([]);
   protected readonly running = signal(false);
   protected readonly progress = signal<{ n: number; of: number; rpm: number } | undefined>(undefined);
@@ -39,10 +46,18 @@ export class Dyno implements OnInit {
     return info ? info.presets.map(k => ({ key: k, ...info.preset_info[k]! })) : [];
   });
   /** how far this page's fast solve is from a converged one (FINDING-013) */
-  protected readonly accuracy = computed(() =>
+  protected readonly accuracy = computed(() => this.isCustom()
+    ? 'Each point is solved in 9 fast cycles so a pull takes about a minute. For a custom engine, how far that is from a fully converged solve has not been measured.'
     // keyed on the solver (grid) hash: the live loop and the synth never run in a pull
-    accuracyNote(this.engine(), GRID_VERSION, r => fmt0.format(r)));
-  protected readonly spec = computed<PresetInfo | undefined>(() => this.solver.info()?.preset_info[this.engine()]);
+    : accuracyNote(this.engine(), GRID_VERSION, r => fmt0.format(r)));
+  protected readonly spec = computed<PresetInfo | undefined>(() =>
+    this.isCustom() ? this.customInfo() : this.solver.info()?.preset_info[this.engine()]);
+  /** a custom engine's finished pull against its brochure, as builder.verify() reports it
+   *  (not while it runs: a half-run pull's peaks would read as a shortfall) */
+  protected readonly achieved = computed(() => {
+    const req = this.customInfo()?.requested;
+    return this.isCustom() && req && this.elapsedS() !== undefined ? achieved(this.points(), req) : null;
+  });
   protected readonly rpms = computed(() => {
     const s = this.spec();
     if (!s) return [];
@@ -103,6 +118,29 @@ export class Dyno implements OnInit {
     this.points.set([]);
     this.elapsedS.set(undefined);
     this.runError.set(undefined);
+    if (key === this.CUSTOM) void this.describeCustom();
+  }
+
+  protected customChanged(e: CustomEngine): void {
+    this.custom.set(e);
+    this.points.set([]);
+    this.elapsedS.set(undefined);
+    void this.describeCustom();
+  }
+
+  private engineRef(): EngineRef {
+    return this.isCustom() ? { headline: headline(this.custom()) } : { preset: this.engine() };
+  }
+
+  /** The builder's own rpm range and the requested numbers, for the chart and the comparison. */
+  private async describeCustom(): Promise<void> {
+    this.customInfo.set(undefined);
+    this.runError.set(undefined);
+    try {
+      this.customInfo.set(await this.solver.describeEngine({ headline: headline(this.custom()) }));
+    } catch (e) {
+      this.runError.set(describe(e));
+    }
   }
 
   protected async run(): Promise<void> {
@@ -116,7 +154,7 @@ export class Dyno implements OnInit {
     try {
       for (const [i, rpm] of rpms.entries()) {
         this.progress.set({ n: i + 1, of: rpms.length, rpm });
-        const r = await this.solver.solvePoint({ engine: { preset: this.engine() }, rpm, load: 1 });
+        const r = await this.solver.solvePoint({ engine: this.engineRef(), rpm, load: 1 });
         this.points.update(p => [...p, { rpm, torque: r.torque, powerKw: r.power / 1000, r }]);
       }
       this.elapsedS.set((performance.now() - t0) / 1000);

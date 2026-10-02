@@ -68,6 +68,18 @@ check("unknown preset is rejected", e?.kind === "invalid-request", e?.message.sl
 e = await expectError(solver.solvePoint({ engine: { preset: "crdi15" }, rpm: 1800, load: 1.5 }));
 check("out-of-range load is rejected", e?.kind === "invalid-request", e?.message ?? "no error");
 
+// ADR-014: a custom engine from brochure numbers, described by the builder itself
+const MY20 = { name: "2.0 L four", displacement: 2.0, n_cyl: 4, rated_rpm: 4000, peak_torque: 320,
+               peak_power: 103, plateau: [1750, 2500], vehicle: "crdi15" };
+const desc = await solver.describeEngine({ headline: MY20 });
+check("describeEngine: a custom engine's rpm range and requested numbers (ADR-014)",
+      desc.name === "2.0 L four" && desc.idle_rpm > 0 && desc.max_rpm > desc.rated_rpm
+      && desc.requested?.peak_torque === 320 && desc.requested?.plateau?.[0] === 1750,
+      `idle ${desc.idle_rpm} rated ${desc.rated_rpm} max ${desc.max_rpm}, requested ${JSON.stringify(desc.requested)}`);
+e = await expectError(solver.describeEngine({ headline: { ...MY20, n_cyl: "four" } }));
+check("a custom engine the builder cannot make is an invalid request", e?.kind === "invalid-request"
+      && /cannot make this engine/.test(e.message), e?.message.slice(0, 80) ?? "no error");
+
 const progress: GridProgress[] = [];
 const grid = await solver.buildGrid(
   { engine: { preset: "crdi15" }, rpms: [1800], loads: [0.6, 0.2] },

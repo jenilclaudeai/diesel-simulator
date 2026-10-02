@@ -53,7 +53,15 @@ def _resolve_spec(engine):
         spec = PRESETS[key]()
     elif "headline" in engine:
         from .builder import from_dict           # lazy: only when needed
-        spec = from_dict(engine["headline"])
+        h = engine["headline"]
+        if not isinstance(h, dict):
+            raise RequestError("'headline' must be an object of build_engine's parameters")
+        try:
+            spec = from_dict(h)
+        except (TypeError, ValueError, KeyError, ZeroDivisionError) as e:
+            # a misspelt key, a string where a number belongs, a missing number:
+            # the request's fault, said as such (ADR-014's form shows it)
+            raise RequestError(f"the builder cannot make this engine: {e}") from None
     else:
         raise RequestError("'engine' needs 'preset' or 'headline'")
     # never mutate anything a later request could see
@@ -148,6 +156,25 @@ def runtime_info(_req_json="{}"):
         "grid_cycles": GRID_CYCLES,
         "source_keys": list(SOURCE_KEYS),
     })
+
+
+def describe_engine(req_json):
+    """What a UI needs to label an engine and choose its rpm range, without a
+    solve -- for a custom engine (ADR-014) the builder's derived idle and max
+    rpm, and the brochure numbers it was asked for (achieved vs requested)."""
+    req = json.loads(req_json)
+    engine = req.get("engine")
+    spec = _resolve_spec(engine)
+    out = {"name": spec.name, "idle_rpm": float(spec.idle_rpm),
+           "rated_rpm": float(spec.rated_rpm), "max_rpm": float(spec.max_rpm),
+           "displacement_l": float(spec.geom.displacement * 1000.0),
+           "n_cyl": int(spec.geom.n_cyl)}
+    h = engine.get("headline") if isinstance(engine, dict) else None
+    if h:
+        plateau = h.get("plateau")
+        out["requested"] = {"peak_torque": float(h["peak_torque"]), "peak_power_kw": float(h["peak_power"]),
+                            "plateau": [float(x) for x in plateau] if plateau else None}
+    return json.dumps(out)
 
 
 def solve_point(req_json):

@@ -5,13 +5,14 @@
  * any number of 'progress' messages before its single 'result' or 'error'.
  */
 import type {
-  Grid, GridProgress, GridRequest, PointRequest, PointResult, RuntimeInfo,
+  EngineInfo, EngineRef, Grid, GridProgress, GridRequest, PointRequest, PointResult, RuntimeInfo,
   SolverErrorKind,
 } from "./solver-port.js";
 
 export type Request =
   | { type: "init"; id: number }
   | { type: "solvePoint"; id: number; req: PointRequest }
+  | { type: "describeEngine"; id: number; engine: EngineRef }
   | { type: "buildGrid"; id: number; req: GridRequest }
   | { type: "cancel"; id: number };
 
@@ -22,7 +23,7 @@ export interface WireError {
 }
 
 export type Reply =
-  | { type: "result"; id: number; value: RuntimeInfo | PointResult | Grid }
+  | { type: "result"; id: number; value: RuntimeInfo | PointResult | EngineInfo | Grid }
   | { type: "progress"; id: number; progress: GridProgress }
   | { type: "error"; id: number; error: WireError };
 

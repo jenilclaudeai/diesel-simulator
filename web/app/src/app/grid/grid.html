@@ -18,13 +18,18 @@
         @for (p of presets(); track p.key) {
           <option [value]="p.key" [selected]="p.key === engine()">{{ p.name }}</option>
         }
+        <option [value]="CUSTOM" [selected]="isCustom()">Custom engine…</option>
       </select>
     </label>
     <button type="button" class="run" (click)="build()"
-            [disabled]="solver.status() !== 'ready' || running()">
+            [disabled]="solver.status() !== 'ready' || running() || (isCustom() && !customInfo())">
       {{ running() ? 'Building' : grid() ? 'Build again' : 'Build grid' }}
     </button>
   </div>
+
+  @if (isCustom()) {
+    <app-engine-form [engine]="custom()" [disabled]="running()" (changed)="customChanged($event)" />
+  }
 
   <p class="status" role="status" aria-live="polite">
     @switch (solver.status()) {

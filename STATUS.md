@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-10-01 (session 5, part 13: custom engines, step 1 of 3, the native path; #77 → #78 → #79)
+**Updated:** 2026-10-01 (session 5, part 14: custom engines, step 2 of 3, the form; #77 → #78 → #79 → #80)
 **Phase:** 1, 2, 3 and **4 exit-ready** (REVIEW-003 to -006). The owner signed
 off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
 - FINDING-022 is fixed (option A, #64).
@@ -58,9 +58,39 @@ off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
   - Mutants: the import, 3 of 3 e2e and 2 of 2 unit; the JSON, 3 of 3;
     the TypeScript key list, 1 of 1.
   - Drive 7/7, dyno 13/13, sound 6/6; `build:pages` OK.
-- **Next (steps 2 and 3):** the custom-engine form, with JSON import/export
+- ~~**Next (steps 2 and 3):** the custom-engine form, with JSON import/export
   and achieved against requested, on Dyno and Grid; then the in-browser
-  converged build with a worker pool, progress, resumable and cached.
+  converged build with a worker pool, progress, resumable and cached.~~
+  Step 2 is below; step 3 is next.
+
+**Part 14: custom engines, step 2 of 3, the form (#80, stacked on #79):**
+- **"Custom engine…" on Dyno and Grid.** A form for the brochure numbers,
+  the plateau, turbocharged and the vehicle, with JSON import and export in
+  the `engines/*.json` format (`engine/custom-engine.ts`, unit-tested).
+- **A new solver call, `describeEngine`**, through bridge → worker → client
+  → cache. The builder itself reports a custom engine's idle and max rpm
+  for the axes; its rules are not copied into TypeScript.
+- **The Dyno pull reports achieved against asked**, as `verify()` does: peak
+  torque, peak power, and torque at the plateau's start. It shows only once
+  the pull finishes; my first version showed the table after 2 of 10
+  points, and its peaks read as a shortfall.
+  - Measured in the browser, the example 2.0 L: 100.9% of its torque, 98.2%
+    of its power, 81.5% at the plateau start. That is the builder's known
+    low-end shortfall (roster A was 77–86% before tuning).
+- **Found by the new test:** `n_cyl: "four"` (and any number the builder
+  cannot use) crashed with a raw `TypeError`. The bridge now answers
+  "invalid request: the builder cannot make this engine: …". The same
+  path serves `solve_point`'s custom engines.
+- **Tests.**
+  - Python 69 / 0 / 2 known (scipy), 63 + 4 skipped → 64 + 4 (plain);
+    `test_describe_engine` (4 parts); the solver round trip +2 (20 + 20);
+    app units 54 (+6); grid e2e 9/9.
+  - e2e dyno 15 (+2: the builder describes the custom engine; its pull
+    reports achieved against asked), grid +1 (described, ready to build).
+  - Mutants: Dyno 3 of 3 (pulling a preset instead, the heading not from
+    the builder, no achieved table). My first bounds (50–130%) would have
+    let a pulled preset pass at 70.6%; the peaks now need 90–110%. One
+    mutant first failed to compile (counted broken, redone so it compiles).
 
 **Part 12: FINDING-023 fixed, and cam ramps with their own height
 (#78, `feat/slap-and-ramp`, stacked on #77, docs):**
@@ -209,8 +239,9 @@ tested top of each stack, 0 lines differ):
 (`docs/status-main` → `main`) → #73 → #74 → #75 → #76 (`feat/roster-a`).~~
 *(All merged 2026-09-30, each retargeted to `main`; `main` equals the
 tested top, 0 lines differ.)* **Open now:** #77 (`docs/decisions-023-ramp` →
-`main`) → #78 (`feat/slap-and-ramp`) → #79 (`feat/custom-engines`). Merge in
-order, retargeting each child to `main` after its parent merges.
+`main`) → #78 (`feat/slap-and-ramp`) → #79 (`feat/custom-engines`) → #80
+(`feat/custom-engine-form`). Merge in order, retargeting each child to
+`main` after its parent merges.
 Remote branches besides those: `main`, and `fix/steady-state-controllers`
 (kept; the only copy of the FINDING-013 option A experiment).
 
@@ -882,14 +913,14 @@ claim is corrected in PROJECT_CONTEXT §1.3 (#46). Kept as history.)*
 ## Tests
 
 ```
-python3 tests/test_physics.py                    # top of the stack (#79): 68 passed, 0 failed, 2 known with scipy; 63 + 4 skipped without
+python3 tests/test_physics.py                    # top of the stack (#80): 69 passed, 0 failed, 2 known with scipy; 64 + 4 skipped without
 python3 tools/audit_dead_signals.py              # 0 dead, 2 frozen (the h_ring clamp, known), 0 tiny
 python3 tools/validate_table.py [--aged]         # PROJECT_CONTEXT §1.5 re-check: 12 of 12 in band
 python3 tools/fixtures/gen_fixtures.py --check   # golden fixtures current (regenerate without --check)
 cd web/physics && npm ci && npm test             # TypeScript ports vs fixtures: 5 checks
 cd tools/pyodide && npm ci && npm run suite      # the same physics suite under Pyodide
 cd web/solver && npm ci && npm test              # 20 cache tests + 18 round-trip checks through a real worker
-cd web/app && npm test -- --watch=false          # 48 unit tests (vitest)
+cd web/app && npm test -- --watch=false          # 54 unit tests (vitest)
 cd web/app && npm run build:pages                # never plain `build`
 cd web/app && CHROME_PATH=... npm run e2e        # dyno pull in Chrome vs native (computes its own reference)
 cd web/app && CHROME_PATH=... npm run e2e:grid   # full 8 x 6 grid in Chrome vs native, cell for cell (~9 min)
@@ -936,7 +967,7 @@ Session 4's branch table is in git history.
 
 1. ~~**Owner:** merge #50, then #51 → #58, then #59 → #64, retargeting each
    child to `main`.~~ Done (#50, #65, #71). ~~**Now: merge #72 → #76 in
-   order**~~ done 2026-09-30. **Now: merge #77 → #78 → #79 in order**,
+   order**~~ done 2026-09-30. **Now: merge #77 → #78 → #79 → #80 in order**,
    retargeting each child to `main` after its parent merges.
 2. **Owner: listen.** On `/drive`: Sound on, keys 1–5 for the mics, "Record
    10 s (WAV)". Or `python3 play.py`. Listen for:

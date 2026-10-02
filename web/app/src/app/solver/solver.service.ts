@@ -1,7 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import {
   CachedSolver, IndexedDbGridCache, SolverError, WorkerSolver,
-  type Endpoint, type Grid, type GridOptions, type GridRequest, type PointRequest, type PointResult,
+  type EngineInfo, type EngineRef, type Endpoint, type Grid, type GridOptions, type GridRequest, type PointRequest, type PointResult,
   type RuntimeInfo, type SolverPort,
 } from '@dieselsim/solver';
 import { NUMPY_BUNDLED, PHYSICS_BUNDLE, PHYSICS_VERSION } from './physics-version';
@@ -35,6 +35,12 @@ export class SolverService {
   async solvePoint(req: PointRequest): Promise<PointResult> {
     await this.start();
     return this.port!.solvePoint(req);
+  }
+
+  /** Name, rpm range and requested numbers of an engine, without a solve (ADR-014). */
+  async describeEngine(engine: EngineRef): Promise<EngineInfo> {
+    await this.start();
+    return this.port!.describeEngine(engine);
   }
 
   /** A full grid, cell by cell, served from the IndexedDB cache when it can be. */

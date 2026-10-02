@@ -98,7 +98,7 @@ const loadS = (Date.now() - t0) / 1000;
 const about = await page.$eval(".about", e => e.textContent);
 check("Python boots in the page's worker", /Python 3\.14/.test(about), `ready after ${loadS.toFixed(0)} s`);
 check("worker runs the physics this build expects", about.includes(physics.slice(0, 12)), physics.slice(0, 12));
-const engines = await page.$$eval("select option", o => o.map(x => x.textContent.trim()));
+const engines = await page.$$eval("select option", o => o.map(x => x.textContent.trim()).filter(t => t !== "Custom engine…"));
 check("engine list comes from the solver", engines.length === 5, engines.join(" | "));
 check("page is not showing a cache-off warning", !about.includes("caching is off"));
 
@@ -117,6 +117,29 @@ const peak = await page.$eval(".readouts", e => e.innerText.replace(/\s+/g, " ")
 check("peak readouts shown", /Peak torque \d+ N·m at [\d,]+ rpm/.test(peak), peak);
 check("governed region explained", await page.$(".note") !== null);
 await page.screenshot({ path: path.join(out, "dyno.png"), fullPage: true });
+
+// ---- a custom engine from brochure numbers (ADR-014) ----
+await page.select("select", "__custom");
+await page.waitForFunction(() => {
+  const b = document.querySelector("button.run");
+  return (b && !b.disabled) || document.querySelector(".status .err");
+}, { timeout: 60_000, polling: 250 });
+const formName = await page.$eval(".engine-form input[type=text]", e => e.value).catch(() => "");
+const lead = await page.$eval("h1", e => e.textContent.trim());
+check("a custom engine is described by the builder before it runs", formName === "2.0 L four, 140 ps" && lead === formName,
+  `form "${formName}", heading "${lead}"`);
+await page.click("button.run");
+// the pull is done when the status says so (or errs); then the table must be there
+await page.waitForFunction(() => /Pull complete/.test(document.querySelector(".status")?.textContent ?? "")
+  || document.querySelector(".status .err"), { timeout: 300_000, polling: 1000 }).catch(() => {});
+const ach = await page.$$eval("table.achieved tbody tr", rs => rs.map(r => [...r.children].map(c => c.textContent.trim())));
+const share = ach.map(r => Number((r[3] ?? "").replace("%", "")));
+check("its pull reports achieved against asked, as verify() does",
+  // the builder hits its peaks within a few percent; the low end is where it falls short
+  ach.length === 3 && /320 N·m/.test(ach[0]?.[1] ?? "") && share[0] > 90 && share[0] < 110
+  && share[1] > 90 && share[1] < 110 && share[2] > 50 && share[2] < 130,
+  ach.map(r => `${r[0]}: ${r[2]} of ${r[1]} (${r[3]})`).join("; ") || await page.$eval(".status", e => e.textContent.trim()));
+await page.screenshot({ path: path.join(out, "dyno-custom.png"), fullPage: true });
 
 check("no page errors, console errors or failed requests", problems.length === 0, problems.slice(0, 3).join(" ; "));
 await browser.close();
