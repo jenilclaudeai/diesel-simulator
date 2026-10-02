@@ -273,6 +273,7 @@ def register(key: str, spec: EngineSpec):
 def from_dict(d: dict) -> EngineSpec:
     d = dict(d)
     d.pop("key", None)
+    d.pop("vehicle", None)       # which car it drives in (ADR-014), not the engine
     if isinstance(d.get("plateau"), list):
         d["plateau"] = tuple(d["plateau"])
     if isinstance(d.get("firing_order"), list):

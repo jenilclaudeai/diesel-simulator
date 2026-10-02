@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-10-01 (session 5, part 12: FINDING-023 fixed, ramp heights, truck127's valves; #77, #78)
+**Updated:** 2026-10-01 (session 5, part 13: custom engines, step 1 of 3, the native path; #77 → #78 → #79)
 **Phase:** 1, 2, 3 and **4 exit-ready** (REVIEW-003 to -006). The owner signed
 off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
 - FINDING-022 is fixed (option A, #64).
@@ -20,6 +20,47 @@ off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
 - **Decided 2026-10-01:** custom engines from the UI and JSON, **drivable**
   (the owner's choice over Dyno/Grid only). They come after #78; see Next
   actions.
+- **Decided 2026-10-01, ADR-014:** both grid paths, in the browser and
+  native; the same 8×6 grid as the roster.
+  - Measured: Pyodide is 2.65× slower than native. A drivable grid takes
+    ~26 min on 4 browser workers, ~13 min on 8, ~15 min natively on 6
+    cores, and hours on a phone.
+
+**Part 13: custom engines, step 1 of 3, the native path (#79, stacked on
+#78):**
+- **The format.** A custom engine is the roster's JSON plus `"vehicle"`, one
+  of `live.VEHICLE_KEYS` (held to TypeScript by the vehicles fixture).
+  - `python3 tools/build_live_grids.py --engine my.json` builds its grid to
+    `out/grids/<key>.json`, recording the JSON and its SHA-256.
+  - A smoke run (`--size 2x2`) took 98 s, and the Python loop drove the file
+    in the vehicle it names.
+- **The app.** `/drive` and `/enjoy` import a grid file.
+  - The file is refused, with the reason, if it is not a converged grid or
+    names no known vehicle.
+  - The worker takes the vehicle from the file.
+  - `LiveSession.stop()` now clears the last engine's info. The new e2e
+    check caught it reporting the truck while the imported engine loaded.
+- **The grid hash now excludes `bridge.py`** (with `live.py` and
+  `livesound.py`). Steps 2 and 3 add bridge entry points, and each would
+  have staled all 8 grids.
+  - That change itself moves the hash, so the grids were **re-stamped**
+    66de4859… → 4838e151….
+  - Proof: the only `dieselsim/` changes since the build are `builder.py`
+    (ignores `"vehicle"`, a key no engine file has), `live.py` and
+    `bridge.py` (both excluded). For each file, the re-stamp asserted that
+    only the hash string differs.
+  - The exclusion test now also starts its import walk at `builder.py`. A
+    mutant excluding `builder.py` is caught.
+- **Tests.** Python 68 / 0 / 2 known (scipy), 63 + 4 skipped (plain).
+  App units 48 (+6 for the grid-file check); e2e:enjoy 16/16
+  (+2: a bad file refused; an imported engine drives in its file's
+  vehicle); `test_custom_engine_json`.
+  - Mutants: the import, 3 of 3 e2e and 2 of 2 unit; the JSON, 3 of 3;
+    the TypeScript key list, 1 of 1.
+  - Drive 7/7, dyno 13/13, sound 6/6; `build:pages` OK.
+- **Next (steps 2 and 3):** the custom-engine form, with JSON import/export
+  and achieved against requested, on Dyno and Grid; then the in-browser
+  converged build with a worker pool, progress, resumable and cached.
 
 **Part 12: FINDING-023 fixed, and cam ramps with their own height
 (#78, `feat/slap-and-ramp`, stacked on #77, docs):**
@@ -168,8 +209,8 @@ tested top of each stack, 0 lines differ):
 (`docs/status-main` → `main`) → #73 → #74 → #75 → #76 (`feat/roster-a`).~~
 *(All merged 2026-09-30, each retargeted to `main`; `main` equals the
 tested top, 0 lines differ.)* **Open now:** #77 (`docs/decisions-023-ramp` →
-`main`) → #78 (`feat/slap-and-ramp`). Merge #77 first, then retarget #78 to
-`main`.
+`main`) → #78 (`feat/slap-and-ramp`) → #79 (`feat/custom-engines`). Merge in
+order, retargeting each child to `main` after its parent merges.
 Remote branches besides those: `main`, and `fix/steady-state-controllers`
 (kept; the only copy of the FINDING-013 option A experiment).
 
@@ -841,20 +882,20 @@ claim is corrected in PROJECT_CONTEXT §1.3 (#46). Kept as history.)*
 ## Tests
 
 ```
-python3 tests/test_physics.py                    # top of the stack (#76): 64 passed, 0 failed, 3 known with scipy; 59 + 4 skipped without
+python3 tests/test_physics.py                    # top of the stack (#79): 68 passed, 0 failed, 2 known with scipy; 63 + 4 skipped without
 python3 tools/audit_dead_signals.py              # 0 dead, 2 frozen (the h_ring clamp, known), 0 tiny
 python3 tools/validate_table.py [--aged]         # PROJECT_CONTEXT §1.5 re-check: 12 of 12 in band
 python3 tools/fixtures/gen_fixtures.py --check   # golden fixtures current (regenerate without --check)
 cd web/physics && npm ci && npm test             # TypeScript ports vs fixtures: 5 checks
 cd tools/pyodide && npm ci && npm run suite      # the same physics suite under Pyodide
 cd web/solver && npm ci && npm test              # 20 cache tests + 18 round-trip checks through a real worker
-cd web/app && npm test -- --watch=false          # 42 unit tests (vitest)
+cd web/app && npm test -- --watch=false          # 48 unit tests (vitest)
 cd web/app && npm run build:pages                # never plain `build`
 cd web/app && CHROME_PATH=... npm run e2e        # dyno pull in Chrome vs native (computes its own reference)
 cd web/app && CHROME_PATH=... npm run e2e:grid   # full 8 x 6 grid in Chrome vs native, cell for cell (~9 min)
 cd web/app && CHROME_PATH=... npm run e2e:drive  # /drive: prebuilt grid, 60 Hz, 60 s script vs native Python
-cd web/physics && npm test                       # 59 checks: fixture ports, 7 live drives, the synth, 8 vehicles
-cd web/app && CHROME_PATH=... npm run e2e:enjoy  # /enjoy: multi-touch on an emulated landscape Pixel, 14 checks
+cd web/physics && npm test                       # 60 checks: fixture ports, 7 live drives, the synth, 8 vehicles + their keys
+cd web/app && CHROME_PATH=... npm run e2e:enjoy  # /enjoy: multi-touch on an emulated landscape Pixel, 16 checks
 cd web/app && CHROME_PATH=... npm run e2e:sound  # /drive with sound: worklet output, firing harmonics, pitch, mics
 python3 tools/fixtures/gen_fixtures.py --only live   # regenerate live drives after a live.py change (~4 min)
 python3 tools/build_live_grids.py                # rebuild the prebuilt converged grids after a SOLVER change (~57 min)
@@ -895,8 +936,8 @@ Session 4's branch table is in git history.
 
 1. ~~**Owner:** merge #50, then #51 → #58, then #59 → #64, retargeting each
    child to `main`.~~ Done (#50, #65, #71). ~~**Now: merge #72 → #76 in
-   order**~~ done 2026-09-30. **Now: merge #77, then retarget #78 to
-   `main` and merge it.**
+   order**~~ done 2026-09-30. **Now: merge #77 → #78 → #79 in order**,
+   retargeting each child to `main` after its parent merges.
 2. **Owner: listen.** On `/drive`: Sound on, keys 1–5 for the mics, "Record
    10 s (WAV)". Or `python3 play.py`. Listen for:
    - `hd_i6`'s tick dominance (13×);

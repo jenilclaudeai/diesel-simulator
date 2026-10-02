@@ -217,6 +217,42 @@ wav = snd.render_transient(eng, tl)
 
 Run `python3 demo.py <outdir>` to generate every figure and audio file.
 
+### Your own engine, from brochure numbers (ADR-014)
+
+Write the numbers as JSON, in the same format as the Enjoy roster
+(`engines/*.json`), plus the vehicle it should drive in:
+
+```json
+{"key": "my20", "name": "2.0 L four, 140 ps", "displacement": 2.0, "n_cyl": 4,
+ "rated_rpm": 4000, "peak_torque": 320, "peak_power": 103, "plateau": [1750, 2500],
+ "vehicle": "crdi15"}
+```
+
+- `vehicle` is one of `hatch15` (1.3 t hatchback), `crdi15` (1.5 t compact),
+  `ld_i4` (1.75 t car), `crdi22` (1.9 t SUV), `hd_i6` (40 t truck) or
+  `tractor` (3 t utility tractor).
+- The other keys are `builder.build_engine`'s parameters. The roster files
+  show the optional tuning, such as `afr_limit` and `boost_map_rise`.
+
+Check what the engine actually makes. The builder sizes the hardware, but
+the solver decides what it delivers:
+
+```python
+from dieselsim.builder import from_dict, verify
+import json
+verify(from_dict(json.load(open("my20.json"))))
+```
+
+Then build the grid the real-time drive needs, and drive it:
+
+```bash
+python3 tools/build_live_grids.py --engine my20.json    # ~15 min on 6 cores -> out/grids/my20.json
+```
+
+On `/drive` or `/enjoy`, choose the grid file under "Custom engine" (or
+"Your own engine"). The app refuses a file that is not a converged grid, or
+that names no known vehicle, and says why.
+
 ---
 
 ## Does it produce sensible numbers?

@@ -105,8 +105,12 @@ def source_hash():
 # The real-time loop and its streaming synth consume grids and do not shape
 # them, so a change to either must not make every prebuilt grid stale (Phase
 # 3, prebuilt converged grids; FINDING-021's synth first shipped without
-# this, staling all five). Everything else in the package can change a cell.
-GRID_HASH_EXCLUDES = ("live.py", "livesound.py")
+# this, staling all five). This file is the browser's entry point: it calls
+# the solver and never shapes a cell (no cell solve imports it, checked by
+# the suite), and prebuilt grids come from tools/build_live_grids.py; it was
+# added for ADR-014, whose entry points would otherwise stale every grid on
+# each edit. Everything else in the package can change a cell.
+GRID_HASH_EXCLUDES = ("live.py", "livesound.py", "bridge.py")
 
 
 def grid_hash():

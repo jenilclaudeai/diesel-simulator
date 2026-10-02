@@ -110,7 +110,8 @@ addEventListener('message', (ev: MessageEvent<ToWorker>) => {
   switch (m.type) {
     case 'load': {
       const grid = new Adr011Grid(m.grid.spec, m.grid);
-      live = new LiveEngine(grid, m.grid.preset, m.trans, m.grid.engine_view);
+      // a custom engine names its vehicle (ADR-014); a roster grid's preset picks its own
+      live = new LiveEngine(grid, m.grid.vehicle ?? m.grid.preset, m.trans, m.grid.engine_view);
       frames = 0; held.clear();
       post({ type: 'info', info: info() });
       post({ type: 'state', view: view() });

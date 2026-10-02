@@ -13,6 +13,7 @@
     <a routerLink="/" class="home">Diesel Sim</a>
     <select aria-label="Engine" [disabled]="status() === 'loading'" (change)="selectPreset($any($event.target).value)">
       @for (p of presets; track p.key) { <option [value]="p.key" [selected]="p.key === preset()">{{ p.name }}</option> }
+      @if (imported(); as g) { <option [value]="IMPORTED" [selected]="preset() === IMPORTED">{{ g.name }} (imported)</option> }
     </select>
     <div class="seg" role="group" aria-label="Gearbox">
       <button type="button" [attr.aria-pressed]="!manual()" (click)="setManual(false)">Auto</button>
@@ -27,6 +28,9 @@
         {{ status() === 'loading' ? 'Starting…' : 'Start engine' }}
       </button>
       @if (error()) { <p class="err">{{ error() }}</p> }
+      <label class="import">Your own engine: <input type="file" accept=".json,application/json"
+        [disabled]="status() === 'loading'" (change)="importGrid($any($event.target))" aria-label="Import grid file"></label>
+      @if (importError()) { <p class="err import-err">{{ importError() }}</p> }
       <p class="hint">Throttle on the right, brake on the left: press harder by sliding up. Paddles shift.</p>
     } @else if (v(); as s) {
       <ul class="lamps" aria-label="Warning lamps">

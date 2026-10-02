@@ -203,6 +203,32 @@ check("the truck's dials: a slower speedometer than the hatchback's, both scales
   `speedometer to ${truck.speedTop} km/h (truck) vs ${hatchTop} (hatchback); tach labelled to ${truck.tachTop} of ${truck.tachMax} rpm`);
 await page.screenshot({ path: path.join(here, "out", "enjoy-truck.png") });
 
+// ---- a custom engine's grid file (ADR-014) ----
+// the hatchback's grid, relabelled as a custom engine that drives the SUV: if
+// the worker honours the file's "vehicle", the dash reports the SUV
+const gridsDir = path.join(here, "..", "public", "grids");
+const custom = JSON.parse(fs.readFileSync(path.join(gridsDir, "hatch15.json"), "utf8"));
+Object.assign(custom, { preset: "testeng", name: "Test engine", custom: true, vehicle: "crdi22" });
+fs.mkdirSync(path.join(here, "out"), { recursive: true });
+const customPath = path.join(here, "out", "custom.grid.json"), badPath = path.join(here, "out", "not-a-grid.json");
+fs.writeFileSync(customPath, JSON.stringify(custom));
+fs.writeFileSync(badPath, JSON.stringify({ hello: 1 }));
+if (await page.$("button.stop")) await tapEl("button.stop");
+await page.waitForSelector("input[type=file]");
+await (await page.$("input[type=file]")).uploadFile(badPath);
+await page.waitForSelector(".import-err", { timeout: 5000 }).catch(() => {});
+const badMsg = await page.$eval(".import-err", e => e.textContent).catch(() => "");
+check("a file that is not a grid is refused, with the reason", /not a grid file/.test(badMsg), badMsg.trim());
+await (await page.$("input[type=file]")).uploadFile(customPath);
+await page.waitForFunction(() => [...document.querySelectorAll("select option")].some(o => o.selected && /Test engine/.test(o.textContent)),
+  { timeout: 5000 }).catch(() => {});
+await tapEl("button.start");
+await page.waitForFunction(() => globalThis.__enjoy.info()?.vehicle, { timeout: 60_000 }).catch(() => {});
+const cinfo = await page.evaluate(() => globalThis.__enjoy.info());
+const csel = await page.$eval("select", s => s.selectedOptions[0]?.textContent ?? "");
+check("an imported custom engine drives, in the vehicle its file names", /Test engine/.test(csel) && /SUV/.test(cinfo?.vehicle ?? ""),
+  `engine "${csel.trim()}", vehicle "${cinfo?.vehicle}"`);
+
 // ---- portrait ----
 await page.setViewport({ width: 412, height: 915, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true, isLandscape: false });
 await sleep(300);

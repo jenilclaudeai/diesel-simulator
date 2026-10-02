@@ -1258,7 +1258,7 @@ def test_grid_hash_ignores_the_live_loop():
         shutil.copytree(pkg, cp, ignore=shutil.ignore_patterns("__pycache__"))
         base = gh(cp)
         same_as_bridge = base == bridge.grid_hash()
-        for name in ("live.py", "livesound.py"):
+        for name in bridge.GRID_HASH_EXCLUDES:
             with open(os.path.join(cp, name), "a") as fh:
                 fh.write("\n# edit\n")
         live_edit = gh(cp)
@@ -1268,7 +1268,8 @@ def test_grid_hash_ignores_the_live_loop():
     # every package module the cell solve can import, statically (imports
     # inside functions included) -- no subprocess, which Pyodide lacks
     import ast
-    loaded, todo = set(), ["grid.py", "acoustics.py"]
+    # (builder.py too: a roster or custom grid's spec is made by it)
+    loaded, todo = set(), ["grid.py", "acoustics.py", "builder.py"]
     while todo:
         name = todo.pop()
         if name in loaded or not os.path.exists(os.path.join(pkg, name)):
@@ -1587,6 +1588,37 @@ ENGINES_DIR = os.path.join(os.path.dirname(__file__), "..", "engines")
 ROSTER = ("hatch15", "crdi22", "truck127")        # Enjoy mode, roster A (ADR-012)
 
 
+def test_custom_engine_json():
+    """ADR-014: a custom engine is the roster's JSON plus "vehicle". The
+    builder ignores "vehicle" (the same engine with or without it); a grid
+    file that records its engine JSON is rebuilt from it, not from a preset
+    of the same name; and every vehicle key but the fallback names its own
+    vehicle (a typo would silently get the tractor, which the build tool and
+    the app refuse)."""
+    import dataclasses
+    import json
+    from dieselsim.builder import from_dict
+    from dieselsim.live import VEHICLE_KEYS, Vehicle
+    d = {"name": "2.0 L four", "displacement": 2.0, "n_cyl": 4, "rated_rpm": 4000,
+         "peak_torque": 320, "peak_power": 103, "plateau": [1750, 2500]}
+    same = dataclasses.asdict(from_dict(dict(d, vehicle="crdi15"))) == dataclasses.asdict(from_dict(d))
+    names = {k: Vehicle(k).name for k in VEHICLE_KEYS}
+    fallback = Vehicle("no such vehicle").name
+    distinct = (len(set(names.values())) == len(VEHICLE_KEYS) and names["tractor"] == fallback
+                and all(n != fallback for k, n in names.items() if k != "tractor"))
+    parts = {"builder ignores vehicle": same, "every vehicle key is its own vehicle": distinct}
+    if not _no_prebuilt_grids("a grid file is rebuilt from its own engine JSON"):
+        from dieselsim.live import Adr011Grid
+        with open(os.path.join(os.path.dirname(__file__), "..", "web", "app", "public", "grids", "hatch15.json")) as fh:
+            gj = json.load(fh)
+        gj.update(preset="crdi15", engine_json=dict(d, vehicle="crdi15"))   # a preset name that is NOT its engine
+        parts["grid built from its engine JSON"] = Adr011Grid.from_json(gj).spec.name == "2.0 L four"
+    bad = [k for k, ok in parts.items() if not ok]
+    check("custom engine JSON: vehicle kept apart, grids rebuilt from their own JSON (ADR-014)",
+          float(len(bad)), 0.0, 0.0, (f"failed: {', '.join(bad)}" if bad else f"{len(parts)} of {len(parts)} parts")
+          + f"; vehicles {', '.join(f'{k}={v}' for k, v in names.items())}")
+
+
 def test_roster_engines_make_their_numbers():
     """ADR-008/012: each Enjoy roster engine, built by builder.py from its
     engines/<key>.json brochure, still delivers it: at the start of its
@@ -1660,6 +1692,7 @@ def main():
                test_mech_levels_carry_physics,
                test_cold_slap_follows_clearance,
                test_ramps_have_their_own_height,
+               test_custom_engine_json,
                test_flat_tappet_wears_more_than_roller,
                test_closing_ramps_clear_the_lash,
                test_cam_wear_calibration,

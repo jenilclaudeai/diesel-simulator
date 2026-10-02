@@ -10,6 +10,11 @@ export interface GridFile extends Adr011GridData {
   unsettled_cells: number;
   spec: LiveSpec;
   engine_view: EngineView;
+  /** ADR-014: a custom engine's vehicle (a live.VEHICLE_KEYS key); roster grids use their preset's */
+  vehicle?: string;
+  custom?: boolean;
+  engine_json?: Record<string, unknown>;
+  engine_file_sha256?: string;
 }
 
 /** A frame-exact input script (the fixture generator's format). */
