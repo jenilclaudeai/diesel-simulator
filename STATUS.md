@@ -1,6 +1,125 @@
 # Status
 
-**Updated:** 2026-10-05 (session 5, part 19: the app is live on GitHub Pages; #85 merged)
+**Updated:** 2026-10-05, end of session 5. Read this section first; the
+dated sections below it are history.
+
+## Start here
+
+**The app is live:** https://jenilclaudeai.github.io/diesel-simulator/
+It is published from `main` by `.github/workflows/pages.yml` on every merge.
+Pages: `/` (Dyno pull), `/grid`, `/drive` (engineering), `/enjoy` (phones,
+landscape).
+
+| phase | state |
+|---|---|
+| 1–3: physics truth, solver port, real-time loop | done (REVIEW-003 to -005) |
+| 4: audio | done; the owner signed it off by ear 2026-09-30 (REVIEW-006) |
+| 5: Enjoy mode | **built; the exit is the owner's Android check** (see below) |
+| 6: Expert mode | not started (custom engines, ADR-014, anticipate part of it) |
+| 7: Environment and projects | not started |
+| 8: Polish and host | Pages hosting done early (#85); the rest not started |
+
+**What Phase 5 has** (all merged):
+- `/enjoy`: touch pedals, gear paddles, dials, lamps, temperatures, and a
+  steady-state trip computer.
+- The full roster (ADR-012): `hatch15`, `crdi22`, `truck127`, `v8hd` and
+  `single10`; 1, 4, 6 and 8 cylinders, one without a turbo. The records
+  are in `engines/ROSTER.md`.
+- FINDING-023 (cold slap from a temperature-dependent clearance) and cam
+  ramps with their own height (REVIEW-003 m-5), in one rebuild of every
+  grid.
+- **Custom engines (ADR-014):** brochure numbers or JSON on the Dyno and
+  Grid pages, achieved against requested, then drivable.
+  - The browser builds the converged grid with a worker pool: 21.5 min
+    measured on an 8-core Mac.
+  - Or natively: `tools/build_live_grids.py --engine`.
+  - Saved under "Your engines" on `/drive` and `/enjoy`, with a grid-file
+    download for phones.
+- The Derate lamp means protection: charge air above 80 °C, or an overheat
+  derate.
+
+**Waiting on the owner:**
+1. **The Android check**, Phase 5's exit criterion: open
+   https://jenilclaudeai.github.io/diesel-simulator/enjoy on a mid-range
+   Android in Chrome, landscape, and tap Start engine. Judge smoothness,
+   sound (crackle?), the pedals and paddles; try the truck and the single.
+   Then write REVIEW-007 (the Phase 5 exit review).
+2. **Listening:** the before/after pairs in `out/listen/review003m5_*.wav`.
+   - They are local files on this Mac, gitignored. Each is 4 s before, a
+     gap, then 4 s after, rendered by `EngineSound.render` on the
+     exterior mic.
+   - Before is `main`'s physics ahead of #78 (rendered just before #77
+     merged; #77 was docs only, so `512683a` is the same physics). After is
+     #78.
+   - The clips: crdi15 idle warm and cold, hd_i6 idle and 1250 rpm at half
+     load, single at 2000 rpm, truck127 idle.
+   - The one-off script that made them was not kept. If they are lost,
+     render the same points on both commits.
+   - The open question: is `hd_i6`'s idle tick, now 0.23× the loudest other
+     source, too quiet for a mechanical-lash truck? `RAMP_SPEED` is the
+     single knob.
+3. **Merge #86** (docs only), if not yet merged.
+
+**Known defects and follow-ups** (none blocking):
+- The dev preset `single` sags on the tractor's torque converter in
+  "Auto". It is recorded as KNOWN in the suite. The exact fix is to size
+  each converter from its engine's own full-load torque at stall; that
+  touches every engine and the live fixtures.
+- The V8 fires evenly every 90°. With no separate cylinder banks, a
+  cross-plane V8's per-bank "burble" is absent.
+- `truck127`'s grid has 13 unsettled cells and `v8hd`'s has 8,
+  period-averaged (FINDING-013). Look only if they show on the dials.
+- Live friction costs a whole frame every 6th frame on a low-end phone (6×
+  throttling): decide after the Android check.
+- Older follow-ups are in "Next actions" at the end of this file.
+
+**Repository:**
+- No PR is open except #86.
+- Remote branches: `main`, `docs/pages-live` (#86), and
+  `fix/steady-state-controllers`. Keep the last one: it is the only copy of
+  the FINDING-013 option A experiment.
+- The owner merges PRs. Stacked PRs: retarget each child to `main` after
+  its parent merges, then check `main` by content (memory:
+  stack-merge-trap).
+
+**Tests, read from finished runs (2026-10-03/05):**
+
+| suite | result |
+|---|---|
+| `python3 tests/test_physics.py` | 71 passed, 0 failed, 3 known (with scipy); 66 + 4 skipped (without) |
+| `tools/fixtures/gen_fixtures.py --check` | 7 modules current |
+| `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |
+| `web/physics npm test` | 5 + 36 + 10 + 11 = 62 |
+| `web/solver npm test` | cache 20, live-grid scheduler 8, round trip 22 |
+| `web/app npm test` | 56 unit tests |
+| e2e (`web/app`) | dyno 15, grid 9, drive 7, sound 6, enjoy 19, custom 4 |
+
+CI runs all of them except the manual `web/solver npm run test:live-real`.
+Its jobs: physics on Python 3.10 and 3.12, Pyodide, fixtures, solver, web
+app, web e2e, grid e2e, and custom-engine e2e.
+
+**This Mac** (see Housekeeping):
+- Node 22.23.3 at `~/.cache/dieselsim/node-v22.23.3-darwin-arm64/bin`
+  (prepend to PATH).
+- scipy in `~/.cache/dieselsim/venv/bin/python`.
+- Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
+  (`CHROME_PATH` for e2e).
+- The CoreAudio output is stuck, so the e2e uses Chrome's fake audio sink.
+- A LAN dev server needs `npm start -- --host 0.0.0.0 --ssl` for sound
+  (secure context). The live site makes it unnecessary.
+
+**First thing next session:** read this section, check whether #86 merged
+and whether the owner has done the Android check, then ask. If the check
+went well, write REVIEW-007 and close Phase 5. If it found problems, fix
+those first.
+
+---
+
+## Session 5, parts 12–19 (2026-09-30 to 2026-10-05): the detail
+
+*(Moved here from the top of this file when it was condensed; the text is
+unchanged.)*
+
 **Phase:** 1, 2, 3 and **4 exit-ready** (REVIEW-003 to -006). The owner signed
 off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
 - FINDING-022 is fixed (option A, #64).
@@ -1111,7 +1230,7 @@ cd web/app && npm run build:pages                # never plain `build`
 cd web/app && CHROME_PATH=... npm run e2e        # dyno pull in Chrome vs native (computes its own reference)
 cd web/app && CHROME_PATH=... npm run e2e:grid   # full 8 x 6 grid in Chrome vs native, cell for cell (~9 min)
 cd web/app && CHROME_PATH=... npm run e2e:drive  # /drive: prebuilt grid, 60 Hz, 60 s script vs native Python
-cd web/physics && npm test                       # 60 checks: fixture ports, 7 live drives, the synth, 8 vehicles + their keys
+cd web/physics && npm test                       # 62 checks: fixture ports, 7 live drives, the synth, 10 vehicles + their keys
 cd web/app && CHROME_PATH=... npm run e2e:enjoy  # /enjoy: multi-touch on an emulated landscape Pixel, 19 checks
 cd web/app && CHROME_PATH=... npm run e2e:custom # a custom engine built, stopped, resumed, saved and driven (CI: own job)
 cd web/app && CHROME_PATH=... npm run e2e:sound  # /drive with sound: worklet output, firing harmonics, pitch, mics
