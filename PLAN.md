@@ -256,8 +256,11 @@ checked against their brochure and drivable, with grids built in the
 browser or natively (ADR-014, #79–#82). That partly anticipates Phase 6
 (spec editing) and Phase 7 (engine JSON).
 
-**Open: the exit criterion itself, the owner's Android check**, on the live
-site (Phase 8's hosting was done early for it).
+**Open: the exit criterion itself.** The owner did the Android check on the
+live site (reported 2026-10-05; Phase 8's hosting was done early for it) and
+found a few bugs, to be listed in a shared Google Sheet. Phase 5 exits once
+they are fixed (REVIEW-007). *(Was: "Open: the exit criterion itself, the
+owner's Android check, on the live site.")*
 
 ---
 

@@ -14,7 +14,7 @@ landscape).
 |---|---|
 | 1–3: physics truth, solver port, real-time loop | done (REVIEW-003 to -005) |
 | 4: audio | done; the owner signed it off by ear 2026-09-30 (REVIEW-006) |
-| 5: Enjoy mode | **built; the exit is the owner's Android check** (see below) |
+| 5: Enjoy mode | **built; the owner's Android check is done and found a few bugs** (see below) |
 | 6: Expert mode | not started (custom engines, ADR-014, anticipate part of it) |
 | 7: Environment and projects | not started |
 | 8: Polish and host | Pages hosting done early (#85); the rest not started |
@@ -39,11 +39,18 @@ landscape).
   derate.
 
 **Waiting on the owner:**
-1. **The Android check**, Phase 5's exit criterion: open
-   https://jenilclaudeai.github.io/diesel-simulator/enjoy on a mid-range
-   Android in Chrome, landscape, and tap Start engine. Judge smoothness,
-   sound (crackle?), the pedals and paddles; try the truck and the single.
-   Then write REVIEW-007 (the Phase 5 exit review).
+1. **The Android bug list.** The owner did the Android check (reported
+   2026-10-05) and found a few bugs. They will list them in a Google Sheet
+   that both of us can open; it isn't written yet. Phase 5 stays open until
+   they are fixed. Then write REVIEW-007, the Phase 5 exit review.
+   - Measure each entry before fixing it, as with every bug list here.
+   - Live friction's cost on a low-end phone was left to wait for this
+     check: see whether the sheet mentions stutter.
+   - *(Was: "The Android check, Phase 5's exit criterion: open
+     https://jenilclaudeai.github.io/diesel-simulator/enjoy on a mid-range
+     Android in Chrome, landscape, and tap Start engine. Judge smoothness,
+     sound (crackle?), the pedals and paddles; try the truck and the single.
+     Then write REVIEW-007 (the Phase 5 exit review).")*
 2. **Listening:** the before/after pairs in `out/listen/review003m5_*.wav`.
    - They are local files on this Mac, gitignored. Each is 4 s before, a
      gap, then 4 s after, rendered by `EngineSound.render` on the
@@ -108,10 +115,12 @@ app, web e2e, grid e2e, and custom-engine e2e.
 - A LAN dev server needs `npm start -- --host 0.0.0.0 --ssl` for sound
   (secure context). The live site makes it unnecessary.
 
-**First thing next session:** read this section, check whether #86 merged
-and whether the owner has done the Android check, then ask. If the check
-went well, write REVIEW-007 and close Phase 5. If it found problems, fix
-those first.
+**First thing next session:** read this section, check whether #86 merged,
+and ask the owner for the Android bug sheet's link. Verify each bug, fix
+them, then write REVIEW-007 and close Phase 5. *(Was: "check whether #86
+merged and whether the owner has done the Android check, then ask. If the
+check went well, write REVIEW-007 and close Phase 5. If it found problems,
+fix those first." The check is done and found problems.)*
 
 ---
 
@@ -1160,7 +1169,7 @@ a miscount, not a change.)*
 | 020 | the converter's lock-up clutch was numerically unstable, pinned at its clamp (bug #11's jolts) | **fixed (#54)** |
 | 021 | `play.py`'s real-time sound was a stale copy; slap, exhaust flow and seating moved it 0.0000% | **fixed (#59)** |
 | 022 | intake loudness and turbo boost term normalised away in `render()`, so also in the synth | **fixed with option A (#64)**. *(Was: "open: known defect, the owner's call with the listening review".)* |
-| 023 | the synth's slap input (skirt film) sits on its clamp in 240/240 cold cells, 115/240 warm | **open, option A chosen (2026-09-30)**, with the ramp-height parameter in one rebuild. *(Was:)* known defect; the owner chose to do it after 022, in its own rebuild |
+| 023 | the synth's slap input (skirt film) sits on its clamp in 240/240 cold cells, 115/240 warm | **fixed with option A (#78)**, with the ramp-height parameter in the same rebuild. *(Was, stale after #78 merged until 2026-10-05:)* open, option A chosen (2026-09-30). *(Before that:)* known defect; the owner chose to do it after 022, in its own rebuild |
 
 ### Still open inside those
 
@@ -1276,9 +1285,10 @@ Session 4's branch table is in git history.
    order**~~ done 2026-09-30. ~~**Now: merge #77 → #78 → #79 → #80 in order**~~
    done 2026-10-02. ~~**Now: merge #81 → #82 → #83 → #84 in order**~~ done
    2026-10-04. ~~**Now: merge #85**~~ merged; the app is live.
-   **Now: the owner's Android check** at
+   ~~**Now: the owner's Android check** at
    https://jenilclaudeai.github.io/diesel-simulator/enjoy, the last Phase 5
-   exit criterion.
+   exit criterion.~~ Done (reported 2026-10-05); it found a few bugs. **Now:
+   the owner's bug sheet**, then the fixes.
 2. **Owner: listen.** On `/drive`: Sound on, keys 1–5 for the mics, "Record
    10 s (WAV)". Or `python3 play.py`. Listen for:
    - `hd_i6`'s tick dominance (13×);
