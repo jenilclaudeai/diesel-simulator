@@ -64,7 +64,25 @@ landscape).
      Android in Chrome, landscape, and tap Start engine. Judge smoothness,
      sound (crackle?), the pedals and paddles; try the truck and the single.
      Then write REVIEW-007 (the Phase 5 exit review).")*
-2. **Listening:** the before/after pairs in `out/listen/review003m5_*.wav`.
+2. **The grid-build plan (opened 2026-10-05, in progress on
+   `docs/grid-build-plan`, stacked on #86).** The owner measured a grid
+   build taking 5+ min on a Samsung phone, and a drivable-grid ETA of 2–3+
+   h on an M2 MacBook. Too slow for users; a new plan is wanted. Measured
+   so far:
+   - **The ETA formula misleads early.** It counts all 104 pieces as
+     equal, and the first to finish are the 8 row calibrations (~4× a
+     cell). Replayed with ADR-014's piece costs on 6 workers, it shows
+     ~5 h at the first piece and 1–2.5 h for the first ~4 min, of a build
+     that takes ~18 min. Not yet confirmed which browser the owner used,
+     or how long the build really ran.
+   - **Nearly all the time is the pure-Python crank-step loop**
+     (`cycle.py:run` → `thermo.py` helpers, tens of millions of calls).
+   - **Converged solves always run 200 real-time cycles**
+     (`CONVERGED_CYCLES`), and only check settling at the end. First data:
+     `hatch15` cells settle by cycle 32–37, within 0.006% of their
+     200-cycle values. The full experiment and the proposal follow
+     (`reviews/PROPOSAL-grid-build.md`).
+3. **Listening:** the before/after pairs in `out/listen/review003m5_*.wav`.
    - They are local files on this Mac, gitignored. Each is 4 s before, a
      gap, then 4 s after, rendered by `EngineSound.render` on the
      exterior mic.
@@ -78,7 +96,7 @@ landscape).
    - The open question: is `hd_i6`'s idle tick, now 0.23× the loudest other
      source, too quiet for a mechanical-lash truck? `RAMP_SPEED` is the
      single knob.
-3. **Merge #86** (docs only), if not yet merged.
+4. **Merge #86** (docs only; CI 9/9 green on `1fcf32e`), then retarget `docs/grid-build-plan`'s PR to `main`.
 
 **Known defects and follow-ups** (none blocking):
 - The dev preset `single` sags on the tractor's torque converter in
