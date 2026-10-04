@@ -40,9 +40,22 @@ landscape).
 
 **Waiting on the owner:**
 1. **The Android bug list.** The owner did the Android check (reported
-   2026-10-05) and found a few bugs. They will list them in a Google Sheet
-   that both of us can open; it isn't written yet. Phase 5 stays open until
-   they are fixed. Then write REVIEW-007, the Phase 5 exit review.
+   2026-10-05) and found a few bugs. Phase 5 stays open until they are
+   fixed. Then write REVIEW-007, the Phase 5 exit review.
+   - **The bug sheet:** "diesel-simulator: Android bugs (Phase 5)",
+     https://docs.google.com/spreadsheets/d/1giP18zulUFOkOyXFj7sj0JRSGR8SydxNb2owMN0COV8/edit
+     It was created 2026-10-05 through the Google Drive connector, in the
+     connector's Drive. The owner first made a sheet, `1gta1hA0…`, that the
+     connector couldn't see; it was empty and this one replaces it.
+   - **Bugs tab:** the owner's. One row per bug, IDs `B-01`…`B-40`.
+     Read it with the connector's `read_file_content` (file ID above).
+   - **Tracker tab:** ours. The connector can't edit cells, so the tab
+     `IMPORTDATA`s **`reviews/ANDROID-BUGS.csv` from `main`**. Update the
+     CSV, not the sheet. Columns: ID, Verdict (Confirmed / Partly / Not
+     reproduced / Needs info), Measured, Cause, Fix (PR), Status (New /
+     Measuring / Fixing / In PR / Fixed on live site / Won't fix + reason),
+     Updated. It shows only what has merged, which is what the live site
+     runs. The Bugs tab's green Status column looks each ID up in it.
    - Measure each entry before fixing it, as with every bug list here.
    - Live friction's cost on a low-end phone was left to wait for this
      check: see whether the sheet mentions stutter.
