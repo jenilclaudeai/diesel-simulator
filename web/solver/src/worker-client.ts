@@ -4,7 +4,7 @@
  * In the browser the Endpoint wraps a Worker; in tests it wraps a Node
  * worker_threads Worker. Either way this is what the UI holds.
  */
-import type { Endpoint, Reply, Request } from "./protocol.js";
+import type { Endpoint, LiveFn, Reply, Request } from "./protocol.js";
 import {
   SolverError,
   type EngineInfo, type EngineRef, type Grid, type GridOptions, type GridRequest, type PointRequest,
@@ -41,6 +41,12 @@ export class WorkerSolver implements SolverPort {
     return this.call<EngineInfo>({ type: "describeEngine", engine });
   }
 
+  /** One drivable-grid piece (ADR-014 step 3): a bridge function, JSON in and out. */
+  async liveCall(fn: LiveFn, arg: string): Promise<string> {
+    await this.ready();
+    return this.call<string>({ type: "liveCall", fn, arg });
+  }
+
   async buildGrid(req: GridRequest, opts: GridOptions = {}): Promise<Grid> {
     if (opts.signal?.aborted) throw new SolverError("cancelled", "aborted before start");
     await this.ready();
@@ -65,6 +71,7 @@ export class WorkerSolver implements SolverPort {
   private call<T>(body: Omit<Extract<Request, { type: "init" }>, "id"> |
                         Omit<Extract<Request, { type: "solvePoint" }>, "id"> |
                         Omit<Extract<Request, { type: "describeEngine" }>, "id"> |
+                        Omit<Extract<Request, { type: "liveCall" }>, "id"> |
                         Omit<Extract<Request, { type: "buildGrid" }>, "id">,
                   onProgress?: GridOptions["onProgress"]): Promise<T> {
     if (this.disposed) return Promise.reject(new SolverError("cancelled", "solver disposed"));

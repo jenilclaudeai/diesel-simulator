@@ -161,25 +161,8 @@ FRICTION_KEYS = ("fmep", "P_friction", "P_mech", "P_rings", "P_skirt", "P_mains"
                  "gallery_pressure", "v_seating")
 
 
-def friction_engine_view(eng):
-    """Everything FrictionModel.evaluate reads, as plain data: the spec (with
-    its derived geometry and the wall temperatures the engine's coolant has
-    set), the oil condition, the wear state and both cams. The TypeScript
-    port takes exactly this."""
-    import dataclasses
-    spec = eng.spec
-    d = json.loads(json.dumps(dataclasses.asdict(spec), default=float))
-    g = spec.geom
-    d["geom"].update(crank_radius=g.crank_radius, piston_area=g.piston_area, displacement=g.displacement,
-                     clearance_volume=g.clearance_volume,
-                     phase_deg=[g.phase_deg(i) for i in range(g.n_cyl)])
-    cams = {}
-    for name, cam in (("intake", eng.cycle.cam_int), ("exhaust", eng.cycle.cam_exh)):
-        cams[name] = dict(open_deg=cam.open_deg, close_deg=cam.close_deg, lift_max=cam.lift_max,
-                          lash=cam.lash, ramp=cam.ramp, ramp_height=cam.ramp_height)
-    return {"spec": d, "cams": cams,
-            "oil": {k: float(v) for k, v in dataclasses.asdict(eng.oil.cond).items()},
-            "wear": {k: float(v) for k, v in dataclasses.asdict(eng.wear.state).items()}}
+# moved to the package (ADR-014 step 3: the browser builds grids too)
+from dieselsim.bridge import friction_engine_view  # noqa: E402
 
 
 FRICTION_CASES = (("crdi15", 1800.0, 0.6, 373.0, None), ("crdi15", 1800.0, 0.6, 273.0, None),

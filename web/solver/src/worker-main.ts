@@ -7,7 +7,7 @@
  * Node's worker_threads.
  */
 import type { PyodideInterface } from "pyodide";
-import type { Endpoint, Reply, Request, WireError } from "./protocol.js";
+import { LIVE_FNS, type Endpoint, type Reply, type Request, type WireError } from "./protocol.js";
 import type {
   EngineInfo, Grid, GridCell, GridRequest, PointRequest, PointResult, RuntimeInfo,
 } from "./solver-port.js";
@@ -59,6 +59,11 @@ export function serveSolver(ep: Endpoint, rt: WorkerRuntime): void {
         const { py } = await boot();
         reply({ type: "result", id: msg.id,
                 value: JSON.parse(callBridge(py, "describe_engine", JSON.stringify({ engine: msg.engine }))) as EngineInfo });
+      } else if (msg.type === "liveCall") {
+        // only the drivable-grid functions: the wire must not reach the rest of the bridge
+        if (!(LIVE_FNS as readonly string[]).includes(msg.fn)) throw wire("protocol", `'${msg.fn}' is not a live-grid function`);
+        const { py } = await boot();
+        reply({ type: "result", id: msg.id, value: callBridge(py, msg.fn, msg.arg) });
       } else if (msg.type === "buildGrid") {
         const { py } = await boot();
         const grid = await buildGrid(py, msg.id, msg.req, cancelled, reply);
