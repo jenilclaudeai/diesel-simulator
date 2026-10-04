@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-10-04 (session 5, part 19: GitHub Pages; #81–#84 merged, #85 open)
+**Updated:** 2026-10-05 (session 5, part 19: the app is live on GitHub Pages; #85 merged)
 **Phase:** 1, 2, 3 and **4 exit-ready** (REVIEW-003 to -006). The owner signed
 off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
 - FINDING-022 is fixed (option A, #64).
@@ -181,9 +181,22 @@ Android check works from anywhere over real HTTPS.**
 - **Pages was switched on** (source: GitHub Actions, HTTPS enforced) through
   the API on 2026-10-04. The `github-pages` environment deploys only from
   `main`, so the first deployment happens when #85 merges.
-- **Not yet seen live:** the site, until that first deployment. Then check:
+- ~~**Not yet seen live:** the site, until that first deployment. Then check:
   the four pages load, Python boots on the Dyno page, `/enjoy` drives with
-  sound, and a refresh on a deep link works.
+  sound, and a refresh on a deep link works.~~
+- **Live since 2026-10-04** (#85 merged; the Pages run succeeded).
+  Checked in headless Chrome against the published site on 2026-10-05:
+  - The Dyno page boots Python 3.14.2 with numpy in 4.8 s, and a dyno point
+    solves.
+  - A deep link straight to `/enjoy` drives the hatchback (778 rpm) and the
+    15 L V8 (577 rpm) with sound (−33 dBFS), in a secure context.
+  - A deep link to `/drive` loads.
+  - Assets: `.wasm` as `application/wasm`, modules as `text/javascript`,
+    the grids whole.
+  - No page errors, console errors or failed requests.
+  - Deep links come back from Pages with HTTP 404 and the app's page (the
+    `404.html` fallback). Browsers render it and the router takes over;
+    only crawlers and link previews see the 404.
 
 **Part 18: roster B (#84, stacked on #83). With it, ADR-012's roster is
 complete: 1, 4, 6 and 8 cylinders, and one engine with no turbo.**
@@ -412,7 +425,8 @@ tested top, 0 lines differ.)* ~~**Open now:** #77 (`docs/decisions-023-ramp` →
 (`feat/custom-engine-form`).~~ *(All merged 2026-10-02.)* ~~**Open now:** #81
 (`feat/browser-grid-build` → `main`) → #82 (`feat/drivable-grid-ui`) → #83
 (`feat/derate-lamp-ci`) → #84 (`feat/roster-b`).~~ *(All merged 2026-10-04.)*
-**Open now:** #85 (`feat/pages-deploy` → `main`).
+~~**Open now:** #85 (`feat/pages-deploy` → `main`).~~ *(Merged 2026-10-04.)*
+**No PR is open.**
 Remote branches besides those: `main`, and `fix/steady-state-controllers`
 (kept; the only copy of the FINDING-013 option A experiment).
 
@@ -1142,8 +1156,10 @@ Session 4's branch table is in git history.
    child to `main`.~~ Done (#50, #65, #71). ~~**Now: merge #72 → #76 in
    order**~~ done 2026-09-30. ~~**Now: merge #77 → #78 → #79 → #80 in order**~~
    done 2026-10-02. ~~**Now: merge #81 → #82 → #83 → #84 in order**~~ done
-   2026-10-04. **Now: merge #85**; it publishes the app to Pages. Then the
-   Android check can use https://jenilclaudeai.github.io/diesel-simulator/enjoy.
+   2026-10-04. ~~**Now: merge #85**~~ merged; the app is live.
+   **Now: the owner's Android check** at
+   https://jenilclaudeai.github.io/diesel-simulator/enjoy, the last Phase 5
+   exit criterion.
 2. **Owner: listen.** On `/drive`: Sound on, keys 1–5 for the mics, "Record
    10 s (WAV)". Or `python3 play.py`. Listen for:
    - `hd_i6`'s tick dominance (13×);
