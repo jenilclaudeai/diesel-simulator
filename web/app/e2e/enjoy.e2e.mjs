@@ -192,6 +192,7 @@ check("a stalled manual lights the Stalled lamp, and no lamp lights falsely",
 // the dial scale follows the vehicle
 const hatchTop = d.speedTop;
 await page.select('select[aria-label="Engine"]', "truck127");      // the roster's truck (ADR-012)
+await tapEl(".seg button:nth-child(1)");                 // Auto again: the stall test left it in Manual
 await page.waitForSelector("button.start");
 await tapEl("button.start");
 await page.waitForFunction(() => globalThis.__enjoy.view(), { timeout: 60_000 });
@@ -202,6 +203,19 @@ check("the truck's dials: a slower speedometer than the hatchback's, both scales
   && truck.speedTop === truck.speedMax && truck.tachTop === truck.tachMax,
   `speedometer to ${truck.speedTop} km/h (truck) vs ${hatchTop} (hatchback); tach labelled to ${truck.tachTop} of ${truck.tachMax} rpm`);
 await page.screenshot({ path: path.join(here, "out", "enjoy-truck.png") });
+
+// the truck flat out from a standstill: the charge air heats and the model
+// cuts fuel (the 5% rule once lit Derate here, at 66 C); the lamp means
+// protection, so it must stay dark below the charge-air threshold
+await touch("touchStart", [await at(".throttle .pedal", 0.95)]);
+// held until the model really cuts fuel for the warm charge air (not a guessed duration)
+await page.waitForFunction(() => globalThis.__enjoy.view()?.derate < 0.95, { timeout: 30_000, polling: 100 }).catch(() => {});
+const hot = await page.evaluate(() => ({ v: globalThis.__enjoy.view(),
+  lit: [...document.querySelectorAll(".lamp.on")].map(l => l.textContent.trim()) }));
+await touch("touchEnd", []);
+check("the truck flat out: the fuel cut from a warm charge cooler does not light Derate",
+  hot.v.derate < 0.95 && hot.v.T_charge < 353.15 && !hot.lit.includes("Derate"),
+  `charge ${(hot.v.T_charge - 273.15).toFixed(0)} C, derate ${hot.v.derate.toFixed(3)}, lit: ${hot.lit.join(", ") || "none"}`);
 
 // ---- a custom engine's grid file (ADR-014) ----
 // the hatchback's grid, relabelled as a custom engine that drives the SUV: if

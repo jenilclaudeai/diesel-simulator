@@ -64,7 +64,7 @@ export class EnjoyPage implements OnDestroy {
       { key: 'stall', text: 'Stalled', on: s.stalled, warn: true },
       { key: 'stopped', text: 'Engine off', on: s.engine_stopped, warn: true },
       { key: 'hot', text: 'Overheat', on: !!s.overheat || s.T_coolant >= i.T_warn, warn: true },
-      { key: 'derate', text: 'Derate', on: derateLit(s.derate, s.derate_heat), warn: true },
+      { key: 'derate', text: 'Derate', on: derateLit(s.T_charge, s.derate_heat), warn: true },
       { key: 'fuel', text: s.out_of_fuel ? 'Out of fuel' : 'Low fuel', on: lowFuel, warn: true },
       { key: 'fan', text: 'Fan', on: s.fan_on, warn: false },
       { key: 'cruise', text: 'Cruise', on: s.cruise, warn: false },
