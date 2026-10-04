@@ -175,7 +175,7 @@ class Vehicle:
         self.launch_rpm = 2000.0
         self.fuel_tank_L = 60.0
         self.clutch_cap_max = 0.0     # 0 -> derived from engine torque
-        if preset in ("hd_i6", "truck127"):       # tractor unit, laden (truck127: Enjoy roster, ADR-012)
+        if preset in ("hd_i6", "truck127", "v8hd"):   # tractor unit, laden (truck127, v8hd: Enjoy roster, ADR-012)
             self.name = "40 t tractor-trailer"
             self.fuel_tank_L = 400.0
             self.stall_rpm = 1900.0
@@ -435,7 +435,13 @@ class TorqueConverter:
         # settles at against a braked output at full throttle -- not by the
         # engine's rated speed.  Sizing off rated speed gave the 1.5 L a
         # stall around 3800 rpm: the engine just flared and the car crawled.
-        T_ref = 1.05 * max(0.1, spec.geom.displacement * 1.9e6 / (4 * math.pi))
+        # T_ref is the engine's torque from a typical full-load BMEP: 19 bar
+        # for a turbodiesel, 8 bar for a naturally aspirated one. With 19 bar
+        # for every engine, roster B's 1.0 L NA single got a converter sized
+        # for 159 N.m against its 58 (17.6 N.m of drag at idle on top of cold
+        # friction) and was dragged down to the loop's floor in "Auto".
+        bmep = 1.9e6 if getattr(spec.turbo, "enabled", True) else 0.8e6
+        T_ref = 1.05 * max(0.1, spec.geom.displacement * bmep / (4 * math.pi))
         n_stall = getattr(veh, "stall_rpm", 0.0) or 0.52 * spec.rated_rpm
         w_stall = 2.0 * math.pi * n_stall / 60.0
         self.k_cap = T_ref / w_stall ** 2 * veh.tc_diameter_gain
