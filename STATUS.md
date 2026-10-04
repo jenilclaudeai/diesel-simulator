@@ -65,7 +65,7 @@ landscape).
      sound (crackle?), the pedals and paddles; try the truck and the single.
      Then write REVIEW-007 (the Phase 5 exit review).")*
 2. **The grid-build plan: decide on `reviews/PROPOSAL-grid-build.md`**
-   (2026-10-05, PR on `docs/grid-build-plan`, stacked on #86). The owner
+   (2026-10-05, **#87** on `docs/grid-build-plan`, stacked on #86). The owner
    measured 5+ min for a grid on a Samsung phone, and a 2–3+ h ETA for a
    drivable grid on an M2 MacBook. Measured since:
    - **The ETA formula misleads early, by up to 20×.** It counts all 104
@@ -116,7 +116,7 @@ landscape).
 - Older follow-ups are in "Next actions" at the end of this file.
 
 **Repository:**
-- No PR is open except #86.
+- Open PRs: #86 (docs; CI green), and #87 stacked on it (the grid-build proposal; retarget it to `main` once #86 merges).
 - Remote branches: `main`, `docs/pages-live` (#86), and
   `fix/steady-state-controllers`. Keep the last one: it is the only copy of
   the FINDING-013 option A experiment.
