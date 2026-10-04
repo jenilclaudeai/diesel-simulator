@@ -9,6 +9,10 @@ The scope is deliberately broad, in the spirit of *Automation*: geometry,
 valve timing, injection strategy, turbo matching, oil grade, surface finish
 and clearances are all inputs, and everything downstream reacts to them.
 
+**Try it in your browser:** https://jenilclaudeai.github.io/diesel-simulator/
+(on a phone, open `/enjoy` and turn it sideways). It is published from `main`
+by `.github/workflows/pages.yml`.
+
 ---
 
 ## Getting started
