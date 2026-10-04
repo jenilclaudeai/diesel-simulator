@@ -1,0 +1,60 @@
+# Publish the app to GitHub Pages from main (Phase 8; owner's choice
+# 2026-10-04, so the Android check works from anywhere over real HTTPS).
+#
+#   https://jenilclaudeai.github.io/diesel-simulator/
+#
+# ADR-003 is what makes this possible: no SharedArrayBuffer, so no
+# COOP/COEP headers, which Pages cannot set. The build is the same
+# `npm run build:pages` CI checks on every PR; 404.html is index.html, so
+# deep links and refreshes reach the app's router.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# one deployment at a time; a newer push replaces a queued one
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web/app
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            web/app/package-lock.json
+            web/solver/package-lock.json
+      - run: npm ci
+        working-directory: web/solver
+      - run: npm ci
+      - run: npm run build:pages
+      - name: the deep-link fallback is in place
+        run: cmp dist/app/browser/index.html dist/app/browser/404.html
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: web/app/dist/app/browser
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

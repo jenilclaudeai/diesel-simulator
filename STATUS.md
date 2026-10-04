@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-10-03 (session 5, part 18: roster B -- the 15 L V8 and the old single; #81 → #82 → #83 → #84)
+**Updated:** 2026-10-04 (session 5, part 19: GitHub Pages; #81–#84 merged, #85 open)
 **Phase:** 1, 2, 3 and **4 exit-ready** (REVIEW-003 to -006). The owner signed
 off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
 - FINDING-022 is fixed (option A, #64).
@@ -163,6 +163,27 @@ tested top (`be26576`), 0 lines differ.
   the test 460 s. My estimate was twice that.)*
 - ~~**Next: roster B**, the 15 L V8 truck and an old naturally aspirated
   single (ADR-012).~~ Done, below.
+
+**#81–#84 merged 2026-10-04**, each retargeted to `main`. `main` equals the
+tested top (`5147579`), 0 lines differ.
+
+**Part 19: published on GitHub Pages (#85). The owner's choice, so the
+Android check works from anywhere over real HTTPS.**
+- **`.github/workflows/pages.yml`** publishes `main` to
+  **https://jenilclaudeai.github.io/diesel-simulator/** on every merge.
+  - It runs the same `npm run build:pages` CI checks: 67 MB, no file over
+    50 MB.
+  - ADR-003 is what makes Pages possible: no `SharedArrayBuffer`, so no
+    COOP/COEP headers.
+- **Deep links:** Pages has no single-page-app fallback, so a refresh on
+  `/diesel-simulator/enjoy` would 404. `postbuild:pages` copies
+  `index.html` to `404.html`, and the workflow checks the copy.
+- **Pages was switched on** (source: GitHub Actions, HTTPS enforced) through
+  the API on 2026-10-04. The `github-pages` environment deploys only from
+  `main`, so the first deployment happens when #85 merges.
+- **Not yet seen live:** the site, until that first deployment. Then check:
+  the four pages load, Python boots on the Dyno page, `/enjoy` drives with
+  sound, and a refresh on a deep link works.
 
 **Part 18: roster B (#84, stacked on #83). With it, ADR-012's roster is
 complete: 1, 4, 6 and 8 cylinders, and one engine with no turbo.**
@@ -388,10 +409,10 @@ tested top of each stack, 0 lines differ):
 *(All merged 2026-09-30, each retargeted to `main`; `main` equals the
 tested top, 0 lines differ.)* ~~**Open now:** #77 (`docs/decisions-023-ramp` →
 `main`) → #78 (`feat/slap-and-ramp`) → #79 (`feat/custom-engines`) → #80
-(`feat/custom-engine-form`).~~ *(All merged 2026-10-02.)* **Open now:** #81
+(`feat/custom-engine-form`).~~ *(All merged 2026-10-02.)* ~~**Open now:** #81
 (`feat/browser-grid-build` → `main`) → #82 (`feat/drivable-grid-ui`) → #83
-(`feat/derate-lamp-ci`) → #84 (`feat/roster-b`). Merge in order, retargeting
-each child to `main`.
+(`feat/derate-lamp-ci`) → #84 (`feat/roster-b`).~~ *(All merged 2026-10-04.)*
+**Open now:** #85 (`feat/pages-deploy` → `main`).
 Remote branches besides those: `main`, and `fix/steady-state-controllers`
 (kept; the only copy of the FINDING-013 option A experiment).
 
@@ -1120,8 +1141,9 @@ Session 4's branch table is in git history.
 1. ~~**Owner:** merge #50, then #51 → #58, then #59 → #64, retargeting each
    child to `main`.~~ Done (#50, #65, #71). ~~**Now: merge #72 → #76 in
    order**~~ done 2026-09-30. ~~**Now: merge #77 → #78 → #79 → #80 in order**~~
-   done 2026-10-02. **Now: merge #81 → #82 → #83 → #84 in order**, retargeting
-   each child to `main` after its parent merges.
+   done 2026-10-02. ~~**Now: merge #81 → #82 → #83 → #84 in order**~~ done
+   2026-10-04. **Now: merge #85**; it publishes the app to Pages. Then the
+   Android check can use https://jenilclaudeai.github.io/diesel-simulator/enjoy.
 2. **Owner: listen.** On `/drive`: Sound on, keys 1–5 for the mics, "Record
    10 s (WAV)". Or `python3 play.py`. Listen for:
    - `hd_i6`'s tick dominance (13×);
