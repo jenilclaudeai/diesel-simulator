@@ -15,6 +15,9 @@
       <select [disabled]="status() === 'loading'" (change)="selectPreset($any($event.target).value)">
         @for (p of presets; track p.key) { <option [value]="p.key" [selected]="p.key === preset()">{{ p.name }}</option> }
         @if (imported(); as g) { <option [value]="IMPORTED" [selected]="preset() === IMPORTED">{{ g.name }} (imported)</option> }
+        @if (mine().length) { <optgroup label="Your engines">
+          @for (m of mine(); track m.key) { <option [value]="MY + m.key" [selected]="preset() === MY + m.key">{{ m.name }}</option> }
+        </optgroup> }
       </select>
     </label>
     <label class="field import"><span>Custom engine</span>

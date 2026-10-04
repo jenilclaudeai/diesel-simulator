@@ -239,6 +239,13 @@ type the numbers in, or import and export the same JSON. A dyno pull then
 shows what the engine achieves against what you asked for, solved in your
 browser.
 
+**To drive it in the app**, press "Build drivable grid" on the Dyno page.
+- Your browser builds the converged grid with several workers. Allow
+  about half an hour on a 4-core laptop. It keeps what it finishes, so you
+  can stop or close the tab and carry on later.
+- The engine is then saved under "Your engines" on `/drive` and `/enjoy`.
+- "Download grid file" gives you the file, for a phone or a friend.
+
 **In Python**, check what the engine actually makes. The builder sizes the
 hardware, but the solver decides what it delivers:
 
