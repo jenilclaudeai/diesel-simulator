@@ -9,6 +9,8 @@ out/
 *.png
 *.wav
 *.csv
+# ...except the Android bug tracker, which the bug sheet imports (STATUS.md)
+!reviews/ANDROID-BUGS.csv
 
 # environments
 .venv/
