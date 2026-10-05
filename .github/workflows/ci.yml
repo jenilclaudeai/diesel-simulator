@@ -140,6 +140,8 @@ jobs:
         working-directory: web/solver
       - run: npm ci
       - run: npm test -- --watch=false
+      - name: fuel figures labelled steady-state (FINDING-009)
+        run: npm run check:labels
       - run: npm run build:pages
       - name: prepare-assets on a network without the Pyodide CDN
         run: npm run check:assets

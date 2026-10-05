@@ -2,7 +2,8 @@
 // custom engine's drivable grid is built by the page's worker pool (a 2 x 2
 // grid through the e2e-only ?gridsize hook, so it takes minutes, not half an
 // hour), stopped part-way and resumed from what it kept, saved to "Your
-// engines", then driven on /enjoy in the vehicle the engine names.
+// engines", then driven on /enjoy in the vehicle the engine names. Then an
+// engine edited in the spec editor (Phase 6) is built, saved and driven too.
 //
 //   npm run build:pages && CHROME_PATH=... npm run e2e:custom     (~6-10 min)
 import http from "node:http";
@@ -93,6 +94,52 @@ check("Drive it opens /enjoy with the saved engine, which drives in its own vehi
   /2\.0 L four/.test(chosen) && /1\.5 t compact/.test(info.vehicle ?? "") && info.rpm > 500,
   `chose "${chosen}", vehicle "${info.vehicle}", idling at ${info.rpm} rpm`);
 await page.screenshot({ path: path.join(out, "custom-enjoy.png") });
+
+// Phase 6 (proposal item 5): an engine edited in the spec editor is built, saved and driven the same way
+await page.setViewport({ width: 1100, height: 900 });
+await page.goto(`http://localhost:${port}${BASE}spec?e2e&gridsize=2x2`, { waitUntil: "load" });
+await page.waitForSelector('tr[data-path="idle_rpm"] input', { timeout: 120_000 }).catch(() => {});
+const setValue = (p, v) => page.$eval(`tr[data-path="${p}"] input`, (el, val) => {
+  el.value = String(val);
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+}, v).catch(() => {});
+await setValue("idle_rpm", 950);
+await setValue("geom.compression_ratio", 18);
+await page.waitForSelector("button.build-drivable:not([disabled])", { timeout: 10_000 }).catch(() => {});
+await page.click("button.build-drivable").catch(() => {});
+await page.waitForSelector(".built, .build-err", { timeout: 20 * 60_000 }).catch(() => {});
+const editedBuilt = await page.$eval(".built", e => e.textContent.replace(/\s+/g, " ").trim()).catch(() => "");
+const saved = await page.evaluate(() => new Promise(ok => {
+  const open = indexedDB.open("dieselsim-my-engines", 1);
+  open.onerror = () => ok(null);
+  open.onsuccess = () => {
+    const all = open.result.transaction("grids").objectStore("grids").getAll();
+    all.onsuccess = () => {
+      const g = all.result.map(t => JSON.parse(t)).find(g => g.base === "crdi15");
+      ok(g ? { key: g.preset, vehicle: g.vehicle, cr: g.spec.geom.compression_ratio, idle: g.spec.idle_rpm,
+        rpm0: g.rpms[0], overrides: g.overrides } : null);
+    };
+    all.onerror = () => ok(null);
+  };
+}));
+check("an edited engine's drivable grid is built from the spec editor, with the edits in it",
+  /Saved to your engines: CRDi-I4 1\.5L 115ps, edited \(2 fields\), in the 1\.5 t compact/.test(editedBuilt)
+  && saved?.cr === 18 && saved?.idle === 950 && saved?.rpm0 === 950 && saved?.vehicle === "crdi15"
+  && /^crdi15-edited-[0-9a-f]{8}$/.test(saved?.key ?? ""),
+  `"${editedBuilt.slice(0, 90)}"; grid ${JSON.stringify(saved)}`);
+await page.click(".built a[href*='/enjoy']").catch(() => {});
+await page.waitForFunction(() => location.pathname.endsWith("/enjoy"), { timeout: 10_000 }).catch(() => {});
+await page.goto(page.url() + "&e2e", { waitUntil: "load" });
+await page.setViewport({ width: 915, height: 412, isMobile: true, hasTouch: true, isLandscape: true });
+await page.waitForSelector("button.start", { timeout: 10_000 }).catch(() => {});
+const chosenEdited = await page.$eval("select", s => s.selectedOptions[0]?.textContent.trim() ?? "").catch(() => "");
+await page.click("button.start").catch(() => {});
+await page.waitForFunction(() => globalThis.__enjoy?.view()?.rpm > 0, { timeout: 60_000 }).catch(() => {});
+await new Promise(r => setTimeout(r, 4000));                                // let the idle settle
+const idle = await page.evaluate(() => Math.round(globalThis.__enjoy?.view()?.rpm ?? 0));
+check("the edited engine drives, idling at its edited 950 rpm (crdi15's own is 800)",
+  /edited/.test(chosenEdited) && Math.abs(idle - 950) < 60, `chose "${chosenEdited}", idling at ${idle} rpm`);
+await page.screenshot({ path: path.join(out, "edited-enjoy.png") });
 
 check("no page errors or console errors", problems.length === 0, problems.slice(0, 3).join(" | "));
 await browser.close();

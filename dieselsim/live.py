@@ -88,11 +88,17 @@ class Adr011Grid(PerfGrid):
     def from_json(cls, gj, spec=None):
         """A grid as tools/build_live_grids.py writes it (arrays as float32
         base64); `spec` defaults to the engine it records (a custom engine's
-        JSON, ADR-014) or else its preset's."""
+        JSON, ADR-014; or an edited engine's base preset and overrides, from
+        the spec editor, Phase 6) or else its preset's."""
         import base64
         if spec is None and gj.get("engine_json"):
             from .builder import from_dict
             spec = from_dict(gj["engine_json"])
+        if spec is None and gj.get("base"):
+            from .config import PRESETS
+            from .overrides import apply_overrides
+            spec = copy.deepcopy(PRESETS[gj["base"]]())
+            apply_overrides(spec, gj.get("overrides"))
         if spec is None:
             from .engine import DieselEngine
             spec = DieselEngine(preset=gj["preset"]).spec

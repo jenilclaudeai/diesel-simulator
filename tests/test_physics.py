@@ -1613,6 +1613,13 @@ def test_custom_engine_json():
             gj = json.load(fh)
         gj.update(preset="crdi15", engine_json=dict(d, vehicle="crdi15"))   # a preset name that is NOT its engine
         parts["grid built from its engine JSON"] = Adr011Grid.from_json(gj).spec.name == "2.0 L four"
+        # Phase 6: an edited engine's grid (the spec editor's "Drive it") records its base preset and edits
+        del gj["engine_json"]
+        gj.update(preset="crdi15-edited", base="crdi15", overrides={"geom.compression_ratio": 18.0, "idle_rpm": 900.0})
+        es = Adr011Grid.from_json(gj).spec
+        parts["an edited engine's grid rebuilt from its base and edits"] = (
+            es.geom.compression_ratio == 18.0 and es.idle_rpm == 900.0 and es.name == Adr011Grid.from_json(
+                dict(gj, preset="crdi15", base=None)).spec.name)
     bad = [k for k, ok in parts.items() if not ok]
     check("custom engine JSON: vehicle kept apart, grids rebuilt from their own JSON (ADR-014)",
           float(len(bad)), 0.0, 0.0, (f"failed: {', '.join(bad)}" if bad else f"{len(parts)} of {len(parts)} parts")
