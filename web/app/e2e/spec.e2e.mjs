@@ -123,10 +123,44 @@ check("the cycle page solves the edited engine: native Python's peak pressure fo
   /1 field changed/.test(note) && peakBar.toFixed(1) === ref.p_max_bar.toFixed(1),
   `"${note}"; page ${peak}; native ${ref.p_max_bar.toFixed(1)} bar (compression ratio 17)`);
 
-await page.goto(`http://localhost:${port}${BASE}spec?e2e`, { waitUntil: "load" });
-await page.waitForSelector("button.reset-all", { timeout: 60_000 });
+// the invalidation banner (PLAN.md Phase 6): edit again, come back, and the old
+// result is flagged out of date until it is solved again. In-app navigation
+// only: a reload would drop the kept results.
+let ref18;
+try {
+  ref18 = JSON.parse(process.env.NATIVE_SPEC_CYCLE18 ?? execFileSync("python3", [path.join(here, "native_cycle.py")],
+    { cwd: path.resolve(here, "..", "..", ".."), encoding: "utf8", env: { ...process.env, OVERRIDES: JSON.stringify({ "geom.compression_ratio": 18 }) } }));
+} catch (e) { ref18 = { p_max_bar: NaN }; }
+const navTo = async label => {
+  await page.evaluate(l => [...document.querySelectorAll("nav a")].find(a => a.textContent.trim() === l)?.click(), label);
+};
+await navTo("Spec");
+await page.waitForSelector('tr[data-path="geom.compression_ratio"] input', { timeout: 60_000 });
+await setValue("geom.compression_ratio", 18);
+await page.click("a.solve");
+await page.waitForSelector(".cycle-data", { timeout: 60_000 });
+const staleShown = await page.$eval("app-spec-status .stale", e => e.textContent.replace(/\s+/g, " ").trim()).catch(() => "");
+const oldPeak = await page.evaluate(() => [...document.querySelectorAll(".cycle-data tr")]
+  .find(tr => tr.querySelector("th")?.textContent.trim() === "Peak pressure")?.querySelector("td")?.textContent.trim() ?? "");
+await page.click("app-spec-status button.rerun");
+await page.waitForFunction(() => !document.querySelector("app-spec-status .stale") && !document.querySelector("button.run[disabled]"),
+  { timeout: 5 * 60_000, polling: 500 }).catch(() => {});
+const staleAfter = await page.$("app-spec-status .stale");
+const peak18 = await page.evaluate(() => [...document.querySelectorAll(".cycle-data tr")]
+  .find(tr => tr.querySelector("th")?.textContent.trim() === "Peak pressure")?.querySelector("td")?.textContent.trim() ?? "");
+const peak18Bar = Number((peak18.match(/[\d.,]+/)?.[0] ?? "NaN").replace(/,/g, ""));
+check("after another edit the kept result is flagged out of date; solved again, it is native Python's for the new edit",
+  /out of date/.test(staleShown) && oldPeak === peak && !staleAfter && peak18Bar.toFixed(1) === ref18.p_max_bar.toFixed(1),
+  `banner: "${staleShown.slice(0, 60)}…" over ${oldPeak}; after: ${staleAfter ? "still stale" : "clear"}, ${peak18} (native ${ref18.p_max_bar.toFixed(1)}, compression ratio 18)`);
+
+await navTo("Spec");
+await page.waitForSelector('tr[data-path="geom.compression_ratio"] input', { timeout: 60_000 });
+const beforeReset = await page.$eval(".changed-count", e => e.textContent.trim());
 await page.click("button.reset-all").catch(() => {});
-check("Reset all clears the edits", (await page.$eval(".changed-count", e => e.textContent.trim())) === "0 fields changed");
+await page.waitForFunction(() => document.querySelector(".changed-count")?.textContent.trim() === "0 fields changed",
+  { timeout: 5000 }).catch(() => {});
+const afterReset = await page.$eval(".changed-count", e => e.textContent.trim());
+check("Reset all clears the edits", afterReset === "0 fields changed", `${beforeReset} -> ${afterReset}`);
 check("no page errors or console errors", problems.length === 0, problems.slice(0, 3).join(" | "));
 
 await browser.close();

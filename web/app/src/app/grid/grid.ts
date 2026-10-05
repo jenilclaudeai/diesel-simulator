@@ -4,6 +4,9 @@ import type { EngineInfo, EngineRef, Grid, GridProgress, PresetInfo } from '@die
 import { type CustomEngine, EXAMPLE_ENGINE, headline } from '../engine/custom-engine';
 import { EngineForm } from '../engine/engine-form';
 import { describe, SolverService } from '../solver/solver.service';
+import { SpecEdits } from '../spec/spec-edits';
+import { refKey, SpecStatus } from '../spec/spec-status';
+import { LastResults } from '../spec/last-results';
 import { gridAxes, N_LOAD, N_RPM } from './grid-axes';
 
 
@@ -13,20 +16,23 @@ const fmt2 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2, minimu
 
 @Component({
   selector: 'app-grid',
-  imports: [RouterLink, EngineForm],
+  imports: [RouterLink, EngineForm, SpecStatus],
   templateUrl: './grid.html',
   styleUrl: '../dyno/dyno.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class GridPage implements OnInit {
   protected readonly solver = inject(SolverService);
+  private readonly edits = inject(SpecEdits);
+  /** refKey() of the engine the current grid was built for (the stale banner compares it) */
+  protected readonly solvedWith = signal<string | undefined>(undefined);
   protected readonly fmt0 = fmt0;
   protected readonly fmt1 = fmt1;
   protected readonly fmt2 = fmt2;
   protected readonly N_RPM = N_RPM;
   protected readonly N_LOAD = N_LOAD;
 
-  protected readonly engine = signal('crdi15');
+  protected readonly engine = signal(inject(SpecEdits).base());
   /** ADR-014: the "Custom engine" choice, its numbers, and the builder's description of it */
   protected readonly CUSTOM = '__custom';
   protected readonly custom = signal<CustomEngine>(EXAMPLE_ENGINE);
@@ -61,8 +67,13 @@ export class GridPage implements OnInit {
     return { rpms: g.rpms, rows };
   });
 
+  private readonly kept = inject(LastResults);
+
   ngOnInit(): void {
     this.solver.start().catch(() => { /* surfaced through solver.error() */ });
+    // back from the spec editor: the last grid, flagged out of date if the edits changed since
+    const k = this.kept.get<{ engine: string; grid: Grid; solvedWith: string; elapsedS: number }>('grid');
+    if (k) { this.engine.set(k.engine); this.grid.set(k.grid); this.solvedWith.set(k.solvedWith); this.elapsedS.set(k.elapsedS); }
   }
 
   protected selectEngine(key: string): void {
@@ -91,7 +102,7 @@ export class GridPage implements OnInit {
   }
 
   private engineRef(): EngineRef {
-    return this.isCustom() ? { headline: headline(this.custom()) } : { preset: this.engine() };
+    return this.isCustom() ? { headline: headline(this.custom()) } : this.edits.engineRef(this.engine());
   }
 
   protected async build(): Promise<void> {
@@ -101,6 +112,7 @@ export class GridPage implements OnInit {
     this.grid.set(undefined);
     this.runError.set(undefined);
     this.elapsedS.set(undefined);
+    this.solvedWith.set(this.isCustom() ? undefined : refKey(this.engineRef()));
     const t0 = performance.now();
     try {
       const g = await this.solver.buildGrid(
@@ -108,6 +120,7 @@ export class GridPage implements OnInit {
         { onProgress: p => this.progress.set(p) });
       this.grid.set(g);
       this.elapsedS.set((performance.now() - t0) / 1000);
+      if (!this.isCustom()) this.kept.set('grid', { engine: this.engine(), grid: g, solvedWith: this.solvedWith()!, elapsedS: this.elapsedS()! });
     } catch (e) {
       this.runError.set(describe(e));
     } finally {

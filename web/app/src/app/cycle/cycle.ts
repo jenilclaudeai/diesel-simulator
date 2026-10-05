@@ -3,6 +3,10 @@ import { RouterLink } from '@angular/router';
 import type { CycleResult, PresetInfo } from '@dieselsim/solver';
 import { describe, SolverService } from '../solver/solver.service';
 import { SpecEdits } from '../spec/spec-edits';
+import { refKey, SpecStatus } from '../spec/spec-status';
+import { LastResults } from '../spec/last-results';
+
+interface Kept { engine: string; rpm: number; load: number; result: CycleResult; solvedWith: string; elapsedS: number }
 import { buildPlot, rel, sortedByX, type PlotModel } from './plots';
 
 const fmt0 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
@@ -19,7 +23,7 @@ const deg = (v: number) => `${v >= 0 ? '+' : '−'}${fmt1.format(Math.abs(v))}°
  */
 @Component({
   selector: 'app-cycle',
-  imports: [RouterLink],
+  imports: [RouterLink, SpecStatus],
   templateUrl: './cycle.html',
   styleUrl: './cycle.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -31,11 +35,11 @@ export class CyclePage implements OnInit {
 
   /** starts on the spec editor's engine, so its edits are what gets solved */
   protected readonly engine = signal(this.edits.base());
-  /** fields changed in the spec editor that apply to this engine */
-  protected readonly editsHere = computed(() => (this.engine() === this.edits.base() ? this.edits.count() : 0));
   protected readonly rpmIn = signal<number | undefined>(undefined);
   protected readonly load = signal(0.6);
   protected readonly result = signal<CycleResult | undefined>(undefined);
+  /** refKey() of the engine the current result was solved with (the stale banner compares it) */
+  protected readonly solvedWith = signal<string | undefined>(undefined);
   protected readonly running = signal(false);
   protected readonly error = signal<string | undefined>(undefined);
   protected readonly elapsedS = signal<number | undefined>(undefined);
@@ -128,9 +132,17 @@ export class CyclePage implements OnInit {
     ] as const;
   });
 
+  private readonly kept = inject(LastResults);
+
   ngOnInit(): void {
     // Expert-mode page: the solver is the whole point, so start loading now.
     this.solver.start().catch(() => { /* surfaced through solver.error() */ });
+    // back from the spec editor: the last cycle, flagged out of date if the edits changed since
+    const k = this.kept.get<Kept>('cycle');
+    if (k) {
+      this.engine.set(k.engine); this.rpmIn.set(k.rpm); this.load.set(k.load);
+      this.result.set(k.result); this.solvedWith.set(k.solvedWith); this.elapsedS.set(k.elapsedS);
+    }
   }
 
   protected selectEngine(key: string): void {
@@ -138,6 +150,7 @@ export class CyclePage implements OnInit {
     this.rpmIn.set(undefined);
     this.result.set(undefined);
     this.error.set(undefined);
+    this.kept.clear('cycle');
   }
 
   protected setRpm(v: string): void {
@@ -152,7 +165,11 @@ export class CyclePage implements OnInit {
     this.error.set(undefined);
     const t0 = performance.now();
     try {
-      this.result.set(await this.solver.solveCycle({ engine: this.edits.engineRef(this.engine()), rpm: this.rpm(), load: this.load() }));
+      const engine = this.edits.engineRef(this.engine());
+      this.result.set(await this.solver.solveCycle({ engine, rpm: this.rpm(), load: this.load() }));
+      this.solvedWith.set(refKey(engine));
+      this.kept.set<Kept>('cycle', { engine: this.engine(), rpm: this.rpm(), load: this.load(), result: this.result()!,
+        solvedWith: refKey(engine), elapsedS: (performance.now() - t0) / 1000 });
       this.elapsedS.set((performance.now() - t0) / 1000);
     } catch (e) {
       this.error.set(describe(e));
