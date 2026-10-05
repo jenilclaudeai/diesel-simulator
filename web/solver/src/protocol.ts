@@ -15,12 +15,17 @@ export type Request =
   | { type: "solveCycle"; id: number; req: PointRequest }
   | { type: "describeEngine"; id: number; engine: EngineRef }
   | { type: "liveCall"; id: number; fn: LiveFn; arg: string }
+  | { type: "durabilityCall"; id: number; fn: DurabilityFn; arg: string }
   | { type: "buildGrid"; id: number; req: GridRequest }
   | { type: "cancel"; id: number };
 
 /** The bridge functions a drivable-grid build calls (ADR-014 step 3); JSON in, JSON out. */
 export const LIVE_FNS = ["live_grid_plan", "live_row_limit", "live_cell", "live_grid_assemble"] as const;
 export type LiveFn = (typeof LIVE_FNS)[number];
+
+/** The bridge functions a durability run is stepped with (Phase 6, ADR-015); JSON in, JSON out. */
+export const DURABILITY_FNS = ["durability_start", "durability_next", "durability_stop"] as const;
+export type DurabilityFn = (typeof DURABILITY_FNS)[number];
 
 export interface WireError {
   kind: SolverErrorKind;

@@ -75,7 +75,22 @@ landscape).
     bar at +10°, MFB50 +12.0°, IMEP 11.07 bar at crdi15 2700 rpm / 60%,
     solved in ~12 s. 2 of 2 e2e mutants caught.
   - Units 68 (+10).
-- Next: the sweep and durability bridge calls; then the spec editor.
+- **Done: durability stepped from the browser** (branch
+  `feat/durability-call`, stacked on `feat/cycle-page`):
+  - `durability_run`'s loop is now the generator `durability_blocks`, with
+    old and new logs identical by `repr`, 225 values across 2 oil changes.
+  - `bridge.durability_start/_next/_stop` keep one run in the worker's
+    Python; `durabilityCall` behind an allowlist.
+  - Round trip 27 (+3): a 50 h block matches native within 5.48e-13. Python
+    `test_durability_steps` 4 parts; mutants 3 of 3 (Python), 1 of 1 (TS).
+  - Grids re-stamped `a442cfb3` → `15593c2d` with proof, now by
+    **`tools/restamp_grids.py`**, which asserts the proof and refuses a
+    stale re-stamp.
+  - Suite 74 / 0 / 3 (scipy); audit 0 / 2 / 0; fixtures 7 of 7.
+- **Sweep needs no new call:** the bridge's `overrides` plus `solvePoint`,
+  one point per value, as the Dyno pull loops over rpm (progress and Stop
+  come free). The sweep page is stage 2.
+- Next: the spec editor (stage 1's last piece).
 3. **The grid-build plan is deferred by the owner until v1 is complete**
    (2026-10-05). Option A (the ETA) shipped in #88. *(Was: "Decide the
    grid-build plan".)*

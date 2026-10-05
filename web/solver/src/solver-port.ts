@@ -154,6 +154,8 @@ export interface SolverPort {
   solvePoint(req: PointRequest): Promise<PointResult>;
   /** One point's crank-angle traces for the cycle page; n_cycles at least 9. */
   solveCycle(req: PointRequest): Promise<CycleResult>;
+  /** A durability run's step (durability_start / _next / _stop), JSON in and out (ADR-015). */
+  durabilityCall(fn: "durability_start" | "durability_next" | "durability_stop", arg: string): Promise<string>;
   /** Name, rpm range and (for a custom engine) the brochure numbers, without a solve. */
   describeEngine(engine: EngineRef): Promise<EngineInfo>;
   buildGrid(req: GridRequest, opts?: GridOptions): Promise<Grid>;

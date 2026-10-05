@@ -84,6 +84,25 @@ check("solveCycle matches native CPython: p_max, imep_net and the whole p trace;
 e = await expectError(solver.solveCycle({ engine: { preset: "crdi15" }, rpm: 1800, load: 0.6, n_cycles: 6 }));
 check("solveCycle refuses n_cycles below 9", e?.kind === "invalid-request", e?.message ?? "no error");
 
+// Phase 6 (ADR-015): a durability run stepped through the real worker matches native
+// (DieselEngine.durability_run(50, step_h=50) on crdi15, native, 2026-10-05)
+const NATIVE_DUR = { torque: 202.37961214603365, bore_wear_um: 0.033379075126331016, health: 0.02781589593860918 };
+const dStart = JSON.parse(await solver.durabilityCall("durability_start",
+  JSON.stringify({ engine: { preset: "crdi15" }, hours: 50, step_h: 50 }))) as { id: string };
+const dNext = JSON.parse(await solver.durabilityCall("durability_next", JSON.stringify({ id: dStart.id }))) as
+  { rows: Record<string, number>[]; done: boolean };
+const dRow = dNext.rows?.[0];
+const dRel = Math.max(...(["torque", "bore_wear_um", "health"] as const).map(k =>
+  Math.abs((dRow?.[k] ?? NaN) - NATIVE_DUR[k]) / NATIVE_DUR[k]));
+check("a durability run stepped through the worker matches native: one 50 h block, its torque, bore wear and life consumed",
+  dNext.rows?.length === 1 && dRow?.["hours"] === 50 && dRel < REL_TOL, `worst rel diff ${dRel.toExponential(2)}`);
+const dDone = JSON.parse(await solver.durabilityCall("durability_next", JSON.stringify({ id: dStart.id }))) as { done: boolean };
+const dStop = JSON.parse(await solver.durabilityCall("durability_stop", JSON.stringify({ id: dStart.id }))) as { stopped: boolean };
+check("the run says when it is done, and is gone after", dDone.done === true && dStop.stopped === false,
+  `done ${dDone.done}, stop after done ${dStop.stopped}`);
+e = await expectError(solver.durabilityCall("solve_point" as never, "{}"));
+check("durabilityCall refuses a non-durability function", e?.kind === "protocol", e?.message ?? "no error");
+
 // ADR-014: a custom engine from brochure numbers, described by the builder itself
 const MY20 = { name: "2.0 L four", displacement: 2.0, n_cyl: 4, rated_rpm: 4000, peak_torque: 320,
                peak_power: 103, plateau: [1750, 2500], vehicle: "crdi15" };

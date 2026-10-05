@@ -52,6 +52,10 @@ export class CachedSolver implements SolverPort {
     return this.ready().then(() => this.inner.solvePoint(req));
   }
 
+  durabilityCall(fn: "durability_start" | "durability_next" | "durability_stop", arg: string): Promise<string> {
+    return this.ready().then(() => this.inner.durabilityCall(fn, arg));
+  }
+
   solveCycle(req: PointRequest): Promise<CycleResult> {
     return this.ready().then(() => this.inner.solveCycle(req));
   }

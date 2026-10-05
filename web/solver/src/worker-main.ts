@@ -7,7 +7,7 @@
  * Node's worker_threads.
  */
 import type { PyodideInterface } from "pyodide";
-import { LIVE_FNS, type Endpoint, type Reply, type Request, type WireError } from "./protocol.js";
+import { DURABILITY_FNS, LIVE_FNS, type Endpoint, type Reply, type Request, type WireError } from "./protocol.js";
 import type {
   CycleResult, EngineInfo, Grid, GridCell, GridRequest, PointRequest, PointResult, RuntimeInfo,
 } from "./solver-port.js";
@@ -65,6 +65,11 @@ export function serveSolver(ep: Endpoint, rt: WorkerRuntime): void {
       } else if (msg.type === "liveCall") {
         // only the drivable-grid functions: the wire must not reach the rest of the bridge
         if (!(LIVE_FNS as readonly string[]).includes(msg.fn)) throw wire("protocol", `'${msg.fn}' is not a live-grid function`);
+        const { py } = await boot();
+        reply({ type: "result", id: msg.id, value: callBridge(py, msg.fn, msg.arg) });
+      } else if (msg.type === "durabilityCall") {
+        // only the durability functions, as liveCall allows only the live-grid ones
+        if (!(DURABILITY_FNS as readonly string[]).includes(msg.fn)) throw wire("protocol", `'${msg.fn}' is not a durability function`);
         const { py } = await boot();
         reply({ type: "result", id: msg.id, value: callBridge(py, msg.fn, msg.arg) });
       } else if (msg.type === "buildGrid") {
