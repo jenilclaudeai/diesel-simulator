@@ -14,8 +14,8 @@ landscape).
 |---|---|
 | 1–3: physics truth, solver port, real-time loop | done (REVIEW-003 to -005) |
 | 4: audio | done; the owner signed it off by ear 2026-09-30 (REVIEW-006) |
-| 5: Enjoy mode | **built; the Android check's bugs fixed on the live site (#88); the owner re-checks B-01/B-02 on the phone, then REVIEW-007** |
-| 6: Expert mode | not started (custom engines, ADR-014, anticipate part of it) |
+| 5: Enjoy mode | **exit-ready (REVIEW-007): one item left, the owner's re-check on the phone (M-1)** |
+| 6: Expert mode | **planned, for decision:** `reviews/PROPOSAL-phase6.md` |
 | 7: Environment and projects | not started |
 | 8: Polish and host | Pages hosting done early (#85); the rest not started |
 
@@ -39,29 +39,25 @@ landscape).
   derate.
 
 **Waiting on the owner:**
-1. **Re-check B-01 and B-02 on the S9+**, on the live site (fixed by #88,
-   merged 2026-10-05; I checked the published site in headless Chrome at
-   846×340/300 with two fonts). If they hold, write **REVIEW-007** and close
-   Phase 5.
+1. **Close Phase 5: REVIEW-007's M-1.** On the S9+, on the live site: after
+   a stall, hold the clutch and tap Restart (B-01); shift without the
+   clutch (B-02); and say whether the sound plays without crackle and the
+   drive is smooth. Then Phase 5 is done.
    - The bug sheet: https://docs.google.com/spreadsheets/d/1giP18zulUFOkOyXFj7sj0JRSGR8SydxNb2owMN0COV8/edit
      The owner's Bugs tab, and a Tracker tab that `IMPORTDATA`s
-     `reviews/ANDROID-BUGS.csv` from `main` (Google refreshes it hourly; the
-     first time it may need "Allow access"). **Update the CSV, never the
-     sheet.** The Drive connector can read the sheet but not edit cells.
-   - B-04's "stuck at 0 for an hour" isn't reproduced: it needs the
-     circumstances. B-03 looks like a Chrome extension (dev server only).
-2. **Decide the grid-build plan,** `reviews/PROPOSAL-grid-build.md`. Option
-   A (an honest ETA) shipped in #88. The rest is open: B+C (early stop plus
-   `thermo.py` speedups, one solver change and one rebuild), and E (phones
-   get prebuilt or derived grids). **Option C measured (session 6):
-   1.107×, bit-identical**: hoisting `thermo`'s constants. Inlining further
-   gave nothing, and its Newton part was already done. So B+C give
-   ~2–2.7× on every build. That's not enough for phones on its own, which is
-   why E matters.
-3. **Copy the Features tab into the bug sheet** (template
+     `reviews/ANDROID-BUGS.csv` from `main` (refreshed hourly; the first
+     time it may need "Allow access"). **Update the CSV, never the
+     sheet.** The Drive connector reads the sheet but can't edit cells.
+2. **Decide Phase 6's plan:** `reviews/PROPOSAL-phase6.md`. Scope A/B/C
+   (recommended B: PLAN's full scope, staged), which fields, the
+   development presets, and durability's default length.
+3. **The grid-build plan is deferred by the owner until v1 is complete**
+   (2026-10-05). Option A (the ETA) shipped in #88. *(Was: "Decide the
+   grid-build plan".)*
+4. **Copy the Features tab into the bug sheet** (template
    `12mLsfoFBwh_5Zqai6zpHpv3yZSBx45jvFgf3ZnYZyNY`: tab menu → Copy to →
    Existing spreadsheet). Its status columns read `reviews/FEATURES.csv`.
-4. **Listening:** `out/listen/review003m5_*.wav`; is `hd_i6`'s idle tick
+5. **Listening:** `out/listen/review003m5_*.wav`; is `hd_i6`'s idle tick
    too quiet? (Details in the session 6 section below.)
 
 **Known defects and follow-ups** (none blocking):
@@ -80,7 +76,7 @@ landscape).
 **Repository:**
 - #86, #87 and #88 merged 2026-10-05; `main` equals the tested top
   (`8040506`), 0 lines differ. Pages deployed it.
-- Open: **#89** (docs: live statuses, STATUS condensed, option C measured).
+- Open: **#89** (docs: live statuses, STATUS condensed, option C measured, REVIEW-007, the Phase 6 proposal).
 - Remote branches: `main`, the merged `docs/pages-live`,
   `docs/grid-build-plan` and `fix/b04-stop-eta` (safe to delete), and
   `fix/steady-state-controllers`. Keep the last one: it is the only copy of

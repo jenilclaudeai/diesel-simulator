@@ -1,6 +1,11 @@
 # PROPOSAL — custom-engine grids that people will wait for
 
-**Date:** 2026-10-05 (session 6). **For decision by the owner.**
+**Date:** 2026-10-05 (session 6). **Deferred by the owner, 2026-10-05:** "First
+I would like to go as per plan and complete this version. Then we can add
+more features or do mods. For now it should be fine with grid build time."
+Option A (an honest ETA) shipped in #88, as part of B-04; the rest waits
+until after v1, and the measurements below stand. *(Was: "For decision by
+the owner.")*
 **Lenses:** PM, LEAD, PHY1, PHY2, SW1, QA2, USR1/2 (advisory)
 **Why now:** the owner measured, on real devices, a grid build of 5+ min on
 a Samsung phone, and a drivable-grid ETA of **2–3+ h on an M2 MacBook**.
