@@ -9,6 +9,7 @@ import { engineLibrary, MY, type MyEngine } from '../engine/my-engines';
 import type { GridFile, Pedals } from '../drive/protocol';
 import { avgL100, nowL100, rangeKm } from './economy';
 import { Gauge, speedScale, tachScale } from './gauge';
+import { touchHint } from './hints';
 import { derateLit } from './lamps';
 import { Pedal } from './pedal';
 import { ROSTER } from './roster';
@@ -31,6 +32,7 @@ const PHASE = ['', 'shifting: torque phase', 'shifting: inertia phase'];
 })
 export class EnjoyPage implements OnDestroy {
   protected readonly fmt0 = fmt0;
+  protected readonly touchHint = touchHint;
   protected readonly presets = ROSTER;
   protected readonly preset = signal(ROSTER[0]!.key);
   /** A custom engine's grid, imported from a file (ADR-014). */
@@ -140,13 +142,13 @@ export class EnjoyPage implements OnDestroy {
     if (which === 'throttle' && value === 0) this.pedals = { ...this.pedals, throttle: null };
   }
 
-  /** A paddle, on pointerdown: acts at once, whatever other fingers are down. */
-  protected paddle(key: string, e: PointerEvent): void {
+  /** A paddle or Restart, on pointerdown: acts at once, whatever other fingers are down. */
+  protected press(key: string, e: PointerEvent): void {
     e.preventDefault();
     this.tap(key);
   }
 
-  /** A paddle activated from the keyboard (Enter or Space: a click with detail 0). */
+  /** A paddle or Restart activated from the keyboard (Enter or Space: a click with detail 0). */
   protected keyTap(key: string, e: MouseEvent): void {
     if (e.detail === 0) this.tap(key);
   }

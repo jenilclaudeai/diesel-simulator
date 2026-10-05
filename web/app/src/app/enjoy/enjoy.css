@@ -43,12 +43,19 @@ button:disabled { opacity: 0.45; }
 
 .gauges { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 6px; }
 .gauges app-gauge { height: 100%; max-height: 42vh; min-height: 120px; }
-.mid { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; min-width: 7.5em; }
-.mid .gear { font-size: clamp(2.4rem, 11vh, 4.6rem); line-height: 1; font-weight: 700; }
+.mid { display: flex; flex-direction: column; align-items: center; text-align: center; min-width: 7.5em; }
+/* B-02: the floor was 2.4rem; on a 300-350 px landscape phone (Chrome's toolbar showing) the
+   column then outgrew the dials' row and ran into the strip */
+.mid .gear { font-size: clamp(2rem, 11vh, 4.6rem); line-height: 1; font-weight: 700; }
 .mid .mode { opacity: 0.85; font-size: 0.9rem; }
 .mid .phase { min-height: 1.2em; color: var(--amber); font-size: 0.85rem; }
 .mid .digits { font-size: 0.85rem; opacity: 0.85; }
-.mid .hint { font-size: 0.8rem; opacity: 0.85; max-width: 12em; }
+.gauges { position: relative; }
+/* B-02: the hint is a toast over the dials' empty lower middle, not a line in .mid,
+   which on a short landscape phone grew into the strip below and printed over it */
+.gauges > .toast { position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); z-index: 2;
+  max-width: 46%; font-size: .8rem; text-align: center; pointer-events: none;
+  padding: 4px 10px; border-radius: 6px; background: var(--slate); border: 1px solid #dfe3dc59; }
 
 .strip { display: grid; grid-template-columns: 1.2fr 1fr auto; gap: 10px; align-items: start; font-size: 0.8rem; }
 .temp { display: grid; grid-template-columns: 5.2em 1fr 3.4em; align-items: center; gap: 5px; }
