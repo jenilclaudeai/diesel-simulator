@@ -33,7 +33,10 @@ jobs:
   physics:
     name: physics (Python ${{ matrix.python }})
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 30, not 20: with Phase 6's tests the suite took 11-20 min on the same
+    # tree depending on runner load, and 3 of 22 runs were killed at 20m15s
+    # (REVIEW-008 M-4)
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
