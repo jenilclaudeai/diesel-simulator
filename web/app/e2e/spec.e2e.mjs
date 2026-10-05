@@ -138,11 +138,12 @@ await navTo("Spec");
 await page.waitForSelector('tr[data-path="geom.compression_ratio"] input', { timeout: 60_000 });
 await setValue("geom.compression_ratio", 18);
 await page.click("a.solve");
-await page.waitForSelector(".cycle-data", { timeout: 60_000 });
+await page.waitForSelector(".cycle-data", { timeout: 60_000 }).catch(() => {});   // a forgotten result fails the check below
 const staleShown = await page.$eval("app-spec-status .stale", e => e.textContent.replace(/\s+/g, " ").trim()).catch(() => "");
 const oldPeak = await page.evaluate(() => [...document.querySelectorAll(".cycle-data tr")]
   .find(tr => tr.querySelector("th")?.textContent.trim() === "Peak pressure")?.querySelector("td")?.textContent.trim() ?? "");
-await page.click("app-spec-status button.rerun");
+// clicked only if shown: a missing banner must fail the check below, not crash the test
+await page.$eval("app-spec-status button.rerun", b => b.click()).catch(() => {});
 await page.waitForFunction(() => !document.querySelector("app-spec-status .stale") && !document.querySelector("button.run[disabled]"),
   { timeout: 5 * 60_000, polling: 500 }).catch(() => {});
 const staleAfter = await page.$("app-spec-status .stale");
