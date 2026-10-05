@@ -63,6 +63,18 @@ landscape).
      custom-engine build stuck at 0 for over an hour with Stop not
      working ("Can't drive"): first.** Rows are in
      `reviews/ANDROID-BUGS.csv`.
+   - **Measured 2026-10-05 on the dev server** (the owner: B-04 and B-03
+     were on local `npm start`; B-03 doesn't happen on Pages). A full-size
+     custom build in headless Chrome:
+     - **Stop reproduced.** Pressed at 367 s, still building 30 s later.
+       Stop is checked only between pieces, and a running Python piece
+       can't be interrupted (no `SharedArrayBuffer`, ADR-003).
+     - **The ETA bug reproduced.** "258 min left" at the first piece
+       (156 s) of a ~19 min build.
+     - **Not reproduced:** stuck at 0 (first piece at 156 s), and B-03 (no
+       errors; the owner's log points at a Chrome extension).
+     - Repro script: `web/app/e2e/out/repro-b04.mjs` (gitignored;
+       `URL=… WATCH_S=…`).
    - **Features tab:** the connector can't add a tab to an existing
      sheet, and rebuilding the sheet would lose B-03's full log (the
      connector's view truncates it). So it's a self-contained template,
