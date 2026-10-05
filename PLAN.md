@@ -304,8 +304,9 @@ the exit review, on the stack #89–#99 (waiting to merge).
   banner, and an edited engine can be built drivable.
 - `/cycle`, `/sweep` and `/durability`, each checked against native Python
   in a browser.
-- The review found and fixed three MAJORs: CI's Pyodide job red since #91,
-  the Dyno BSFC unlabelled, and edited engines not drivable.
+- The review found and fixed four MAJORs: CI's Pyodide job red since #91,
+  the Dyno BSFC unlabelled, edited engines not drivable, and a CI timeout
+  too tight for the grown suite.
 - Open, all MINOR:
   - edits live in memory until Phase 7's project file (m-3);
   - the sweep's stated resolution (m-1);

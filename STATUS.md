@@ -64,10 +64,11 @@ its stack merges.
        checked against native Python in a browser.
      - FINDING-024 (MFB50 was late by up to 7°) is fixed, with the grids
        re-stamped with proof.
-   - REVIEW-008 found and fixed three MAJORs:
+   - REVIEW-008 found and fixed four MAJORs:
      - CI's Pyodide job had been red since #91, which I'd missed;
      - the Dyno BSFC column was unlabelled;
-     - an edited engine couldn't be driven.
+     - an edited engine couldn't be driven;
+     - the physics job's 20-minute timeout was too tight for the grown suite.
    - *(Was: "~~Decide Phase 6's plan.~~ Decided 2026-10-05: option B
      (ADR-015)…")*
 
@@ -101,9 +102,11 @@ its stack merges.
   #93 (durability call) ← #94 (spec editor) ← #95 (edits everywhere,
   banner) ← #96 (sweep) ← #97 (durability page) ← #98 (schematics) ← #99
   (REVIEW-008 and its fixes). Each targets the branch below.
-  - CI at writing (2026-10-06): #89–#92 green, 9 of 9. #93–#99 were still
-    running after the M-1 fix was merged forward. Read them with
-    `gh pr checks <n>` before merging.
+  - CI (2026-10-06): after the M-1 fix, #89–#94, #97 and #99 were 9 of 9.
+    #95, #96 and #98 each had Python 3.10 cancelled at the job's 20-minute
+    limit (REVIEW-008 M-4). The limit is now 30 min on #90, merged forward,
+    and CI re-runs on #90–#99. Read every job with `gh pr checks <n>`
+    before merging.
   - *(Was: "Open: #89 (docs: …)".)*
 - Remote branches: `main`, the merged `docs/pages-live`,
   `docs/grid-build-plan` and `fix/b04-stop-eta` (safe to delete), and

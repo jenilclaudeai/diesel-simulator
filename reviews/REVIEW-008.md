@@ -18,7 +18,7 @@ option B), on the stack #89 ← #90 … ← #98 and this review's PR
 | Class | Count |
 |---|---|
 | BLOCK | 0 |
-| MAJOR | 3, all resolved in this review (M-1 to M-3) |
+| MAJOR | 4, all resolved in this review (M-1 to M-4) |
 | MINOR | 6 |
 | NOTE | 5 |
 
@@ -27,7 +27,9 @@ part of PLAN's Phase 6 is built and checked against native Python in a
 browser. This review found three gaps, and each is fixed here:
 - CI's Pyodide job had been red since #91;
 - the Dyno table's BSFC was unlabelled;
-- an edited engine could not be driven.
+- an edited engine could not be driven;
+- the physics job's 20-minute timeout killed runs (found after the review's first
+  push; M-4).
 
 The owner has nothing to do for Phase 6 but merge. Trying Expert mode is
 welcome, and is the real test of the USR lens (N-4).
@@ -106,6 +108,19 @@ edited engine reuses ADR-014's build"); the stack never built it.
   - the key ignoring the edits' order fails a unit test;
   - `live.py` ignoring the edits fails the Python part.
 - `live.py` is outside the grid hash, so no grid changes.
+
+**M-4 (MAJOR, resolved, added after this review's first push): the physics
+job's 20-minute timeout.** Once M-1's fix had gone forward, CI re-ran the
+whole stack. Python 3.10 was then **cancelled at 20m15s** on #95, #96 and
+#98, the job's limit, not a test failure.
+- The same trees took 11 to 20 min depending on runner load: across #89 to
+  #99, 9 more of the 22 physics runs went past 17 min.
+- Phase 6's tests made the suite longer, and eleven PRs' CI at once made the
+  runners slower.
+- Raised to 30 min, as the Pyodide job has, on #90 (the first PR that grows
+  the suite) and merged forward. Re-running the cancelled jobs would only
+  have hidden it.
+- CI after the change: see STATUS.
 
 **m-1 (MINOR): the sweep's resolution.** Each point is a fast 9-cycle solve.
 crdi15 dips 0.3% at CR 16, which is noise, and its full-load error is 5.8%
