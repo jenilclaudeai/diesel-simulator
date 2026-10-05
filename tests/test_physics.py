@@ -1792,13 +1792,19 @@ def test_accuracy_table_is_for_this_build():
     noticed. So: the table names this build, the same hash the shipped grids
     carry. After a change that can move torque, re-measure
     (tools/diag_torque_limiter.py --write-accuracy); after one that can't,
-    re-stamp it with the grids (tools/restamp_grids.py)."""
+    re-stamp it with the grids (tools/restamp_grids.py). SKIP where web/app
+    is absent (the Pyodide harness copies only the package and the tests)."""
     import json
     import os
     import re
     from dieselsim import bridge
     root = os.path.join(os.path.dirname(__file__), "..")
-    with open(os.path.join(root, "web", "app", "src", "app", "dyno", "accuracy.ts")) as fh:
+    table_file = os.path.join(root, "web", "app", "src", "app", "dyno", "accuracy.ts")
+    if not os.path.isfile(table_file):
+        RESULTS.append(("SKIP", "the Dyno page's accuracy table is for this solver build", None, None,
+                        "web/app not present (Pyodide harness)"))
+        return
+    with open(table_file) as fh:
         m = re.search(r"ACCURACY_SOLVER = '([0-9a-f]{64})'", fh.read())
     table = m.group(1) if m else ""
     with open(os.path.join(root, "web", "app", "public", "grids", "crdi15.json")) as fh:
