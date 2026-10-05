@@ -1,0 +1,105 @@
+<header class="bar">
+  <span class="wordmark">Diesel Sim</span>
+  <nav class="nav"><a routerLink="/">Dyno pull</a> · <a routerLink="/grid">Operating grid</a> · <a routerLink="/cycle">Cycle</a> · <span aria-current="page">Sweep</span> · <a routerLink="/durability">Durability</a> · <a routerLink="/spec">Spec</a> · <a routerLink="/drive">Drive</a> · <a routerLink="/enjoy">Enjoy</a></nav>
+</header>
+
+<main class="page">
+  <h1>Parameter sweep</h1>
+  <p class="lead">Change one number over a range and see what the engine does at one operating point. Every value is a
+    full combustion-cycle solve, in your browser.</p>
+
+  <div class="controls">
+    <label class="field"><span>Engine</span>
+      <select [disabled]="solver.status() !== 'ready' || running()" (change)="selectEngine($any($event.target).value)">
+        @for (p of presets(); track p.key) { <option [value]="p.key" [selected]="p.key === engine()">{{ p.name }}</option> }
+      </select>
+    </label>
+    <label class="field"><span>Field to sweep</span>
+      <select class="field-in" [disabled]="running()" (change)="selectField($any($event.target).value)">
+        @for (g of fieldGroups; track g.title) {
+          <optgroup [label]="g.title">
+            @for (f of g.fields; track f.path) { <option [value]="f.path" [selected]="f.path === field()">{{ f.label }}</option> }
+          </optgroup>
+        }
+      </select>
+    </label>
+  </div>
+  <div class="controls">
+    <label class="field"><span>From {{ unit() }}</span>
+      <input class="from-in" type="number" step="any" [value]="range().from ?? ''" [disabled]="running()" (change)="from.set(num($any($event.target).value))" /></label>
+    <label class="field"><span>To {{ unit() }}</span>
+      <input class="to-in" type="number" step="any" [value]="range().to ?? ''" [disabled]="running()" (change)="to.set(num($any($event.target).value))" /></label>
+    <label class="field"><span>Points</span>
+      <input class="steps-in" type="number" min="2" max="25" step="1" [value]="steps()" [disabled]="running()" (change)="steps.set(num($any($event.target).value) ?? 7)" /></label>
+    <label class="field"><span>Engine speed (rpm)</span>
+      <input class="rpm-in" type="number" step="50" [value]="rpm()" [disabled]="running()" (change)="rpmIn.set(num($any($event.target).value))" /></label>
+    <label class="field"><span>Load: {{ fmt0.format(load() * 100) }}%</span>
+      <input class="load-in" type="range" min="0" max="1" step="0.05" [value]="load()" [disabled]="running()" (input)="load.set(+$any($event.target).value)" /></label>
+    @if (running()) { <button type="button" class="run" (click)="halt()">Stop</button> }
+    @else { <button type="button" class="run" (click)="run()" [disabled]="solver.status() !== 'ready' || plan().length < 2">{{ rows().length ? 'Run again' : 'Run sweep' }}</button> }
+  </div>
+  @if (current() !== undefined) {
+    <p class="note">This engine: {{ label(field()) }} = {{ fmtV(current()!) }} {{ unit() }}. The sweep solves
+      {{ plan().length }} points: {{ plan().map(fmtV).join(', ') }}.</p>
+  }
+
+  <app-spec-status [engine]="engine()" [solvedWith]="rows().length ? solvedWith() : undefined" [busy]="running()" again="Run the sweep again" (rerun)="run()" />
+
+  <p class="status" role="status" aria-live="polite">
+    @switch (solver.status()) {
+      @case ('loading') { Loading Python and numpy into your browser. About 9 MB the first time. }
+      @case ('error') { <span class="err">{{ solver.error() }}</span> }
+      @case ('ready') {
+        @if (progress(); as p) { Solving point {{ p.n }} of {{ p.of }}: {{ label(field()) }} = {{ fmtV(p.value) }}. }
+        @else if (error()) { <span class="err">{{ error() }}</span> }
+        @else if (rows().length) { {{ rows().length }} points solved. }
+        @else { Ready. Each point takes a few seconds. }
+      }
+    }
+  </p>
+
+  @if (plots().length) {
+    <div class="plots">
+      @for (pl of plots(); track pl.title) {
+        <figure class="plot">
+          <figcaption>{{ pl.title }}</figcaption>
+          <svg [attr.viewBox]="'0 0 ' + pl.W + ' ' + pl.H" role="img" [attr.aria-label]="pl.title + '. ' + pl.desc">
+            @for (t of pl.yTicks; track $index) {
+              <line class="grid" [attr.x1]="pl.M.l" [attr.x2]="pl.W - pl.M.r" [attr.y1]="t.y" [attr.y2]="t.y" />
+              <text class="tick" [attr.x]="pl.M.l - 6" [attr.y]="t.y + 4" text-anchor="end">{{ t.label }}</text>
+            }
+            @for (t of pl.xTicks; track $index) {
+              <line class="grid" [attr.x1]="t.x" [attr.x2]="t.x" [attr.y1]="pl.M.t" [attr.y2]="pl.H - pl.M.b" />
+              <text class="tick" [attr.x]="t.x" [attr.y]="pl.H - pl.M.b + 16" text-anchor="middle">{{ t.label }}</text>
+            }
+            @for (m of pl.markers; track $index) {
+              <line [class]="'marker ' + m.cls" [attr.x1]="m.x" [attr.x2]="m.x" [attr.y1]="pl.M.t" [attr.y2]="pl.H - pl.M.b" />
+              <text class="mlabel" [attr.x]="m.x + 3" [attr.y]="pl.M.t + 11 + m.row * 13">{{ m.label }}</text>
+            }
+            @for (l of pl.lines; track l.label) { <polyline [class]="'trace ' + l.cls" [attr.points]="l.d" /> }
+            <text class="axis" [attr.x]="(pl.M.l + pl.W - pl.M.r) / 2" [attr.y]="pl.H - 6" text-anchor="middle">{{ pl.xLabel }}</text>
+            <text class="axis" [attr.transform]="'translate(14,' + (pl.M.t + pl.H - pl.M.b) / 2 + ') rotate(-90)'" text-anchor="middle">{{ pl.yLabel }}</text>
+          </svg>
+          <p class="cap">{{ pl.desc }}</p>
+        </figure>
+      }
+    </div>
+  }
+
+  @if (rows().length) {
+    <table class="data sweep-data">
+      <caption>{{ label(field()) }} at {{ fmt0.format(rpm()) }} rpm, {{ fmt0.format(load() * 100) }}% load</caption>
+      <thead><tr><th scope="col">{{ label(field()) }} {{ unit() }}</th><th scope="col">Torque (N·m)</th><th scope="col">Power (kW)</th>
+        <th scope="col">BSFC, steady state (g/kWh)</th><th scope="col">Peak pressure (bar)</th><th scope="col">Exhaust (°C)</th><th scope="col">Boost</th></tr></thead>
+      <tbody>
+        @for (row of rows(); track row.value) {
+          <tr><td>{{ fmtV(row.value) }}</td><td>{{ fmt1.format(row.r.torque) }}</td><td>{{ fmt1.format(row.r.power / 1000) }}</td>
+            <td>{{ fmt0.format(row.r.bsfc) }}</td><td>{{ fmt1.format(row.r.p_max / 1e5) }}</td><td>{{ fmt0.format(row.r.T_exh - 273.15) }}</td>
+            <td>{{ row.r.boost_pr.toFixed(2) }}</td></tr>
+        }
+      </tbody>
+    </table>
+    <p class="note">Economy figures are steady-state: they hold each point indefinitely, so real mixed driving uses more
+      fuel (FINDING-009).</p>
+  }
+</main>
