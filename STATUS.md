@@ -56,6 +56,22 @@ landscape).
      Measuring / Fixing / In PR / Fixed on live site / Won't fix + reason),
      Updated. It shows only what has merged, which is what the live site
      runs. The Bugs tab's green Status column looks each ID up in it.
+   - **The bugs (listed 2026-10-05):** B-01, Restart after a stall does
+     nothing (S9+); B-02, text overlaps when shifting without the clutch
+     (S9+); B-03, a console error, from a local dev server with a Chrome
+     extension and the text cut off (needs the full error); **B-04, a
+     custom-engine build stuck at 0 for over an hour with Stop not
+     working ("Can't drive"): first.** Rows are in
+     `reviews/ANDROID-BUGS.csv`.
+   - **Features tab:** the connector can't add a tab to an existing
+     sheet, and rebuilding the sheet would lose B-03's full log (the
+     connector's view truncates it). So it's a self-contained template,
+     "diesel-simulator: Features tab (copy into the tracker)"
+     (`12mLsfoFBwh_5Zqai6zpHpv3yZSBx45jvFgf3ZnYZyNY`), for the owner to
+     copy in (tab menu → Copy to → Existing spreadsheet). Blue columns are
+     the owner's ideas, F-01…F-40. Green columns are looked up from
+     **`reviews/FEATURES.csv`** on `main` (ID, Assessment, Plan, Status,
+     PR, Updated), imported into a grey block from column R.
    - Measure each entry before fixing it, as with every bug list here.
    - Live friction's cost on a low-end phone was left to wait for this
      check: see whether the sheet mentions stutter.
@@ -68,6 +84,9 @@ landscape).
    (2026-10-05, **#87** on `docs/grid-build-plan`, stacked on #86). The owner
    measured 5+ min for a grid on a Samsung phone, and a 2–3+ h ETA for a
    drivable grid on an M2 MacBook. Measured since:
+   - **Corrected the same day:** B-04 (stuck at 0 for over an hour) means
+     the M2's long build was **not** just the misleading ETA, as first
+     written. The proposal is corrected in place.
    - **The ETA formula misleads early, by up to 20×.** It counts all 104
      pieces as equal, and the 8 row calibrations (~4× a cell) finish
      first. On 6 workers it reads ~5 h at the first piece, of a ~18 min

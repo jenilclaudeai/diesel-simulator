@@ -1,1 +1,5 @@
 ID,Verdict,Measured,Cause,Fix (PR),Status,Updated
+B-01,Measuring,"Stall in manual, then Restart does nothing (S9+). Not yet reproduced.",,,New,2026-10-05
+B-02,Measuring,"Text overlaps when shifting in manual without the clutch (S9+). Not yet reproduced.",,,New,2026-10-05
+B-03,Needs info,"The log is from a local dev server (npm start) and shows a Chrome extension (chext_*.js); the full error text is cut off. '[py] Loading numpy' is the Dyno page at / booting Python, not /enjoy. The live /enjoy showed no errors on 2026-10-05. Please paste the whole error line and its stack.",,,Needs info,2026-10-05
+B-04,Measuring,"Build stays at 0 pieces for over an hour, and Stop does nothing. This is not the misleading ETA: at 0 pieces no ETA shows at all. Being reproduced on the live site. Which device and browser?",,,New,2026-10-05

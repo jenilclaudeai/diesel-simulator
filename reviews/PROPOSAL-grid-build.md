@@ -27,11 +27,18 @@ ADR-014). Replaying the scheduler and the formula with those costs
 | 20 pieces, 6.4 min | 27 min | 12 min |
 | 60 pieces, 12 min | 9 min | 6 min |
 
-The build itself takes ~18 min (21.5 min measured in Chrome, part 17). So
-the owner's "2–3+ h" on the M2 is most likely the first minutes' ETA, not
-the real duration. *Not yet confirmed: which browser, and whether that
-build was left to finish.* Either way it's a defect: a user who reads
-"3 hours" leaves.
+The build itself takes ~18 min (21.5 min measured in Chrome, part 17).
+Either way the ETA is a defect: a user who reads "3 hours" leaves.
+
+**Correction (2026-10-05, the same day):** this said the owner's "2–3+ h"
+on the M2 was "most likely the first minutes' ETA, not the real duration".
+The owner's bug B-04 contradicts that: a build that **stayed at 0 pieces
+for over an hour, with Stop not working**. At 0 pieces the app shows no
+ETA at all, so that build was stuck, not slow. The ETA defect stands, but a
+stuck build is a separate bug and comes first. *(Was: "So the owner's
+'2–3+ h' on the M2 is most likely the first minutes' ETA, not the real
+duration. Not yet confirmed: which browser, and whether that build was left
+to finish.")*
 
 ### 2. Where the time goes
 
@@ -169,6 +176,8 @@ its speed is unmeasured. Two forms:
 
 ## Recommendation
 
+0. **First:** B-04, the build stuck at 0 with Stop not working (a bug,
+   not a speed problem; see the correction above).
 1. **Now:** A (honest ETA, and a phone told up front).
 2. **Next:** B + C as one solver change, with one rebuild and one physics
    review: about 2–3× on every build.
