@@ -85,12 +85,20 @@ landscape).
      - **B-01:** Restart acts on press; `/enjoy` words the loop's keyboard
        hints for touch (`enjoy/hints.ts`).
      - **B-02:** the hint is a toast out of the column's flow; stalled,
-       Restart replaces the digits' line; the gear floor is 2rem. It
-       holds down to 846×300, but not at 280. Stalled at 300, Restart's
-       bottom 3 px meet the strip's edge; taps still land.
+       Restart takes the rpm line's place. The dial row can't shrink below
+       its content (`min-height: min-content`), and a dash too tall for the
+       screen overflows at the bottom (`safe center`, `overflow-y: auto`),
+       so the strip scrolls and nothing overlaps.
+       **Correction:** the first version (a 2rem gear floor, measured to
+       hold "down to 846×300, not at 280") leaned on the Mac's font. CI's
+       Linux font ran the column 64 px into the strip. Now verified with
+       the Mac font and Verdana at 411/340/300, and the e2e rules hold at
+       846×300 with 125% text. *(Was: "the gear floor is 2rem. It holds
+       down to 846×300, but not at 280. Stalled at 300, Restart's bottom 3
+       px meet the strip's edge; taps still land.")*
      - Tests: scheduler 12 (+4), cache 20; units 58 (+2); e2e:enjoy 21
-       (+2). Mutants: scheduler 3 of 3, units 1 of 1, e2e 3 of 3, every
-       one compiled. e2e:custom gained a "Stop < 5 s" check.
+       (+2). Mutants: scheduler 3 of 3, units 1 of 1, e2e 3 of 3 (then 2 of
+       2 against the B-02 layout rules), every one compiled. e2e:custom gained a "Stop < 5 s" check.
      - **The new ETA over a whole real build** (production build, full
        8×6, this Mac, 27.5 min; part 17 measured 21.5, so load varies):
        0.63× the real time left at the first piece (optimistic: until a
