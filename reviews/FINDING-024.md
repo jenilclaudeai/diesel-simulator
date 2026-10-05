@@ -59,6 +59,17 @@ were **re-stamped** `dee93a17…` → `a442cfb3…`, with this proof:
   old hash, asserted to appear exactly once. In each of the 10 files the
   changed span is the 64 bytes of the hash, and the size is unchanged.
 
+**Correction (2026-10-06): the re-stamp missed one artifact.** The Dyno
+page's accuracy table (`web/app/src/app/dyno/accuracy.ts`, FINDING-013) is
+also keyed on the grid hash, as `ACCURACY_SOLVER`. Left at `dee93a17`, it
+turned every engine's measured note into "not measured for this solver
+build". Found a day later while building the sweep page, which reuses that
+note. It's re-stamped here to `a442cfb3`, by the same proof: the fast-path
+and converged torques it compares can't be moved by MFB50's accumulation.
+`test_accuracy_table_is_for_this_build` now fails whenever the table, the
+grids and the build disagree; the stale table fails it. *(Was: the proof
+above listed only the 10 grids.)*
+
 ## Tests
 
 - `test_mfb50_counts_combustion_before_tdc`:
