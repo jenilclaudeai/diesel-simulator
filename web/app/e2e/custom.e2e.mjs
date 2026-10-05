@@ -58,10 +58,14 @@ await page.click("button.build-drivable");
 await page.waitForFunction(() => /\b([2-9]|10) of 10\b/.test(document.querySelector(".build-status")?.textContent ?? ""),
   { timeout: 20 * 60_000, polling: 1000 }).catch(() => {});
 const before = await status();
+const tStop = Date.now();
 await page.click("button.cancel-build").catch(() => {});
 await page.waitForSelector(".build-err", { timeout: 10 * 60_000 }).catch(() => {});
+const stopMs = Date.now() - tStop;
 const stopped = await page.$eval(".build-err", e => e.textContent.trim()).catch(() => "");
 check("a build stopped part-way says it keeps what it finished", /kept/.test(stopped), `${before} -> "${stopped}"`);
+// B-04: Stop used to wait for every running piece (up to a whole row, minutes)
+check("Stop answers at once, mid-piece", stopMs < 5000, `${stopMs} ms`);
 
 // carry on: the resumed build starts from what was kept, then saves
 await page.click("button.build-drivable");

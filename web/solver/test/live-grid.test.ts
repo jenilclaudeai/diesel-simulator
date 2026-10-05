@@ -1,6 +1,6 @@
 // buildLiveGrid's scheduling, resume and cancel, against fake workers (no
 // Pyodide): fast. The real build is test/live-grid-real.test.ts.
-import { buildLiveGrid, MemoryPieceStore, type LiveBuildProgress, type LiveCaller } from "../src/live-grid-build.js";
+import { buildLiveGrid, etaSeconds, MemoryPieceStore, type LiveBuildProgress, type LiveCaller } from "../src/live-grid-build.js";
 import type { LiveFn } from "../src/protocol.js";
 
 const results: boolean[] = [];
@@ -12,7 +12,7 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 const RPMS = [1000, 2000, 3000], LOADS = [0, 1];
 class Fake implements LiveCaller {
-  static live = 0; static peak = 0;
+  static live = 0; static peak = 0; static rowMs = 15; static cellMs = 3;
   calls: { fn: LiveFn; arg: Record<string, unknown> }[] = [];
   constructor(private readonly failAt?: { rpm: number; load: number }) {}
   async liveCall(fn: LiveFn, arg: string): Promise<string> {
@@ -20,7 +20,7 @@ class Fake implements LiveCaller {
     this.calls.push({ fn, arg: a });
     Fake.live++; Fake.peak = Math.max(Fake.peak, Fake.live);
     try {
-      await sleep(fn === "live_row_limit" ? 15 : 3);
+      await sleep(fn === "live_row_limit" ? Fake.rowMs : fn === "live_cell" ? Fake.cellMs : 3);
       if (fn === "live_grid_plan") return JSON.stringify({ rpms: RPMS, loads: LOADS });
       if (fn === "live_row_limit") return JSON.stringify({ fuel_limit: (a["rpm"] as number) / 100 });
       if (fn === "live_cell") {
@@ -67,6 +67,9 @@ const opts = { key: "t", size: [3, 2] as [number, number] };
     await buildLiveGrid({ preset: "x" }, ws1, { ...opts, store, storeKey: "k", signal: ac.signal,
       onProgress: p => { if (p.done >= 6) ac.abort(); } });
   } catch (e) { err = e as Error; }
+  // Stop returns at once (test 4); these fake workers are not terminated as the
+  // app's are, so let their pieces in flight end (and be kept) before counting
+  await sleep(40);
   const kept = store.map.size;
   check("a cancelled build stops, says so, and keeps what it finished", /cancelled/.test(err?.message ?? "") && kept >= 6 && kept < 15,
     `${kept} pieces kept; ${err?.message}`);
@@ -86,6 +89,49 @@ const opts = { key: "t", size: [3, 2] as [number, number] };
   try { await buildLiveGrid({ preset: "x" }, ws, opts); } catch (e) { err = e as Error; }
   check("a cell that fails fails the build, and nothing is assembled", err?.message === "solver blew up"
     && !ws[0]!.calls.some(c => c.fn === "live_grid_assemble"), err?.message ?? "no error");
+}
+
+// 4. Stop answers at once, not when the running pieces finish (B-04)
+{
+  Fake.rowMs = 400;
+  const ac = new AbortController();
+  const t = performance.now();
+  setTimeout(() => ac.abort(), 50);
+  let err: Error | undefined;
+  try { await buildLiveGrid({ preset: "x" }, [new Fake(), new Fake()], { ...opts, signal: ac.signal }); }
+  catch (e) { err = e as Error; }
+  const ms = performance.now() - t;
+  check("Stop rejects at once, mid-row, and says so", /cancelled/.test(err?.message ?? "") && ms < 100,
+    `${ms.toFixed(0)} ms after starting (Stop at 50 ms, the rows take 400 ms); ${err?.message}`);
+  Fake.rowMs = 15;
+  await sleep(450);                                 // let the abandoned fake rows end before the next test
+}
+
+// 5. the ETA tracks the time really left (B-04: it read 258 min of a 19 min build)
+{
+  Fake.rowMs = 80; Fake.cellMs = 20;
+  const reps: { t: number; eta?: number; done: number; phase: string }[] = [];
+  const t0 = performance.now();
+  await buildLiveGrid({ preset: "x" }, [new Fake(), new Fake(), new Fake()],
+    { ...opts, onProgress: p => reps.push({ t: performance.now(), done: p.done, phase: p.phase, ...(p.etaS !== undefined ? { eta: p.etaS * 1000 } : {}) }) });
+  const end = reps.filter(r => r.phase !== "assemble").at(-1)!.t, span = end - t0;
+  const judged = reps.filter(r => r.eta !== undefined && end - r.t > 0.3 * span);
+  const ratios = judged.map(r => r.eta! / (end - r.t));
+  const worst = ratios.reduce((w, x) => Math.max(w, x, 1 / x), 1);
+  check("the ETA stays within 1.5x of the time really left while 30% or more remains",
+    judged.length >= 2 && worst <= 1.5, `${judged.length} reports judged, worst ${worst.toFixed(2)}x; ratios ${ratios.map(x => x.toFixed(2)).join(" ")}`);
+  check("no ETA before the first piece finishes", reps.filter(r => r.done === 0).every(r => r.eta === undefined));
+  Fake.rowMs = 15; Fake.cellMs = 3;
+}
+
+// 6. etaSeconds by hand
+{
+  const none = etaSeconds({ rowsUnstarted: 3, cellsLeft: 12, running: [], workers: 3 });
+  const cells = etaSeconds({ rowS: 40, cellS: 10, rowsUnstarted: 0, cellsLeft: 12, running: [], workers: 3 });
+  const early = etaSeconds({ rowS: 40, rowsUnstarted: 0, cellsLeft: 12, running: [{ kind: "row", elapsedS: 30 }], workers: 3 });
+  check("etaSeconds: nothing timed, no answer; 12 cells of 10 s on 3 workers, 40 s; a row counts as 4 cells until cells are timed",
+    none === undefined && cells === 40 && early !== undefined && Math.abs(early - (10 / 3 + 12 * 10 / 3)) < 1e-9,
+    `${none} / ${cells} / ${early}`);
 }
 
 const failed = results.filter(r => !r).length;

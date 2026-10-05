@@ -75,6 +75,49 @@ landscape).
        errors; the owner's log points at a Chrome extension).
      - Repro script: `web/app/e2e/out/repro-b04.mjs` (gitignored;
        `URL=… WATCH_S=…`).
+   - **Fixed in #88 (`fix/b04-stop-eta`, stacked on #87):**
+     - **B-04 Stop** answers at once: the pool is raced against the abort
+       signal, and `SolverService` terminates the workers. Dev server, Stop
+       mid-row: "Stopped" in 0.5 s.
+     - **B-04 ETA:** `etaSeconds` spreads the worker-seconds left (a row
+       counts as 4 cells until both are timed) over the workers. Dev
+       server: 11 min at the first piece (was 258).
+     - **B-01:** Restart acts on press; `/enjoy` words the loop's keyboard
+       hints for touch (`enjoy/hints.ts`).
+     - **B-02:** the hint is a toast out of the column's flow; stalled,
+       Restart takes the rpm line's place. The dial row can't shrink below
+       its content (`min-height: min-content`), and a dash too tall for the
+       screen overflows at the bottom (`safe center`, `overflow-y: auto`),
+       so the strip scrolls and nothing overlaps.
+       **Correction:** the first version (a 2rem gear floor, measured to
+       hold "down to 846×300, not at 280") leaned on the Mac's font. CI's
+       Linux font ran the column 64 px into the strip. Now verified with
+       the Mac font and Verdana at 411/340/300, and the e2e rules hold at
+       846×300 with 125% text. *(Was: "the gear floor is 2rem. It holds
+       down to 846×300, but not at 280. Stalled at 300, Restart's bottom 3
+       px meet the strip's edge; taps still land.")*
+     - Tests: scheduler 12 (+4), cache 20; units 58 (+2); e2e:enjoy 21
+       (+2). Mutants: scheduler 3 of 3, units 1 of 1, e2e 3 of 3 (then 2 of
+       2 against the B-02 layout rules), every one compiled. e2e:custom gained a "Stop < 5 s" check.
+     - **The new ETA over a whole real build** (production build, full
+       8×6, this Mac, 27.5 min; part 17 measured 21.5, so load varies):
+       0.63× the real time left at the first piece (optimistic: until a
+       cell is timed, a cell counts as a quarter of a row), then
+       0.84–0.98× from the 5th piece on. The old formula read ~20× high
+       there. Not tuned on one run. *(A first attempt was killed at 9 of
+       104 by a dev-server live reload that my own file edits triggered.)*
+     - e2e:custom 5/5 with the new Stop check (72 ms); its mutant (Stop
+       awaiting the pool) fails it at 69.7 s.
+     - **PR #88**, stacked on #87. **CI 9/9 green on `1e2b520`**,
+       including Linux's B-01 (782 rpm) and B-02 rules (dials 177–303,
+       column 183–296, strip from 309) and Stop (40 ms). Python 71/0/3
+       known; Pyodide 59; solver 20 + 12 + 22.
+   - **Next for the owner:** merge #86 → #87 → #88, retargeting each child
+     to `main`. Then re-check B-01 and B-02 on the phone (the live site
+     updates on merge). B-04's "stuck at 0" needs the circumstances
+     (which browser, tab in front, Mac asleep?), or it stays not
+     reproduced. B-03 looks like a Chrome extension.
+   - Repro for B-01/B-02: `web/app/e2e/out/repro-b01-b02.mjs` (`H=300`).
    - **Features tab:** the connector can't add a tab to an existing
      sheet, and rebuilding the sheet would lose B-03's full log (the
      connector's view truncates it). So it's a self-contained template,
@@ -147,7 +190,7 @@ landscape).
 - Older follow-ups are in "Next actions" at the end of this file.
 
 **Repository:**
-- Open PRs: #86 (docs; CI green), and #87 stacked on it (the grid-build proposal; retarget it to `main` once #86 merges).
+- Open PRs, a stack: #86 (docs; CI green) ← #87 (grid-build proposal, tracker) ← #88 (B-01, B-02, B-04 fixes). Merge in order, retargeting each child to `main` after its parent merges.
 - Remote branches: `main`, `docs/pages-live` (#86), and
   `fix/steady-state-controllers`. Keep the last one: it is the only copy of
   the FINDING-013 option A experiment.

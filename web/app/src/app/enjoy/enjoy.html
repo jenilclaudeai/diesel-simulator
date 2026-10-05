@@ -4,9 +4,9 @@
   <!-- pointerdown, not click: with a thumb already on the clutch, a tap here
        produces no click on a phone (measured by e2e:enjoy); click is kept for
        the keyboard (a key activation has detail 0) -->
-  <button type="button" class="paddle minus" (pointerdown)="paddle(',', $event)" (click)="keyTap(',', $event)"
+  <button type="button" class="paddle minus" (pointerdown)="press(',', $event)" (click)="keyTap(',', $event)"
           [disabled]="status() !== 'driving'" aria-label="Shift down">&minus;</button>
-  <button type="button" class="paddle plus" (pointerdown)="paddle('.', $event)" (click)="keyTap('.', $event)"
+  <button type="button" class="paddle plus" (pointerdown)="press('.', $event)" (click)="keyTap('.', $event)"
           [disabled]="status() !== 'driving'" aria-label="Shift up">+</button>
 
   <header class="top">
@@ -50,10 +50,15 @@
           <span class="mode">{{ s.trans === 'manual' ? 'manual' : s.auto ? 'auto' : 'manual shift' }}</span>
           @if (!s.auto && s.trans !== 'manual') { <button type="button" class="auto" (click)="tap('m')">back to auto</button> }
           <span class="phase">{{ phase() }}</span>
-          <span class="digits"><span class="rpm">{{ fmt0.format(s.rpm) }}</span> rpm · <span class="kmh">{{ fmt0.format(s.kmh) }}</span> km/h</span>
-          @if (s.stalled) { <button type="button" class="restart" (click)="tap('i')">Restart</button> }
-          @if (s.hint) { <span class="hint">{{ s.hint }}</span> }
+          <!-- stalled, Restart takes the digits' line (both read 0, and the tach still shows rpm), so
+               the column does not grow past the dials on a short phone (B-01: it slid under the strip).
+               On press, as the paddles: a tap made while a thumb holds the clutch fires no click. -->
+          @if (s.stalled) { <button type="button" class="restart" (pointerdown)="press('i', $event)" (click)="keyTap('i', $event)">Restart</button> }
+          @else { <span class="digits"><span class="rpm">{{ fmt0.format(s.rpm) }}</span> rpm · <span class="kmh">{{ fmt0.format(s.kmh) }}</span> km/h</span> }
         </div>
+        <!-- a toast over the dials' empty lower middle, out of the column's flow, so a
+             long hint cannot push the column into the strip below (B-02) -->
+        @if (s.hint) { <span class="toast" role="status">{{ touchHint(s.hint) }}</span> }
         <app-gauge class="speedo" label="Speed" [unit]="speed().unit" [value]="s.kmh" [max]="speed().max"
                    [step]="speed().step" [labelEvery]="speed().labelEvery" [labelScale]="speed().labelScale" />
       </div>
