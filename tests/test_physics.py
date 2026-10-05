@@ -1652,6 +1652,64 @@ def test_describe_engine():
           + f"custom idle {custom['idle_rpm']:.0f} / max {custom['max_rpm']:.0f} rpm; bad numbers: {rejected[:80]}")
 
 
+def test_solve_cycle():
+    """Phase 6 (ADR-015): the cycle page's traces. They must be the solver's
+    own arrays, exactly; p must be paired with V (FINDING-008's trap, in
+    another form); the events must be the spec's; n_cycles stays >= 9; and a
+    NaN must fail at the boundary rather than reach the browser's JSON.parse.
+
+    The pairing check: the trapezoid loop integral of p dV over one
+    cylinder's displacement against imep_net. They are not equal: the solver
+    integrates p (at the step's start) times the analytic dV/dtheta, and at
+    1 degree a sharp combustion peak moves the answer by the rule alone
+    (measured 2026-10-05: trapezoid 0.961 / 0.975 / 0.996 of imep_net on
+    single / crdi15 / hd_i6; left-point 1.047 on single). So 5% is the
+    bound, and the same integral with p shifted 90 degrees must miss by far,
+    or the check couldn't tell. (A 360-degree shift is invisible to it: V
+    repeats every revolution.)"""
+    import json
+    import numpy as np
+    from dieselsim import bridge
+    from dieselsim.config import PRESETS
+    from dieselsim.engine import DieselEngine
+    key, rpm, load = "crdi15", 2000.0, 0.6
+    r = json.loads(bridge.solve_cycle(json.dumps({"engine": {"preset": key}, "rpm": rpm, "load": load})))
+    op = DieselEngine(spec=PRESETS[key]()).operating_point(rpm, load=load, n_cycles=9)
+    tr = op.cycle.traces
+    same = all(np.array_equal(np.array(r[k]), np.asarray(v, dtype=float)) for k, v in (
+        ("theta", tr.theta), ("V", tr.V), ("p", tr.p[0]), ("p_motored", tr.p_motored[0]), ("T", tr.T[0]),
+        ("hrr", tr.hrr[0]), ("lift_int", tr.valve_lift_int), ("lift_exh", tr.valve_lift_exh),
+        ("p_int_manifold", tr.p_int_manifold), ("p_exh_manifold", tr.p_exh_manifold)))
+    p, V = np.array(r["p"]), np.array(r["V"])
+    dV, Vd, im = np.roll(V, -1) - V, V.max() - V.min(), r["summary"]["imep_net"]
+    loop = lambda pp: float(np.sum(0.5 * (pp + np.roll(pp, -1)) * dV) / Vd / im)  # noqa: E731
+    paired, shifted = loop(p), loop(np.roll(p, 90))
+    vt = PRESETS[key]().valves
+    events = (r["events"]["ivo"], r["events"]["ivc"], r["events"]["evo"], r["events"]["evc"]) == \
+        (vt.ivo_deg, vt.ivc_deg, vt.evo_deg, vt.evc_deg)
+    try:
+        bridge.solve_cycle(json.dumps({"engine": {"preset": key}, "rpm": rpm, "load": load, "n_cycles": 6}))
+        floor = "accepted"
+    except bridge.RequestError:
+        floor = "refused"
+    try:
+        bridge._finite_deep({"summary": {"x": 1.0}, "p": [1.0, float("nan")]}, "t")
+        nan = "passed through"
+    except ArithmeticError as e:
+        nan = str(e)
+    parts = {"the solver's own traces, exactly": same,
+             "p paired with V (within 5% of imep_net)": abs(paired - 1.0) <= 0.05,
+             "and a 90-degree shift misses by far": abs(shifted - 1.0) > 0.5,
+             "valve events are the spec's": events,
+             "cylinder 1's phase is 0": r["cylinder_phase_deg"] == 0.0,
+             "n_cycles below 9 refused": floor == "refused",
+             "a NaN deep in a trace fails at the boundary": "p[1]" in nan}
+    bad = [k for k, ok in parts.items() if not ok]
+    check("solve_cycle: the cycle page's traces (ADR-015)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ")
+          + f"loop/imep {paired:.4f}, shifted 90 deg {shifted:.3f}; p_max {max(p) / 1e5:.1f} bar")
+
+
 def test_live_grid_pieces_match_the_shipped_grid():
     """ADR-014 step 3: a browser worker builds a drivable grid from the
     bridge's pieces, and tools/build_live_grids.py now builds with the same
@@ -1817,7 +1875,7 @@ def main():
                test_cold_slap_follows_clearance,
                test_ramps_have_their_own_height,
                test_custom_engine_json,
-               test_describe_engine,
+               test_describe_engine, test_solve_cycle,
                test_live_grid_pieces_match_the_shipped_grid,
                test_na_engines_idle_on_a_converter,
                test_flat_tappet_wears_more_than_roller,
