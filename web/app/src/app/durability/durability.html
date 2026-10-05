@@ -1,0 +1,92 @@
+<header class="bar">
+  <span class="wordmark">Diesel Sim</span>
+  <nav class="nav"><a routerLink="/">Dyno pull</a> · <a routerLink="/grid">Operating grid</a> · <a routerLink="/cycle">Cycle</a> · <a routerLink="/sweep">Sweep</a> · <span aria-current="page">Durability</span> · <a routerLink="/spec">Spec</a> · <a routerLink="/drive">Drive</a> · <a routerLink="/enjoy">Enjoy</a></nav>
+</header>
+
+<main class="page">
+  <h1>Durability</h1>
+  <p class="lead">Age the engine over a duty cycle: wear, oil and their feedback, re-solving the engine every block so the
+    wear changes how it runs. Solved by Python in your browser.</p>
+
+  <div class="controls">
+    <label class="field"><span>Engine</span>
+      <select [disabled]="solver.status() !== 'ready' || running()" (change)="selectEngine($any($event.target).value)">
+        @for (p of presets(); track p.key) { <option [value]="p.key" [selected]="p.key === engine()">{{ p.name }}</option> }
+      </select>
+    </label>
+    <label class="field"><span>Running hours</span>
+      <input class="hours-in" type="number" min="10" max="20000" step="50" [value]="hours()" [disabled]="running()"
+             (change)="hours.set(num($any($event.target).value, 10, 20000) ?? 1000)" /></label>
+    <label class="field"><span>Block (hours)</span>
+      <input class="step-in" type="number" min="10" max="500" step="10" [value]="stepH()" [disabled]="running()"
+             (change)="stepH.set(num($any($event.target).value, 10, 500) ?? 50)" /></label>
+    @if (running()) { <button type="button" class="run" (click)="halt()">Stop</button> }
+    @else { <button type="button" class="run" (click)="run()" [disabled]="solver.status() !== 'ready'">{{ rows().length ? 'Run again' : 'Start' }}</button> }
+  </div>
+  <p class="note cost">The duty cycle is idle, 62% and 85% of rated speed, and rated, at rising load. {{ fmt0.format(hours()) }} hours
+    take {{ fmtDuration(estimate()) }} here. It stops between blocks when you press Stop.</p>
+
+  <app-spec-status [engine]="engine()" [solvedWith]="rows().length && !running() ? solvedWith() : undefined" [busy]="running()" again="Run it again" (rerun)="run()" />
+
+  <p class="status" role="status" aria-live="polite">
+    @switch (solver.status()) {
+      @case ('loading') { Loading Python and numpy into your browser. About 9 MB the first time. }
+      @case ('error') { <span class="err">{{ solver.error() }}</span> }
+      @case ('ready') {
+        @if (running()) {
+          Running: {{ fmt0.format(last()?.['hours'] ?? 0) }} of {{ fmt0.format(hours()) }} hours@if (etaS() !== undefined) {, {{ fmtDuration(etaS()!) }} left}.
+        } @else if (error()) { <span class="err">{{ error() }}</span> }
+        @else if (last(); as l) { {{ fmt0.format(l['hours']!) }} hours run. }
+        @else { Ready. }
+      }
+    }
+  </p>
+
+  @if (plots().length) {
+    <div class="plots">
+      @for (pl of plots(); track pl.title) {
+        <figure class="plot">
+          <figcaption>{{ pl.title }}</figcaption>
+          <svg [attr.viewBox]="'0 0 ' + pl.W + ' ' + pl.H" role="img" [attr.aria-label]="pl.title + '. ' + pl.desc">
+            @for (t of pl.yTicks; track $index) {
+              <line class="grid" [attr.x1]="pl.M.l" [attr.x2]="pl.W - pl.M.r" [attr.y1]="t.y" [attr.y2]="t.y" />
+              <text class="tick" [attr.x]="pl.M.l - 6" [attr.y]="t.y + 4" text-anchor="end">{{ t.label }}</text>
+            }
+            @for (t of pl.xTicks; track $index) {
+              <line class="grid" [attr.x1]="t.x" [attr.x2]="t.x" [attr.y1]="pl.M.t" [attr.y2]="pl.H - pl.M.b" />
+              <text class="tick" [attr.x]="t.x" [attr.y]="pl.H - pl.M.b + 16" text-anchor="middle">{{ t.label }}</text>
+            }
+            @for (m of pl.markers; track $index) {
+              <line [class]="'marker ' + m.cls" [attr.x1]="m.x" [attr.x2]="m.x" [attr.y1]="pl.M.t" [attr.y2]="pl.H - pl.M.b" />
+              <text class="mlabel" [attr.x]="m.x + 3" [attr.y]="pl.M.t + 11 + m.row * 13">{{ m.label }}</text>
+            }
+            @for (l of pl.lines; track l.label) { <polyline [class]="'trace ' + l.cls" [attr.points]="l.d" /> }
+            <text class="axis" [attr.x]="(pl.M.l + pl.W - pl.M.r) / 2" [attr.y]="pl.H - 6" text-anchor="middle">{{ pl.xLabel }}</text>
+            <text class="axis" [attr.transform]="'translate(14,' + (pl.M.t + pl.H - pl.M.b) / 2 + ') rotate(-90)'" text-anchor="middle">{{ pl.yLabel }}</text>
+          </svg>
+          <p class="cap">{{ pl.desc }}</p>
+        </figure>
+      }
+    </div>
+  }
+
+  @if (last(); as l) {
+    <table class="data durability-data">
+      <caption>After {{ fmt0.format(l['hours']!) }} hours</caption>
+      <tbody>
+        <tr><th scope="row">Life consumed (0 = new)</th><td>{{ fmt3.format(l['health']!) }}%</td></tr>
+        <tr><th scope="row">Bore wear at TDC</th><td>{{ fmt3.format(l['bore_wear_um']!) }} µm</td></tr>
+        <tr><th scope="row">Ring gap</th><td>{{ fmt3.format(l['ring_gap_mm']!) }} mm</td></tr>
+        <tr><th scope="row">Main bearing clearance</th><td>{{ fmt2.format(l['main_clr_um']!) }} µm</td></tr>
+        <tr><th scope="row">Blow-by</th><td>{{ fmt1.format(l['blowby']!) }} L/min</td></tr>
+        <tr><th scope="row">Oil pressure at rated</th><td>{{ fmt2.format(l['oil_p']! / 1e5) }} bar</td></tr>
+        <tr><th scope="row">Oil: soot, TBN</th><td>{{ fmt2.format(l['oil_soot']!) }}%, {{ fmt1.format(l['oil_tbn']!) }}</td></tr>
+        <tr><th scope="row">Oil changes</th><td>{{ fmt0.format(l['oil_changes']!) }}</td></tr>
+        <tr><th scope="row">Rated torque, power</th><td>{{ fmt1.format(l['torque']!) }} N·m, {{ fmt1.format(l['power']! / 1000) }} kW</td></tr>
+        <tr><th scope="row">BSFC at rated (steady state)</th><td>{{ fmt0.format(l['bsfc']!) }} g/kWh</td></tr>
+      </tbody>
+    </table>
+    <p class="note">Life consumed counts up from 0 for a new engine; it is not health remaining (FINDING-019). Economy is
+      a steady-state figure (FINDING-009).</p>
+  }
+</main>
