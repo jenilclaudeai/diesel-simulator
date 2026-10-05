@@ -1710,6 +1710,37 @@ def test_solve_cycle():
           + f"loop/imep {paired:.4f}, shifted 90 deg {shifted:.3f}; p_max {max(p) / 1e5:.1f} bar")
 
 
+def test_mfb50_counts_combustion_before_tdc():
+    """FINDING-024: MFB50 accumulated heat release from firing TDC (0), so
+    combustion before TDC (at 700-719) was counted last and MFB50 came out
+    late: 7 deg on `single`, which releases 41% of its heat before TDC.
+    Synthetic: equal heat in the 20 deg before and the 20 deg after TDC puts
+    the half at -1 (the last degree before TDC); the old code said +19.
+    Real: on `single` the solver's MFB50 equals an independent computation
+    from the traces, accumulated from gas-exchange TDC."""
+    import json
+    import types
+    import numpy as np
+    from dieselsim import bridge
+    from dieselsim.cycle import CycleSolver
+    ns = types.SimpleNamespace(n=720, theta=np.arange(720.0))
+    hrr = np.zeros(720)
+    hrr[700:720] = 1.0
+    hrr[0:20] = 1.0
+    synthetic = CycleSolver.mfb50(ns, hrr, 1.0)
+    r = json.loads(bridge.solve_cycle(json.dumps({"engine": {"preset": "single"}, "rpm": 2000, "load": 0.5})))
+    h, th = np.array(r["hrr"]), np.array(r["theta"])
+    rel = np.where(th > 360, th - 720, th)
+    order = np.argsort(rel, kind="stable")
+    c = np.cumsum(h[order])
+    independent = float(rel[order][int(np.searchsorted(c, 0.5 * c[-1]))])
+    solver = r["summary"]["mfb50"]
+    ok = synthetic == -1.0 and solver == independent
+    check("MFB50 counts combustion before TDC (FINDING-024)", 0.0 if ok else 1.0, 0.0, 0.0,
+          f"synthetic {synthetic:+.0f} (want -1; the old code: +19); single 2000/0.5: solver {solver:+.1f}, "
+          f"independent {independent:+.1f}")
+
+
 def test_live_grid_pieces_match_the_shipped_grid():
     """ADR-014 step 3: a browser worker builds a drivable grid from the
     bridge's pieces, and tools/build_live_grids.py now builds with the same
@@ -1875,7 +1906,7 @@ def main():
                test_cold_slap_follows_clearance,
                test_ramps_have_their_own_height,
                test_custom_engine_json,
-               test_describe_engine, test_solve_cycle,
+               test_describe_engine, test_solve_cycle, test_mfb50_counts_combustion_before_tdc,
                test_live_grid_pieces_match_the_shipped_grid,
                test_na_engines_idle_on_a_converter,
                test_flat_tappet_wears_more_than_roller,

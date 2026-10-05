@@ -60,6 +60,12 @@ landscape).
   `test_solve_cycle` 7 parts (5 of 5 mutants); round trip 24 (+2): real
   Pyodide worker vs native within 2.25e-7 (2 of 2 mutants). 6.1 s natively
   per point, so ~16 s in the browser; 109 kB of JSON.
+- **Found and fixed on the way: FINDING-024.** MFB50 counted combustion
+  before TDC last, so it was late by up to 7°. It's a reported figure only.
+  The 10 grids were re-stamped (`dee93a17` → `a442cfb3`) with proof: the
+  pre-fix tree hashes to `dee93a17` exactly, `mfb50` has no grid-path
+  reader, a shipped cell recomputes with 0.00e+00 difference, and in each
+  file only the 64-byte hash changed. Branch `fix/mfb50`, stacked on #90.
 - Next: the cycle page; then the sweep and durability calls; then the
   spec editor.
 3. **The grid-build plan is deferred by the owner until v1 is complete**
@@ -100,7 +106,7 @@ landscape).
 
 | suite | result |
 |---|---|
-| `python3 tests/test_physics.py` | 71 passed, 0 failed, 3 known (with scipy); 66 + 4 skipped (without) |
+| `python3 tests/test_physics.py` | 71 passed, 0 failed, 3 known (with scipy); 66 + 4 skipped (without). On `fix/mfb50`: 73 / 0 / 3 (with scipy) |
 | Pyodide suite | 59 passed, 0 failed, 2 known, 12 skipped |
 | `tools/fixtures/gen_fixtures.py --check` | 7 modules current |
 | `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |
@@ -1323,6 +1329,7 @@ a miscount, not a change.)*
 | 021 | `play.py`'s real-time sound was a stale copy; slap, exhaust flow and seating moved it 0.0000% | **fixed (#59)** |
 | 022 | intake loudness and turbo boost term normalised away in `render()`, so also in the synth | **fixed with option A (#64)**. *(Was: "open: known defect, the owner's call with the listening review".)* |
 | 023 | the synth's slap input (skirt film) sits on its clamp in 240/240 cold cells, 115/240 warm | **fixed with option A (#78)**, with the ramp-height parameter in the same rebuild. *(Was, stale after #78 merged until 2026-10-05:)* open, option A chosen (2026-09-30). *(Before that:)* known defect; the owner chose to do it after 022, in its own rebuild |
+| 024 | MFB50 counted combustion before TDC last: late by up to 7° (`single`, 41% of heat before TDC) | **fixed** (`fix/mfb50`); a reported figure only; the 10 grids re-stamped with proof (dee93a17 → a442cfb3) |
 
 ### Still open inside those
 
