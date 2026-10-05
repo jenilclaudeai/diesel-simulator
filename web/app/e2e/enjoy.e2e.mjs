@@ -209,23 +209,32 @@ check("Restart: one finger is refused in touch words; with the clutch held it re
   && !restarted.stalled && restarted.rpm > 300,
   `one finger: stalled ${refused.stalled}, "${refused.hint}"; clutch held: stalled ${restarted.stalled}, ${Math.round(restarted.rpm)} rpm`);
 
-// B-02: on a short landscape phone (Chrome's toolbar showing), a clutchless
-// shift's hint printed over the strip, and the middle column ran into it
+// B-02: on a short landscape phone (Chrome's toolbar showing) a clutchless
+// shift's hint printed over the strip. The checks are layout rules, not pixel
+// margins, so no font can pass them by luck (CI's wide Linux font found that):
+// at 846 x 300 with the text at 125% (Android's larger text), the middle column
+// stays inside the dials' row, the strip below it, the hint above the strip,
+// the lamps below the top bar
 await page.setViewport({ width: 846, height: 300, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true, isLandscape: true });
+const big = await page.addStyleTag({ content: "html { font-size: 125% !important; }" });
 await sleep(300);
 await tapEl("button.paddle.plus");
 await sleep(200);
 const short = await page.evaluate(() => {
   const b = s => document.querySelector(s)?.getBoundingClientRect();
-  const hint = b(".toast"), strip = b(".strip"), mid = b(".mid");
+  const g = b(".gauges"), m = b(".mid"), st = b(".strip"), h = b(".toast"), t = b(".top"), l = b(".lamps");
+  const r = x => Math.round(x);
   return { text: document.querySelector(".toast")?.textContent.trim() ?? "",
-    hintIntoStrip: hint && strip ? Math.round(hint.bottom - strip.top) : null,
-    midIntoStrip: mid && strip ? Math.round(mid.bottom - strip.top) : null };
+    rules: g && m && st && h && t && l ? {
+      column: m.top >= g.top - 0.5 && m.bottom <= g.bottom + 0.5, strip: st.top >= g.bottom - 0.5,
+      hint: h.bottom <= st.top + 0.5, lamps: l.top >= t.bottom - 0.5 } : null,
+    px: g && m && st ? `dials ${r(g.top)}-${r(g.bottom)}, column ${r(m.top)}-${r(m.bottom)}, strip from ${r(st.top)}` : "" };
 });
+await big.evaluate(e => e.remove());
 await page.setViewport({ width: 915, height: 412, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true, isLandscape: true });
-check("846 x 300: the shift hint and the middle column stay clear of the strip (B-02)",
-  /clutch/.test(short.text) && short.hintIntoStrip !== null && short.hintIntoStrip <= 0 && short.midIntoStrip <= 0,
-  `"${short.text}"; hint ${short.hintIntoStrip} px, column ${short.midIntoStrip} px into the strip`);
+const rulesOk = !!short.rules && Object.values(short.rules).every(Boolean);
+check("846 x 300, text 125%: column inside the dials' row, strip below, hint above the strip, lamps below the top bar (B-02)",
+  /clutch/.test(short.text) && rulesOk, `"${short.text}"; ${JSON.stringify(short.rules)}; ${short.px}`);
 
 // the dial scale follows the vehicle
 const hatchTop = d.speedTop;
