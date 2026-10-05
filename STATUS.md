@@ -53,8 +53,11 @@ landscape).
 2. **Decide the grid-build plan,** `reviews/PROPOSAL-grid-build.md`. Option
    A (an honest ETA) shipped in #88. The rest is open: B+C (early stop plus
    `thermo.py` speedups, one solver change and one rebuild), and E (phones
-   get prebuilt or derived grids). Option C's speedup is being measured
-   (session 6).
+   get prebuilt or derived grids). **Option C measured (session 6):
+   1.107×, bit-identical**: hoisting `thermo`'s constants. Inlining further
+   gave nothing, and its Newton part was already done. So B+C give
+   ~2–2.7× on every build. That's not enough for phones on its own, which is
+   why E matters.
 3. **Copy the Features tab into the bug sheet** (template
    `12mLsfoFBwh_5Zqai6zpHpv3yZSBx45jvFgf3ZnYZyNY`: tab menu → Copy to →
    Existing spreadsheet). Its status columns read `reviews/FEATURES.csv`.
