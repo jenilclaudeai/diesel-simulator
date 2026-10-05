@@ -8,6 +8,8 @@ import { SpecEdits } from '../spec/spec-edits';
 import { FIELDS, GROUPS, label, readOnly, unitFor } from '../spec/spec-meta';
 import { refKey, SpecStatus } from '../spec/spec-status';
 import { defaultRange, sweepValues } from './sweep-plan';
+import { sweepNote } from './sweep-note';
+import { GRID_VERSION } from '../solver/physics-version';
 
 const fmt0 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 const fmt1 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
@@ -77,6 +79,8 @@ export class SweepPage implements OnInit {
     const c = this.current(), d = c === undefined ? undefined : defaultRange(c, this.schemaRow().type === 'int');
     return { from: this.from() ?? d?.from, to: this.to() ?? d?.to };
   });
+  /** how far apart points must be to mean anything (FINDING-013) */
+  protected readonly resolution = computed(() => sweepNote(this.engine(), GRID_VERSION));
   protected readonly plan = computed(() => {
     const r = this.range();
     return r.from === undefined || r.to === undefined ? [] : sweepValues(r.from, r.to, this.steps(), this.schemaRow().type === 'int');

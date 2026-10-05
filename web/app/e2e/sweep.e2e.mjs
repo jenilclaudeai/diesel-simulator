@@ -76,6 +76,9 @@ const plots = await page.$$eval("figure.plot", fs => fs.map(f => ({ t: f.querySe
   n: f.querySelector("polyline")?.getAttribute("points").trim().split(/\s+/).length })));
 check("two plots of the 4 points, the economy one labelled steady-state",
   plots.length === 2 && plots.every(p => p.n === 4) && /steady state/.test(plots[1]?.t ?? ""), JSON.stringify(plots));
+const resolution = await page.$eval("p.resolution", e => e.textContent.replace(/\s+/g, " ").trim()).catch(() => "");
+check("the page says how far apart points must be to mean anything: crdi15's measured 5.8% (this build's accuracy table)",
+  /noise, not physics/.test(resolution) && /5\.8%/.test(resolution), `"${resolution.slice(0, 160)}…"`);
 await page.screenshot({ path: path.join(out, "sweep.png"), fullPage: true });
 
 // Stop: a second run halted after its first point
