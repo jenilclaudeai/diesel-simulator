@@ -1784,6 +1784,39 @@ def test_durability_steps():
           f"{rows[-1]['health']:.3f}%" if rows else "no rows")
 
 
+def test_spec_editor_schema():
+    """Phase 6 (ADR-015): the spec editor's data. The committed schema
+    (web/app/src/app/spec/spec-schema.json, tools/spec_schema.py) is current;
+    describe_spec returns exactly its paths, in order, with overrides applied;
+    and every editable field (number, int, bool) round-trips through
+    `overrides`: set to its own value, the spec is unchanged, so every path
+    the editor sends is one the bridge accepts."""
+    import importlib.util
+    import json
+    import os
+    from dieselsim import bridge
+    root = os.path.join(os.path.dirname(__file__), "..")
+    spec_ = importlib.util.spec_from_file_location("spec_schema", os.path.join(root, "tools", "spec_schema.py"))
+    tool = importlib.util.module_from_spec(spec_)
+    spec_.loader.exec_module(tool)
+    with open(tool.OUT) as fh:
+        committed = json.load(fh)
+    current = committed == tool.schema()
+    d = json.loads(bridge.describe_spec(json.dumps({"engine": {"preset": "crdi15",
+                                                               "overrides": {"geom.compression_ratio": 17.0}}})))
+    paths = [f["path"] for f in d["fields"]] == [r["path"] for r in committed]
+    cr = next(f["value"] for f in d["fields"] if f["path"] == "geom.compression_ratio") == 17.0
+    editable = {f["path"]: f["value"] for f in d["fields"] if f["type"] in ("number", "int", "bool")}
+    again = json.loads(bridge.describe_spec(json.dumps({"engine": {"preset": "crdi15", "overrides": editable}})))
+    roundtrip = again["fields"] == d["fields"]
+    parts = {"the committed schema is current": current, "describe_spec has the schema's paths, in order": paths,
+             "an override shows in describe_spec": cr, "every editable field round-trips through overrides": roundtrip}
+    bad = [k for k, ok in parts.items() if not ok]
+    check("spec editor: schema and describe_spec (ADR-015)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ")
+          + f"{len(d['fields'])} fields, {len(editable)} editable")
+
+
 def test_live_grid_pieces_match_the_shipped_grid():
     """ADR-014 step 3: a browser worker builds a drivable grid from the
     bridge's pieces, and tools/build_live_grids.py now builds with the same
@@ -1950,6 +1983,7 @@ def main():
                test_ramps_have_their_own_height,
                test_custom_engine_json,
                test_describe_engine, test_solve_cycle, test_mfb50_counts_combustion_before_tdc, test_durability_steps,
+               test_spec_editor_schema,
                test_live_grid_pieces_match_the_shipped_grid,
                test_na_engines_idle_on_a_converter,
                test_flat_tappet_wears_more_than_roller,

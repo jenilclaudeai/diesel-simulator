@@ -1,0 +1,1130 @@
+[
+ {
+  "path": "name",
+  "cls": "EngineSpec",
+  "type": "string",
+  "note": ""
+ },
+ {
+  "path": "geom.bore",
+  "cls": "Geometry",
+  "type": "number",
+  "note": "m"
+ },
+ {
+  "path": "geom.stroke",
+  "cls": "Geometry",
+  "type": "number",
+  "note": "m"
+ },
+ {
+  "path": "geom.conrod",
+  "cls": "Geometry",
+  "type": "number",
+  "note": "m  (centre-to-centre)"
+ },
+ {
+  "path": "geom.n_cyl",
+  "cls": "Geometry",
+  "type": "int",
+  "note": ""
+ },
+ {
+  "path": "geom.compression_ratio",
+  "cls": "Geometry",
+  "type": "number",
+  "note": "geometric"
+ },
+ {
+  "path": "geom.pin_offset",
+  "cls": "Geometry",
+  "type": "number",
+  "note": "m  (+ = toward thrust side)"
+ },
+ {
+  "path": "geom.firing_order",
+  "cls": "Geometry",
+  "type": "list",
+  "note": ""
+ },
+ {
+  "path": "geom.vee_angle_deg",
+  "cls": "Geometry",
+  "type": "number",
+  "note": "0 => inline"
+ },
+ {
+  "path": "geom.recip_mass",
+  "cls": "Geometry",
+  "type": "number",
+  "note": "kg, piston + rings + pin + small end"
+ },
+ {
+  "path": "geom.rot_mass_bigend",
+  "cls": "Geometry",
+  "type": "number",
+  "note": "kg, rotating part of the con-rod"
+ },
+ {
+  "path": "geom.flywheel_inertia",
+  "cls": "Geometry",
+  "type": "number",
+  "note": "kg m^2 (flywheel + crank + damper)"
+ },
+ {
+  "path": "valves.ivo_deg",
+  "cls": "ValveTrain",
+  "type": "int",
+  "note": "intake opens (before TDC overlap)"
+ },
+ {
+  "path": "valves.ivc_deg",
+  "cls": "ValveTrain",
+  "type": "int",
+  "note": "intake closes (after BDC)"
+ },
+ {
+  "path": "valves.evo_deg",
+  "cls": "ValveTrain",
+  "type": "int",
+  "note": "exhaust opens (before BDC)"
+ },
+ {
+  "path": "valves.evc_deg",
+  "cls": "ValveTrain",
+  "type": "int",
+  "note": "exhaust closes (after TDC overlap)"
+ },
+ {
+  "path": "valves.n_intake_valves",
+  "cls": "ValveTrain",
+  "type": "int",
+  "note": ""
+ },
+ {
+  "path": "valves.n_exhaust_valves",
+  "cls": "ValveTrain",
+  "type": "int",
+  "note": ""
+ },
+ {
+  "path": "valves.intake_valve_dia",
+  "cls": "ValveTrain",
+  "type": "number",
+  "note": "m, inner seat diameter"
+ },
+ {
+  "path": "valves.exhaust_valve_dia",
+  "cls": "ValveTrain",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "valves.intake_lift_max",
+  "cls": "ValveTrain",
+  "type": "number",
+  "note": "m"
+ },
+ {
+  "path": "valves.exhaust_lift_max",
+  "cls": "ValveTrain",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "valves.lash_intake",
+  "cls": "ValveTrain",
+  "type": "number",
+  "note": "m, cold lash at the valve"
+ },
+ {
+  "path": "valves.lash_exhaust",
+  "cls": "ValveTrain",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "valves.cam_base_radius",
+  "cls": "ValveTrain",
+  "type": "number",
+  "note": "m"
+ },
+ {
+  "path": "valves.follower_radius",
+  "cls": "ValveTrain",
+  "type": "number",
+  "note": "m (roller) -- 0 => flat tappet"
+ },
+ {
+  "path": "valves.valve_spring_preload",
+  "cls": "ValveTrain",
+  "type": "number",
+  "note": "N per valve at zero lift"
+ },
+ {
+  "path": "valves.valve_spring_rate",
+  "cls": "ValveTrain",
+  "type": "number",
+  "note": "N/m"
+ },
+ {
+  "path": "valves.valve_train_eq_mass",
+  "cls": "ValveTrain",
+  "type": "number",
+  "note": "kg referred to the valve"
+ },
+ {
+  "path": "valves.cd_intake",
+  "cls": "ValveTrain",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "valves.cd_exhaust",
+  "cls": "ValveTrain",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "valves.ramp_fraction",
+  "cls": "ValveTrain",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "valves.ramp_height_intake",
+  "cls": "ValveTrain",
+  "type": "string",
+  "note": ""
+ },
+ {
+  "path": "valves.ramp_height_exhaust",
+  "cls": "ValveTrain",
+  "type": "string",
+  "note": ""
+ },
+ {
+  "path": "inj.n_holes",
+  "cls": "Injection",
+  "type": "int",
+  "note": ""
+ },
+ {
+  "path": "inj.hole_dia",
+  "cls": "Injection",
+  "type": "number",
+  "note": "m"
+ },
+ {
+  "path": "inj.cd_nozzle",
+  "cls": "Injection",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "inj.rail_pressure_max",
+  "cls": "Injection",
+  "type": "number",
+  "note": "Pa"
+ },
+ {
+  "path": "inj.rail_pressure_idle",
+  "cls": "Injection",
+  "type": "number",
+  "note": "Pa"
+ },
+ {
+  "path": "inj.soi_deg_btdc",
+  "cls": "Injection",
+  "type": "number",
+  "note": "main injection start, deg BTDC"
+ },
+ {
+  "path": "inj.pilot_enabled",
+  "cls": "Injection",
+  "type": "bool",
+  "note": ""
+ },
+ {
+  "path": "inj.pilot_fraction",
+  "cls": "Injection",
+  "type": "number",
+  "note": "of total fuel mass"
+ },
+ {
+  "path": "inj.pilot_advance_deg",
+  "cls": "Injection",
+  "type": "number",
+  "note": "deg before main SOI"
+ },
+ {
+  "path": "inj.cetane_number",
+  "cls": "Injection",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "inj.fuel_temp",
+  "cls": "Injection",
+  "type": "number",
+  "note": "K at the nozzle"
+ },
+ {
+  "path": "turbo.enabled",
+  "cls": "Turbo",
+  "type": "bool",
+  "note": ""
+ },
+ {
+  "path": "turbo.comp_wheel_dia",
+  "cls": "Turbo",
+  "type": "number",
+  "note": "m (inducer/exducer scale)"
+ },
+ {
+  "path": "turbo.turb_wheel_dia",
+  "cls": "Turbo",
+  "type": "number",
+  "note": "m"
+ },
+ {
+  "path": "turbo.comp_blades",
+  "cls": "Turbo",
+  "type": "int",
+  "note": "full+splitter blade count (tone source)"
+ },
+ {
+  "path": "turbo.turb_blades",
+  "cls": "Turbo",
+  "type": "int",
+  "note": ""
+ },
+ {
+  "path": "turbo.shaft_inertia",
+  "cls": "Turbo",
+  "type": "number",
+  "note": "kg m^2"
+ },
+ {
+  "path": "turbo.comp_eff_peak",
+  "cls": "Turbo",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "turbo.turb_eff_peak",
+  "cls": "Turbo",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "turbo.n_corr_ref",
+  "cls": "Turbo",
+  "type": "number",
+  "note": "rpm, speed giving pr_max_ref at u=1"
+ },
+ {
+  "path": "turbo.mdot_corr_max",
+  "cls": "Turbo",
+  "type": "number",
+  "note": "kg/s corrected choke flow at u=1"
+ },
+ {
+  "path": "turbo.pr_max_ref",
+  "cls": "Turbo",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "turbo.turbine_area_eff",
+  "cls": "Turbo",
+  "type": "number",
+  "note": "m^2 effective nozzle area (A/R proxy)"
+ },
+ {
+  "path": "turbo.vgt",
+  "cls": "Turbo",
+  "type": "bool",
+  "note": "variable geometry"
+ },
+ {
+  "path": "turbo.vgt_min_frac",
+  "cls": "Turbo",
+  "type": "number",
+  "note": "min effective area fraction"
+ },
+ {
+  "path": "turbo.wastegate_pset",
+  "cls": "Turbo",
+  "type": "number",
+  "note": "boost PR at which the WG starts to open"
+ },
+ {
+  "path": "turbo.wastegate_gain",
+  "cls": "Turbo",
+  "type": "number",
+  "note": "m^2 per unit PR above set point"
+ },
+ {
+  "path": "turbo.bearing_visc_k",
+  "cls": "Turbo",
+  "type": "number",
+  "note": "N m s^2 (viscous drag coeff, x omega^2)"
+ },
+ {
+  "path": "turbo.intercooler_eff",
+  "cls": "Turbo",
+  "type": "number",
+  "note": "effectiveness"
+ },
+ {
+  "path": "turbo.intercooler_dp",
+  "cls": "Turbo",
+  "type": "number",
+  "note": "Pa at rated flow"
+ },
+ {
+  "path": "turbo.charge_cooler_medium_T",
+  "cls": "Turbo",
+  "type": "number",
+  "note": "K"
+ },
+ {
+  "path": "air.intake_plenum_vol",
+  "cls": "AirPath",
+  "type": "number",
+  "note": "m^3"
+ },
+ {
+  "path": "air.exhaust_manifold_vol",
+  "cls": "AirPath",
+  "type": "number",
+  "note": "m^3"
+ },
+ {
+  "path": "air.runner_length_int",
+  "cls": "AirPath",
+  "type": "number",
+  "note": "m (acoustic)"
+ },
+ {
+  "path": "air.runner_length_exh",
+  "cls": "AirPath",
+  "type": "number",
+  "note": "m"
+ },
+ {
+  "path": "air.intake_pipe_length",
+  "cls": "AirPath",
+  "type": "number",
+  "note": "m  snorkel + filter box outlet"
+ },
+ {
+  "path": "air.airbox_volume",
+  "cls": "AirPath",
+  "type": "number",
+  "note": "m^3 (Helmholtz)"
+ },
+ {
+  "path": "air.airbox_neck_len",
+  "cls": "AirPath",
+  "type": "number",
+  "note": "m"
+ },
+ {
+  "path": "air.airbox_neck_area",
+  "cls": "AirPath",
+  "type": "number",
+  "note": "m^2"
+ },
+ {
+  "path": "air.air_filter_dp_k",
+  "cls": "AirPath",
+  "type": "number",
+  "note": "Pa / (kg/s)^2"
+ },
+ {
+  "path": "air.exhaust_pipe_length",
+  "cls": "AirPath",
+  "type": "number",
+  "note": "m tailpipe run"
+ },
+ {
+  "path": "air.exhaust_pipe_dia",
+  "cls": "AirPath",
+  "type": "number",
+  "note": "m"
+ },
+ {
+  "path": "air.muffler_volume",
+  "cls": "AirPath",
+  "type": "number",
+  "note": "m^3"
+ },
+ {
+  "path": "air.muffler_length",
+  "cls": "AirPath",
+  "type": "number",
+  "note": "m (chamber length, tone)"
+ },
+ {
+  "path": "air.dpf_present",
+  "cls": "AirPath",
+  "type": "bool",
+  "note": ""
+ },
+ {
+  "path": "air.egr_max_fraction",
+  "cls": "AirPath",
+  "type": "number",
+  "note": "of trapped mass"
+ },
+ {
+  "path": "air.intake_restriction_area",
+  "cls": "AirPath",
+  "type": "number",
+  "note": "m^2 (0 => auto from valve area)"
+ },
+ {
+  "path": "air.exhaust_outlet_area",
+  "cls": "AirPath",
+  "type": "number",
+  "note": "m^2 (0 => auto)"
+ },
+ {
+  "path": "oil.name",
+  "cls": "Lubricant",
+  "type": "string",
+  "note": ""
+ },
+ {
+  "path": "oil.vogel_a",
+  "cls": "Lubricant",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "oil.vogel_b",
+  "cls": "Lubricant",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "oil.vogel_c",
+  "cls": "Lubricant",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "oil.density15",
+  "cls": "Lubricant",
+  "type": "number",
+  "note": "kg/m^3"
+ },
+ {
+  "path": "oil.viscosity_index",
+  "cls": "Lubricant",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "oil.tbn0",
+  "cls": "Lubricant",
+  "type": "number",
+  "note": "mg KOH/g"
+ },
+ {
+  "path": "oil.hths",
+  "cls": "Lubricant",
+  "type": "number",
+  "note": "Pa.s at 150 C, 1e6 1/s"
+ },
+ {
+  "path": "oil.sump_volume",
+  "cls": "Lubricant",
+  "type": "number",
+  "note": "m^3 (34 L truck sump)"
+ },
+ {
+  "path": "oil.pump_disp",
+  "cls": "Lubricant",
+  "type": "number",
+  "note": "m^3/rev"
+ },
+ {
+  "path": "oil.pump_relief",
+  "cls": "Lubricant",
+  "type": "number",
+  "note": "Pa gauge"
+ },
+ {
+  "path": "oil.pump_eta_vol",
+  "cls": "Lubricant",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "oil.pump_eta_mech",
+  "cls": "Lubricant",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "oil.cooler_UA",
+  "cls": "Lubricant",
+  "type": "number",
+  "note": "W/K oil-to-coolant"
+ },
+ {
+  "path": "oil.change_interval_h",
+  "cls": "Lubricant",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "trib.n_comp_rings",
+  "cls": "Tribology",
+  "type": "int",
+  "note": ""
+ },
+ {
+  "path": "trib.ring_axial_width",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "m (face width in stroke dir.)"
+ },
+ {
+  "path": "trib.ring_tangential_load",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "N per ring (free-gap tension)"
+ },
+ {
+  "path": "trib.oil_ring_load",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "N"
+ },
+ {
+  "path": "trib.oil_ring_width",
+  "cls": "Tribology",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "trib.ring_gap_new",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "m, installed end gap"
+ },
+ {
+  "path": "trib.ring_face_roughness",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "m Rq"
+ },
+ {
+  "path": "trib.bore_roughness",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "m Rq (plateau honed)"
+ },
+ {
+  "path": "trib.oil_supply_film",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "m film left for the ring pack"
+ },
+ {
+  "path": "trib.bore_hardness",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "Pa (Vickers ~ 265 HV cast iron)"
+ },
+ {
+  "path": "trib.ring_hardness",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "Pa (nitrided / CrN)"
+ },
+ {
+  "path": "trib.skirt_area",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "m^2 per piston (both thrust faces)"
+ },
+ {
+  "path": "trib.skirt_clearance_new",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "m diametral, cold"
+ },
+ {
+  "path": "trib.piston_alu",
+  "cls": "Tribology",
+  "type": "bool",
+  "note": ""
+ },
+ {
+  "path": "trib.main_dia",
+  "cls": "Tribology",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "trib.main_width",
+  "cls": "Tribology",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "trib.main_clearance_new",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "m diametral"
+ },
+ {
+  "path": "trib.n_mains",
+  "cls": "Tribology",
+  "type": "int",
+  "note": ""
+ },
+ {
+  "path": "trib.rod_dia",
+  "cls": "Tribology",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "trib.rod_width",
+  "cls": "Tribology",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "trib.rod_clearance_new",
+  "cls": "Tribology",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "trib.bearing_roughness",
+  "cls": "Tribology",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "trib.bearing_hardness",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "Pa (tri-metal overlay)"
+ },
+ {
+  "path": "trib.pin_dia",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "m, piston-pin (small end)"
+ },
+ {
+  "path": "trib.pin_width",
+  "cls": "Tribology",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "trib.pin_clearance",
+  "cls": "Tribology",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "trib.pin_mu_boundary",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "oscillating, film never builds"
+ },
+ {
+  "path": "trib.water_pump_k",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "W / rpm^3"
+ },
+ {
+  "path": "trib.fan_k",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "W / rpm^3  (when locked)"
+ },
+ {
+  "path": "trib.fan_duty",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "average engagement"
+ },
+ {
+  "path": "trib.alternator_load_W",
+  "cls": "Tribology",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "trib.alternator_eta",
+  "cls": "Tribology",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "trib.windage_k",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "W / rpm^2.7"
+ },
+ {
+  "path": "trib.aircomp_load_W",
+  "cls": "Tribology",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "trib.fuel_pump_eta",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "HP pump mech+vol efficiency"
+ },
+ {
+  "path": "trib.fuel_pump_spill",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "pumped / delivered volume"
+ },
+ {
+  "path": "trib.seal_drag_Nm",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "front + rear crank seals"
+ },
+ {
+  "path": "trib.gear_train_k",
+  "cls": "Tribology",
+  "type": "number",
+  "note": "W / rpm^2 (timing gears)"
+ },
+ {
+  "path": "thermal.coolant_T",
+  "cls": "Thermal",
+  "type": "number",
+  "note": "K (88 C)"
+ },
+ {
+  "path": "thermal.piston_T",
+  "cls": "Thermal",
+  "type": "number",
+  "note": "K crown mean"
+ },
+ {
+  "path": "thermal.head_T",
+  "cls": "Thermal",
+  "type": "number",
+  "note": "K firedeck"
+ },
+ {
+  "path": "thermal.liner_T_top",
+  "cls": "Thermal",
+  "type": "number",
+  "note": "K"
+ },
+ {
+  "path": "thermal.liner_T_bot",
+  "cls": "Thermal",
+  "type": "number",
+  "note": "K"
+ },
+ {
+  "path": "thermal.port_T_exh",
+  "cls": "Thermal",
+  "type": "number",
+  "note": "K"
+ },
+ {
+  "path": "thermal.ambient_T",
+  "cls": "Thermal",
+  "type": "number",
+  "note": "K"
+ },
+ {
+  "path": "thermal.ambient_p",
+  "cls": "Thermal",
+  "type": "number",
+  "note": "Pa"
+ },
+ {
+  "path": "thermal.oil_T_start",
+  "cls": "Thermal",
+  "type": "number",
+  "note": "K"
+ },
+ {
+  "path": "thermal.oil_T_target",
+  "cls": "Thermal",
+  "type": "number",
+  "note": "K (100 C steady)"
+ },
+ {
+  "path": "thermal.coolant_volume",
+  "cls": "Thermal",
+  "type": "number",
+  "note": "m^3 (block + rad + heater circuit)"
+ },
+ {
+  "path": "thermal.metal_mass",
+  "cls": "Thermal",
+  "type": "number",
+  "note": "kg of block/head that must warm up too"
+ },
+ {
+  "path": "thermal.radiator_UA",
+  "cls": "Thermal",
+  "type": "number",
+  "note": "W/K at the reference fan/road speed"
+ },
+ {
+  "path": "thermal.thermostat_open_T",
+  "cls": "Thermal",
+  "type": "number",
+  "note": "K, starts to crack"
+ },
+ {
+  "path": "thermal.thermostat_full_T",
+  "cls": "Thermal",
+  "type": "number",
+  "note": "K, fully open"
+ },
+ {
+  "path": "cooling.rad_core_area",
+  "cls": "Cooling",
+  "type": "number",
+  "note": "m^2 frontal"
+ },
+ {
+  "path": "cooling.rad_core_depth",
+  "cls": "Cooling",
+  "type": "number",
+  "note": "m"
+ },
+ {
+  "path": "cooling.rad_UA_ref",
+  "cls": "Cooling",
+  "type": "number",
+  "note": "W/K at rad_air_ref"
+ },
+ {
+  "path": "cooling.rad_air_ref",
+  "cls": "Cooling",
+  "type": "number",
+  "note": "kg/s of air through the core"
+ },
+ {
+  "path": "cooling.grille_recovery",
+  "cls": "Cooling",
+  "type": "number",
+  "note": "face velocity / vehicle speed"
+ },
+ {
+  "path": "cooling.fan_dia",
+  "cls": "Cooling",
+  "type": "number",
+  "note": "m"
+ },
+ {
+  "path": "cooling.fan_max_flow",
+  "cls": "Cooling",
+  "type": "number",
+  "note": "kg/s of air at full engagement"
+ },
+ {
+  "path": "cooling.fan_power_max",
+  "cls": "Cooling",
+  "type": "number",
+  "note": "W absorbed at full engagement"
+ },
+ {
+  "path": "cooling.fan_type",
+  "cls": "Cooling",
+  "type": "string",
+  "note": "viscous | electric | fixed"
+ },
+ {
+  "path": "cooling.fan_on_T",
+  "cls": "Cooling",
+  "type": "number",
+  "note": "K, clutch engages"
+ },
+ {
+  "path": "cooling.fan_off_T",
+  "cls": "Cooling",
+  "type": "number",
+  "note": "K, drops out (hysteresis)"
+ },
+ {
+  "path": "cooling.fan_ramp_s",
+  "cls": "Cooling",
+  "type": "number",
+  "note": "s to spin up / drop out"
+ },
+ {
+  "path": "cooling.ic_UA_ref",
+  "cls": "Cooling",
+  "type": "number",
+  "note": "W/K at ic_air_ref"
+ },
+ {
+  "path": "cooling.ic_air_ref",
+  "cls": "Cooling",
+  "type": "number",
+  "note": "kg/s"
+ },
+ {
+  "path": "cooling.ic_core_area",
+  "cls": "Cooling",
+  "type": "number",
+  "note": "m^2 frontal"
+ },
+ {
+  "path": "cooling.ic_ahead_of_rad",
+  "cls": "Cooling",
+  "type": "bool",
+  "note": "stack order: IC heats the rad's air"
+ },
+ {
+  "path": "cooling.ic_dp_ref",
+  "cls": "Cooling",
+  "type": "number",
+  "note": "Pa charge-side drop at rated flow"
+ },
+ {
+  "path": "cooling.T_warn",
+  "cls": "Cooling",
+  "type": "number",
+  "note": "K (100 C) light comes on"
+ },
+ {
+  "path": "cooling.T_derate",
+  "cls": "Cooling",
+  "type": "number",
+  "note": "K (107 C) start pulling power"
+ },
+ {
+  "path": "cooling.T_derate_full",
+  "cls": "Cooling",
+  "type": "number",
+  "note": "K (115 C) at the floor"
+ },
+ {
+  "path": "cooling.derate_floor",
+  "cls": "Cooling",
+  "type": "number",
+  "note": "fraction of demanded fuel left"
+ },
+ {
+  "path": "cooling.T_shutdown",
+  "cls": "Cooling",
+  "type": "number",
+  "note": "K (120 C) protect the engine"
+ },
+ {
+  "path": "cooling.T_restart",
+  "cls": "Cooling",
+  "type": "number",
+  "note": "K, restart allowed below this"
+ },
+ {
+  "path": "cooling.allow_shutdown",
+  "cls": "Cooling",
+  "type": "bool",
+  "note": ""
+ },
+ {
+  "path": "idle_rpm",
+  "cls": "EngineSpec",
+  "type": "int",
+  "note": ""
+ },
+ {
+  "path": "rated_rpm",
+  "cls": "EngineSpec",
+  "type": "int",
+  "note": ""
+ },
+ {
+  "path": "max_rpm",
+  "cls": "EngineSpec",
+  "type": "int",
+  "note": ""
+ },
+ {
+  "path": "afr_limit",
+  "cls": "EngineSpec",
+  "type": "number",
+  "note": "smoke-limited air/fuel ratio"
+ },
+ {
+  "path": "afr_stoich",
+  "cls": "EngineSpec",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "torque_limit",
+  "cls": "EngineSpec",
+  "type": "number",
+  "note": "N.m brake, flat cap"
+ },
+ {
+  "path": "power_limit",
+  "cls": "EngineSpec",
+  "type": "number",
+  "note": "W brake, cap (a hyperbola in torque)"
+ },
+ {
+  "path": "torque_limit_map",
+  "cls": "EngineSpec",
+  "type": "list",
+  "note": ""
+ },
+ {
+  "path": "p_max_limit",
+  "cls": "EngineSpec",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "T_exh_limit",
+  "cls": "EngineSpec",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "boost_map_rise",
+  "cls": "EngineSpec",
+  "type": "number",
+  "note": ""
+ },
+ {
+  "path": "crank_gear_teeth",
+  "cls": "EngineSpec",
+  "type": "int",
+  "note": ""
+ },
+ {
+  "path": "cam_gear_teeth",
+  "cls": "EngineSpec",
+  "type": "int",
+  "note": ""
+ },
+ {
+  "path": "injpump_gear_teeth",
+  "cls": "EngineSpec",
+  "type": "int",
+  "note": ""
+ }
+]
