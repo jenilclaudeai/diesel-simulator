@@ -6,7 +6,8 @@ cannot reach a grid cell -- with the proof CLAUDE.md asks for, asserted:
    hashes to exactly the hash every grid carries (so the change is the only
    hashed change since they were stamped);
 2. each grid file's only change is that 64-character hash (same size, one
-   64-byte span).
+   64-byte span) -- and the same for the Dyno page's accuracy table
+   (web/app/src/app/dyno/accuracy.ts, ACCURACY_SOLVER), keyed on the same hash.
 
 The third part of the proof is the caller's: show that nothing on a grid's
 path reads what changed (a grep, and test_live_grid_pieces_match_the_shipped_grid,
@@ -51,7 +52,11 @@ def main(argv):
         raise SystemExit("the grids were not stamped by the pre-change tree: no re-stamp")
     if old_hash == new_hash:
         raise SystemExit("the hash did not change: nothing to do")
-    for f in files:
+    # the Dyno page's accuracy table is keyed on the same hash (ACCURACY_SOLVER); the
+    # FINDING-024 re-stamp missed it once, so it is stamped with the grids, under the
+    # same rule (test_accuracy_table_is_for_this_build guards it)
+    accuracy = os.path.join(REPO, "web", "app", "src", "app", "dyno", "accuracy.ts")
+    for f in files + [accuracy]:
         with open(f, "rb") as fh:
             b = fh.read()
         if b.count(old_hash.encode()) != 1:
@@ -63,7 +68,7 @@ def main(argv):
             with open(f, "wb") as fh:
                 fh.write(nb)
         print(f"{os.path.basename(f)}: changed span {diff[-1] - diff[0] + 1} bytes")
-    print(("would re-stamp " if dry else "re-stamped ") + f"{len(files)} grids {old_hash[:12]} -> {new_hash[:12]}")
+    print(("would re-stamp " if dry else "re-stamped ") + f"{len(files)} grids and the accuracy table {old_hash[:12]} -> {new_hash[:12]}")
 
 
 if __name__ == "__main__":

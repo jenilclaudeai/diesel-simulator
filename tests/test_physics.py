@@ -1817,6 +1817,30 @@ def test_spec_editor_schema():
           + f"{len(d['fields'])} fields, {len(editable)} editable")
 
 
+def test_accuracy_table_is_for_this_build():
+    """The Dyno page's accuracy note (web/app/src/app/dyno/accuracy.ts,
+    FINDING-013) shows its measured figures only when ACCURACY_SOLVER is the
+    running build's grid hash. Re-stamping the grids without it (session 6,
+    FINDING-024) turned every engine's note into 'not measured' and nothing
+    noticed. So: the table names this build, the same hash the shipped grids
+    carry. After a change that can move torque, re-measure
+    (tools/diag_torque_limiter.py --write-accuracy); after one that can't,
+    re-stamp it with the grids (tools/restamp_grids.py)."""
+    import json
+    import os
+    import re
+    from dieselsim import bridge
+    root = os.path.join(os.path.dirname(__file__), "..")
+    with open(os.path.join(root, "web", "app", "src", "app", "dyno", "accuracy.ts")) as fh:
+        m = re.search(r"ACCURACY_SOLVER = '([0-9a-f]{64})'", fh.read())
+    table = m.group(1) if m else ""
+    with open(os.path.join(root, "web", "app", "public", "grids", "crdi15.json")) as fh:
+        grids = json.load(fh)["grid_hash"]
+    h = bridge.grid_hash()
+    check("the Dyno page's accuracy table is for this solver build", 0.0 if table == h == grids else 1.0, 0.0, 0.0,
+          f"table {table[:12]}, grids {grids[:12]}, this build {h[:12]}")
+
+
 def test_live_grid_pieces_match_the_shipped_grid():
     """ADR-014 step 3: a browser worker builds a drivable grid from the
     bridge's pieces, and tools/build_live_grids.py now builds with the same
@@ -1958,7 +1982,8 @@ def test_roster_grids_match_their_engine_files():
 
 
 def main():
-    for fn in (test_golden_points, test_n_cycles_convergence,
+    for fn in (test_accuracy_table_is_for_this_build,
+               test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
                test_cold_start_sharpens_dpdtheta,
                test_combustion_dpdtheta_responds,
