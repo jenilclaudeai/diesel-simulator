@@ -114,7 +114,11 @@ raising no error.** `tools/audit_dead_signals.py` exists to catch the next.
   any other file, **`builder.py` included**, makes every prebuilt grid
   stale. Re-stamp only with proof that no cell can change (the static
   import walk, identical specs), asserting that only the hash string
-  differs.
+  differs. **`tools/restamp_grids.py <dir of pre-change files>`** asserts
+  the mechanical half: the pre-change tree hashes to the grids' stamp, and
+  each file changes only by the hash. It refuses otherwise. The "can't
+  reach a cell" half is yours: a grep, and
+  `test_live_grid_pieces_match_the_shipped_grid`.
 - A roster engine's file must be **`engines/<key>.json`**. Under any other
   name its grid records no engine-file fingerprint, and the tests do not
   find it. `load_engine_dir` registers every file in `engines/`, so
