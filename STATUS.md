@@ -1,6 +1,147 @@
 # Status
 
-**Updated:** 2026-10-04 (session 5, part 19: GitHub Pages; #81–#84 merged, #85 open)
+**Updated:** 2026-10-05, end of session 5. Read this section first; the
+dated sections below it are history.
+
+## Start here
+
+**The app is live:** https://jenilclaudeai.github.io/diesel-simulator/
+It is published from `main` by `.github/workflows/pages.yml` on every merge.
+Pages: `/` (Dyno pull), `/grid`, `/drive` (engineering), `/enjoy` (phones,
+landscape).
+
+| phase | state |
+|---|---|
+| 1–3: physics truth, solver port, real-time loop | done (REVIEW-003 to -005) |
+| 4: audio | done; the owner signed it off by ear 2026-09-30 (REVIEW-006) |
+| 5: Enjoy mode | **built; the owner's Android check is done and found a few bugs** (see below) |
+| 6: Expert mode | not started (custom engines, ADR-014, anticipate part of it) |
+| 7: Environment and projects | not started |
+| 8: Polish and host | Pages hosting done early (#85); the rest not started |
+
+**What Phase 5 has** (all merged):
+- `/enjoy`: touch pedals, gear paddles, dials, lamps, temperatures, and a
+  steady-state trip computer.
+- The full roster (ADR-012): `hatch15`, `crdi22`, `truck127`, `v8hd` and
+  `single10`; 1, 4, 6 and 8 cylinders, one without a turbo. The records
+  are in `engines/ROSTER.md`.
+- FINDING-023 (cold slap from a temperature-dependent clearance) and cam
+  ramps with their own height (REVIEW-003 m-5), in one rebuild of every
+  grid.
+- **Custom engines (ADR-014):** brochure numbers or JSON on the Dyno and
+  Grid pages, achieved against requested, then drivable.
+  - The browser builds the converged grid with a worker pool: 21.5 min
+    measured on an 8-core Mac.
+  - Or natively: `tools/build_live_grids.py --engine`.
+  - Saved under "Your engines" on `/drive` and `/enjoy`, with a grid-file
+    download for phones.
+- The Derate lamp means protection: charge air above 80 °C, or an overheat
+  derate.
+
+**Waiting on the owner:**
+1. **The Android bug list.** The owner did the Android check (reported
+   2026-10-05) and found a few bugs. Phase 5 stays open until they are
+   fixed. Then write REVIEW-007, the Phase 5 exit review.
+   - **The bug sheet:** "diesel-simulator: Android bugs (Phase 5)",
+     https://docs.google.com/spreadsheets/d/1giP18zulUFOkOyXFj7sj0JRSGR8SydxNb2owMN0COV8/edit
+     It was created 2026-10-05 through the Google Drive connector, in the
+     connector's Drive. The owner first made a sheet, `1gta1hA0…`, that the
+     connector couldn't see; it was empty and this one replaces it.
+   - **Bugs tab:** the owner's. One row per bug, IDs `B-01`…`B-40`.
+     Read it with the connector's `read_file_content` (file ID above).
+   - **Tracker tab:** ours. The connector can't edit cells, so the tab
+     `IMPORTDATA`s **`reviews/ANDROID-BUGS.csv` from `main`**. Update the
+     CSV, not the sheet. Columns: ID, Verdict (Confirmed / Partly / Not
+     reproduced / Needs info), Measured, Cause, Fix (PR), Status (New /
+     Measuring / Fixing / In PR / Fixed on live site / Won't fix + reason),
+     Updated. It shows only what has merged, which is what the live site
+     runs. The Bugs tab's green Status column looks each ID up in it.
+   - Measure each entry before fixing it, as with every bug list here.
+   - Live friction's cost on a low-end phone was left to wait for this
+     check: see whether the sheet mentions stutter.
+   - *(Was: "The Android check, Phase 5's exit criterion: open
+     https://jenilclaudeai.github.io/diesel-simulator/enjoy on a mid-range
+     Android in Chrome, landscape, and tap Start engine. Judge smoothness,
+     sound (crackle?), the pedals and paddles; try the truck and the single.
+     Then write REVIEW-007 (the Phase 5 exit review).")*
+2. **Listening:** the before/after pairs in `out/listen/review003m5_*.wav`.
+   - They are local files on this Mac, gitignored. Each is 4 s before, a
+     gap, then 4 s after, rendered by `EngineSound.render` on the
+     exterior mic.
+   - Before is `main`'s physics ahead of #78 (rendered just before #77
+     merged; #77 was docs only, so `512683a` is the same physics). After is
+     #78.
+   - The clips: crdi15 idle warm and cold, hd_i6 idle and 1250 rpm at half
+     load, single at 2000 rpm, truck127 idle.
+   - The one-off script that made them was not kept. If they are lost,
+     render the same points on both commits.
+   - The open question: is `hd_i6`'s idle tick, now 0.23× the loudest other
+     source, too quiet for a mechanical-lash truck? `RAMP_SPEED` is the
+     single knob.
+3. **Merge #86** (docs only), if not yet merged.
+
+**Known defects and follow-ups** (none blocking):
+- The dev preset `single` sags on the tractor's torque converter in
+  "Auto". It is recorded as KNOWN in the suite. The exact fix is to size
+  each converter from its engine's own full-load torque at stall; that
+  touches every engine and the live fixtures.
+- The V8 fires evenly every 90°. With no separate cylinder banks, a
+  cross-plane V8's per-bank "burble" is absent.
+- `truck127`'s grid has 13 unsettled cells and `v8hd`'s has 8,
+  period-averaged (FINDING-013). Look only if they show on the dials.
+- Live friction costs a whole frame every 6th frame on a low-end phone (6×
+  throttling): decide after the Android check.
+- Older follow-ups are in "Next actions" at the end of this file.
+
+**Repository:**
+- No PR is open except #86.
+- Remote branches: `main`, `docs/pages-live` (#86), and
+  `fix/steady-state-controllers`. Keep the last one: it is the only copy of
+  the FINDING-013 option A experiment.
+- The owner merges PRs. Stacked PRs: retarget each child to `main` after
+  its parent merges, then check `main` by content (memory:
+  stack-merge-trap).
+
+**Tests, read from finished runs (2026-10-03/05):**
+
+| suite | result |
+|---|---|
+| `python3 tests/test_physics.py` | 71 passed, 0 failed, 3 known (with scipy); 66 + 4 skipped (without) |
+| `tools/fixtures/gen_fixtures.py --check` | 7 modules current |
+| `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |
+| `web/physics npm test` | 5 + 36 + 10 + 11 = 62 |
+| `web/solver npm test` | cache 20, live-grid scheduler 8, round trip 22 |
+| `web/app npm test` | 56 unit tests |
+| e2e (`web/app`) | dyno 15, grid 9, drive 7, sound 6, enjoy 19, custom 4 |
+
+CI runs all of them except the manual `web/solver npm run test:live-real`.
+Its jobs: physics on Python 3.10 and 3.12, Pyodide, fixtures, solver, web
+app, web e2e, grid e2e, and custom-engine e2e.
+
+**This Mac** (see Housekeeping):
+- Node 22.23.3 at `~/.cache/dieselsim/node-v22.23.3-darwin-arm64/bin`
+  (prepend to PATH).
+- scipy in `~/.cache/dieselsim/venv/bin/python`.
+- Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
+  (`CHROME_PATH` for e2e).
+- The CoreAudio output is stuck, so the e2e uses Chrome's fake audio sink.
+- A LAN dev server needs `npm start -- --host 0.0.0.0 --ssl` for sound
+  (secure context). The live site makes it unnecessary.
+
+**First thing next session:** read this section, check whether #86 merged,
+and ask the owner for the Android bug sheet's link. Verify each bug, fix
+them, then write REVIEW-007 and close Phase 5. *(Was: "check whether #86
+merged and whether the owner has done the Android check, then ask. If the
+check went well, write REVIEW-007 and close Phase 5. If it found problems,
+fix those first." The check is done and found problems.)*
+
+---
+
+## Session 5, parts 12–19 (2026-09-30 to 2026-10-05): the detail
+
+*(Moved here from the top of this file when it was condensed; the text is
+unchanged.)*
+
 **Phase:** 1, 2, 3 and **4 exit-ready** (REVIEW-003 to -006). The owner signed
 off the sound by ear on 2026-09-30 ("Yes it sounds right to me").
 - FINDING-022 is fixed (option A, #64).
@@ -181,9 +322,22 @@ Android check works from anywhere over real HTTPS.**
 - **Pages was switched on** (source: GitHub Actions, HTTPS enforced) through
   the API on 2026-10-04. The `github-pages` environment deploys only from
   `main`, so the first deployment happens when #85 merges.
-- **Not yet seen live:** the site, until that first deployment. Then check:
+- ~~**Not yet seen live:** the site, until that first deployment. Then check:
   the four pages load, Python boots on the Dyno page, `/enjoy` drives with
-  sound, and a refresh on a deep link works.
+  sound, and a refresh on a deep link works.~~
+- **Live since 2026-10-04** (#85 merged; the Pages run succeeded).
+  Checked in headless Chrome against the published site on 2026-10-05:
+  - The Dyno page boots Python 3.14.2 with numpy in 4.8 s, and a dyno point
+    solves.
+  - A deep link straight to `/enjoy` drives the hatchback (778 rpm) and the
+    15 L V8 (577 rpm) with sound (−33 dBFS), in a secure context.
+  - A deep link to `/drive` loads.
+  - Assets: `.wasm` as `application/wasm`, modules as `text/javascript`,
+    the grids whole.
+  - No page errors, console errors or failed requests.
+  - Deep links come back from Pages with HTTP 404 and the app's page (the
+    `404.html` fallback). Browsers render it and the router takes over;
+    only crawlers and link previews see the 404.
 
 **Part 18: roster B (#84, stacked on #83). With it, ADR-012's roster is
 complete: 1, 4, 6 and 8 cylinders, and one engine with no turbo.**
@@ -412,7 +566,8 @@ tested top, 0 lines differ.)* ~~**Open now:** #77 (`docs/decisions-023-ramp` →
 (`feat/custom-engine-form`).~~ *(All merged 2026-10-02.)* ~~**Open now:** #81
 (`feat/browser-grid-build` → `main`) → #82 (`feat/drivable-grid-ui`) → #83
 (`feat/derate-lamp-ci`) → #84 (`feat/roster-b`).~~ *(All merged 2026-10-04.)*
-**Open now:** #85 (`feat/pages-deploy` → `main`).
+~~**Open now:** #85 (`feat/pages-deploy` → `main`).~~ *(Merged 2026-10-04.)*
+**No PR is open.**
 Remote branches besides those: `main`, and `fix/steady-state-controllers`
 (kept; the only copy of the FINDING-013 option A experiment).
 
@@ -1027,7 +1182,7 @@ a miscount, not a change.)*
 | 020 | the converter's lock-up clutch was numerically unstable, pinned at its clamp (bug #11's jolts) | **fixed (#54)** |
 | 021 | `play.py`'s real-time sound was a stale copy; slap, exhaust flow and seating moved it 0.0000% | **fixed (#59)** |
 | 022 | intake loudness and turbo boost term normalised away in `render()`, so also in the synth | **fixed with option A (#64)**. *(Was: "open: known defect, the owner's call with the listening review".)* |
-| 023 | the synth's slap input (skirt film) sits on its clamp in 240/240 cold cells, 115/240 warm | **open, option A chosen (2026-09-30)**, with the ramp-height parameter in one rebuild. *(Was:)* known defect; the owner chose to do it after 022, in its own rebuild |
+| 023 | the synth's slap input (skirt film) sits on its clamp in 240/240 cold cells, 115/240 warm | **fixed with option A (#78)**, with the ramp-height parameter in the same rebuild. *(Was, stale after #78 merged until 2026-10-05:)* open, option A chosen (2026-09-30). *(Before that:)* known defect; the owner chose to do it after 022, in its own rebuild |
 
 ### Still open inside those
 
@@ -1097,7 +1252,7 @@ cd web/app && npm run build:pages                # never plain `build`
 cd web/app && CHROME_PATH=... npm run e2e        # dyno pull in Chrome vs native (computes its own reference)
 cd web/app && CHROME_PATH=... npm run e2e:grid   # full 8 x 6 grid in Chrome vs native, cell for cell (~9 min)
 cd web/app && CHROME_PATH=... npm run e2e:drive  # /drive: prebuilt grid, 60 Hz, 60 s script vs native Python
-cd web/physics && npm test                       # 60 checks: fixture ports, 7 live drives, the synth, 8 vehicles + their keys
+cd web/physics && npm test                       # 62 checks: fixture ports, 7 live drives, the synth, 10 vehicles + their keys
 cd web/app && CHROME_PATH=... npm run e2e:enjoy  # /enjoy: multi-touch on an emulated landscape Pixel, 19 checks
 cd web/app && CHROME_PATH=... npm run e2e:custom # a custom engine built, stopped, resumed, saved and driven (CI: own job)
 cd web/app && CHROME_PATH=... npm run e2e:sound  # /drive with sound: worklet output, firing harmonics, pitch, mics
@@ -1142,8 +1297,11 @@ Session 4's branch table is in git history.
    child to `main`.~~ Done (#50, #65, #71). ~~**Now: merge #72 → #76 in
    order**~~ done 2026-09-30. ~~**Now: merge #77 → #78 → #79 → #80 in order**~~
    done 2026-10-02. ~~**Now: merge #81 → #82 → #83 → #84 in order**~~ done
-   2026-10-04. **Now: merge #85**; it publishes the app to Pages. Then the
-   Android check can use https://jenilclaudeai.github.io/diesel-simulator/enjoy.
+   2026-10-04. ~~**Now: merge #85**~~ merged; the app is live.
+   ~~**Now: the owner's Android check** at
+   https://jenilclaudeai.github.io/diesel-simulator/enjoy, the last Phase 5
+   exit criterion.~~ Done (reported 2026-10-05); it found a few bugs. **Now:
+   the owner's bug sheet**, then the fixes.
 2. **Owner: listen.** On `/drive`: Sound on, keys 1–5 for the mics, "Record
    10 s (WAV)". Or `python3 play.py`. Listen for:
    - `hd_i6`'s tick dominance (13×);

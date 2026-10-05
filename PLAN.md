@@ -241,6 +241,27 @@ then B (a 15 L V8 truck and an old NA single).
 audio, without ever fetching Pyodide. Judged on a real mid-range Android
 phone in Chrome (ADR-012).
 
+### State (2026-10-05)
+
+Built and merged (#72–#84):
+- `/enjoy` with touch pedals, paddles, the dashboard and the steady-state
+  trip computer;
+- the whole roster, A and B: `hatch15`, `crdi22`, `truck127`, `v8hd` and
+  `single10` (records in `engines/ROSTER.md`);
+- FINDING-023's cold slap and the separate ramp height, which the owner is
+  to judge by ear.
+
+Also built, beyond the plan: custom engines from brochure numbers or JSON,
+checked against their brochure and drivable, with grids built in the
+browser or natively (ADR-014, #79–#82). That partly anticipates Phase 6
+(spec editing) and Phase 7 (engine JSON).
+
+**Open: the exit criterion itself.** The owner did the Android check on the
+live site (reported 2026-10-05; Phase 8's hosting was done early for it) and
+found a few bugs, to be listed in a shared Google Sheet. Phase 5 exits once
+they are fixed (REVIEW-007). *(Was: "Open: the exit criterion itself, the
+owner's Android check, on the live site.")*
+
 ---
 
 ## Phase 6 — Expert mode
@@ -268,7 +289,9 @@ Project save/load as JSON (OPEN-C).
 
 ## Phase 8 — Polish and host
 
-GitHub Pages. Metric/imperial toggle. Accessibility: gauges need text
+~~GitHub Pages.~~ Done early, 2026-10-04 (#85), for the Phase 5 phone check:
+https://jenilclaudeai.github.io/diesel-simulator/, published from `main`.
+Metric/imperial toggle. Accessibility: gauges need text
 alternatives, and warnings must not be encoded in colour alone.
 
 ---

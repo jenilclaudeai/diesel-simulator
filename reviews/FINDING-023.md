@@ -2,7 +2,7 @@
 
 **Opened by:** Phase 4, the first run of `test_grid_sources_warm_and_cold` on the rebuilt grids. The test said a cold cell's skirt film is thicker than the warm one's, and it was false in 115 of 240 cells.
 **Lens:** PHY2 (lead), QA2, USR1
-**Status:** open, recorded as a known defect in the suite. Left for the owner's listening review, together with FINDING-022.
+**Status:** **fixed with option A (#78, merged 2026-10-02)**; see "Fixed with option A" below. *(Was, left stale after the merge until 2026-10-05: "open, recorded as a known defect in the suite. Left for the owner's listening review, together with FINDING-022.")*
 **Decision (2026-09-30):** the owner chose **option A**, built together with a separate ramp-height parameter (REVIEW-003 m-5) so that the grids rebuild once.
 **Reproduce:** `test_grid_sources_warm_and_cold`, `test_live_sound_follows_the_engine`
 
