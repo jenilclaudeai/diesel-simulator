@@ -75,6 +75,28 @@ landscape).
        errors; the owner's log points at a Chrome extension).
      - Repro script: `web/app/e2e/out/repro-b04.mjs` (gitignored;
        `URL=… WATCH_S=…`).
+   - **Fixed on `fix/b04-stop-eta` (stacked on #87):**
+     - **B-04 Stop** answers at once: the pool is raced against the abort
+       signal, and `SolverService` terminates the workers. Dev server, Stop
+       mid-row: "Stopped" in 0.5 s.
+     - **B-04 ETA:** `etaSeconds` spreads the worker-seconds left (a row
+       counts as 4 cells until both are timed) over the workers. Dev
+       server: 11 min at the first piece (was 258).
+     - **B-01:** Restart acts on press; `/enjoy` words the loop's keyboard
+       hints for touch (`enjoy/hints.ts`).
+     - **B-02:** the hint is a toast out of the column's flow; stalled,
+       Restart replaces the digits' line; the gear floor is 2rem. It
+       holds down to 846×300, but not at 280. Stalled at 300, Restart's
+       bottom 3 px meet the strip's edge; taps still land.
+     - Tests: scheduler 12 (+4), cache 20; units 58 (+2); e2e:enjoy 21
+       (+2). Mutants: scheduler 3 of 3, units 1 of 1, e2e 3 of 3, every
+       one compiled. e2e:custom gained a "Stop < 5 s" check (its run is
+       pending).
+     - **Not yet measured cleanly:** the new ETA over a whole real build.
+       The first attempt was killed at 9 of 104 by a dev-server live
+       reload that my own file edits triggered. Redo it on a production
+       build.
+   - Repro for B-01/B-02: `web/app/e2e/out/repro-b01-b02.mjs` (`H=300`).
    - **Features tab:** the connector can't add a tab to an existing
      sheet, and rebuilding the sheet would lose B-03's full log (the
      connector's view truncates it). So it's a self-contained template,
