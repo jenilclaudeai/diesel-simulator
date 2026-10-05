@@ -80,6 +80,7 @@ landscape).
 **Repository:**
 - #86, #87 and #88 merged 2026-10-05; `main` equals the tested top
   (`8040506`), 0 lines differ. Pages deployed it.
+- Open: **#89** (docs: live statuses, STATUS condensed, option C measured).
 - Remote branches: `main`, the merged `docs/pages-live`,
   `docs/grid-build-plan` and `fix/b04-stop-eta` (safe to delete), and
   `fix/steady-state-controllers`. Keep the last one: it is the only copy of
