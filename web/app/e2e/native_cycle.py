@@ -16,6 +16,11 @@ from dieselsim import bridge  # noqa: E402
 PRESET, LOAD = "crdi15", 0.6
 info = json.loads(bridge.runtime_info())["preset_info"][PRESET]
 rpm = round((info["idle_rpm"] + 0.6 * (info["rated_rpm"] - info["idle_rpm"])) / 50) * 50
-s = json.loads(bridge.solve_cycle(json.dumps({"engine": {"preset": PRESET}, "rpm": rpm, "load": LOAD})))["summary"]
+# OVERRIDES='{"geom.compression_ratio": 17}' solves the engine with them, as the
+# spec editor's edits are solved (e2e/spec.e2e.mjs)
+engine = {"preset": PRESET}
+if os.environ.get("OVERRIDES"):
+    engine["overrides"] = json.loads(os.environ["OVERRIDES"])
+s = json.loads(bridge.solve_cycle(json.dumps({"engine": engine, "rpm": rpm, "load": LOAD})))["summary"]
 print(json.dumps({"rpm": rpm, "p_max_bar": s["p_max"] / 1e5, "mfb50": s["mfb50"],
                   "imep_net_bar": s["imep_net"] / 1e5, "theta_pmax": s["theta_pmax"]}))

@@ -1,6 +1,6 @@
 <header class="bar">
   <span class="wordmark">Diesel Sim</span>
-  <nav class="nav"><a routerLink="/">Dyno pull</a> · <a routerLink="/grid">Operating grid</a> · <span aria-current="page">Cycle</span> · <a routerLink="/drive">Drive</a> · <a routerLink="/enjoy">Enjoy</a></nav>
+  <nav class="nav"><a routerLink="/">Dyno pull</a> · <a routerLink="/grid">Operating grid</a> · <span aria-current="page">Cycle</span> · <a routerLink="/spec">Spec</a> · <a routerLink="/drive">Drive</a> · <a routerLink="/enjoy">Enjoy</a></nav>
 </header>
 
 <main class="page">
@@ -31,6 +31,11 @@
       {{ running() ? 'Solving' : result() ? 'Solve again' : 'Solve cycle' }}
     </button>
   </div>
+
+  @if (editsHere()) {
+    <p class="note edits">With your spec edits: {{ editsHere() }} {{ editsHere() === 1 ? 'field' : 'fields' }} changed on this engine.
+      <a routerLink="/spec">Edit</a></p>
+  }
 
   <p class="status" role="status" aria-live="polite">
     @switch (solver.status()) {

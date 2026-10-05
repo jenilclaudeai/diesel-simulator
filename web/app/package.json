@@ -21,6 +21,7 @@
     "e2e:enjoy": "node e2e/enjoy.e2e.mjs",
     "e2e:custom": "node e2e/custom.e2e.mjs",
     "e2e:cycle": "node e2e/cycle.e2e.mjs",
+    "e2e:spec": "node e2e/spec.e2e.mjs",
     "perf": "node e2e/perf.mjs"
   },
   "private": true,

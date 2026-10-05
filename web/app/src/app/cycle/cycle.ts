@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } 
 import { RouterLink } from '@angular/router';
 import type { CycleResult, PresetInfo } from '@dieselsim/solver';
 import { describe, SolverService } from '../solver/solver.service';
+import { SpecEdits } from '../spec/spec-edits';
 import { buildPlot, rel, sortedByX, type PlotModel } from './plots';
 
 const fmt0 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
@@ -25,9 +26,13 @@ const deg = (v: number) => `${v >= 0 ? '+' : '−'}${fmt1.format(Math.abs(v))}°
 })
 export class CyclePage implements OnInit {
   protected readonly solver = inject(SolverService);
+  protected readonly edits = inject(SpecEdits);
   protected readonly fmt0 = fmt0;
 
-  protected readonly engine = signal('crdi15');
+  /** starts on the spec editor's engine, so its edits are what gets solved */
+  protected readonly engine = signal(this.edits.base());
+  /** fields changed in the spec editor that apply to this engine */
+  protected readonly editsHere = computed(() => (this.engine() === this.edits.base() ? this.edits.count() : 0));
   protected readonly rpmIn = signal<number | undefined>(undefined);
   protected readonly load = signal(0.6);
   protected readonly result = signal<CycleResult | undefined>(undefined);
@@ -147,7 +152,7 @@ export class CyclePage implements OnInit {
     this.error.set(undefined);
     const t0 = performance.now();
     try {
-      this.result.set(await this.solver.solveCycle({ engine: { preset: this.engine() }, rpm: this.rpm(), load: this.load() }));
+      this.result.set(await this.solver.solveCycle({ engine: this.edits.engineRef(this.engine()), rpm: this.rpm(), load: this.load() }));
       this.elapsedS.set((performance.now() - t0) / 1000);
     } catch (e) {
       this.error.set(describe(e));
