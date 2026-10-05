@@ -9,7 +9,7 @@
 import type { PyodideInterface } from "pyodide";
 import { DURABILITY_FNS, LIVE_FNS, type Endpoint, type Reply, type Request, type WireError } from "./protocol.js";
 import type {
-  CycleResult, EngineInfo, Grid, GridCell, GridRequest, PointRequest, PointResult, RuntimeInfo,
+  CycleResult, SpecDescription, EngineInfo, Grid, GridCell, GridRequest, PointRequest, PointResult, RuntimeInfo,
 } from "./solver-port.js";
 
 export interface WorkerRuntime {
@@ -58,6 +58,10 @@ export function serveSolver(ep: Endpoint, rt: WorkerRuntime): void {
       } else if (msg.type === "solveCycle") {
         const { py } = await boot();
         reply({ type: "result", id: msg.id, value: JSON.parse(callBridge(py, "solve_cycle", JSON.stringify(msg.req))) as CycleResult });
+      } else if (msg.type === "describeSpec") {
+        const { py } = await boot();
+        reply({ type: "result", id: msg.id,
+                value: JSON.parse(callBridge(py, "describe_spec", JSON.stringify({ engine: msg.engine }))) as SpecDescription });
       } else if (msg.type === "describeEngine") {
         const { py } = await boot();
         reply({ type: "result", id: msg.id,

@@ -15,7 +15,7 @@ import { gridCacheKey } from "./cache-key.js";
 import type { GridCache, PutResult } from "./grid-cache.js";
 import {
   SolverError,
-  type CycleResult, type EngineInfo, type EngineRef, type Grid, type GridOptions, type GridRequest, type PointRequest,
+  type CycleResult, type SpecDescription, type EngineInfo, type EngineRef, type Grid, type GridOptions, type GridRequest, type PointRequest,
   type PointResult, type RuntimeInfo, type SolverPort,
 } from "./solver-port.js";
 
@@ -58,6 +58,10 @@ export class CachedSolver implements SolverPort {
 
   solveCycle(req: PointRequest): Promise<CycleResult> {
     return this.ready().then(() => this.inner.solveCycle(req));
+  }
+
+  describeSpec(engine: EngineRef): Promise<SpecDescription> {
+    return this.ready().then(() => this.inner.describeSpec(engine));
   }
 
   describeEngine(engine: EngineRef): Promise<EngineInfo> {
