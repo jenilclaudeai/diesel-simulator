@@ -69,6 +69,19 @@ check("every field, in seven subsystems: 188 rows, 180 of them editable",
   layout.groups.length === 7 && layout.rows === 188 && layout.editable === 180,
   `${layout.groups.join(" | ")}; ${layout.rows} rows, ${layout.editable} inputs; compression ratio ${layout.cr}`);
 
+// ADR-009: the four live schematics, drawn from the spec
+await page.waitForSelector("figure.schematic.compressor polyline.speed", { timeout: 60_000 }).catch(() => {});
+const schem = await page.evaluate(() => ({
+  kinds: [...document.querySelectorAll("figure.schematic")].map(f => [...f.classList].find(c => c !== "schematic")),
+  speedLines: document.querySelectorAll("figure.compressor polyline.speed").length,
+  surge: !!document.querySelector("figure.compressor polyline.surge"),
+  dial: document.querySelector("figure.valves figcaption")?.textContent.replace(/\s+/g, " ").trim() ?? "",
+  aria: [...document.querySelectorAll("figure.schematic svg")].every(s => (s.getAttribute("aria-label") ?? "").length > 30),
+}));
+check("four schematics from the spec: cross-section, valve dial (crdi15's 18° overlap), compressor map (6 speed lines, surge), ring pack",
+  JSON.stringify(schem.kinds) === JSON.stringify(["cylinder", "valves", "compressor", "friction"]) && schem.speedLines === 6 && schem.surge
+  && /overlap 18°/.test(schem.dial) && schem.aria, `${schem.kinds.join(", ")}; ${schem.speedLines} speed lines; "${schem.dial.slice(0, 70)}…"`);
+
 const setValue = async (p, v) => {
   await page.$eval(`tr[data-path="${p}"] input`, (el, val) => {
     el.value = String(val);
@@ -136,7 +149,14 @@ const navTo = async label => {
 };
 await navTo("Spec");
 await page.waitForSelector('tr[data-path="geom.compression_ratio"] input', { timeout: 60_000 });
+// the compressor map places the last cycle's operating point, while that cycle is of this engine as edited
+await page.waitForSelector("figure.compressor circle.op", { timeout: 10_000 }).catch(() => {});
+const opBefore = !!(await page.$("figure.compressor circle.op"));
 await setValue("geom.compression_ratio", 18);
+await page.waitForFunction(() => !document.querySelector("figure.compressor circle.op"), { timeout: 5000 }).catch(() => {});
+const opAfterEdit = !!(await page.$("figure.compressor circle.op"));
+check("the compressor map shows the cycle's operating point, and drops it once an edit makes that cycle stale",
+  opBefore && !opAfterEdit, `point with the CR 17 cycle: ${opBefore}; after the CR 18 edit: ${opAfterEdit}`);
 await page.click("a.solve");
 await page.waitForSelector(".cycle-data", { timeout: 60_000 }).catch(() => {});   // a forgotten result fails the check below
 const staleShown = await page.$eval("app-spec-status .stale", e => e.textContent.replace(/\s+/g, " ").trim()).catch(() => "");
@@ -162,6 +182,22 @@ await page.waitForFunction(() => document.querySelector(".changed-count")?.textC
   { timeout: 5000 }).catch(() => {});
 const afterReset = await page.$eval(".changed-count", e => e.textContent.trim());
 check("Reset all clears the edits", afterReset === "0 fields changed", `${beforeReset} -> ${afterReset}`);
+
+// live: the schematics redraw as fields change (one source of truth, ADR-009)
+const ratio = () => page.evaluate(() => {
+  const l = [...document.querySelectorAll("figure.cylinder line.liner")].map(x => Number(x.getAttribute("x1")));
+  return (l[1] - l[0]) / (2 * Number(document.querySelector("figure.cylinder circle.crankcircle")?.getAttribute("r")));
+});
+const r0 = await ratio();
+await setValue("geom.bore", 0.0924);
+await setValue("valves.evc_deg", 382);
+await new Promise(r => setTimeout(r, 400));
+const r1 = await ratio();
+const dial2 = await page.$eval("figure.valves figcaption", e => e.textContent.replace(/\s+/g, " ").trim());
+check("live: a 20% bigger bore redraws the cross-section to scale (liner / crank diameter = bore / stroke), EVC 382 gives 28° overlap",
+  Math.abs(r0 - 0.077 / 0.0805) < 0.01 && Math.abs(r1 - 0.0924 / 0.0805) < 0.01 && /overlap 28°/.test(dial2),
+  `liner/crank ${r0.toFixed(3)} -> ${r1.toFixed(3)} (want ${(0.077 / 0.0805).toFixed(3)} -> ${(0.0924 / 0.0805).toFixed(3)}); "${dial2.slice(0, 60)}…"`);
+await page.click("button.reset-all").catch(() => {});
 check("no page errors or console errors", problems.length === 0, problems.slice(0, 3).join(" | "));
 
 await browser.close();
