@@ -192,6 +192,10 @@ jobs:
         run: npm run e2e:enjoy
         env:
           CHROME_PATH: /usr/bin/google-chrome
+      - name: cycle page e2e in headless Chrome (Phase 6, against native Python)
+        run: npm run e2e:cycle
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
       - name: keep the screenshots
         if: always()
         uses: actions/upload-artifact@v7

@@ -1,7 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import {
   buildLiveGrid, CachedSolver, IndexedDbGridCache, IndexedDbPieceStore, liveBuildKey, SolverError, WorkerSolver,
-  type LiveBuildProgress,
+  type CycleResult, type LiveBuildProgress,
   type EngineInfo, type EngineRef, type Endpoint, type Grid, type GridOptions, type GridRequest, type PointRequest, type PointResult,
   type RuntimeInfo, type SolverPort,
 } from '@dieselsim/solver';
@@ -37,6 +37,12 @@ export class SolverService {
   async solvePoint(req: PointRequest): Promise<PointResult> {
     await this.start();
     return this.port!.solvePoint(req);
+  }
+
+  /** One point's crank-angle traces, for the cycle page (Phase 6, ADR-015). */
+  async solveCycle(req: PointRequest): Promise<CycleResult> {
+    await this.start();
+    return this.port!.solveCycle(req);
   }
 
   /** Name, rpm range and requested numbers of an engine, without a solve (ADR-014). */
