@@ -38,6 +38,7 @@ class FakeSolver implements SolverPort {
     return { source_hash: this.hash, contract: 1, python: "x", numpy: "x", presets: [], preset_info: {}, grid_cycles: 9, source_keys: [], load_s: 0 };
   }
   async solvePoint(): Promise<PointResult> { throw new Error("not used"); }
+  async solveCycle(): Promise<never> { throw new Error("not used"); }
   async describeEngine(): Promise<EngineInfo> { throw new Error("not used"); }
   async buildGrid(req: GridRequest) { this.builds++; return fakeGrid(req); }
   dispose() {}

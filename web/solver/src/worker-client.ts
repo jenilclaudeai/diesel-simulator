@@ -7,7 +7,7 @@
 import type { Endpoint, LiveFn, Reply, Request } from "./protocol.js";
 import {
   SolverError,
-  type EngineInfo, type EngineRef, type Grid, type GridOptions, type GridRequest, type PointRequest,
+  type CycleResult, type EngineInfo, type EngineRef, type Grid, type GridOptions, type GridRequest, type PointRequest,
   type PointResult, type RuntimeInfo, type SolverPort,
 } from "./solver-port.js";
 
@@ -34,6 +34,11 @@ export class WorkerSolver implements SolverPort {
   async solvePoint(req: PointRequest): Promise<PointResult> {
     await this.ready();
     return this.call<PointResult>({ type: "solvePoint", req });
+  }
+
+  async solveCycle(req: PointRequest): Promise<CycleResult> {
+    await this.ready();
+    return this.call<CycleResult>({ type: "solveCycle", req });
   }
 
   async describeEngine(engine: EngineRef): Promise<EngineInfo> {
@@ -70,6 +75,7 @@ export class WorkerSolver implements SolverPort {
 
   private call<T>(body: Omit<Extract<Request, { type: "init" }>, "id"> |
                         Omit<Extract<Request, { type: "solvePoint" }>, "id"> |
+                        Omit<Extract<Request, { type: "solveCycle" }>, "id"> |
                         Omit<Extract<Request, { type: "describeEngine" }>, "id"> |
                         Omit<Extract<Request, { type: "liveCall" }>, "id"> |
                         Omit<Extract<Request, { type: "buildGrid" }>, "id">,

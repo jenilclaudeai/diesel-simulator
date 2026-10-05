@@ -124,10 +124,36 @@ export class SolverError extends Error {
   }
 }
 
+/**
+ * One point's crank-angle traces (Phase 6's cycle page, ADR-015). Cylinder 1's
+ * arrays are in its own crank angle, theta, 0 = its firing TDC (0..720); the
+ * manifold pressures are in engine angle. The two coincide for cylinder 1
+ * only, when cylinder_phase_deg is 0 (FINDING-008). SI units: Pa, m^3, K,
+ * J/deg (hrr), m (valve lift).
+ */
+export interface CycleResult {
+  rpm: number; load: number; n_cyl: number; cylinder: 1; cylinder_phase_deg: number;
+  summary: {
+    torque: number; power: number; bmep: number; bsfc: number;
+    imep_gross: number; imep_net: number; pmep: number;
+    p_max: number; theta_pmax: number; dpdtheta_comb: number; T_max: number;
+    mfb50: number; ign_delay_deg: number; ign_delay_ms: number; premix_fraction: number;
+    burn_duration_deg: number; inj_duration_deg: number; rail_pressure: number;
+    afr: number; boost_pr: number; egr_fraction: number; fuel_mg: number;
+  };
+  /** degrees in the same 0..720 convention; soc_* are -1 where combustion did not start */
+  events: { ivo: number; ivc: number; evo: number; evc: number; soi_main: number; soi_pilot: number;
+            soc_main: number; soc_pilot: number; inj_dur_main: number };
+  theta: number[]; V: number[]; p: number[]; p_motored: number[]; T: number[]; hrr: number[];
+  lift_int: number[]; lift_exh: number[]; p_int_manifold: number[]; p_exh_manifold: number[];
+}
+
 export interface SolverPort {
   /** Resolves once the runtime is loaded. Safe to call repeatedly. */
   ready(): Promise<RuntimeInfo>;
   solvePoint(req: PointRequest): Promise<PointResult>;
+  /** One point's crank-angle traces for the cycle page; n_cycles at least 9. */
+  solveCycle(req: PointRequest): Promise<CycleResult>;
   /** Name, rpm range and (for a custom engine) the brochure numbers, without a solve. */
   describeEngine(engine: EngineRef): Promise<EngineInfo>;
   buildGrid(req: GridRequest, opts?: GridOptions): Promise<Grid>;
