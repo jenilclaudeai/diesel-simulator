@@ -75,7 +75,7 @@ landscape).
        errors; the owner's log points at a Chrome extension).
      - Repro script: `web/app/e2e/out/repro-b04.mjs` (gitignored;
        `URL=… WATCH_S=…`).
-   - **Fixed on `fix/b04-stop-eta` (stacked on #87):**
+   - **Fixed in #88 (`fix/b04-stop-eta`, stacked on #87):**
      - **B-04 Stop** answers at once: the pool is raced against the abort
        signal, and `SolverService` terminates the workers. Dev server, Stop
        mid-row: "Stopped" in 0.5 s.
@@ -90,12 +90,17 @@ landscape).
        bottom 3 px meet the strip's edge; taps still land.
      - Tests: scheduler 12 (+4), cache 20; units 58 (+2); e2e:enjoy 21
        (+2). Mutants: scheduler 3 of 3, units 1 of 1, e2e 3 of 3, every
-       one compiled. e2e:custom gained a "Stop < 5 s" check (its run is
-       pending).
-     - **Not yet measured cleanly:** the new ETA over a whole real build.
-       The first attempt was killed at 9 of 104 by a dev-server live
-       reload that my own file edits triggered. Redo it on a production
-       build.
+       one compiled. e2e:custom gained a "Stop < 5 s" check.
+     - **The new ETA over a whole real build** (production build, full
+       8×6, this Mac, 27.5 min; part 17 measured 21.5, so load varies):
+       0.63× the real time left at the first piece (optimistic: until a
+       cell is timed, a cell counts as a quarter of a row), then
+       0.84–0.98× from the 5th piece on. The old formula read ~20× high
+       there. Not tuned on one run. *(A first attempt was killed at 9 of
+       104 by a dev-server live reload that my own file edits triggered.)*
+     - e2e:custom 5/5 with the new Stop check (72 ms); its mutant (Stop
+       awaiting the pool) fails it at 69.7 s.
+     - **PR #88**, stacked on #87.
    - Repro for B-01/B-02: `web/app/e2e/out/repro-b01-b02.mjs` (`H=300`).
    - **Features tab:** the connector can't add a tab to an existing
      sheet, and rebuilding the sheet would lose B-03's full log (the
@@ -169,7 +174,7 @@ landscape).
 - Older follow-ups are in "Next actions" at the end of this file.
 
 **Repository:**
-- Open PRs: #86 (docs; CI green), and #87 stacked on it (the grid-build proposal; retarget it to `main` once #86 merges).
+- Open PRs, a stack: #86 (docs; CI green) ← #87 (grid-build proposal, tracker) ← #88 (B-01, B-02, B-04 fixes). Merge in order, retargeting each child to `main` after its parent merges.
 - Remote branches: `main`, `docs/pages-live` (#86), and
   `fix/steady-state-controllers`. Keep the last one: it is the only copy of
   the FINDING-013 option A experiment.
