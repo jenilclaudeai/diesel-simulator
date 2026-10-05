@@ -256,6 +256,13 @@ checked against their brochure and drivable, with grids built in the
 browser or natively (ADR-014, #79–#82). That partly anticipates Phase 6
 (spec editing) and Phase 7 (engine JSON).
 
+**Custom-engine build times, measured on real devices (2026-10-05):** 5+
+min for a grid on a Samsung phone, and an ETA of 2–3+ h for a drivable
+grid on an M2 MacBook (mostly a misleading ETA; the build is ~18 min on a
+laptop). Options and a recommendation are in `reviews/PROPOSAL-grid-build.md`,
+for the owner's decision. It may revise ADR-014 (the browser build) and
+add a phone path.
+
 **Open: the exit criterion itself.** The owner did the Android check on the
 live site (reported 2026-10-05; Phase 8's hosting was done early for it) and
 found a few bugs, to be listed in a shared Google Sheet. Phase 5 exits once

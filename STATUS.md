@@ -56,6 +56,34 @@ landscape).
      Measuring / Fixing / In PR / Fixed on live site / Won't fix + reason),
      Updated. It shows only what has merged, which is what the live site
      runs. The Bugs tab's green Status column looks each ID up in it.
+   - **The bugs (listed 2026-10-05):** B-01, Restart after a stall does
+     nothing (S9+); B-02, text overlaps when shifting without the clutch
+     (S9+); B-03, a console error, from a local dev server with a Chrome
+     extension and the text cut off (needs the full error); **B-04, a
+     custom-engine build stuck at 0 for over an hour with Stop not
+     working ("Can't drive"): first.** Rows are in
+     `reviews/ANDROID-BUGS.csv`.
+   - **Measured 2026-10-05 on the dev server** (the owner: B-04 and B-03
+     were on local `npm start`; B-03 doesn't happen on Pages). A full-size
+     custom build in headless Chrome:
+     - **Stop reproduced.** Pressed at 367 s, still building 30 s later.
+       Stop is checked only between pieces, and a running Python piece
+       can't be interrupted (no `SharedArrayBuffer`, ADR-003).
+     - **The ETA bug reproduced.** "258 min left" at the first piece
+       (156 s) of a ~19 min build.
+     - **Not reproduced:** stuck at 0 (first piece at 156 s), and B-03 (no
+       errors; the owner's log points at a Chrome extension).
+     - Repro script: `web/app/e2e/out/repro-b04.mjs` (gitignored;
+       `URL=… WATCH_S=…`).
+   - **Features tab:** the connector can't add a tab to an existing
+     sheet, and rebuilding the sheet would lose B-03's full log (the
+     connector's view truncates it). So it's a self-contained template,
+     "diesel-simulator: Features tab (copy into the tracker)"
+     (`12mLsfoFBwh_5Zqai6zpHpv3yZSBx45jvFgf3ZnYZyNY`), for the owner to
+     copy in (tab menu → Copy to → Existing spreadsheet). Blue columns are
+     the owner's ideas, F-01…F-40. Green columns are looked up from
+     **`reviews/FEATURES.csv`** on `main` (ID, Assessment, Plan, Status,
+     PR, Updated), imported into a grey block from column R.
    - Measure each entry before fixing it, as with every bug list here.
    - Live friction's cost on a low-end phone was left to wait for this
      check: see whether the sheet mentions stutter.
@@ -64,7 +92,32 @@ landscape).
      Android in Chrome, landscape, and tap Start engine. Judge smoothness,
      sound (crackle?), the pedals and paddles; try the truck and the single.
      Then write REVIEW-007 (the Phase 5 exit review).")*
-2. **Listening:** the before/after pairs in `out/listen/review003m5_*.wav`.
+2. **The grid-build plan: decide on `reviews/PROPOSAL-grid-build.md`**
+   (2026-10-05, **#87** on `docs/grid-build-plan`, stacked on #86). The owner
+   measured 5+ min for a grid on a Samsung phone, and a 2–3+ h ETA for a
+   drivable grid on an M2 MacBook. Measured since:
+   - **Corrected the same day:** B-04 (stuck at 0 for over an hour) means
+     the M2's long build was **not** just the misleading ETA, as first
+     written. The proposal is corrected in place.
+   - **The ETA formula misleads early, by up to 20×.** It counts all 104
+     pieces as equal, and the 8 row calibrations (~4× a cell) finish
+     first. On 6 workers it reads ~5 h at the first piece, of a ~18 min
+     build. Not yet confirmed: the owner's browser, and whether the build
+     was left to finish.
+   - **All the time is the pure-Python crank-step loop.**
+   - **Converged solves always run 200 real-time cycles.** Of 11 cells, 9
+     pass the tail test at cycles 25–134 (2 never do), at most 0.25% from
+     the 200-cycle value. Stopping early with a margin: ~1.8–2.5×.
+     Chaining cells: not worth it.
+   - Recommended: A, an honest ETA (now); B+C, early stop plus `thermo.py`
+     speedups, one solver change and one rebuild; E, phones get prebuilt
+     (E1) or derived approximate (E2) grids rather than building. The
+     owner decides the order, E1/E2, and whether a coarser grid (D) is
+     acceptable.
+   - Open questions put to the owner: the M2's browser, and whether that
+     build finished; which page took 5+ min on the phone; whether phone
+     users should make their own engines.
+3. **Listening:** the before/after pairs in `out/listen/review003m5_*.wav`.
    - They are local files on this Mac, gitignored. Each is 4 s before, a
      gap, then 4 s after, rendered by `EngineSound.render` on the
      exterior mic.
@@ -78,7 +131,7 @@ landscape).
    - The open question: is `hd_i6`'s idle tick, now 0.23× the loudest other
      source, too quiet for a mechanical-lash truck? `RAMP_SPEED` is the
      single knob.
-3. **Merge #86** (docs only), if not yet merged.
+4. **Merge #86** (docs only; CI 9/9 green on `1fcf32e`), then retarget `docs/grid-build-plan`'s PR to `main`.
 
 **Known defects and follow-ups** (none blocking):
 - The dev preset `single` sags on the tractor's torque converter in
@@ -94,7 +147,7 @@ landscape).
 - Older follow-ups are in "Next actions" at the end of this file.
 
 **Repository:**
-- No PR is open except #86.
+- Open PRs: #86 (docs; CI green), and #87 stacked on it (the grid-build proposal; retarget it to `main` once #86 merges).
 - Remote branches: `main`, `docs/pages-live` (#86), and
   `fix/steady-state-controllers`. Keep the last one: it is the only copy of
   the FINDING-013 option A experiment.

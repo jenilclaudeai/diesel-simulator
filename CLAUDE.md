@@ -31,6 +31,10 @@ truth. A stale STATUS.md is the failure this setup exists to prevent.
 - The twelve-persona team in `TEAM.md` is a set of **review lenses** applied
   at decision points, not agents in every reply.
 - Commit and push early; end each chunk of work with a written status.
+- **At the end of every response, update the context files that went
+  stale**: `STATUS.md` always, and `PLAN.md`, `CLAUDE.md`, `DECISIONS.md`
+  or `reviews/` when the response changed what they say (owner's
+  instruction, 2026-10-05). Not only at the end of a session.
 
 ## Git
 

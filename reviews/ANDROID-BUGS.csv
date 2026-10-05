@@ -1,1 +1,5 @@
 ID,Verdict,Measured,Cause,Fix (PR),Status,Updated
+B-01,Measuring,"Stall in manual, then Restart does nothing (S9+). Not yet reproduced.",,,New,2026-10-05
+B-02,Measuring,"Text overlaps when shifting in manual without the clutch (S9+). Not yet reproduced.",,,New,2026-10-05
+B-03,Not reproduced,"Owner: only on local npm start, not on Pages. A headless Chrome on the dev server (no extensions): no page errors over 6.5 min. The owner's log shows a Chrome extension (chext_*.js), and the error is in an anonymous VM script (VM3:2), which suggests the extension, not the app.",Most likely a browser extension,,Not reproduced,2026-10-05
+B-04,Partly,"Reproduced on the dev server, full size, 6 workers: Stop pressed at 367 s, still building 30 s later (14 -> 19 of 104). The ETA read 258 min at the first piece (156 s) of a ~19 min build. Not reproduced: stuck at 0 (first piece at 156 s here).","Stop is checked only between pieces, and a running Python piece can't be interrupted (no SharedArrayBuffer, ADR-003). The ETA counts a row (~4x a cell) as one piece and ignores the parallel workers.",,Fixing,2026-10-05

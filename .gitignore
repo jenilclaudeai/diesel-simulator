@@ -11,6 +11,7 @@ out/
 *.csv
 # ...except the Android bug tracker, which the bug sheet imports (STATUS.md)
 !reviews/ANDROID-BUGS.csv
+!reviews/FEATURES.csv
 
 # environments
 .venv/
