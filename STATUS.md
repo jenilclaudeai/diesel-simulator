@@ -108,7 +108,15 @@ landscape).
        104 by a dev-server live reload that my own file edits triggered.)*
      - e2e:custom 5/5 with the new Stop check (72 ms); its mutant (Stop
        awaiting the pool) fails it at 69.7 s.
-     - **PR #88**, stacked on #87.
+     - **PR #88**, stacked on #87. **CI 9/9 green on `1e2b520`**,
+       including Linux's B-01 (782 rpm) and B-02 rules (dials 177–303,
+       column 183–296, strip from 309) and Stop (40 ms). Python 71/0/3
+       known; Pyodide 59; solver 20 + 12 + 22.
+   - **Next for the owner:** merge #86 → #87 → #88, retargeting each child
+     to `main`. Then re-check B-01 and B-02 on the phone (the live site
+     updates on merge). B-04's "stuck at 0" needs the circumstances
+     (which browser, tab in front, Mac asleep?), or it stays not
+     reproduced. B-03 looks like a Chrome extension.
    - Repro for B-01/B-02: `web/app/e2e/out/repro-b01-b02.mjs` (`H=300`).
    - **Features tab:** the connector can't add a tab to an existing
      sheet, and rebuilding the sheet would lose B-03's full log (the
