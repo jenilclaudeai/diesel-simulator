@@ -79,6 +79,10 @@ deps, use `npx -y npm@11 install`. The project supports Python 3.10 —
 Five of the first six findings had one shape: **a mechanism fully built,
 correctly wired, and fed a quantity that was zero or pinned against a clamp,
 raising no error.** `tools/audit_dead_signals.py` exists to catch the next.
+It checks **outputs** that never vary; it cannot see an **input** that
+nothing reads. FINDING-025 was one: the spec's ambient fields were editable
+on `/spec`, but `operating_point` ran at fixed defaults. For a spec field,
+grep its readers and solve with it changed.
 
 ## Traps in the code — all fail silently
 

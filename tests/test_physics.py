@@ -1890,6 +1890,60 @@ def test_compressor_map():
           + f"crdi15 2700/0.6 at PR {op['pr']:.2f}, {op['m_corr']:.4f} kg/s corrected, u {op['u']:.3f}, surge margin {op['surge_margin']:.2f}")
 
 
+def test_spec_ambient_reaches_the_solve():
+    """FINDING-025: the spec's ambient (thermal.ambient_p / ambient_T, primary
+    fields in the spec editor) reached no solve. operating_point took fixed
+    defaults, 101325 Pa and 298 K, and no caller passed the spec's, so a
+    3000 m edit on /spec left all 8 Dyno outputs bit-identical. Now the
+    defaults are the spec's. Parts:
+    - the default spec through the bridge equals an explicit 101325 Pa / 298 K
+      solve exactly (the fix changes nothing at standard ambient);
+    - 70 kPa in the spec moves the solve the way thin air does (less air: AFR
+      down 10% or more; NOx and soot up);
+    - 318 K in the spec makes the exhaust hotter;
+    - an engine whose spec says 70 kPa equals one told p_amb=70 kPa explicitly;
+    - solve_cycle's compressor point reads its inlet temperature from the spec."""
+    import json
+    from dieselsim import bridge
+    from dieselsim.config import PRESETS
+    from dieselsim.engine import DieselEngine
+
+    def point(overrides=None):
+        eng = {"preset": "crdi15"}
+        if overrides:
+            eng["overrides"] = overrides
+        return json.loads(bridge.solve_point(json.dumps({"engine": eng, "rpm": 2500, "load": 1.0, "n_cycles": 9})))
+
+    base = point()
+    op = DieselEngine(spec=PRESETS["crdi15"]()).operating_point(2500, load=1.0, n_cycles=9,
+                                                                p_amb=101325.0, T_amb=298.0)
+    thin = point({"thermal.ambient_p": 70000.0})
+    hot = point({"thermal.ambient_T": 318.0})
+    spec70 = PRESETS["crdi15"]()
+    spec70.thermal.ambient_p = 70000.0
+    explicit = DieselEngine(spec=spec70).operating_point(2500, load=1.0, n_cycles=9, p_amb=70000.0)
+
+    def comp(T):
+        eng = {"preset": "crdi15", "overrides": {"thermal.ambient_T": T}} if T else {"preset": "crdi15"}
+        return json.loads(bridge.solve_cycle(json.dumps({"engine": eng, "rpm": 2700, "load": 0.6})))["compressor"]
+    c298, c318 = comp(None), comp(318.0)
+    parts = {
+        "default spec equals explicit 101325 Pa / 298 K": base["torque"] == op.torque and base["bsfc"] == op.bsfc
+        and base["afr"] == op.cycle.afr,
+        "70 kPa: AFR down >= 10%, NOx and soot up": thin["afr"] <= 0.9 * base["afr"]
+        and thin["nox_g_kwh"] > base["nox_g_kwh"] and thin["soot_g_kwh"] > base["soot_g_kwh"],
+        "318 K: exhaust hotter": hot["T_exh"] > base["T_exh"] + 5.0,
+        "spec 70 kPa equals explicit p_amb 70 kPa": thin["torque"] == explicit.torque and thin["afr"] == explicit.cycle.afr,
+        "compressor point at the spec's inlet T": c318 is not None and c298 is not None
+        and abs(c318["T_in"] - 318.0) < 1e-9 and abs(c298["T_in"] - 298.0) < 1e-9,
+    }
+    bad = [k for k, ok in parts.items() if not ok]
+    check("spec ambient reaches the solve (FINDING-025)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ")
+          + f"crdi15 2500/1.0: AFR {base['afr']:.1f} -> {thin['afr']:.1f} at 70 kPa, "
+          + f"T_exh {base['T_exh']:.0f} -> {hot['T_exh']:.0f} K at 318 K, torque {base['torque']:.1f} -> {thin['torque']:.1f} N.m")
+
+
 def test_live_grid_pieces_match_the_shipped_grid():
     """ADR-014 step 3: a browser worker builds a drivable grid from the
     bridge's pieces, and tools/build_live_grids.py now builds with the same
@@ -2057,7 +2111,7 @@ def main():
                test_ramps_have_their_own_height,
                test_custom_engine_json,
                test_describe_engine, test_solve_cycle, test_mfb50_counts_combustion_before_tdc, test_durability_steps,
-               test_spec_editor_schema,
+               test_spec_editor_schema, test_spec_ambient_reaches_the_solve,
                test_live_grid_pieces_match_the_shipped_grid,
                test_na_engines_idle_on_a_converter,
                test_flat_tappet_wears_more_than_roller,

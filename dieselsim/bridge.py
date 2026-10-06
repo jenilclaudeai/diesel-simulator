@@ -221,16 +221,18 @@ def solve_point(req_json):
 
 def _compressor_point(spec, last):
     """The operating point on the compressor map: corrected flow and pressure
-    ratio, from the turbo's last state. operating_point's default ambient
-    (298 K) is the compressor inlet temperature solve_cycle runs at."""
+    ratio, from the turbo's last state. The compressor inlet temperature is
+    the spec's ambient, which operating_point runs at (FINDING-025; it was a
+    fixed 298 K, right only while the solve ignored the spec's ambient)."""
     from .turbo import P_REF, T_REF
     if not spec.turbo.enabled or not last or "pr_c" not in last:
         return None
-    T_in = 298.0
+    T_in = spec.thermal.ambient_T
     p_in = last.get("p_comp_in", P_REF)
     m_corr = last["mdot_comp"] * math.sqrt(T_in / T_REF) / (p_in / P_REF)
     return {"pr": float(last["pr_c"]), "m_corr": float(m_corr), "u": float(last["u_norm"]),
-            "eta": float(last["eta_c"]), "surge_margin": float(last["surge_margin"])}
+            "eta": float(last["eta_c"]), "surge_margin": float(last["surge_margin"]),
+            "T_in": float(T_in)}
 
 
 def compressor_map(req_json):
