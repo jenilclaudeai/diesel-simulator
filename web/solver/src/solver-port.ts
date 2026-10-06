@@ -148,6 +148,10 @@ export interface CycleResult {
   lift_int: number[]; lift_exh: number[]; p_int_manifold: number[]; p_exh_manifold: number[];
 }
 
+/** One spec field for the editor (ADR-015): its dotted path, which `overrides` takes. */
+export interface SpecField { path: string; type: "number" | "int" | "bool" | "string" | "list"; value: number | boolean | string | number[] }
+export interface SpecDescription { name: string; fields: SpecField[] }
+
 export interface SolverPort {
   /** Resolves once the runtime is loaded. Safe to call repeatedly. */
   ready(): Promise<RuntimeInfo>;
@@ -156,6 +160,8 @@ export interface SolverPort {
   solveCycle(req: PointRequest): Promise<CycleResult>;
   /** A durability run's step (durability_start / _next / _stop), JSON in and out (ADR-015). */
   durabilityCall(fn: "durability_start" | "durability_next" | "durability_stop", arg: string): Promise<string>;
+  /** Every spec field of an engine, overrides applied, for the spec editor (ADR-015). */
+  describeSpec(engine: EngineRef): Promise<SpecDescription>;
   /** Name, rpm range and (for a custom engine) the brochure numbers, without a solve. */
   describeEngine(engine: EngineRef): Promise<EngineInfo>;
   buildGrid(req: GridRequest, opts?: GridOptions): Promise<Grid>;

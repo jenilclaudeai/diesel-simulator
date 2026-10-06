@@ -263,6 +263,48 @@ def solve_cycle(req_json):
     }, "solve_cycle"))
 
 
+def spec_leaves(spec):
+    """Every leaf of an EngineSpec, in dataclass order: (dotted path, value).
+    The paths are the ones `overrides` takes. Tuples come back as lists."""
+    import dataclasses
+    out = []
+
+    def walk(obj, prefix):
+        for f in dataclasses.fields(obj):
+            v = getattr(obj, f.name)
+            path = f"{prefix}{f.name}"
+            if dataclasses.is_dataclass(v):
+                walk(v, path + ".")
+            else:
+                out.append((path, list(v) if isinstance(v, tuple) else v))
+    walk(spec, "")
+    return out
+
+
+def describe_spec(req_json):
+    """The spec editor's view of an engine (Phase 6, ADR-015): every field's
+    dotted path (what `overrides` takes), its type and its value, with the
+    request's overrides applied."""
+    req = json.loads(req_json)
+    spec = _resolve_spec(req.get("engine"))
+
+    def kind(v):
+        if isinstance(v, bool):
+            return "bool"
+        if isinstance(v, int):
+            return "int"
+        if isinstance(v, float):
+            return "number"
+        if isinstance(v, list):
+            return "list"
+        return "string"
+    fields_ = [{"path": p, "type": kind(v), "value": v} for p, v in spec_leaves(spec)]
+    bad = [f["path"] for f in fields_ if isinstance(f["value"], float) and not math.isfinite(f["value"])]
+    if bad:
+        raise ArithmeticError(f"describe_spec: non-finite value at {', '.join(bad[:5])}")
+    return json.dumps({"name": spec.name, "fields": fields_})
+
+
 # --------------------------------------------------------------------------
 # Durability (Phase 6, ADR-015): DieselEngine.durability_blocks stepped from
 # the browser, a block or a few per call, so the page shows progress and can

@@ -7,7 +7,7 @@
 import type { DurabilityFn, Endpoint, LiveFn, Reply, Request } from "./protocol.js";
 import {
   SolverError,
-  type CycleResult, type EngineInfo, type EngineRef, type Grid, type GridOptions, type GridRequest, type PointRequest,
+  type CycleResult, type SpecDescription, type EngineInfo, type EngineRef, type Grid, type GridOptions, type GridRequest, type PointRequest,
   type PointResult, type RuntimeInfo, type SolverPort,
 } from "./solver-port.js";
 
@@ -39,6 +39,11 @@ export class WorkerSolver implements SolverPort {
   async solveCycle(req: PointRequest): Promise<CycleResult> {
     await this.ready();
     return this.call<CycleResult>({ type: "solveCycle", req });
+  }
+
+  async describeSpec(engine: EngineRef): Promise<SpecDescription> {
+    await this.ready();
+    return this.call<SpecDescription>({ type: "describeSpec", engine });
   }
 
   async describeEngine(engine: EngineRef): Promise<EngineInfo> {
@@ -83,6 +88,7 @@ export class WorkerSolver implements SolverPort {
                         Omit<Extract<Request, { type: "solvePoint" }>, "id"> |
                         Omit<Extract<Request, { type: "solveCycle" }>, "id"> |
                         Omit<Extract<Request, { type: "describeEngine" }>, "id"> |
+                        Omit<Extract<Request, { type: "describeSpec" }>, "id"> |
                         Omit<Extract<Request, { type: "liveCall" }>, "id"> |
                         Omit<Extract<Request, { type: "durabilityCall" }>, "id"> |
                         Omit<Extract<Request, { type: "buildGrid" }>, "id">,

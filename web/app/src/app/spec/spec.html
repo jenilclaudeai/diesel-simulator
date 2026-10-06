@@ -1,0 +1,89 @@
+<header class="bar">
+  <span class="wordmark">Diesel Sim</span>
+  <nav class="nav"><a routerLink="/">Dyno pull</a> · <a routerLink="/grid">Operating grid</a> · <a routerLink="/cycle">Cycle</a> · <span aria-current="page">Spec</span> · <a routerLink="/drive">Drive</a> · <a routerLink="/enjoy">Enjoy</a></nav>
+</header>
+
+<main class="page">
+  <h1>{{ name() }}</h1>
+  <p class="lead">Every number the solver builds this engine from, grouped by what it belongs to. Change any of them,
+    then solve its combustion cycle.</p>
+
+  <div class="controls">
+    <label class="field">
+      <span>Engine</span>
+      <select [disabled]="solver.status() !== 'ready'" (change)="selectEngine($any($event.target).value)">
+        @for (p of presets(); track p.key) {
+          <option [value]="p.key" [selected]="p.key === edits.base()">{{ p.name }}</option>
+        }
+      </select>
+    </label>
+    <label class="field">
+      <span>Find a field</span>
+      <input class="filter" type="search" placeholder="bore, injection, turbo…" [value]="filter()" (input)="filter.set($any($event.target).value)" />
+    </label>
+  </div>
+
+  <div class="actions" role="group" aria-label="Your edits">
+    <span class="changed-count">{{ edits.count() }} {{ edits.count() === 1 ? 'field' : 'fields' }} changed</span>
+    <button type="button" class="reset-all" (click)="edits.resetAll()" [disabled]="!edits.count()">Reset all</button>
+    <button type="button" class="export" (click)="exportFile()">Export spec (JSON)</button>
+    <label class="import">Import spec (JSON)<input #file type="file" accept="application/json,.json" (change)="importFile(file)" /></label>
+    <a class="solve" routerLink="/cycle">Solve the cycle with {{ edits.count() ? 'these' : 'this engine' }} →</a>
+  </div>
+  @if (fileError()) { <p class="err" role="alert">{{ fileError() }}</p> }
+
+  <p class="status" role="status" aria-live="polite">
+    @switch (solver.status()) {
+      @case ('loading') { Loading Python and numpy into your browser. About 9 MB the first time. }
+      @case ('error') { <span class="err">{{ solver.error() }}</span> }
+      @case ('ready') { @if (loadError()) { <span class="err">{{ loadError() }}</span> } @else if (!groups().length && !filter()) { Reading the engine's spec. } }
+    }
+  </p>
+
+  @for (g of groups(); track g.key) {
+    <section class="group" [attr.aria-labelledby]="'g-' + g.key">
+      <h2 [id]="'g-' + g.key">{{ g.title }} @if (g.changed) { <span class="badge">{{ g.changed }} changed</span> }</h2>
+      <table class="fields">
+        <tbody>
+          @for (r of g.primary; track r.f.path) { <ng-container *ngTemplateOutlet="row; context: { $implicit: r }" /> }
+        </tbody>
+      </table>
+      @if (g.more.length) {
+        <details [open]="!!filter()">
+          <summary>More {{ g.title.toLowerCase() }} ({{ g.more.length }})</summary>
+          <table class="fields">
+            <tbody>
+              @for (r of g.more; track r.f.path) { <ng-container *ngTemplateOutlet="row; context: { $implicit: r }" /> }
+            </tbody>
+          </table>
+        </details>
+      }
+    </section>
+  }
+
+  <ng-template #row let-r>
+    <tr [class.changed]="r.changed" [attr.data-path]="r.f.path">
+      <th scope="row"><label [attr.for]="'f-' + r.f.path">{{ r.label }}</label>
+        <span class="path">{{ r.f.path }}</span></th>
+      <td class="val">
+        @if (r.ro) {
+          <span class="ro">{{ fmtValue(r.value) }}</span>
+        } @else if (r.f.type === 'bool') {
+          <input [id]="'f-' + r.f.path" type="checkbox" [checked]="r.value" (change)="edit(r, $any($event.target).checked)" />
+        } @else {
+          <input [id]="'f-' + r.f.path" type="number" [step]="r.f.type === 'int' ? 1 : 'any'" [value]="r.value"
+                 (change)="edit(r, $any($event.target).value)" />
+        }
+        <span class="unit">{{ r.unit }}</span>
+      </td>
+      <td class="was">
+        @if (r.changed) {
+          engine: {{ fmtValue(r.engine) }}
+          <button type="button" class="reset" (click)="edits.reset(r.f.path)" [attr.aria-label]="'Reset ' + r.label">Reset</button>
+        } @else if (r.note) {
+          <span class="note">{{ r.note }}</span>
+        }
+      </td>
+    </tr>
+  </ng-template>
+</main>

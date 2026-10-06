@@ -100,6 +100,12 @@ const dDone = JSON.parse(await solver.durabilityCall("durability_next", JSON.str
 const dStop = JSON.parse(await solver.durabilityCall("durability_stop", JSON.stringify({ id: dStart.id }))) as { stopped: boolean };
 check("the run says when it is done, and is gone after", dDone.done === true && dStop.stopped === false,
   `done ${dDone.done}, stop after done ${dStop.stopped}`);
+// Phase 6 (ADR-015): the spec editor's view of an engine, overrides applied
+const sd = await solver.describeSpec({ preset: "crdi15", overrides: { "geom.compression_ratio": 17 } });
+const cr = sd.fields?.find(f => f.path === "geom.compression_ratio");
+check("describeSpec: every field with its dotted path, overrides applied",
+  sd.fields?.length === 188 && cr?.value === 17 && cr?.type === "number" && sd.fields.filter(f => f.type === "list").length === 2,
+  `${sd.fields?.length} fields; compression ratio ${String(cr?.value)}`);
 e = await expectError(solver.durabilityCall("solve_point" as never, "{}"));
 check("durabilityCall refuses a non-durability function", e?.kind === "protocol", e?.message ?? "no error");
 

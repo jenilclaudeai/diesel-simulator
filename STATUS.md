@@ -90,7 +90,25 @@ landscape).
 - **Sweep needs no new call:** the bridge's `overrides` plus `solvePoint`,
   one point per value, as the Dyno pull loops over rpm (progress and Stop
   come free). The sweep page is stage 2.
-- Next: the spec editor (stage 1's last piece).
+- **Done: the spec editor, `/spec`** (branch `feat/spec-editor`, stacked
+  on `feat/durability-call`):
+  - `bridge.describe_spec` (188 fields; every editable one round-trips
+    through `overrides`).
+  - A generated schema (`tools/spec_schema.py --check`), so the editor's
+    field list can't drift from `config.py`.
+  - Curated groups, order, labels and units on top (`spec/spec-meta.ts`,
+    tested).
+  - Edits (overrides on a base engine) are shared with the cycle page,
+    which solves them; JSON export and import.
+  - `e2e:spec` 7 checks, in CI: compression ratio 17 solved at native
+    Python's 148.9 bar (140.1 unedited). Mutants: Python 3 of 3, e2e 2 of
+    2.
+  - Units 78 (+12); the units pass without `physics-version.ts`, as on CI.
+- **Stage 1 is complete.** The stack: #89 ← #90 (solve_cycle) ← #91
+  (FINDING-024) ← #92 (cycle page) ← #93 (durability) ← the spec-editor PR.
+- **Stage 2 next** (ADR-015): the four ADR-009 schematics; the
+  invalidation banner; the sweep page (overrides plus `solvePoint` per
+  value); the durability page (life consumed, 1,000 h default).
 3. **The grid-build plan is deferred by the owner until v1 is complete**
    (2026-10-05). Option A (the ETA) shipped in #88. *(Was: "Decide the
    grid-build plan".)*
