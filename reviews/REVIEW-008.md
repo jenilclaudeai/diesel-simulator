@@ -20,7 +20,7 @@ option B), on the stack #89 ← #90 … ← #98 and this review's PR
 | BLOCK | 0 |
 | MAJOR | 4, all resolved in this review (M-1 to M-4) |
 | MINOR | 6 |
-| NOTE | 5 |
+| NOTE | 6 |
 
 **Phase 6 is complete once CI is green on the stack and this PR.** Every
 part of PLAN's Phase 6 is built and checked against native Python in a
@@ -174,6 +174,17 @@ Instead, the round-trip test runs each call (`solveCycle`,
 `durabilityCall`, `describeSpec`, `compressorMap`) through a real Pyodide
 worker against native numbers (the cycle within 2.25e-7, durability within
 5.48e-13), and each has its own Python test.
+
+**N-6 (NOTE), QA1: two one-off CI failures in the run that confirmed M-4.**
+- **#96's e2e:spec** read the cycle page's "with your spec edits" note as
+  `""`, with the pressure right (148.9 bar, as native). The check read the
+  note as soon as Solve enabled, and the note can render a moment later.
+  It's a race in the check, not the page: it passed on #95, #98 and #99.
+  Fixed on #94, where it came in (it now waits for the note), and merged
+  forward; e2e:spec is 11 of 11 on the top.
+- **#97's SolverPort job** failed 28 s in, with "No module named 'numpy'":
+  Pyodide's numpy didn't load in CI. The same code passed on #98 and #99.
+  Treated as a CI download flake; the next run of #97 is the check.
 
 ---
 

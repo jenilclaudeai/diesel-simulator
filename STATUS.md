@@ -104,9 +104,12 @@ its stack merges.
   (REVIEW-008 and its fixes). Each targets the branch below.
   - CI (2026-10-06): after the M-1 fix, #89–#94, #97 and #99 were 9 of 9.
     #95, #96 and #98 each had Python 3.10 cancelled at the job's 20-minute
-    limit (REVIEW-008 M-4). The limit is now 30 min on #90, merged forward,
-    and CI re-runs on #90–#99. Read every job with `gh pr checks <n>`
-    before merging.
+    limit (REVIEW-008 M-4). The limit is now 30 min on #90, merged forward.
+    On the re-run, 5 physics runs took 20m40s–20m53s and passed. Then
+    #89–#95, #98 and #99 were 9 of 9. #96 hit a race in an e2e check
+    (fixed on #94 and merged forward), and #97 a numpy load flake (N-6);
+    CI re-runs on #94–#99. Read every job with `gh pr checks <n>` before
+    merging.
   - *(Was: "Open: #89 (docs: …)".)*
 - Remote branches: `main`, the merged `docs/pages-live`,
   `docs/grid-build-plan` and `fix/b04-stop-eta` (safe to delete), and
