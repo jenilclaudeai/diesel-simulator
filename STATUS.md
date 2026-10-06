@@ -40,8 +40,8 @@ its stack merges.
   derate.
 
 **Waiting on the owner:**
-0. **Merge #96 once its checks are green.** It carries #97–#99 too, which
-   merged into its branch rather than `main` (see Repository below).
+0. **Merge #100** (CI: Pyodide's limit 30 → 45 min; see Repository).
+   *(Was: "Merge #96 once its checks are green" — done 2026-10-06 06:30 UTC.)*
 1. **Close Phase 5: REVIEW-007's M-1.** On the S9+, on the live site: after
    a stall, hold the clutch and tap Restart (B-01); shift without the
    clutch (B-02); and say whether the sound plays without crackle and the
@@ -97,6 +97,18 @@ its stack merges.
 - Older follow-ups are in "Next actions" at the end of this file.
 
 **Repository:**
+- **2026-10-06, 06:30 UTC: #96 merged (`ee84ff5`), landing #96–#99 on
+  `main`. All of Phase 6 stage 1 and REVIEW-008, #89–#99, is on `main`.**
+  Checked by content: `main` differs from #99's tested tip `bc35ff7` only
+  in `STATUS.md` (1 file, +15/−1). CI on `main` passed 9 of 9, and Pages
+  deployed it. #96's run before the merge (`76f6617`) also passed 9 of 9;
+  Pyodide reported 64 passed, 0 failed, 2 known, 13 skipped.
+- **Open: #100, Pyodide's CI limit 30 → 45 min.** Measured over the last
+  20 passing CI runs: Pyodide took 12.2–27.7 min, and 12 of the 20 took
+  26.4–27.7 min, within 2.3–3.6 min of the old limit. Python 3.10 peaks at
+  21.1 min (limit 30), so it is unchanged. The 16 cancelled runs among them
+  all ended within 4.8 min: superseded, not timeouts.
+- Earlier the same morning (kept as written):
 - **2026-10-06, 05:32–05:36 UTC: #89–#95 merged into `main`; #96 left open
   (the owner saw failed checks).** #97, #98 and #99 still targeted
   `feat/sweep-page`, so they merged **into #96's branch, not `main`**
