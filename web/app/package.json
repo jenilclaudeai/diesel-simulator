@@ -9,6 +9,7 @@
     "test": "ng test",
     "prepare-assets": "node scripts/prepare-assets.mjs",
     "check:assets": "node scripts/prepare-assets.check.mjs",
+    "check:labels": "node scripts/check-labels.mjs",
     "prestart": "npm run prepare-assets -- --dev",
     "prebuild": "npm run prepare-assets",
     "build:pages": "ng build --base-href /diesel-simulator/",
@@ -22,6 +23,8 @@
     "e2e:custom": "node e2e/custom.e2e.mjs",
     "e2e:cycle": "node e2e/cycle.e2e.mjs",
     "e2e:spec": "node e2e/spec.e2e.mjs",
+    "e2e:sweep": "node e2e/sweep.e2e.mjs",
+    "e2e:durability": "node e2e/durability.e2e.mjs",
     "perf": "node e2e/perf.mjs"
   },
   "private": true,

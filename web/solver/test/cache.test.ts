@@ -41,6 +41,7 @@ class FakeSolver implements SolverPort {
   async solveCycle(): Promise<never> { throw new Error("not used"); }
   async durabilityCall(): Promise<never> { throw new Error("not used"); }
   async describeSpec(): Promise<never> { throw new Error("not used"); }
+  async compressorMap(): Promise<never> { throw new Error("not used"); }
   async describeEngine(): Promise<EngineInfo> { throw new Error("not used"); }
   async buildGrid(req: GridRequest) { this.builds++; return fakeGrid(req); }
   dispose() {}

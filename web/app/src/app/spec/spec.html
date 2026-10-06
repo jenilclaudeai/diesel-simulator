@@ -1,6 +1,6 @@
 <header class="bar">
   <span class="wordmark">Diesel Sim</span>
-  <nav class="nav"><a routerLink="/">Dyno pull</a> · <a routerLink="/grid">Operating grid</a> · <a routerLink="/cycle">Cycle</a> · <span aria-current="page">Spec</span> · <a routerLink="/drive">Drive</a> · <a routerLink="/enjoy">Enjoy</a></nav>
+  <nav class="nav"><a routerLink="/">Dyno pull</a> · <a routerLink="/grid">Operating grid</a> · <a routerLink="/cycle">Cycle</a> · <a routerLink="/sweep">Sweep</a> · <a routerLink="/durability">Durability</a> · <span aria-current="page">Spec</span> · <a routerLink="/drive">Drive</a> · <a routerLink="/enjoy">Enjoy</a></nav>
 </header>
 
 <main class="page">
@@ -31,6 +31,9 @@
     <a class="solve" routerLink="/cycle">Solve the cycle with {{ edits.count() ? 'these' : 'this engine' }} →</a>
   </div>
   @if (fileError()) { <p class="err" role="alert">{{ fileError() }}</p> }
+  @if (edits.count() && solver.status() === 'ready') {
+    <app-drive-build [engine]="driveRef()" [record]="driveRecord()" [extra]="driveExtra()" />
+  }
 
   <p class="status" role="status" aria-live="polite">
     @switch (solver.status()) {
@@ -43,6 +46,9 @@
   @for (g of groups(); track g.key) {
     <section class="group" [attr.aria-labelledby]="'g-' + g.key">
       <h2 [id]="'g-' + g.key">{{ g.title }} @if (g.changed) { <span class="badge">{{ g.changed }} changed</span> }</h2>
+      @if (vals() && !filter() && (g.key === 'cylinder' || g.key === 'valves' || g.key === 'air' || g.key === 'friction')) {
+        <app-schematic [kind]="g.key" [v]="vals()!" [cmap]="cmap()" [point]="point()" />
+      }
       <table class="fields">
         <tbody>
           @for (r of g.primary; track r.f.path) { <ng-container *ngTemplateOutlet="row; context: { $implicit: r }" /> }

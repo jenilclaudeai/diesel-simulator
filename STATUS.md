@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-10-05, session 6. Read this section first; the dated
+**Updated:** 2026-10-06, session 6. Read this section first; the dated
 sections below it are history.
 
 ## Start here
@@ -8,14 +8,15 @@ sections below it are history.
 **The app is live:** https://jenilclaudeai.github.io/diesel-simulator/
 It is published from `main` by `.github/workflows/pages.yml` on every merge.
 Pages: `/` (Dyno pull), `/grid`, `/drive` (engineering), `/enjoy` (phones,
-landscape).
+landscape). Phase 6 adds `/cycle`, `/spec`, `/sweep` and `/durability` once
+its stack merges.
 
 | phase | state |
 |---|---|
 | 1–3: physics truth, solver port, real-time loop | done (REVIEW-003 to -005) |
 | 4: audio | done; the owner signed it off by ear 2026-09-30 (REVIEW-006) |
 | 5: Enjoy mode | **exit-ready (REVIEW-007): one item left, the owner's re-check on the phone (M-1)** |
-| 6: Expert mode | **planned, for decision:** `reviews/PROPOSAL-phase6.md` |
+| 6: Expert mode | **complete (REVIEW-008), on the stack #89–#99, waiting to merge** |
 | 7: Environment and projects | not started |
 | 8: Polish and host | Pages hosting done early (#85); the rest not started |
 
@@ -39,6 +40,8 @@ landscape).
   derate.
 
 **Waiting on the owner:**
+0. **Merge #96 once its checks are green.** It carries #97–#99 too, which
+   merged into its branch rather than `main` (see Repository below).
 1. **Close Phase 5: REVIEW-007's M-1.** On the S9+, on the live site: after
    a stall, hold the clutch and tap Restart (B-01); shift without the
    clutch (B-02); and say whether the sound plays without crackle and the
@@ -48,10 +51,134 @@ landscape).
      `reviews/ANDROID-BUGS.csv` from `main` (refreshed hourly; the first
      time it may need "Allow access"). **Update the CSV, never the
      sheet.** The Drive connector reads the sheet but can't edit cells.
-2. ~~**Decide Phase 6's plan.**~~ **Decided 2026-10-05: option B (ADR-015),**
-   PLAN's full scope in two stages; the other three recommendations taken
-   as accepted (every field, ordered by influence; development presets
-   shown; durability 1,000 h). Change any of them by saying so.
+2. **Merge Phase 6's stack, in order:** #89 → #90 → #91 → #92 → #93 → #94 →
+   #95 → #96 → #97 → #98 → #99 (REVIEW-008). After each merge, retarget the
+   next PR to `main` (`gh pr edit <n> --base main`), then check `main` by
+   content (memory: stack-merge-trap). Pages publishes each merge.
+   - **What Phase 6 has** (REVIEW-008):
+     - `/spec`: every field (188, 181 editable) in 7 subsystem groups, with
+       ADR-009's four live schematics and JSON export and import.
+     - Its edits are solved on Dyno, Grid, Cycle, Sweep and Durability,
+       with an "out of date" banner. **Drive it** builds an edited engine's
+       drivable grid into "Your engines".
+     - `/cycle` (p–V, p–θ, heat release, valve lift), `/sweep` (one field
+       over a range) and `/durability` (life consumed, 0 = new). Each is
+       checked against native Python in a browser.
+     - FINDING-024 (MFB50 was late by up to 7°) is fixed, with the grids
+       re-stamped with proof.
+   - REVIEW-008 found and fixed four MAJORs:
+     - CI's Pyodide job had been red since #91, which I'd missed;
+     - the Dyno BSFC column was unlabelled;
+     - an edited engine couldn't be driven;
+     - the physics job's 20-minute timeout was too tight for the grown suite.
+   - *(Was: "~~Decide Phase 6's plan.~~ Decided 2026-10-05: option B
+     (ADR-015)…")*
+
+3. **The grid-build plan is deferred by the owner until v1 is complete**
+   (2026-10-05). Option A (the ETA) shipped in #88. *(Was: "Decide the
+   grid-build plan".)*
+4. **Copy the Features tab into the bug sheet** (template
+   `12mLsfoFBwh_5Zqai6zpHpv3yZSBx45jvFgf3ZnYZyNY`: tab menu → Copy to →
+   Existing spreadsheet). Its status columns read `reviews/FEATURES.csv`.
+5. **Listening:** `out/listen/review003m5_*.wav`; is `hd_i6`'s idle tick
+   too quiet? (Details in the session 6 section below.)
+
+**Known defects and follow-ups** (none blocking):
+- The dev preset `single` sags on the tractor's torque converter in
+  "Auto". It is recorded as KNOWN in the suite. The exact fix is to size
+  each converter from its engine's own full-load torque at stall; that
+  touches every engine and the live fixtures.
+- The V8 fires evenly every 90°. With no separate cylinder banks, a
+  cross-plane V8's per-bank "burble" is absent.
+- `truck127`'s grid has 13 unsettled cells and `v8hd`'s has 8,
+  period-averaged (FINDING-013). Look only if they show on the dials.
+- Live friction costs a whole frame every 6th frame on a low-end phone (6×
+  throttling): decide after the Android check.
+- Older follow-ups are in "Next actions" at the end of this file.
+
+**Repository:**
+- **2026-10-06, 05:32–05:36 UTC: #89–#95 merged into `main`; #96 left open
+  (the owner saw failed checks).** #97, #98 and #99 still targeted
+  `feat/sweep-page`, so they merged **into #96's branch, not `main`**
+  (memory: stack-merge-trap). Nothing is lost: `feat/sweep-page` at
+  `10e8c01` has the same tree as #99's tested tip `bc35ff7` (0 lines
+  differ). **Merging #96 brings #96–#99 to `main` together**; then check
+  `main` against `bc35ff7` by content.
+  - The "failed checks": #96's last run on `195e54c` passed 9 of 9, but a
+    duplicate run on the same commit was *cancelled*, and GitHub draws a
+    cancelled check as a red ✗. The merges at 05:35 then pushed
+    `10e8c01` and cancelled two more runs. The fresh run on this branch
+    is the one to read.
+- #86, #87 and #88 merged 2026-10-05; `main` equals the tested top
+  (`8040506`), 0 lines differ. Pages deployed it.
+- *(Superseded by the bullet above.)* Open, one stack, merge in order: **#89** (docs, REVIEW-007, the Phase 6
+  proposal) ← #90 (solve_cycle) ← #91 (FINDING-024) ← #92 (cycle page) ←
+  #93 (durability call) ← #94 (spec editor) ← #95 (edits everywhere,
+  banner) ← #96 (sweep) ← #97 (durability page) ← #98 (schematics) ← #99
+  (REVIEW-008 and its fixes). Each targets the branch below.
+  - CI (2026-10-06): after the M-1 fix, #89–#94, #97 and #99 were 9 of 9.
+    #95, #96 and #98 each had Python 3.10 cancelled at the job's 20-minute
+    limit (REVIEW-008 M-4). The limit is now 30 min on #90, merged forward.
+    On the re-run, 5 physics runs took 20m40s–20m53s and passed. Then
+    #89–#95, #98 and #99 were 9 of 9. #96 hit a race in an e2e check
+    (fixed on #94 and merged forward), and #97 a numpy load flake (N-6).
+    **Final: all 11 PRs, #89–#99, are 9 of 9 green** (2026-10-06). Pyodide
+    on #99: 64 passed, 0 failed, 2 known, 13 skipped. Physics jobs now take
+    9–21 min.
+  - *(Was: "Open: #89 (docs: …)".)*
+- Remote branches: `main`, the merged `docs/pages-live`,
+  `docs/grid-build-plan` and `fix/b04-stop-eta` (safe to delete), and
+  `fix/steady-state-controllers`. Keep the last one: it is the only copy of
+  the FINDING-013 option A experiment.
+- The owner merges PRs. Stacked PRs: retarget each child to `main` after
+  its parent merges, then check `main` by content (memory:
+  stack-merge-trap).
+
+**Tests, read from finished runs** (2026-10-06, on #99's tree locally unless marked; *was:* CI on #88,
+2026-10-05):
+
+| suite | result |
+|---|---|
+| `python3 tests/test_physics.py` | 77 passed, 0 failed, 3 known (with scipy). *Was (#88):* 71 / 0 / 3 |
+| Pyodide suite | 64 passed, 0 failed, 2 known, 13 skipped (CI on #99). *Was (#88):* 59 / 0 / 2 / 12 |
+| `tools/fixtures/gen_fixtures.py --check` | 7 modules current |
+| `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |
+| `web/physics npm test` | 5 + 36 + 10 + 11 = 62 |
+| `web/solver npm test` | cache 20, live-grid scheduler 12, round trip 29 |
+| `web/app npm test` | 101 unit tests (pass without `physics-version.ts`); `check:labels` 6 of 10 templates |
+| e2e (`web/app`) | dyno 15, grid 9, drive 7, sound 6, enjoy 21, custom 7, cycle 8, spec 11, sweep 6, durability 5 |
+
+CI runs all of them except the manual `web/solver npm run test:live-real`.
+Its jobs: physics on Python 3.10 and 3.12, Pyodide, fixtures, solver, web
+app, web e2e, grid e2e, and custom-engine e2e.
+
+**This Mac** (see Housekeeping):
+- Node 22.23.3 at `~/.cache/dieselsim/node-v22.23.3-darwin-arm64/bin`
+  (prepend to PATH).
+- scipy in `~/.cache/dieselsim/venv/bin/python`.
+- Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
+  (`CHROME_PATH` for e2e).
+- The CoreAudio output is stuck, so the e2e uses Chrome's fake audio sink.
+- A LAN dev server needs `npm start -- --host 0.0.0.0 --ssl` for sound
+  (secure context). The live site makes it unnecessary.
+
+**First thing next session:** read this section. Check which of #89–#99
+merged, and that `main` matches by content. Check the bug sheet for new rows
+and the owner's re-check of B-01/B-02. Then plan Phase 7 (environment and
+projects; REVIEW-008 m-3 belongs there). The grid-build plan waits until v1
+is complete. *(Was, earlier in session 6: "…check the bug sheet for new
+rows and the owner's re-check of B-01/B-02; ask for the grid-build
+decision.")* *(Was, in session 6: "check whether #86 merged, and ask the owner
+for the Android bug sheet's link. Verify each bug, fix them, then write
+REVIEW-007 and close Phase 5.")*
+
+---
+
+## Session 6 (2026-10-05/06): Phase 6, stage by stage
+
+*(Moved here from "Waiting on the owner" when REVIEW-008 closed the phase.
+The text is unchanged; the sweep, durability and schematics PRs, #96–#98,
+came after it, and their records are in the PRs and REVIEW-008.)*
 
 **Phase 6, stage 1, in progress** (branch `feat/solve-cycle`, stacked on #89):
 - **Done: `bridge.solve_cycle` and `solveCycle` through the port.** Cylinder
@@ -122,72 +249,6 @@ landscape).
     - Dyno e2e 15, unchanged.
   - Next: the sweep page; the durability page; the four schematics; then
     REVIEW-008.
-3. **The grid-build plan is deferred by the owner until v1 is complete**
-   (2026-10-05). Option A (the ETA) shipped in #88. *(Was: "Decide the
-   grid-build plan".)*
-4. **Copy the Features tab into the bug sheet** (template
-   `12mLsfoFBwh_5Zqai6zpHpv3yZSBx45jvFgf3ZnYZyNY`: tab menu → Copy to →
-   Existing spreadsheet). Its status columns read `reviews/FEATURES.csv`.
-5. **Listening:** `out/listen/review003m5_*.wav`; is `hd_i6`'s idle tick
-   too quiet? (Details in the session 6 section below.)
-
-**Known defects and follow-ups** (none blocking):
-- The dev preset `single` sags on the tractor's torque converter in
-  "Auto". It is recorded as KNOWN in the suite. The exact fix is to size
-  each converter from its engine's own full-load torque at stall; that
-  touches every engine and the live fixtures.
-- The V8 fires evenly every 90°. With no separate cylinder banks, a
-  cross-plane V8's per-bank "burble" is absent.
-- `truck127`'s grid has 13 unsettled cells and `v8hd`'s has 8,
-  period-averaged (FINDING-013). Look only if they show on the dials.
-- Live friction costs a whole frame every 6th frame on a low-end phone (6×
-  throttling): decide after the Android check.
-- Older follow-ups are in "Next actions" at the end of this file.
-
-**Repository:**
-- #86, #87 and #88 merged 2026-10-05; `main` equals the tested top
-  (`8040506`), 0 lines differ. Pages deployed it.
-- Open: **#89** (docs: live statuses, STATUS condensed, option C measured, REVIEW-007, the Phase 6 proposal).
-- Remote branches: `main`, the merged `docs/pages-live`,
-  `docs/grid-build-plan` and `fix/b04-stop-eta` (safe to delete), and
-  `fix/steady-state-controllers`. Keep the last one: it is the only copy of
-  the FINDING-013 option A experiment.
-- The owner merges PRs. Stacked PRs: retarget each child to `main` after
-  its parent merges, then check `main` by content (memory:
-  stack-merge-trap).
-
-**Tests, read from finished runs (CI on #88, 2026-10-05; units locally):**
-
-| suite | result |
-|---|---|
-| `python3 tests/test_physics.py` | 71 passed, 0 failed, 3 known (with scipy); 66 + 4 skipped (without). On `fix/mfb50`: 73 / 0 / 3 (with scipy) |
-| Pyodide suite | 59 passed, 0 failed, 2 known, 12 skipped |
-| `tools/fixtures/gen_fixtures.py --check` | 7 modules current |
-| `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |
-| `web/physics npm test` | 5 + 36 + 10 + 11 = 62 |
-| `web/solver npm test` | cache 20, live-grid scheduler 12, round trip 22 |
-| `web/app npm test` | 58 unit tests |
-| e2e (`web/app`) | dyno 15, grid 9, drive 7, sound 6, enjoy 21, custom 5 |
-
-CI runs all of them except the manual `web/solver npm run test:live-real`.
-Its jobs: physics on Python 3.10 and 3.12, Pyodide, fixtures, solver, web
-app, web e2e, grid e2e, and custom-engine e2e.
-
-**This Mac** (see Housekeeping):
-- Node 22.23.3 at `~/.cache/dieselsim/node-v22.23.3-darwin-arm64/bin`
-  (prepend to PATH).
-- scipy in `~/.cache/dieselsim/venv/bin/python`.
-- Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
-  (`CHROME_PATH` for e2e).
-- The CoreAudio output is stuck, so the e2e uses Chrome's fake audio sink.
-- A LAN dev server needs `npm start -- --host 0.0.0.0 --ssl` for sound
-  (secure context). The live site makes it unnecessary.
-
-**First thing next session:** read this section; check the bug sheet for
-new rows and the owner's re-check of B-01/B-02; ask for the grid-build
-decision. *(Was, in session 6: "check whether #86 merged, and ask the owner
-for the Android bug sheet's link. Verify each bug, fix them, then write
-REVIEW-007 and close Phase 5.")*
 
 ---
 

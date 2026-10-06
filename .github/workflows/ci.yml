@@ -143,6 +143,8 @@ jobs:
         working-directory: web/solver
       - run: npm ci
       - run: npm test -- --watch=false
+      - name: fuel figures labelled steady-state (FINDING-009)
+        run: npm run check:labels
       - run: npm run build:pages
       - name: prepare-assets on a network without the Pyodide CDN
         run: npm run check:assets
@@ -201,6 +203,14 @@ jobs:
           CHROME_PATH: /usr/bin/google-chrome
       - name: spec editor e2e in headless Chrome (Phase 6, an edit solved against native Python)
         run: npm run e2e:spec
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+      - name: sweep page e2e in headless Chrome (Phase 6, against native Python)
+        run: npm run e2e:sweep
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+      - name: durability page e2e in headless Chrome (Phase 6, against native Python)
+        run: npm run e2e:durability
         env:
           CHROME_PATH: /usr/bin/google-chrome
       - name: keep the screenshots

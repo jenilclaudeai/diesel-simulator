@@ -1,7 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import {
   buildLiveGrid, CachedSolver, IndexedDbGridCache, IndexedDbPieceStore, liveBuildKey, SolverError, WorkerSolver,
-  type CycleResult, type LiveBuildProgress, type SpecDescription,
+  type CompressorMap, type CycleResult, type LiveBuildProgress, type SpecDescription,
   type EngineInfo, type EngineRef, type Endpoint, type Grid, type GridOptions, type GridRequest, type PointRequest, type PointResult,
   type RuntimeInfo, type SolverPort,
 } from '@dieselsim/solver';
@@ -37,6 +37,34 @@ export class SolverService {
   async solvePoint(req: PointRequest): Promise<PointResult> {
     await this.start();
     return this.port!.solvePoint(req);
+  }
+
+  /**
+   * A durability run, stepped (Phase 6, ADR-015): start one, take its blocks a
+   * few at a time (so the page shows progress and can stop between them), stop.
+   * Rows are DieselEngine.durability_run's log rows; `health` is life consumed.
+   */
+  async durabilityStart(engine: EngineRef, hours: number, stepH: number): Promise<{ id: string; blocks_at_least: number }> {
+    await this.start();
+    return JSON.parse(await this.port!.durabilityCall('durability_start', JSON.stringify({ engine, hours, step_h: stepH }))) as
+      { id: string; blocks_at_least: number };
+  }
+
+  async durabilityNext(id: string, n = 1): Promise<{ rows: Record<string, number>[]; done: boolean }> {
+    await this.start();
+    return JSON.parse(await this.port!.durabilityCall('durability_next', JSON.stringify({ id, n }))) as
+      { rows: Record<string, number>[]; done: boolean };
+  }
+
+  async durabilityStop(id: string): Promise<void> {
+    await this.start();
+    await this.port!.durabilityCall('durability_stop', JSON.stringify({ id }));
+  }
+
+  /** The compressor's map, from the solver's own model, for the spec page's schematic (ADR-009). */
+  async compressorMap(engine: EngineRef): Promise<CompressorMap> {
+    await this.start();
+    return this.port!.compressorMap(engine);
   }
 
   /** Every spec field of an engine, overrides applied: the spec editor's view (Phase 6, ADR-015). */

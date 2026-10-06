@@ -1,9 +1,14 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, OnInit, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import type { SpecField } from '@dieselsim/solver';
+import type { CompressorMap, CycleResult, SpecField } from '@dieselsim/solver';
+import { DriveBuild } from '../engine/drive-build';
+import { editedEngine } from '../engine/my-engines';
 import { describe, SolverService } from '../solver/solver.service';
 import { parseSpecFile, SpecEdits } from './spec-edits';
+import { LastResults } from './last-results';
+import { Schematic } from './schematic';
+import { refKey } from './spec-status';
 import { GROUPS, groupFields, label, noteRest, readOnly, type SchemaRow, unitFor } from './spec-meta';
 
 const fmtValue = (v: unknown) => typeof v === 'number' ? String(Number(v.toPrecision(6))) : Array.isArray(v) ? v.join(', ') : String(v);
@@ -17,7 +22,7 @@ interface Row { f: SchemaRow; label: string; unit: string; note: string; ro: boo
  */
 @Component({
   selector: 'app-spec',
-  imports: [RouterLink, NgTemplateOutlet],
+  imports: [RouterLink, NgTemplateOutlet, Schematic, DriveBuild],
   templateUrl: './spec.html',
   styleUrl: './spec.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -32,12 +37,30 @@ export class SpecPage implements OnInit {
   protected readonly loadError = signal<string | undefined>(undefined);
   protected readonly fileError = signal<string | undefined>(undefined);
   protected readonly filter = signal('');
+  private readonly kept = inject(LastResults);
+  /** every field's value as the engine stands, edits applied: what the schematics draw */
+  protected readonly vals = computed(() => {
+    const e = this.engineValues();
+    return e ? { ...e, ...this.edits.overrides() } : undefined;
+  });
+  protected readonly cmap = signal<CompressorMap | undefined>(undefined);
+  /** the operating point of the last cycle, if it was solved for exactly this engine and these edits */
+  protected readonly point = computed(() => {
+    const k = this.kept.get<{ engine: string; result: CycleResult; solvedWith: string }>('cycle');
+    return k && k.engine === this.edits.base() && k.solvedWith === refKey(this.edits.engineRef(this.edits.base()))
+      ? k.result.compressor : undefined;
+  });
 
   protected readonly presets = computed(() => {
     const info = this.solver.info();
     return info ? info.presets.map(k => ({ key: k, ...info.preset_info[k]! })) : [];
   });
   protected readonly name = computed(() => this.solver.info()?.preset_info[this.edits.base()]?.name ?? 'Spec editor');
+
+  /** "Drive it" (Phase 6): the edited engine's drivable grid, kept in "Your engines" (ADR-014's build) */
+  protected readonly driveRef = computed(() => this.edits.engineRef(this.edits.base()));
+  protected readonly driveRecord = computed(() => editedEngine(this.edits.base(), this.name(), this.edits.overrides()));
+  protected readonly driveExtra = computed(() => ({ base: this.edits.base(), overrides: this.edits.overrides() }));
 
   protected readonly groups = computed(() => {
     const vals = this.engineValues(), ov = this.edits.overrides(), q = this.filter().trim().toLowerCase();
@@ -55,6 +78,12 @@ export class SpecPage implements OnInit {
   });
 
   constructor() {
+    // the compressor map follows the engine and its edits (a cheap call: no solve)
+    effect(() => {
+      const ref = this.edits.engineRef(this.edits.base());
+      if (this.solver.status() !== 'ready') return;
+      this.solver.compressorMap(ref).then(m => this.cmap.set(m)).catch(() => this.cmap.set(undefined));
+    });
     // the base engine's own values, whenever the base changes and the solver is ready
     effect(() => {
       const base = this.edits.base();
