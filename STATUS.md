@@ -79,6 +79,15 @@ its stack merges.
 3. **The grid-build plan is deferred by the owner until v1 is complete**
    (2026-10-05). Option A (the ETA) shipped in #88. *(Was: "Decide the
    grid-build plan".)*
+3b. **Decide Phase 7's plan: `reviews/PROPOSAL-phase7.md` (#102), six
+   decisions.**
+   - Weather in Drive: a per-engine correction table, measured within 1.15%
+     of converged solves on held-out air (recommended); or a grid per
+     preset; or solving pages only.
+   - The ECU at altitude: the boost control holds a pressure ratio, so
+     converged light load gains 8.2% torque on a 90 kPa hill.
+   - Humidity, cold-flow, the presets, and your "Feat Prop" list.
+   - It builds on #101 (FINDING-025): merge that first.
 4. **Copy the Features tab into the bug sheet** (template
    `12mLsfoFBwh_5Zqai6zpHpv3yZSBx45jvFgf3ZnYZyNY`: tab menu → Copy to →
    Existing spreadsheet). Its status columns read `reviews/FEATURES.csv`.
