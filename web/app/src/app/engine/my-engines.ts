@@ -1,10 +1,45 @@
 // "My engines" (ADR-014 step 3): custom engines with a drivable grid, kept in
 // this browser so /drive and /enjoy can offer them. Listing reads only the
 // small records; a grid's text (~5 MB) is fetched when it is driven.
+import { VEHICLE_KEYS, vehicleFor } from '@dieselsim/physics';
 import type { GridFile } from '../drive/protocol';
 import type { CustomEngine } from './custom-engine';
 
-export interface MyEngine { key: string; name: string; vehicle: string; savedAt: number; engine: CustomEngine }
+/** A saved engine: a custom one (ADR-014, `engine`) or an edited preset (the spec editor, Phase 6, `edits`). */
+export interface MyEngine {
+  key: string; name: string; vehicle: string; savedAt: number;
+  engine?: CustomEngine;
+  edits?: { preset: string; overrides: Record<string, number | boolean> };
+}
+
+/**
+ * The vehicle key (live.VEHICLE_KEYS, which a grid file must name) that
+ * drives a preset: the one whose vehicle is the preset's own, else the
+ * tractor, as the live loop itself falls back.
+ */
+export function vehicleKeyFor(preset: string): string {
+  const own = vehicleFor(preset).name;
+  return VEHICLE_KEYS.find(k => vehicleFor(k).name === own) ?? 'tractor';
+}
+
+/**
+ * "Your engines"' record for an edited preset: keyed by the base and the
+ * edits (the same edits, the same key, so a rebuild resumes and replaces),
+ * named for the reader, in the base preset's vehicle.
+ */
+export function editedEngine(preset: string, presetName: string, overrides: Record<string, number | boolean>):
+    Omit<MyEngine, 'savedAt'> {
+  const sorted = Object.keys(overrides).sort().map(k => [k, overrides[k]]);
+  let h = 0x811c9dc5;                                       // FNV-1a, 32 bit
+  for (const c of JSON.stringify(sorted)) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0;
+  const n = sorted.length;
+  return {
+    key: `${preset}-edited-${h.toString(16).padStart(8, '0')}`,
+    name: `${presetName}, edited (${n} ${n === 1 ? 'field' : 'fields'})`,
+    vehicle: vehicleKeyFor(preset),
+    edits: { preset, overrides: { ...overrides } },
+  };
+}
 
 /** The prefix /drive's and /enjoy's engine selects use for a saved engine. */
 export const MY = 'my:';

@@ -35,31 +35,8 @@
   @if (isCustom()) {
     <app-engine-form [engine]="custom()" [disabled]="running() || building()" (changed)="customChanged($event)" />
     @if (customInfo()) {
-      <section class="drivable" aria-labelledby="drivable-h">
-        <h2 id="drivable-h">Drive it</h2>
-        <p class="note">Driving needs a converged grid, warm and cold: 104 pieces, built here by {{ workers }}
-          {{ workers === 1 ? 'worker' : 'workers' }}. Allow about half an hour on a 4-core laptop. It keeps what it
-          finishes, so you can stop or close the tab and carry on later. On a phone, build it on a computer and import the file.</p>
-        <div class="controls">
-          <button type="button" class="build-drivable" (click)="buildDrivable()" [disabled]="building() || running()">
-            {{ building() ? 'Building' : 'Build drivable grid' }}</button>
-          @if (building()) { <button type="button" class="cancel-build" (click)="cancelBuild()">Stop</button> }
-        </div>
-        @if (buildProgress(); as p) {
-          <p class="status build-status" role="status" aria-live="polite">
-            <progress [value]="p.done" [max]="p.total"></progress>
-            {{ p.phase === 'assemble' ? 'Writing the grid file.' : p.phase === 'rows' ? 'Calibrating fuel, row by row.' : 'Solving cells, warm and cold.' }}
-            {{ p.done }} of {{ p.total }}{{ p.resumed ? ' (' + p.resumed + ' from before)' : '' }}{{ p.etaS !== undefined ? ', about ' + fmtMin(p.etaS) + ' left' : '' }}.
-          </p>
-        }
-        @if (buildError()) { <p class="err build-err">{{ buildError() }}</p> }
-        @if (saved(); as s) {
-          <p class="status built">Saved to your engines: {{ s.name }}, in the {{ vehicleName(s.vehicle) }}.
-            <a [routerLink]="['/enjoy']" [queryParams]="{ engine: MY + s.key }">Drive it</a> ·
-            <a [routerLink]="['/drive']" [queryParams]="{ engine: MY + s.key }">on the engineering page</a> ·
-            <button type="button" class="download-grid" (click)="downloadGrid()">Download grid file</button></p>
-        }
-      </section>
+      <app-drive-build [engine]="driveRef()" [record]="driveRecord()" [extra]="driveExtra()"
+        [disabled]="running()" (busy)="building.set($event)" />
     }
   }
 
@@ -145,7 +122,7 @@
       <caption>Every point, as solved</caption>
       <thead>
         <tr><th scope="col">rpm</th><th scope="col">Torque N·m</th><th scope="col">Power kW</th>
-            <th scope="col">BSFC g/kWh</th><th scope="col">Boost ratio</th><th scope="col">Peak pressure bar</th></tr>
+            <th scope="col">BSFC g/kWh, steady state</th><th scope="col">Boost ratio</th><th scope="col">Peak pressure bar</th></tr>
       </thead>
       <tbody>
         @for (p of points(); track p.rpm) {

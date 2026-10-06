@@ -9,6 +9,7 @@
     "test": "ng test",
     "prepare-assets": "node scripts/prepare-assets.mjs",
     "check:assets": "node scripts/prepare-assets.check.mjs",
+    "check:labels": "node scripts/check-labels.mjs",
     "prestart": "npm run prepare-assets -- --dev",
     "prebuild": "npm run prepare-assets",
     "build:pages": "ng build --base-href /diesel-simulator/",

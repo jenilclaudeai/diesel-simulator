@@ -2,6 +2,8 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, OnInit, s
 import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import type { CompressorMap, CycleResult, SpecField } from '@dieselsim/solver';
+import { DriveBuild } from '../engine/drive-build';
+import { editedEngine } from '../engine/my-engines';
 import { describe, SolverService } from '../solver/solver.service';
 import { parseSpecFile, SpecEdits } from './spec-edits';
 import { LastResults } from './last-results';
@@ -20,7 +22,7 @@ interface Row { f: SchemaRow; label: string; unit: string; note: string; ro: boo
  */
 @Component({
   selector: 'app-spec',
-  imports: [RouterLink, NgTemplateOutlet, Schematic],
+  imports: [RouterLink, NgTemplateOutlet, Schematic, DriveBuild],
   templateUrl: './spec.html',
   styleUrl: './spec.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -54,6 +56,11 @@ export class SpecPage implements OnInit {
     return info ? info.presets.map(k => ({ key: k, ...info.preset_info[k]! })) : [];
   });
   protected readonly name = computed(() => this.solver.info()?.preset_info[this.edits.base()]?.name ?? 'Spec editor');
+
+  /** "Drive it" (Phase 6): the edited engine's drivable grid, kept in "Your engines" (ADR-014's build) */
+  protected readonly driveRef = computed(() => this.edits.engineRef(this.edits.base()));
+  protected readonly driveRecord = computed(() => editedEngine(this.edits.base(), this.name(), this.edits.overrides()));
+  protected readonly driveExtra = computed(() => ({ base: this.edits.base(), overrides: this.edits.overrides() }));
 
   protected readonly groups = computed(() => {
     const vals = this.engineValues(), ov = this.edits.overrides(), q = this.filter().trim().toLowerCase();

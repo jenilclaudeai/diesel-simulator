@@ -31,6 +31,9 @@
     <a class="solve" routerLink="/cycle">Solve the cycle with {{ edits.count() ? 'these' : 'this engine' }} →</a>
   </div>
   @if (fileError()) { <p class="err" role="alert">{{ fileError() }}</p> }
+  @if (edits.count() && solver.status() === 'ready') {
+    <app-drive-build [engine]="driveRef()" [record]="driveRecord()" [extra]="driveExtra()" />
+  }
 
   <p class="status" role="status" aria-live="polite">
     @switch (solver.status()) {

@@ -63,8 +63,10 @@ cd web/solver  && npm run test:live-real        # manual ~7 min: browser-built g
 cd web/app     && npm test -- --watch=false     # unit tests (vitest)
 cd web/app     && npm run build:pages           # NEVER plain `build`: blank page on Pages
 cd web/app     && npm run check:assets          # prepare-assets on a network without the Pyodide CDN
+cd web/app     && npm run check:labels          # every fuel figure labelled steady-state (FINDING-009)
 cd web/app     && npm run perf                  # synth/loop/friction cost under Chrome CPU throttling (reports only)
-cd web/app     && npm run e2e                   # browser checks (also e2e:grid, e2e:drive, e2e:sound, e2e:enjoy, e2e:custom)
+cd web/app     && npm run e2e                   # browser checks (also e2e:grid, e2e:drive, e2e:sound, e2e:enjoy, e2e:custom,
+                                                # e2e:cycle, e2e:spec, e2e:sweep, e2e:durability)
 ```
 The app is live at https://jenilclaudeai.github.io/diesel-simulator/,
 published from `main` by `.github/workflows/pages.yml` on every merge.
@@ -103,6 +105,11 @@ raising no error.** `tools/audit_dead_signals.py` exists to catch the next.
   which Pyodide lacks.
 - Full-load dyno pulls end in negative torque: above rated speed the
   governor pulls fuel to 4% at `max_rpm`. That is intended.
+- The Pyodide suite (`tools/pyodide`) copies only `dieselsim/` and
+  `tests/`. A test that reads `web/app`, `tools/` or `engines/` must SKIP
+  there (or leave those parts out and say so), or CI's Pyodide job goes red
+  while every local run passes: it did, on six PRs (REVIEW-008 M-1). Read
+  every job in `gh pr checks`, not just the ones you expect.
 - WebCrypto needs a secure context: over plain http on a LAN address the
   grid cache switches itself off by design.
 - `npm start` downloads the numpy wheel once (`prepare-assets.mjs`). Behind a
@@ -139,8 +146,8 @@ raising no error.** `tools/audit_dead_signals.py` exists to catch the next.
 
 ## Decisions
 
-`DECISIONS.md` holds ADR-001 to ADR-014 (ADR-013: the personas are review
-lenses; ADR-014: custom engines, drivable). Don't reopen one without a
+`DECISIONS.md` holds ADR-001 to ADR-015 (ADR-013: the personas are review
+lenses; ADR-014: custom engines, drivable; ADR-015: Phase 6's scope, staged). Don't reopen one without a
 measured reason. The ones most easily undone by accident: the Python solver
 runs **unmodified** under Pyodide (ADR-001); audio is a TypeScript
 AudioWorklet with no `SharedArrayBuffer`, so no COOP/COEP headers, so GitHub
