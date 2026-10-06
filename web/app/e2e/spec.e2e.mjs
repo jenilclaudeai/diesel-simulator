@@ -113,6 +113,8 @@ await page.screenshot({ path: path.join(out, "spec.png"), fullPage: false });
 // the cycle page solves the edited engine
 await page.click("a.solve");
 await page.waitForSelector("button.run:not([disabled])", { timeout: 60_000 });
+// the note can render a moment after Solve enables: wait for it (CI on #96 once read it empty)
+await page.waitForSelector("p.edits", { timeout: 10_000 }).catch(() => {});
 const note = await page.$eval("p.edits", e => e.textContent.replace(/\s+/g, " ").trim()).catch(() => "");
 await page.click("button.run");
 await page.waitForSelector(".cycle-data", { timeout: 5 * 60_000 });
