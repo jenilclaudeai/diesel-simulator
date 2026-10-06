@@ -2,7 +2,7 @@
 // the engine shown in its subsystem; an edit is counted and shows the engine's
 // own value; filter; a spec file imported (and a bad one refused, with the
 // reason); then the cycle page solves the edited engine, and its numbers are
-// native Python's for the same overrides.
+// native Python's for the same overrides. The edits survive a reload (m-3).
 //
 //   npm run build:pages && CHROME_PATH=... npm run e2e:spec      (~1 min)
 import http from "node:http";
@@ -199,6 +199,22 @@ const dial2 = await page.$eval("figure.valves figcaption", e => e.textContent.re
 check("live: a 20% bigger bore redraws the cross-section to scale (liner / crank diameter = bore / stroke), EVC 382 gives 28° overlap",
   Math.abs(r0 - 0.077 / 0.0805) < 0.01 && Math.abs(r1 - 0.0924 / 0.0805) < 0.01 && /overlap 28°/.test(dial2),
   `liner/crank ${r0.toFixed(3)} -> ${r1.toFixed(3)} (want ${(0.077 / 0.0805).toFixed(3)} -> ${(0.0924 / 0.0805).toFixed(3)}); "${dial2.slice(0, 60)}…"`);
+
+// REVIEW-008 m-3: a reload kept nothing, and the page didn't say so. Now the edits survive a
+// real reload (results don't: the page solves again, and says so).
+await page.click("button.reset-all").catch(() => {});
+await setValue("geom.compression_ratio", 17);
+await page.waitForFunction(() => /1 field changed/.test(document.querySelector(".changed-count")?.textContent ?? ""), { timeout: 5000 }).catch(() => {});
+await page.reload({ waitUntil: "load" });
+await page.waitForSelector('tr[data-path="geom.compression_ratio"] input', { timeout: 180_000 });
+const kept = await page.evaluate(() => ({
+  count: document.querySelector(".changed-count")?.textContent.trim(),
+  cr: Number(document.querySelector('tr[data-path="geom.compression_ratio"] input')?.value),
+  note: document.querySelector("p.kept-note")?.textContent.replace(/\s+/g, " ").trim() ?? "",
+}));
+check("a reload keeps the edits (REVIEW-008 m-3), and the page says results are solved again",
+  kept.count === "1 field changed" && kept.cr === 17 && /kept in this browser/.test(kept.note) && /solves again/.test(kept.note),
+  `after reload: ${kept.count}, compression ratio ${kept.cr}; "${kept.note.slice(0, 70)}…"`);
 await page.click("button.reset-all").catch(() => {});
 check("no page errors or console errors", problems.length === 0, problems.slice(0, 3).join(" | "));
 

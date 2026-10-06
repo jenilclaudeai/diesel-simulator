@@ -32,6 +32,7 @@ input[type="checkbox"] { width: 1.2rem; height: 1.2rem; accent-color: var(--ambe
 
 .status { min-height: 1.6em; margin: 0.8rem 0 0.4rem; color: var(--slate-muted); }
 .err { color: var(--slate); font-weight: 600; }
+.kept-note { margin: 0.4rem 0 0.6rem; max-width: 38em; color: var(--slate-muted); font-size: 0.9rem; }
 
 .group { margin-top: 1.8rem; }
 .group h2 { font-size: 1.3rem; margin: 0 0 0.4rem; display: flex; align-items: baseline; gap: 0.6rem; }
