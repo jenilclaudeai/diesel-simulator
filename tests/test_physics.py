@@ -1957,6 +1957,58 @@ def test_spec_ambient_reaches_the_solve():
           + f"{half_sl.torque:.1f} -> {half_2k.torque:.1f} N.m")
 
 
+def test_environment_presets_reach_the_solve():
+    """Phase 7 (ADR-016): five real places, each the air and the fuel sold
+    there. FINDING-025's lesson: a field is only real if a solve moves when
+    it changes, so each preset is solved, not just listed. Parts:
+    - altitude to pressure matches the ICAO standard atmosphere (3500 m is
+      658 hPa in the published table; sea level is 101325 Pa exactly);
+    - the standard preset's humidity is ISO 8178's reference, 10.71 g/kg;
+    - the standard preset solves bit-identically to no preset;
+    - every other preset moves the solve, the physical way: the plateau's
+      thin air cuts AFR by 10% or more, the arctic morning's dense air
+      gives more torque, the desert's heat a hotter exhaust;
+    - runtime_info carries all five, with the same overrides."""
+    import json
+    from dieselsim import bridge
+    from dieselsim.environment import ENVIRONMENTS, H_REF, humidity_ratio, pressure_at
+
+    def solve(ov):
+        eng = {"preset": "crdi15", **({"overrides": ov} if ov else {})}
+        return json.loads(bridge.solve_point(json.dumps({"engine": eng, "rpm": 2500, "load": 1.0, "n_cycles": 9})))
+
+    E = ENVIRONMENTS
+    none, std = solve(None), solve(E["standard"].overrides())
+    r = {k: solve(E[k].overrides()) for k in ("plateau", "winter", "desert", "tropics")}
+    info = json.loads(bridge.runtime_info()).get("environments", [])   # missing: a part fails, not a KeyError
+    h_std = humidity_ratio(E["standard"].T_amb, E["standard"].p_amb, E["standard"].rh_pct)
+    # the fuel half of a preset: cetane alone, in standard air, must move the solve too
+    cn40, cn55 = solve({"inj.cetane_number": 40.0}), solve({"inj.cetane_number": 55.0})
+    moved = [k for k, v in r.items() if any(v[q] != std[q] for q in ("torque", "afr", "T_exh", "nox_g_kwh"))]
+    parts = {
+        "ICAO pressure: 101325 Pa at 0 m, 658 hPa at 3500 m": pressure_at(0.0) == 101325.0
+        and abs(pressure_at(3500.0) / 65800.0 - 1.0) < 0.002,
+        "standard humidity is ISO 8178's 10.71 g/kg": abs(h_std - H_REF) < 0.02,
+        "standard preset solves identically to none": std == none,
+        "every other preset moves the solve": len(moved) == 4,
+        "plateau: AFR down >= 10%": r["plateau"]["afr"] <= 0.9 * std["afr"],
+        "arctic morning: more torque": r["winter"]["torque"] > std["torque"],
+        "desert: hotter exhaust": r["desert"]["T_exh"] > std["T_exh"] + 5.0,
+        "each fuel preset sets its cetane": all(e.overrides().get("inj.cetane_number") == e.cetane
+                                                for e in E.values() if e.cetane is not None),
+        "cetane alone moves the solve (40 -> 55: less NOx)": cn55["nox_g_kwh"] < cn40["nox_g_kwh"],
+        "runtime_info carries the five, same overrides": [e["key"] for e in info] == list(E)
+        and all(e["overrides"] == E[e["key"]].overrides() for e in info),
+    }
+    bad = [k for k, ok in parts.items() if not ok]
+    check("environment presets reach the solve (ADR-016)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ")
+          + f"crdi15 2500/1.0 torque {std['torque']:.1f} N.m: plateau {r['plateau']['torque']:.1f} (AFR {std['afr']:.1f} -> "
+          + f"{r['plateau']['afr']:.1f}), arctic {r['winter']['torque']:.1f}, desert {r['desert']['torque']:.1f} "
+          + f"(T_exh {std['T_exh']:.0f} -> {r['desert']['T_exh']:.0f} K), tropics {r['tropics']['torque']:.1f}; "
+          + f"3500 m = {pressure_at(3500.0) / 100:.1f} hPa")
+
+
 def test_live_grid_pieces_match_the_shipped_grid():
     """ADR-014 step 3: a browser worker builds a drivable grid from the
     bridge's pieces, and tools/build_live_grids.py now builds with the same
@@ -2124,7 +2176,7 @@ def main():
                test_ramps_have_their_own_height,
                test_custom_engine_json,
                test_describe_engine, test_solve_cycle, test_mfb50_counts_combustion_before_tdc, test_durability_steps,
-               test_spec_editor_schema, test_spec_ambient_reaches_the_solve,
+               test_spec_editor_schema, test_spec_ambient_reaches_the_solve, test_environment_presets_reach_the_solve,
                test_live_grid_pieces_match_the_shipped_grid,
                test_na_engines_idle_on_a_converter,
                test_flat_tappet_wears_more_than_roller,

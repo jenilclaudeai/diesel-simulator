@@ -34,6 +34,16 @@ export interface EngineInfo extends PresetInfo {
   requested?: { peak_torque: number; peak_power_kw: number; plateau: [number, number] | null };
 }
 
+/** A real place and season (dieselsim/environment.py): the air, the fuel sold there, and the spec overrides it sets. */
+export interface EnvironmentPreset {
+  key: string; name: string; place: string;
+  altitude_m: number; T_C: number; rh_pct: number;
+  fuel: string; cetane: number | null; cfpp_C: number | null; sources: string;
+  /** derived: Pa (ICAO standard atmosphere), K, and g water / kg dry air (ISO 8178's H) */
+  p_amb: number; T_amb: number; humidity_g_kg: number;
+  overrides: Record<string, number>;
+}
+
 export interface RuntimeInfo {
   /** SHA-256 of the dieselsim sources actually loaded — the physics version */
   source_hash: string;
@@ -44,6 +54,8 @@ export interface RuntimeInfo {
   preset_info: Record<string, PresetInfo>;
   grid_cycles: number;
   source_keys: string[];
+  /** Phase 7 (ADR-016): the environment presets, in picker order */
+  environments: EnvironmentPreset[];
   /** seconds to load Pyodide, numpy and the package — the cold-start cost */
   load_s: number;
 }
