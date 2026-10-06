@@ -673,8 +673,18 @@ class DieselEngine:
     def durability_run(self, hours: float, duty_cycle=None, step_h: float = 50.0,
                        cold_starts_per_100h: float = 40.0, verbose=True,
                        resolve_every: int = 1):
+        """Age the engine over `hours` of a duty cycle; the log, one row per
+        block. See durability_blocks, which yields the same rows one by one."""
+        return list(self.durability_blocks(hours, duty_cycle, step_h, cold_starts_per_100h,
+                                           verbose, resolve_every))
+
+    def durability_blocks(self, hours: float, duty_cycle=None, step_h: float = 50.0,
+                          cold_starts_per_100h: float = 40.0, verbose=True,
+                          resolve_every: int = 1):
         """
-        Age the engine over `hours` of a duty cycle.
+        Age the engine over `hours` of a duty cycle, one block at a time: a
+        generator yielding each block's log row as it finishes (the browser's
+        durability page steps it, ADR-015). durability_run collects them.
 
         duty_cycle: list of (rpm, load, time_fraction).
         Wear, oil ageing and their feedback are integrated in `step_h` blocks;
@@ -785,7 +795,7 @@ class DieselEngine:
                       f" | bore {L['bore_wear_um']:5.1f} um | "
                       f"oil p {L['oil_p']/1e5:4.2f} bar | health "
                       f"{L['health']:5.1f}%")
-        return log
+            yield log[-1]
 
     # ------------------------------------------------------------------ #
     # transient with a real flywheel

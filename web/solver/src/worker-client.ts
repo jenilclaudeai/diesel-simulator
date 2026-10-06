@@ -4,7 +4,7 @@
  * In the browser the Endpoint wraps a Worker; in tests it wraps a Node
  * worker_threads Worker. Either way this is what the UI holds.
  */
-import type { Endpoint, LiveFn, Reply, Request } from "./protocol.js";
+import type { DurabilityFn, Endpoint, LiveFn, Reply, Request } from "./protocol.js";
 import {
   SolverError,
   type CycleResult, type EngineInfo, type EngineRef, type Grid, type GridOptions, type GridRequest, type PointRequest,
@@ -46,6 +46,12 @@ export class WorkerSolver implements SolverPort {
     return this.call<EngineInfo>({ type: "describeEngine", engine });
   }
 
+  /** A durability run's step (Phase 6): durability_start / _next / _stop, JSON in and out. */
+  async durabilityCall(fn: DurabilityFn, arg: string): Promise<string> {
+    await this.ready();
+    return this.call<string>({ type: "durabilityCall", fn, arg });
+  }
+
   /** One drivable-grid piece (ADR-014 step 3): a bridge function, JSON in and out. */
   async liveCall(fn: LiveFn, arg: string): Promise<string> {
     await this.ready();
@@ -78,6 +84,7 @@ export class WorkerSolver implements SolverPort {
                         Omit<Extract<Request, { type: "solveCycle" }>, "id"> |
                         Omit<Extract<Request, { type: "describeEngine" }>, "id"> |
                         Omit<Extract<Request, { type: "liveCall" }>, "id"> |
+                        Omit<Extract<Request, { type: "durabilityCall" }>, "id"> |
                         Omit<Extract<Request, { type: "buildGrid" }>, "id">,
                   onProgress?: GridOptions["onProgress"]): Promise<T> {
     if (this.disposed) return Promise.reject(new SolverError("cancelled", "solver disposed"));

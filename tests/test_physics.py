@@ -1741,6 +1741,49 @@ def test_mfb50_counts_combustion_before_tdc():
           f"independent {independent:+.1f}")
 
 
+def test_durability_steps():
+    """Phase 6 (ADR-015): a durability run stepped from the browser, block by
+    block (bridge.durability_start / _next / _stop over
+    DieselEngine.durability_blocks), logs exactly what durability_run logs;
+    a finished or replaced run is gone; stop frees it."""
+    import json
+    from dieselsim import bridge
+    from dieselsim.engine import DieselEngine
+    req = {"engine": {"preset": "crdi15"}, "hours": 150, "step_h": 50}
+    ref = DieselEngine(preset="crdi15").durability_run(150.0, step_h=50.0, verbose=False)
+    s = json.loads(bridge.durability_start(json.dumps(req)))
+    rows, done, calls = [], False, 0
+    while not done and calls < 10:
+        r = json.loads(bridge.durability_next(json.dumps({"id": s["id"]})))
+        rows += r["rows"]
+        done = r["done"]
+        calls += 1
+    same = len(rows) == len(ref) and all(
+        set(a) == set(b) and all(repr(float(a[k])) == repr(float(b[k])) for k in a) for a, b in zip(rows, ref))
+    try:
+        bridge.durability_next(json.dumps({"id": s["id"]}))
+        gone = False
+    except bridge.RequestError:
+        gone = True
+    first = json.loads(bridge.durability_start(json.dumps(req)))["id"]
+    second = json.loads(bridge.durability_start(json.dumps(dict(req, hours=100))))["id"]
+    try:
+        bridge.durability_next(json.dumps({"id": first}))
+        replaced = first == second
+    except bridge.RequestError:
+        replaced = True
+    stop1 = json.loads(bridge.durability_stop(json.dumps({"id": second})))["stopped"]
+    stop2 = json.loads(bridge.durability_stop(json.dumps({"id": second})))["stopped"]
+    parts = {"stepped rows equal durability_run's log, exactly": same,
+             "a finished run is gone": gone, "a new start replaces the old run": replaced,
+             "stop frees it once": stop1 and not stop2}
+    bad = [k for k, ok in parts.items() if not ok]
+    check("durability stepped from the browser (ADR-015)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ")
+          + f"{len(rows)} rows in {calls} calls; life consumed after {rows[-1]['hours']:.0f} h: "
+          f"{rows[-1]['health']:.3f}%" if rows else "no rows")
+
+
 def test_accuracy_table_is_for_this_build():
     """The Dyno page's accuracy note (web/app/src/app/dyno/accuracy.ts,
     FINDING-013) shows its measured figures only when ACCURACY_SOLVER is the
@@ -1937,7 +1980,7 @@ def main():
                test_cold_slap_follows_clearance,
                test_ramps_have_their_own_height,
                test_custom_engine_json,
-               test_describe_engine, test_solve_cycle, test_mfb50_counts_combustion_before_tdc,
+               test_describe_engine, test_solve_cycle, test_mfb50_counts_combustion_before_tdc, test_durability_steps,
                test_live_grid_pieces_match_the_shipped_grid,
                test_na_engines_idle_on_a_converter,
                test_flat_tappet_wears_more_than_roller,

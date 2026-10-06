@@ -263,6 +263,53 @@ def solve_cycle(req_json):
     }, "solve_cycle"))
 
 
+# --------------------------------------------------------------------------
+# Durability (Phase 6, ADR-015): DieselEngine.durability_blocks stepped from
+# the browser, a block or a few per call, so the page shows progress and can
+# stop between blocks. The run lives in the worker's Python between calls;
+# one at a time (a new start replaces the old). Rows are durability_run's log
+# rows, exactly. `health` is LIFE CONSUMED, 0 = new (FINDING-019).
+# --------------------------------------------------------------------------
+_DURABILITY = {}
+
+
+def durability_start(req_json):
+    req = json.loads(req_json)
+    spec = _resolve_spec(req.get("engine"))
+    hours = _num(req, "hours", lo=1.0, hi=50000.0)
+    step_h = _num(req, "step_h", lo=5.0, hi=1000.0, default=50.0)
+    eng = DieselEngine(spec=spec)
+    _DURABILITY.clear()
+    run_id = hashlib.sha256(f"{req_json}{len(_DURABILITY)}{id(eng)}".encode()).hexdigest()[:12]
+    _DURABILITY[run_id] = {"gen": eng.durability_blocks(hours, step_h=step_h, verbose=False), "hours": hours}
+    return json.dumps({"id": run_id, "hours": hours, "step_h": step_h,
+                       "blocks_at_least": int(math.ceil(hours / step_h))})
+
+
+def durability_next(req_json):
+    req = json.loads(req_json)
+    run = _DURABILITY.get(req.get("id"))
+    if run is None:
+        raise RequestError("no durability run with that id (only the latest one is kept)")
+    n = int(_num(req, "n", lo=1, hi=100, default=1))
+    rows, done = [], False
+    for _ in range(n):
+        try:
+            row = next(run["gen"])
+        except StopIteration:
+            done = True
+            break
+        rows.append({k: float(v) for k, v in row.items()})
+    if done:
+        _DURABILITY.pop(req.get("id"), None)
+    return json.dumps(_finite_deep({"rows": rows, "done": done, "hours_total": run["hours"]}, "durability_next"))
+
+
+def durability_stop(req_json):
+    req = json.loads(req_json)
+    return json.dumps({"stopped": _DURABILITY.pop(req.get("id"), None) is not None})
+
+
 def solve_grid_cell(req_json):
     """Returns (json_str, {source_key: float32 little-endian bytes})."""
     req = json.loads(req_json)
