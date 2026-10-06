@@ -40,6 +40,8 @@ its stack merges.
   derate.
 
 **Waiting on the owner:**
+0. **Merge #96 once its checks are green.** It carries #97–#99 too, which
+   merged into its branch rather than `main` (see Repository below).
 1. **Close Phase 5: REVIEW-007's M-1.** On the S9+, on the live site: after
    a stall, hold the clutch and tap Restart (B-01); shift without the
    clutch (B-02); and say whether the sound plays without crackle and the
@@ -95,9 +97,21 @@ its stack merges.
 - Older follow-ups are in "Next actions" at the end of this file.
 
 **Repository:**
+- **2026-10-06, 05:32–05:36 UTC: #89–#95 merged into `main`; #96 left open
+  (the owner saw failed checks).** #97, #98 and #99 still targeted
+  `feat/sweep-page`, so they merged **into #96's branch, not `main`**
+  (memory: stack-merge-trap). Nothing is lost: `feat/sweep-page` at
+  `10e8c01` has the same tree as #99's tested tip `bc35ff7` (0 lines
+  differ). **Merging #96 brings #96–#99 to `main` together**; then check
+  `main` against `bc35ff7` by content.
+  - The "failed checks": #96's last run on `195e54c` passed 9 of 9, but a
+    duplicate run on the same commit was *cancelled*, and GitHub draws a
+    cancelled check as a red ✗. The merges at 05:35 then pushed
+    `10e8c01` and cancelled two more runs. The fresh run on this branch
+    is the one to read.
 - #86, #87 and #88 merged 2026-10-05; `main` equals the tested top
   (`8040506`), 0 lines differ. Pages deployed it.
-- Open, one stack, merge in order: **#89** (docs, REVIEW-007, the Phase 6
+- *(Superseded by the bullet above.)* Open, one stack, merge in order: **#89** (docs, REVIEW-007, the Phase 6
   proposal) ← #90 (solve_cycle) ← #91 (FINDING-024) ← #92 (cycle page) ←
   #93 (durability call) ← #94 (spec editor) ← #95 (edits everywhere,
   banner) ← #96 (sweep) ← #97 (durability page) ← #98 (schematics) ← #99
