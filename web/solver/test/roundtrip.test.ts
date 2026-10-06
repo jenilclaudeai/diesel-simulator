@@ -69,6 +69,21 @@ check("unknown preset is rejected", e?.kind === "invalid-request", e?.message.sl
 e = await expectError(solver.solvePoint({ engine: { preset: "crdi15" }, rpm: 1800, load: 1.5 }));
 check("out-of-range load is rejected", e?.kind === "invalid-request", e?.message ?? "no error");
 
+// Phase 6 (ADR-015): a cycle's traces through the real worker match native CPython
+// (bridge.solve_cycle, crdi15 1800 rpm 0.6, native, 2026-10-05): the peak, the IMEP,
+// and the whole pressure trace through its sum
+const NATIVE_CYCLE = { p_max: 13004649.134651296, imep_net: 1134730.1025235609, p_sum: 911129969.1293999 };
+const cyc = await solver.solveCycle({ engine: { preset: "crdi15" }, rpm: 1800, load: 0.6 });
+// (optional chaining: a wrongly shaped answer fails the check rather than crashing the test)
+const cycRel = Math.max(Math.abs((cyc.summary?.p_max ?? NaN) - NATIVE_CYCLE.p_max) / NATIVE_CYCLE.p_max,
+  Math.abs((cyc.summary?.imep_net ?? NaN) - NATIVE_CYCLE.imep_net) / NATIVE_CYCLE.imep_net,
+  Math.abs((cyc.p?.reduce((a, b) => a + b, 0) ?? NaN) - NATIVE_CYCLE.p_sum) / NATIVE_CYCLE.p_sum);
+check("solveCycle matches native CPython: p_max, imep_net and the whole p trace; 720 points; cylinder 1 at phase 0",
+  cycRel < REL_TOL && cyc.theta?.length === 720 && cyc.p?.length === 720 && cyc.V?.length === 720 && cyc.cylinder_phase_deg === 0,
+  `worst rel diff ${cycRel.toExponential(2)}, p_max ${((cyc.summary?.p_max ?? NaN) / 1e5).toFixed(1)} bar`);
+e = await expectError(solver.solveCycle({ engine: { preset: "crdi15" }, rpm: 1800, load: 0.6, n_cycles: 6 }));
+check("solveCycle refuses n_cycles below 9", e?.kind === "invalid-request", e?.message ?? "no error");
+
 // ADR-014: a custom engine from brochure numbers, described by the builder itself
 const MY20 = { name: "2.0 L four", displacement: 2.0, n_cyl: 4, rated_rpm: 4000, peak_torque: 320,
                peak_power: 103, plateau: [1750, 2500], vehicle: "crdi15" };

@@ -48,9 +48,20 @@ landscape).
      `reviews/ANDROID-BUGS.csv` from `main` (refreshed hourly; the first
      time it may need "Allow access"). **Update the CSV, never the
      sheet.** The Drive connector reads the sheet but can't edit cells.
-2. **Decide Phase 6's plan:** `reviews/PROPOSAL-phase6.md`. Scope A/B/C
-   (recommended B: PLAN's full scope, staged), which fields, the
-   development presets, and durability's default length.
+2. ~~**Decide Phase 6's plan.**~~ **Decided 2026-10-05: option B (ADR-015),**
+   PLAN's full scope in two stages; the other three recommendations taken
+   as accepted (every field, ordered by influence; development presets
+   shown; durability 1,000 h). Change any of them by saying so.
+
+**Phase 6, stage 1, in progress** (branch `feat/solve-cycle`, stacked on #89):
+- **Done: `bridge.solve_cycle` and `solveCycle` through the port.** Cylinder
+  1's traces in its own crank angle, manifolds in engine angle (phase 0,
+  returned), events, summary, n_cycles ≥ 9, NaNs refused anywhere.
+  `test_solve_cycle` 7 parts (5 of 5 mutants); round trip 24 (+2): real
+  Pyodide worker vs native within 2.25e-7 (2 of 2 mutants). 6.1 s natively
+  per point, so ~16 s in the browser; 109 kB of JSON.
+- Next: the cycle page; then the sweep and durability calls; then the
+  spec editor.
 3. **The grid-build plan is deferred by the owner until v1 is complete**
    (2026-10-05). Option A (the ETA) shipped in #88. *(Was: "Decide the
    grid-build plan".)*

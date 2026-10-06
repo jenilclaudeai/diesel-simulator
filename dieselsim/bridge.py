@@ -93,6 +93,28 @@ def _finite(d, what):
     return d
 
 
+def _finite_deep(d, what):
+    """_finite for nested results (solve_cycle's summary and traces): a NaN
+    deep in an array would otherwise reach json.dumps, which writes NaN, and
+    the browser's JSON.parse rejects it."""
+    bad = []
+
+    def walk(v, path):
+        if isinstance(v, float) and not math.isfinite(v):
+            bad.append(path)
+        elif isinstance(v, dict):
+            for k, x in v.items():
+                walk(x, f"{path}.{k}" if path else k)
+        elif isinstance(v, list):
+            for i, x in enumerate(v):
+                if len(bad) < 5:
+                    walk(x, f"{path}[{i}]")
+    walk(d, "")
+    if bad:
+        raise ArithmeticError(f"{what}: non-finite result at {', '.join(bad[:5])}")
+    return d
+
+
 def source_hash():
     """
     SHA-256 over the package's own .py files -- the identity of the physics
@@ -195,6 +217,50 @@ def solve_point(req_json):
         "soot_g_kwh": op.soot_g_kwh, "fuel_kg_h": op.fuel_kg_h,
         "h_ring_mid": op.h_ring_mid,
     }, "solve_point"))
+
+
+def solve_cycle(req_json):
+    """One operating point's crank-angle traces, for the cycle page (Phase 6,
+    ADR-015): cylinder 1's pressure, motored pressure, temperature, heat
+    release and volume, the valve lifts, and the manifold pressures.
+
+    FINDING-008: cylinder 1's arrays are in its own crank angle (0 = its
+    firing TDC, 0..720); the manifolds are in engine angle. The two coincide
+    for cylinder 1 only, when its phase is 0 (it leads every firing order);
+    the phase is returned so the page can say so rather than assume it.
+    """
+    req = json.loads(req_json)
+    spec = _resolve_spec(req.get("engine"))
+    rpm = _num(req, "rpm", lo=300.0, hi=10000.0)
+    load = _num(req, "load", lo=0.0, hi=1.0)
+    n_cycles = int(_num(req, "n_cycles", lo=9, hi=40, default=9))   # >= 9: at 6 the drift is 10.8%
+    op = DieselEngine(spec=spec).operating_point(rpm, load=load, n_cycles=n_cycles)
+    c, tr, vt = op.cycle, op.cycle.traces, spec.valves
+    arr = lambda a: [float(x) for x in np.asarray(a, dtype=float)]  # noqa: E731
+    return json.dumps(_finite_deep({
+        "rpm": op.rpm, "load": load, "n_cyl": spec.geom.n_cyl, "cylinder": 1,
+        "cylinder_phase_deg": float(spec.geom.phase_deg(0)),
+        "summary": {
+            "torque": op.torque, "power": op.power, "bmep": op.bmep, "bsfc": op.bsfc,
+            "imep_gross": c.imep_gross, "imep_net": c.imep_net, "pmep": c.pmep,
+            "p_max": c.p_max, "theta_pmax": c.theta_pmax, "dpdtheta_comb": c.dpdtheta_comb,
+            "T_max": c.T_max, "mfb50": c.mfb50, "ign_delay_deg": c.ign_delay_deg,
+            "ign_delay_ms": c.ign_delay_ms, "premix_fraction": c.premix_fraction,
+            "burn_duration_deg": c.burn_duration_deg, "inj_duration_deg": c.inj_duration_deg,
+            "rail_pressure": c.rail_pressure, "afr": c.afr, "boost_pr": c.boost_pr,
+            "egr_fraction": c.egr_fraction, "fuel_mg": op.fuel_mg,
+        },
+        "events": {
+            "ivo": vt.ivo_deg, "ivc": vt.ivc_deg, "evo": vt.evo_deg, "evc": vt.evc_deg,
+            "soi_main": tr.soi_deg, "soi_pilot": tr.pilot_soi_deg,
+            "soc_main": tr.soc_main_deg, "soc_pilot": tr.soc_pilot_deg,
+            "inj_dur_main": tr.inj_dur_main_deg,
+        },
+        "theta": arr(tr.theta), "V": arr(tr.V),
+        "p": arr(tr.p[0]), "p_motored": arr(tr.p_motored[0]), "T": arr(tr.T[0]), "hrr": arr(tr.hrr[0]),
+        "lift_int": arr(tr.valve_lift_int), "lift_exh": arr(tr.valve_lift_exh),
+        "p_int_manifold": arr(tr.p_int_manifold), "p_exh_manifold": arr(tr.p_exh_manifold),
+    }, "solve_cycle"))
 
 
 def solve_grid_cell(req_json):

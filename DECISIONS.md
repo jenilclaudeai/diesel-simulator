@@ -917,3 +917,47 @@ to support and a coarser map; the owner kept one shape.
 The browser build proves too slow in practice on the machines people use
 (measure on a real laptop first), or phones become the main way people
 build engines.
+
+---
+
+## ADR-015 — Phase 6 (Expert mode): PLAN's full scope, in two stages
+
+**Status:** Accepted (2026-10-05). The owner chose option B in
+`reviews/PROPOSAL-phase6.md` ("let's go with option B").
+
+### Decision
+
+1. **Stage 1:** bridge calls for a cycle's traces, a parameter sweep and a
+   durability run; the cycle page (p–V log-log, p–θ, heat release, valve
+   lift); and the spec editor.
+2. **Stage 2:** the four ADR-009 schematics, the grid-invalidation banner,
+   and the sweep and durability pages.
+3. The proposal's other three recommendations, taken as accepted. The owner
+   answered only the scope question; these were offered as the defaults
+   ("if you just say 'go' I'll start with my recommendations"):
+   - **every field** is editable (173 in the nine dataclasses, plus
+     `EngineSpec`'s own), grouped by subsystem, ordered by influence, with
+     the rarely changed collapsed;
+   - the **development presets** appear in Expert mode beside the roster
+     engines (as ADR-008 says);
+   - **durability defaults to 1,000 h** (~7.5 min in the browser), and
+     longer runs state their time first.
+
+   Any of the three can be changed by the owner without reopening the
+   rest.
+
+### Rationale
+
+PLAN.md's scope, which the owner asked to finish before any additions
+("First I would like to go as per plan and complete this version"), staged
+so each half is usable and reviewable.
+
+### Consequences
+
+- The new bridge calls are numpy-only and use no `multiprocessing`
+  (ADR-001). They live in `bridge.py`, which the grid hash excludes, so no
+  prebuilt grid goes stale.
+- Every plot names its angle axis: cylinder 1's own crank angle for its
+  traces, engine angle for the manifolds (FINDING-008).
+- The grid-build speed work (`PROPOSAL-grid-build.md`) waits until after
+  v1, by the owner's decision of the same day.
