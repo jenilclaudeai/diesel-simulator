@@ -1,7 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import {
   buildLiveGrid, CachedSolver, IndexedDbGridCache, IndexedDbPieceStore, liveBuildKey, SolverError, WorkerSolver,
-  type CycleResult, type LiveBuildProgress, type SpecDescription,
+  type CompressorMap, type CycleResult, type LiveBuildProgress, type SpecDescription,
   type EngineInfo, type EngineRef, type Endpoint, type Grid, type GridOptions, type GridRequest, type PointRequest, type PointResult,
   type RuntimeInfo, type SolverPort,
 } from '@dieselsim/solver';
@@ -59,6 +59,12 @@ export class SolverService {
   async durabilityStop(id: string): Promise<void> {
     await this.start();
     await this.port!.durabilityCall('durability_stop', JSON.stringify({ id }));
+  }
+
+  /** The compressor's map, from the solver's own model, for the spec page's schematic (ADR-009). */
+  async compressorMap(engine: EngineRef): Promise<CompressorMap> {
+    await this.start();
+    return this.port!.compressorMap(engine);
   }
 
   /** Every spec field of an engine, overrides applied: the spec editor's view (Phase 6, ADR-015). */

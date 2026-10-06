@@ -43,6 +43,9 @@
   @for (g of groups(); track g.key) {
     <section class="group" [attr.aria-labelledby]="'g-' + g.key">
       <h2 [id]="'g-' + g.key">{{ g.title }} @if (g.changed) { <span class="badge">{{ g.changed }} changed</span> }</h2>
+      @if (vals() && !filter() && (g.key === 'cylinder' || g.key === 'valves' || g.key === 'air' || g.key === 'friction')) {
+        <app-schematic [kind]="g.key" [v]="vals()!" [cmap]="cmap()" [point]="point()" />
+      }
       <table class="fields">
         <tbody>
           @for (r of g.primary; track r.f.path) { <ng-container *ngTemplateOutlet="row; context: { $implicit: r }" /> }

@@ -144,9 +144,18 @@ export interface CycleResult {
   /** degrees in the same 0..720 convention; soc_* are -1 where combustion did not start */
   events: { ivo: number; ivc: number; evo: number; evc: number; soi_main: number; soi_pilot: number;
             soc_main: number; soc_pilot: number; inj_dur_main: number };
+  /** where the compressor runs on its map (null without a turbo): corrected flow, kg/s; pressure ratio */
+  compressor: { pr: number; m_corr: number; u: number; eta: number; surge_margin: number } | null;
   theta: number[]; V: number[]; p: number[]; p_motored: number[]; T: number[]; hrr: number[];
   lift_int: number[]; lift_exh: number[]; p_int_manifold: number[]; p_exh_manifold: number[];
 }
+
+/** The compressor's map (ADR-009): speed lines, surge and choke, from the solver's own Compressor; corrected flow in kg/s. */
+export type CompressorMap = { enabled: false } | {
+  enabled: true; n_corr_ref: number; eta_peak: number;
+  lines: { u: number; rpm: number; m: number[]; pr: number[]; eta: number[] }[];
+  surge: { u: number; m: number; pr: number }[]; choke: { u: number; m: number; pr: number }[];
+};
 
 /** One spec field for the editor (ADR-015): its dotted path, which `overrides` takes. */
 export interface SpecField { path: string; type: "number" | "int" | "bool" | "string" | "list"; value: number | boolean | string | number[] }
@@ -162,6 +171,8 @@ export interface SolverPort {
   durabilityCall(fn: "durability_start" | "durability_next" | "durability_stop", arg: string): Promise<string>;
   /** Every spec field of an engine, overrides applied, for the spec editor (ADR-015). */
   describeSpec(engine: EngineRef): Promise<SpecDescription>;
+  /** The compressor's map for the schematic (ADR-009). */
+  compressorMap(engine: EngineRef): Promise<CompressorMap>;
   /** Name, rpm range and (for a custom engine) the brochure numbers, without a solve. */
   describeEngine(engine: EngineRef): Promise<EngineInfo>;
   buildGrid(req: GridRequest, opts?: GridOptions): Promise<Grid>;

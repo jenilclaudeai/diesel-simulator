@@ -219,6 +219,53 @@ def solve_point(req_json):
     }, "solve_point"))
 
 
+def _compressor_point(spec, last):
+    """The operating point on the compressor map: corrected flow and pressure
+    ratio, from the turbo's last state. operating_point's default ambient
+    (298 K) is the compressor inlet temperature solve_cycle runs at."""
+    from .turbo import P_REF, T_REF
+    if not spec.turbo.enabled or not last or "pr_c" not in last:
+        return None
+    T_in = 298.0
+    p_in = last.get("p_comp_in", P_REF)
+    m_corr = last["mdot_comp"] * math.sqrt(T_in / T_REF) / (p_in / P_REF)
+    return {"pr": float(last["pr_c"]), "m_corr": float(m_corr), "u": float(last["u_norm"]),
+            "eta": float(last["eta_c"]), "surge_margin": float(last["surge_margin"])}
+
+
+def compressor_map(req_json):
+    """The compressor's map for the spec editor's schematic (ADR-009): speed
+    lines, the surge line and the choke line, each point computed by the
+    solver's own Compressor (solve, choke_flow, pr_max) at reference inlet
+    conditions, so the drawing is the model, not a copy of its formulas."""
+    from .turbo import Compressor, P_REF, T_REF
+    req = json.loads(req_json)
+    spec = _resolve_spec(req.get("engine"))
+    if not spec.turbo.enabled:
+        return json.dumps({"enabled": False})
+    comp = Compressor(spec.turbo)
+    n_ref = spec.turbo.n_corr_ref
+    lines, surge = [], []
+    for u in (0.4, 0.55, 0.7, 0.85, 1.0, 1.1):
+        prm = comp.pr_max(u)
+        pts = []
+        for k in range(41):
+            pr = 1.0 + (prm - 1.0) * k / 40.0
+            mdot, eta, _, margin, _ = comp.solve(u * n_ref, pr, P_REF, T_REF)
+            pts.append((float(mdot), float(pr), float(eta), float(margin)))
+        lines.append({"u": u, "rpm": u * n_ref, "m": [p[0] for p in pts], "pr": [p[1] for p in pts],
+                      "eta": [p[2] for p in pts]})
+        # the surge point: where the margin crosses 0 along the line (interpolated)
+        for (m0, p0, _, s0), (m1, p1, _, s1) in zip(pts, pts[1:]):
+            if s0 >= 0.0 > s1:
+                t = s0 / (s0 - s1)
+                surge.append({"u": u, "m": m0 + t * (m1 - m0), "pr": p0 + t * (p1 - p0)})
+                break
+    choke = [{"u": u, "m": float(comp.choke_flow(u)), "pr": 1.0} for u in (0.4, 0.55, 0.7, 0.85, 1.0, 1.1)]
+    return json.dumps(_finite_deep({"enabled": True, "n_corr_ref": n_ref, "eta_peak": spec.turbo.comp_eff_peak,
+                                    "lines": lines, "surge": surge, "choke": choke}, "compressor_map"))
+
+
 def solve_cycle(req_json):
     """One operating point's crank-angle traces, for the cycle page (Phase 6,
     ADR-015): cylinder 1's pressure, motored pressure, temperature, heat
@@ -250,6 +297,8 @@ def solve_cycle(req_json):
             "rail_pressure": c.rail_pressure, "afr": c.afr, "boost_pr": c.boost_pr,
             "egr_fraction": c.egr_fraction, "fuel_mg": op.fuel_mg,
         },
+        # where the compressor runs on its map (ADR-009): the turbo's state at the end of the solve
+        "compressor": _compressor_point(spec, c.turbo),
         "events": {
             "ivo": vt.ivo_deg, "ivc": vt.ivc_deg, "evo": vt.evo_deg, "evc": vt.evc_deg,
             "soi_main": tr.soi_deg, "soi_pilot": tr.pilot_soi_deg,

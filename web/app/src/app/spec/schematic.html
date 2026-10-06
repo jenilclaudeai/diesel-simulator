@@ -1,0 +1,113 @@
+@switch (kind()) {
+  @case ('cylinder') {
+    @if (section(); as s) {
+      <figure class="schematic cylinder">
+        <svg [attr.viewBox]="'0 0 ' + s.W + ' ' + s.H" role="img"
+             [attr.aria-label]="'Cylinder cross-section, to scale: bore ' + f1(geomText().bore) + ' mm, stroke ' + f1(geomText().stroke) + ' mm, rod ' + f1(geomText().rod) + ' mm, compression ratio ' + f1(geomText().cr) + ', at ' + crank() + ' degrees after top dead centre.'">
+          <rect class="head" [attr.x]="s.liner.x0 - 14" [attr.y]="s.head - 14" [attr.width]="s.liner.x1 - s.liner.x0 + 28" height="14" />
+          <line class="liner" [attr.x1]="s.liner.x0" [attr.x2]="s.liner.x0" [attr.y1]="s.liner.y0" [attr.y2]="s.liner.y1" />
+          <line class="liner" [attr.x1]="s.liner.x1" [attr.x2]="s.liner.x1" [attr.y1]="s.liner.y0" [attr.y2]="s.liner.y1" />
+          <rect class="piston" [attr.x]="s.piston.x" [attr.y]="s.piston.y" [attr.width]="s.piston.w" [attr.height]="s.piston.h" rx="2" />
+          <circle class="crankcircle" [attr.cx]="s.crank.x" [attr.cy]="s.crank.y" [attr.r]="s.crank.r" />
+          <line class="rod" [attr.x1]="s.pin.x" [attr.y1]="s.pin.y" [attr.x2]="s.crankPin.x" [attr.y2]="s.crankPin.y" />
+          <line class="throw" [attr.x1]="s.crank.x" [attr.y1]="s.crank.y" [attr.x2]="s.crankPin.x" [attr.y2]="s.crankPin.y" />
+          <circle class="joint" [attr.cx]="s.pin.x" [attr.cy]="s.pin.y" r="4" />
+          <circle class="joint" [attr.cx]="s.crankPin.x" [attr.cy]="s.crankPin.y" r="4" />
+          <circle class="main" [attr.cx]="s.crank.x" [attr.cy]="s.crank.y" r="5" />
+          <text class="lbl" [attr.x]="s.liner.x1 + 18" [attr.y]="(s.gap.y0 + s.gap.y1) / 2 + 4">clearance at TDC {{ f1(s.gap.mm) }} mm</text>
+          <line class="dim" [attr.x1]="s.liner.x1 + 4" [attr.x2]="s.liner.x1 + 14" [attr.y1]="s.gap.y0" [attr.y2]="s.gap.y0" />
+          <line class="dim" [attr.x1]="s.liner.x1 + 4" [attr.x2]="s.liner.x1 + 14" [attr.y1]="s.gap.y1" [attr.y2]="s.gap.y1" />
+        </svg>
+        <figcaption>
+          <label class="crank-in">Crank angle {{ crank() }}°
+            <input type="range" min="0" max="359" step="1" [value]="crank()" (input)="crank.set(+$any($event.target).value)" /></label>
+          Bore {{ f1(geomText().bore) }} mm, stroke {{ f1(geomText().stroke) }} mm, rod {{ f1(geomText().rod) }} mm,
+          compression ratio {{ f1(geomText().cr) }}@if (geomText().off) {, pin offset {{ f1(geomText().off) }} mm}. To scale;
+          the crown and skirt lengths are drawing proportions, not spec fields.
+        </figcaption>
+      </figure>
+    }
+  }
+  @case ('valves') {
+    @if (dial(); as d) {
+      <figure class="schematic valves">
+        <svg viewBox="0 0 260 260" role="img"
+             [attr.aria-label]="'Valve timing: intake open ' + d.intake.deg + ' degrees, exhaust open ' + d.exhaust.deg + ' degrees, overlap ' + d.overlap + ' degrees, injection ' + f1(360 - d.injection) + ' degrees before top dead centre.'">
+          <circle class="dialring" [attr.cx]="d.C" [attr.cy]="d.C" [attr.r]="d.R + 6" />
+          <path class="exh" [attr.d]="d.exhaustPath" />
+          <path class="int" [attr.d]="d.intakePath" />
+          @if (d.overlapPath) { <path class="ovl" [attr.d]="d.overlapPath" /> }
+          <line class="inj" [attr.x1]="d.injIn.x" [attr.y1]="d.injIn.y" [attr.x2]="d.inj.x" [attr.y2]="d.inj.y" />
+          <text class="lbl" [attr.x]="d.tdc.x" [attr.y]="d.tdc.y" text-anchor="middle">TDC</text>
+          <text class="lbl" [attr.x]="d.bdc.x" [attr.y]="d.bdc.y + 8" text-anchor="middle">BDC</text>
+        </svg>
+        <figcaption>
+          <span class="k exh">exhaust {{ d.exhaust.deg }}°</span> <span class="k int">intake {{ d.intake.deg }}°</span>
+          <span class="k ovl">overlap {{ d.overlap }}°</span> <span class="k inj">injection {{ f1(360 - d.injection) }}° before TDC</span>.
+          One turn is shown for each stroke pair: the 720° cycle folded onto 360°, top dead centre at the top.
+        </figcaption>
+      </figure>
+    }
+  }
+  @case ('air') {
+    @if (map(); as m) {
+      <figure class="schematic compressor">
+        <svg [attr.viewBox]="'0 0 ' + m.W + ' ' + m.H" role="img"
+             [attr.aria-label]="'Compressor map: six speed lines, the surge line and the choke line' + (m.point ? ', with the operating point at pressure ratio ' + m.point.pr.toFixed(2) : '') + '.'">
+          @for (t of m.yTicks; track $index) {
+            <line class="grid" [attr.x1]="m.M.l" [attr.x2]="m.W - m.M.r" [attr.y1]="t.y" [attr.y2]="t.y" />
+            <text class="tick" [attr.x]="m.M.l - 6" [attr.y]="t.y + 4" text-anchor="end">{{ t.label }}</text>
+          }
+          @for (t of m.xTicks; track $index) {
+            <text class="tick" [attr.x]="t.x" [attr.y]="m.H - m.M.b + 16" text-anchor="middle">{{ t.label }}</text>
+          }
+          @for (l of m.lines; track l.label) {
+            <polyline class="speed" [attr.points]="l.d" />
+            <text class="lbl small" [attr.x]="l.lx" [attr.y]="l.ly">{{ l.label }}</text>
+          }
+          <polyline class="surge" [attr.points]="m.surge" />
+          <polyline class="choke" [attr.points]="m.choke" />
+          @if (m.point; as p) { <circle class="op" [attr.cx]="p.x" [attr.cy]="p.y" r="6" /> }
+          <text class="axis" [attr.x]="(m.M.l + m.W - m.M.r) / 2" [attr.y]="m.H - 6" text-anchor="middle">Corrected air flow (kg/s)</text>
+          <text class="axis" [attr.transform]="'translate(14,' + (m.M.t + m.H - m.M.b) / 2 + ') rotate(-90)'" text-anchor="middle">Pressure ratio</text>
+        </svg>
+        <figcaption>
+          Speed lines at % of {{ f0(m.nRef) }} rpm (corrected); <span class="k surge">surge</span> on the left, <span class="k choke">choke</span> on the right.
+          @if (m.point; as p) { <span class="k op">This engine's point</span> from your last cycle solve: pressure ratio {{ p.pr.toFixed(2) }},
+            {{ p.m.toFixed(3) }} kg/s, {{ f0(p.margin * 100) }}% from surge. }
+          @else { Solve a cycle on this engine, with these edits, to place its operating point. }
+        </figcaption>
+      </figure>
+    } @else if (cmap()?.enabled === false) {
+      <p class="noturbo">This engine has no turbocharger, so no compressor map.</p>
+    }
+  }
+  @case ('friction') {
+    @if (rings(); as r) {
+      <figure class="schematic friction">
+        <svg viewBox="0 0 420 260" role="img"
+             [attr.aria-label]="'Ring pack: ' + r.nComp + ' compression rings and an oil ring; skirt clearance ' + f0(r.skirtUm) + ' micrometres; main bearing clearance ' + f0(r.main.um) + ', rod ' + f0(r.rod.um) + ' micrometres.'">
+          <rect class="liner-wall" x="96" y="6" width="8" [attr.height]="r.h + 8" />
+          <rect class="piston" x="20" y="10" [attr.width]="76 - r.skirtPx" [attr.height]="r.h" />
+          @for (g of r.rings; track $index) {
+            <rect [class]="'ring ' + g.kind" [attr.x]="82 - r.skirtPx" [attr.y]="g.y" [attr.width]="14 + r.skirtPx" [attr.height]="g.h" />
+            <text class="lbl small" x="112" [attr.y]="g.y + g.h / 2 + 4">{{ g.kind === 'oil' ? 'oil ring, contact land ' + r.oilLandMm.toFixed(2) : 'ring ' + g.mm.toFixed(2) }} mm</text>
+          }
+          <g transform="translate(250 70)">
+            <circle class="bearing" cx="0" cy="0" [attr.r]="r.main.R" /><circle class="journal" cx="0" cy="0" [attr.r]="r.main.r" />
+            <text class="lbl small" x="0" y="64" text-anchor="middle">main {{ f0(r.main.d) }} mm</text>
+          </g>
+          <g transform="translate(360 70)">
+            <circle class="bearing" cx="0" cy="0" [attr.r]="r.rod.R" /><circle class="journal" cx="0" cy="0" [attr.r]="r.rod.r" />
+            <text class="lbl small" x="0" y="64" text-anchor="middle">rod {{ f0(r.rod.d) }} mm</text>
+          </g>
+        </svg>
+        <figcaption>
+          {{ r.nComp }} compression {{ r.nComp === 1 ? 'ring' : 'rings' }} and an oil ring, ring gap {{ r.ringGapMm.toFixed(2) }} mm (new).
+          Clearances, drawn {{ X }} times larger than scale: skirt {{ f0(r.skirtUm) }} µm, main bearing {{ f0(r.main.um) }} µm,
+          rod bearing {{ f0(r.rod.um) }} µm (diametral, new). The oil ring's height and the lands between grooves are drawing proportions.
+        </figcaption>
+      </figure>
+    }
+  }
+}

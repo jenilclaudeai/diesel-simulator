@@ -1854,6 +1854,35 @@ def test_accuracy_table_is_for_this_build():
           f"table {table[:12]}, grids {grids[:12]}, this build {h[:12]}")
 
 
+def test_compressor_map():
+    """ADR-009's compressor-map schematic (Phase 6, ADR-015): bridge.compressor_map
+    is the solver's own Compressor, and solve_cycle's operating point sits on it.
+    The point lies on the speed line at its own u (Compressor.solve at its PR
+    gives its corrected flow); every surge point has zero surge margin; each
+    speed line starts on the choke line at PR 1; no turbo, no map and no point."""
+    import json
+    from dieselsim import bridge
+    from dieselsim.config import PRESETS
+    from dieselsim.turbo import Compressor, P_REF, T_REF
+    spec = PRESETS["crdi15"]()
+    comp = Compressor(spec.turbo)
+    m = json.loads(bridge.compressor_map(json.dumps({"engine": {"preset": "crdi15"}})))
+    op = json.loads(bridge.solve_cycle(json.dumps({"engine": {"preset": "crdi15"}, "rpm": 2700, "load": 0.6})))["compressor"]
+    m_line = comp.solve(op["u"] * spec.turbo.n_corr_ref, op["pr"], P_REF, T_REF)[0]
+    on_line = abs(m_line - op["m_corr"]) <= 1e-9 * max(op["m_corr"], 1e-9)
+    surge_ok = len(m["surge"]) == len(m["lines"]) and all(
+        abs(comp.solve(s_["u"] * spec.turbo.n_corr_ref, s_["pr"], P_REF, T_REF)[3]) < 2e-3 for s_ in m["surge"])
+    choke_ok = all(abs(line["m"][0] - ch["m"]) <= 1e-12 and line["pr"][0] == 1.0 for line, ch in zip(m["lines"], m["choke"]))
+    na_map = json.loads(bridge.compressor_map(json.dumps({"engine": {"preset": "single"}})))
+    na_op = json.loads(bridge.solve_cycle(json.dumps({"engine": {"preset": "single"}, "rpm": 2000, "load": 0.5})))["compressor"]
+    parts = {"the operating point is on its own speed line": on_line, "surge points have zero margin": surge_ok,
+             "speed lines start on the choke line": choke_ok, "no turbo: no map, no point": na_map == {"enabled": False} and na_op is None}
+    bad = [k for k, ok in parts.items() if not ok]
+    check("compressor map is the solver's own (ADR-009)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ")
+          + f"crdi15 2700/0.6 at PR {op['pr']:.2f}, {op['m_corr']:.4f} kg/s corrected, u {op['u']:.3f}, surge margin {op['surge_margin']:.2f}")
+
+
 def test_live_grid_pieces_match_the_shipped_grid():
     """ADR-014 step 3: a browser worker builds a drivable grid from the
     bridge's pieces, and tools/build_live_grids.py now builds with the same
@@ -1995,7 +2024,7 @@ def test_roster_grids_match_their_engine_files():
 
 
 def main():
-    for fn in (test_accuracy_table_is_for_this_build,
+    for fn in (test_accuracy_table_is_for_this_build, test_compressor_map,
                test_golden_points, test_n_cycles_convergence,
                test_premix_responds_to_temperature,
                test_cold_start_sharpens_dpdtheta,
