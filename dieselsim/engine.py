@@ -26,6 +26,13 @@ from .thermo import Fuel
 from .turbo import Turbocharger
 from .wear import WearModel
 
+# The air the fuel-limit chain (torque limiter and pressure/temperature
+# limit) is calibrated in: the engine's rating, which every preset and roster
+# engine was built and validated at. The rating does not move with the
+# weather; only the solve sees the spec's ambient (FINDING-025).
+RATING_P_AMB = 101325.0     # Pa
+RATING_T_AMB = 298.0        # K
+
 
 @dataclass
 class OperatingPoint:
@@ -413,10 +420,14 @@ class DieselEngine:
                         load_est: float = None) -> OperatingPoint:
         """
         p_amb, T_amb: the air the engine breathes. None (every caller in the
-            package) reads spec.thermal.ambient_p / ambient_T at call time.
-            They were fixed defaults, 101325 Pa and 298 K, so the spec's
-            ambient -- a primary field in the spec editor -- reached no
-            solve (FINDING-025).
+            package) reads spec.thermal.ambient_p / ambient_T at call time,
+            except inside the fuel-limit chain's calibration, which runs at
+            RATING_P_AMB / RATING_T_AMB: the same pedal gives the same fuel
+            in any weather, an ECU with no barometric compensation. They
+            were fixed defaults, 101325 Pa and 298 K, so the spec's ambient
+            -- a primary field in the spec editor -- reached no solve; and
+            calibrating at the spec's ambient instead made half load at
+            2000 m give 13.5% more fuel and 4.6% more torque (FINDING-025).
         converged: run at real time for CONVERGED_CYCLES instead of the
             accelerated n_cycles, and check that the last cycles settled
             (FINDING-013). None follows self.converged_mode.
@@ -427,9 +438,9 @@ class DieselEngine:
         """
         g = self.spec.geom
         if p_amb is None:
-            p_amb = self.spec.thermal.ambient_p
+            p_amb = RATING_P_AMB if self._calibrating else self.spec.thermal.ambient_p
         if T_amb is None:
-            T_amb = self.spec.thermal.ambient_T
+            T_amb = RATING_T_AMB if self._calibrating else self.spec.thermal.ambient_T
         conv = self.converged_mode if converged is None else converged
         if fuel_mg is None:
             load = 0.0 if load is None else load

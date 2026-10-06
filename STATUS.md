@@ -100,9 +100,13 @@ its stack merges.
      to 1.
    - Nothing is started on any of them. (This is not item 4's Features tab;
      that one is still to copy.)
-7. **Merge #101 (FINDING-025)**, then decide its open question in Phase 7:
-   at altitude, should the modelled ECU derate from a barometric sensor, or
-   fuel like an uncompensated pump? (See Session 7 below.)
+7. **Merge #101 (FINDING-025)**, then decide its open question in Phase 7.
+   The modelled ECU is now **uncompensated**: the pedal gives fuel, so at
+   altitude torque falls and smoke rises. Keep that, or add a barometric
+   derate, or torque-based control? (See Session 7 below.) *(Was: "…should
+   the modelled ECU derate from a barometric sensor, or fuel like an
+   uncompensated pump?" The first fix was neither; see FINDING-025's
+   correction.)*
 
 **Session 7 (2026-10-06): FINDING-025, the spec's ambient reached no solve**
 (branch `fix/spec-ambient`, #101):
@@ -111,18 +115,37 @@ its stack merges.
   `operating_point` used fixed defaults, 101325 Pa / 298 K. An edit to
   3000 m or 45 °C moved **0 of 8** Dyno outputs; passing them directly
   moved all 8. `thermal.ambient_p` was read nowhere.
-- Fixed: None now means the spec's ambient; the compressor point's inlet
-  temperature is the spec's too, returned as `T_in`.
+- Fixed: None now means the spec's ambient, **except** in the fuel-limit
+  chain's calibration, which stays at the rating's air (101325 Pa / 298 K,
+  `engine.RATING_P_AMB`). The compressor point's inlet temperature is the
+  spec's, returned as `T_in`.
+- **Corrected in place:** the first fix also calibrated at the spec's air.
+  Half load at 2000 m then got 13.5% more fuel and 4.6% more torque, which
+  matches no real ECU. It was found while measuring for the Phase 7
+  proposal and changed before merge.
+  - Now the same pedal gives the same fuel in any air (uncompensated). At
+    3000 m: 198 N·m (−12%), soot 2.9×. At 2000 m, half load: −6.2%.
 - At standard ambient nothing changes: old and new code agree **bit for
-  bit**, 21 of 21 replies by sha256 on all 10 engines. So the grids were
-  re-stamped `15593c2d` → `42da745d` with `tools/restamp_grids.py`'s
-  proof, not rebuilt.
-- `test_spec_ambient_reaches_the_solve`: 5 parts; baseline passes, 4 of 4
-  mutants caught.
-- Open, for Phase 7: the smoke limit uses a scheduled PR × 101325 Pa, so at
-  3000 m the calibrated ECU holds 218 N·m at AFR 19 and 3.7× the soot.
-  That is a torque-based ECU with no barometric derate. Which do we want?
-  Details in `reviews/FINDING-025.md`.
+  bit**, 20 of 21 replies by sha256 on all 10 engines. The 21st,
+  `solve_cycle`, differs only by the added `T_in` key; its other 51 values
+  are identical.
+- So the grids were re-stamped `15593c2d` → `42da745d` → `f298469f`, with
+  `tools/restamp_grids.py`'s proof, not rebuilt.
+- `test_spec_ambient_reaches_the_solve`: 6 parts; baseline passes, 5 of 5
+  mutants caught, including the first fix.
+- Open, for Phase 7: keep the uncompensated ECU, or add a barometric
+  derate (`cycle.fuel_smoke_limit` assumes 101325 Pa) or torque-based
+  control? Details in `reviews/FINDING-025.md`.
+- Also measured, for the proposal (crdi15, through the bridge):
+  - Cetane 40 → 55 moves torque and BSFC under 0.3% and NOx by 4–8%. Its
+    visible effects (hard starts, knock) are not modelled.
+  - Final code, crdi15 2500 rpm full load (1500 rpm half load in
+    brackets):
+    - 2000 m: torque −6.7% (−6.2%), BSFC +7.2%, soot +88% (+54%);
+    - −10 °C: torque +1.3% (+4.7%), soot −29%;
+    - 40 °C: torque −0.4% (−1.5%), soot +12%.
+  - *(Was, from the first fix: "−10 °C: soot −36%, NOx −27%; 2000 m at
+    full load: soot ×2.9, BSFC +14%".)*
 
 **Known defects and follow-ups** (none blocking):
 - The dev preset `single` sags on the tractor's torque converter in
@@ -180,7 +203,7 @@ its stack merges.
 
 | suite | result |
 |---|---|
-| `python3 tests/test_physics.py` | 78 passed, 0 failed, 3 known (with scipy; on #101's tree, 2026-10-06). *Was (#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
+| `python3 tests/test_physics.py` | 78 passed, 0 failed, 3 known (with scipy; on #101's final tree, 2026-10-06). *Was (#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
 | Pyodide suite | 64 passed, 0 failed, 2 known, 13 skipped (CI on #99). *Was (#88):* 59 / 0 / 2 / 12 |
 | `tools/fixtures/gen_fixtures.py --check` | 7 modules current |
 | `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |

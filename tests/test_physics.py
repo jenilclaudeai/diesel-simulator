@@ -1895,13 +1895,18 @@ def test_spec_ambient_reaches_the_solve():
     fields in the spec editor) reached no solve. operating_point took fixed
     defaults, 101325 Pa and 298 K, and no caller passed the spec's, so a
     3000 m edit on /spec left all 8 Dyno outputs bit-identical. Now the
-    defaults are the spec's. Parts:
+    defaults are the spec's, except in the fuel-limit chain's calibration,
+    which stays at the rating's air (engine.RATING_P_AMB / _T_AMB). A first
+    fix calibrated at the spec's ambient too, and half load at 2000 m then
+    got 13.5% more fuel and 4.6% more torque. Parts:
     - the default spec through the bridge equals an explicit 101325 Pa / 298 K
       solve exactly (the fix changes nothing at standard ambient);
     - 70 kPa in the spec moves the solve the way thin air does (less air: AFR
       down 10% or more; NOx and soot up);
     - 318 K in the spec makes the exhaust hotter;
-    - an engine whose spec says 70 kPa equals one told p_amb=70 kPa explicitly;
+    - a spec at 70 kPa equals the standard engine told p_amb=70 kPa
+      explicitly (the rating is calibrated in the same air either way);
+    - half load at 79.5 kPa gets standard's fuel, and less torque;
     - solve_cycle's compressor point reads its inlet temperature from the spec."""
     import json
     from dieselsim import bridge
@@ -1919,9 +1924,13 @@ def test_spec_ambient_reaches_the_solve():
                                                                 p_amb=101325.0, T_amb=298.0)
     thin = point({"thermal.ambient_p": 70000.0})
     hot = point({"thermal.ambient_T": 318.0})
-    spec70 = PRESETS["crdi15"]()
-    spec70.thermal.ambient_p = 70000.0
-    explicit = DieselEngine(spec=spec70).operating_point(2500, load=1.0, n_cycles=9, p_amb=70000.0)
+    explicit = DieselEngine(spec=PRESETS["crdi15"]()).operating_point(2500, load=1.0, n_cycles=9, p_amb=70000.0)
+
+    def half(p):
+        s = PRESETS["crdi15"]()
+        s.thermal.ambient_p = p
+        return DieselEngine(spec=s).operating_point(1500, load=0.5, n_cycles=9)
+    half_sl, half_2k = half(101325.0), half(79500.0)
 
     def comp(T):
         eng = {"preset": "crdi15", "overrides": {"thermal.ambient_T": T}} if T else {"preset": "crdi15"}
@@ -1934,6 +1943,8 @@ def test_spec_ambient_reaches_the_solve():
         and thin["nox_g_kwh"] > base["nox_g_kwh"] and thin["soot_g_kwh"] > base["soot_g_kwh"],
         "318 K: exhaust hotter": hot["T_exh"] > base["T_exh"] + 5.0,
         "spec 70 kPa equals explicit p_amb 70 kPa": thin["torque"] == explicit.torque and thin["afr"] == explicit.cycle.afr,
+        "half load at 79.5 kPa: standard's fuel, less torque": half_2k.fuel_mg == half_sl.fuel_mg
+        and half_2k.torque < half_sl.torque,
         "compressor point at the spec's inlet T": c318 is not None and c298 is not None
         and abs(c318["T_in"] - 318.0) < 1e-9 and abs(c298["T_in"] - 298.0) < 1e-9,
     }
@@ -1941,7 +1952,9 @@ def test_spec_ambient_reaches_the_solve():
     check("spec ambient reaches the solve (FINDING-025)", float(len(bad)), 0.0, 0.0,
           (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ")
           + f"crdi15 2500/1.0: AFR {base['afr']:.1f} -> {thin['afr']:.1f} at 70 kPa, "
-          + f"T_exh {base['T_exh']:.0f} -> {hot['T_exh']:.0f} K at 318 K, torque {base['torque']:.1f} -> {thin['torque']:.1f} N.m")
+          + f"T_exh {base['T_exh']:.0f} -> {hot['T_exh']:.0f} K at 318 K, torque {base['torque']:.1f} -> {thin['torque']:.1f} N.m; "
+          + f"1500/0.5 at 79.5 kPa: {half_2k.fuel_mg:.2f} mg (standard {half_sl.fuel_mg:.2f}), "
+          + f"{half_sl.torque:.1f} -> {half_2k.torque:.1f} N.m")
 
 
 def test_live_grid_pieces_match_the_shipped_grid():
