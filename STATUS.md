@@ -66,8 +66,16 @@ landscape).
   pre-fix tree hashes to `dee93a17` exactly, `mfb50` has no grid-path
   reader, a shipped cell recomputes with 0.00e+00 difference, and in each
   file only the 64-byte hash changed. Branch `fix/mfb50`, stacked on #90.
-- Next: the cycle page; then the sweep and durability calls; then the
-  spec editor.
+- **Done: the cycle page, `/cycle`** (branch `feat/cycle-page`, stacked on
+  `fix/mfb50`):
+  - p–V log-log, p–θ, heat release and valve lift, with events marked and
+    the cycle's numbers in a table (BSFC steady-state); cylinder 1's crank
+    angle said on the page.
+  - `e2e:cycle` (8 checks, in CI's browser job) matches native Python: 140.1
+    bar at +10°, MFB50 +12.0°, IMEP 11.07 bar at crdi15 2700 rpm / 60%,
+    solved in ~12 s. 2 of 2 e2e mutants caught.
+  - Units 68 (+10).
+- Next: the sweep and durability bridge calls; then the spec editor.
 3. **The grid-build plan is deferred by the owner until v1 is complete**
    (2026-10-05). Option A (the ETA) shipped in #88. *(Was: "Decide the
    grid-build plan".)*
