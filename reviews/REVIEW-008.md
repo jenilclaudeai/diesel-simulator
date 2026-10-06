@@ -22,7 +22,9 @@ option B), on the stack #89 ← #90 … ← #98 and this review's PR
 | MINOR | 6 |
 | NOTE | 6 |
 
-**Phase 6 is complete once CI is green on the stack and this PR.** Every
+**Phase 6 is complete: CI is green on the whole stack, 9 of 9 jobs on each
+of #89–#99 (2026-10-06).** *(Was: "complete once CI is green on the stack
+and this PR".)* Every
 part of PLAN's Phase 6 is built and checked against native Python in a
 browser. This review found three gaps, and each is fixed here:
 - CI's Pyodide job had been red since #91;
@@ -120,7 +122,8 @@ whole stack. Python 3.10 was then **cancelled at 20m15s** on #95, #96 and
 - Raised to 30 min, as the Pyodide job has, on #90 (the first PR that grows
   the suite) and merged forward. Re-running the cancelled jobs would only
   have hidden it.
-- CI after the change: see STATUS.
+- CI after the change: 5 physics runs took 20m40s–20m53s and passed;
+  #99's took 21m11s.
 
 **m-1 (MINOR): the sweep's resolution.** Each point is a fast 9-cycle solve.
 crdi15 dips 0.3% at CR 16, which is noise, and its full-load error is 5.8%
@@ -184,7 +187,8 @@ worker against native numbers (the cycle within 2.25e-7, durability within
   forward; e2e:spec is 11 of 11 on the top.
 - **#97's SolverPort job** failed 28 s in, with "No module named 'numpy'":
   Pyodide's numpy didn't load in CI. The same code passed on #98 and #99.
-  Treated as a CI download flake; the next run of #97 is the check.
+  Treated as a CI download flake, and confirmed: #97's next run passed.
+- After both, **all 11 PRs (#89–#99) are 9 of 9 green.**
 
 ---
 
@@ -223,7 +227,7 @@ worker against native numbers (the cycle within 2.25e-7, durability within
 | check | count |
 |---|---|
 | Python suite (native) | 77 passed, 0 failed, 3 known (with scipy) |
-| Python suite under Pyodide (CI) | 61 / 0 / 2 known / 13 skipped (#92, after M-1's fix) |
+| Python suite under Pyodide (CI) | 64 / 0 / 2 known / 13 skipped (#99; 61 on #92, after M-1's fix) |
 | app units | 101 (passing without `physics-version.ts`) |
 | `check:labels` | 6 of 10 templates; 2 of 2 mutants |
 | solver round trip | 29 |

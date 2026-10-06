@@ -107,9 +107,10 @@ its stack merges.
     limit (REVIEW-008 M-4). The limit is now 30 min on #90, merged forward.
     On the re-run, 5 physics runs took 20m40s–20m53s and passed. Then
     #89–#95, #98 and #99 were 9 of 9. #96 hit a race in an e2e check
-    (fixed on #94 and merged forward), and #97 a numpy load flake (N-6);
-    CI re-runs on #94–#99. Read every job with `gh pr checks <n>` before
-    merging.
+    (fixed on #94 and merged forward), and #97 a numpy load flake (N-6).
+    **Final: all 11 PRs, #89–#99, are 9 of 9 green** (2026-10-06). Pyodide
+    on #99: 64 passed, 0 failed, 2 known, 13 skipped. Physics jobs now take
+    9–21 min.
   - *(Was: "Open: #89 (docs: …)".)*
 - Remote branches: `main`, the merged `docs/pages-live`,
   `docs/grid-build-plan` and `fix/b04-stop-eta` (safe to delete), and
@@ -125,7 +126,7 @@ its stack merges.
 | suite | result |
 |---|---|
 | `python3 tests/test_physics.py` | 77 passed, 0 failed, 3 known (with scipy). *Was (#88):* 71 / 0 / 3 |
-| Pyodide suite | 61 passed, 0 failed, 2 known, 13 skipped (CI on #92). *Was (#88):* 59 / 0 / 2 / 12 |
+| Pyodide suite | 64 passed, 0 failed, 2 known, 13 skipped (CI on #99). *Was (#88):* 59 / 0 / 2 / 12 |
 | `tools/fixtures/gen_fixtures.py --check` | 7 modules current |
 | `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |
 | `web/physics npm test` | 5 + 36 + 10 + 11 = 62 |
