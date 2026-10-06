@@ -851,9 +851,14 @@ class CycleSolver:
         return max(0.85, 0.995 - 0.18 * max(0.0, phi - 0.75) ** 1.5)
 
     def mfb50(self, hrr, dth):
-        c = np.cumsum(hrr) * dth
+        # FINDING-024: accumulate from gas-exchange TDC (360), not firing TDC
+        # (0). From 0, combustion before firing TDC sat at the end of the array
+        # and was counted last, which put MFB50 late: 7 deg on `single`, where
+        # 41% of the heat is released before TDC.
+        k = self.n // 2
+        c = np.cumsum(np.roll(hrr, -k)) * dth
         if c[-1] <= 0.0:
             return 0.0
         i = int(np.searchsorted(c, 0.5 * c[-1]))
-        t = self.theta[min(i, self.n - 1)]
+        t = np.roll(self.theta, -k)[min(i, self.n - 1)]
         return t - 720.0 if t > 360.0 else t
