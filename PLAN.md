@@ -258,16 +258,19 @@ browser or natively (ADR-014, #79–#82). That partly anticipates Phase 6
 
 **Custom-engine build times, measured on real devices (2026-10-05):** 5+
 min for a grid on a Samsung phone, and an ETA of 2–3+ h for a drivable
-grid on an M2 MacBook (mostly a misleading ETA; the build is ~18 min on a
-laptop). Options and a recommendation are in `reviews/PROPOSAL-grid-build.md`,
-for the owner's decision. It may revise ADR-014 (the browser build) and
-add a phone path.
+grid on an M2 MacBook. Options are in `reviews/PROPOSAL-grid-build.md`.
+The ETA (option A) shipped in #88; the rest is **deferred by the owner until
+this version is complete** (2026-10-05). *(Was: "(mostly a misleading ETA;
+the build is ~18 min on a laptop). Options and a recommendation are in …,
+for the owner's decision. It may revise ADR-014 and add a phone path.")*
 
-**Open: the exit criterion itself.** The owner did the Android check on the
-live site (reported 2026-10-05; Phase 8's hosting was done early for it) and
+**The exit: REVIEW-007.** The Android check (2026-10-05, Galaxy S9+) found
+4 bugs. B-01 and B-02 are fixed on the live site (#88), along with B-04's
+Stop and ETA; B-03 was a browser extension. One item remains (M-1): the
+owner re-checks on the phone and confirms the sound and smoothness. *(Was:
+"Open: the exit criterion itself. The owner did the Android check … and
 found a few bugs, to be listed in a shared Google Sheet. Phase 5 exits once
-they are fixed (REVIEW-007). *(Was: "Open: the exit criterion itself, the
-owner's Android check, on the live site.")*
+they are fixed (REVIEW-007).")*
 
 ---
 
@@ -281,6 +284,17 @@ Analysis pages: curve, map, cycle (p–V log-log, p–θ, HRR, valve lift), swee
 durability. Economy and BSFC shown anywhere are steady-state figures and are
 labelled so (FINDING-009). Durability's `health` is **life consumed**
 (0 = new), not remaining health (FINDING-019).
+
+**Plan for decision:** `reviews/PROPOSAL-phase6.md` (2026-10-05).
+Measured:
+- the bridge already takes spec `overrides` (173 fields in the nine
+  dataclasses);
+- curve (Dyno) and map (Grid) exist;
+- cycle, sweep and durability need bridge calls;
+- durability costs ~7.5 min per 1,000 h in the browser.
+
+Recommended: PLAN's full scope, staged as two stacks (bridge, cycle page and
+editor first; then schematics, the banner, sweep and durability).
 
 ---
 

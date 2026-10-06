@@ -1,6 +1,11 @@
 # PROPOSAL — custom-engine grids that people will wait for
 
-**Date:** 2026-10-05 (session 6). **For decision by the owner.**
+**Date:** 2026-10-05 (session 6). **Deferred by the owner, 2026-10-05:** "First
+I would like to go as per plan and complete this version. Then we can add
+more features or do mods. For now it should be fine with grid build time."
+Option A (an honest ETA) shipped in #88, as part of B-04; the rest waits
+until after v1, and the measurements below stand. *(Was: "For decision by
+the owner.")*
 **Lenses:** PM, LEAD, PHY1, PHY2, SW1, QA2, USR1/2 (advisory)
 **Why now:** the owner measured, on real devices, a grid build of 5+ min on
 a Samsung phone, and a drivable-grid ETA of **2–3+ h on an M2 MacBook**.
@@ -114,6 +119,23 @@ instead of 800 K (changes results within its 1e-6 K tolerance).
   every test. Still the same Python under Pyodide, so ADR-001 holds.
 - **Costs:** small, but it's a solver change: rebuild once, together with
   B.
+
+**Measured (2026-10-05, session 6). Corrections to the two paragraphs above:**
+- **The Newton part is already done.** Every caller in `cycle.py` passes the
+  current temperature as `T_from_u`'s guess; 800 K is only the unused
+  default. So there was nothing to gain there, and the "changes results"
+  caveat doesn't arise.
+- **Hoisting the constants: 1.107×, bit-identical.** A converged `hatch15`
+  cell (2971 rpm, 60% load), best of 2, without the profiler: 18.81 s →
+  17.00 s. `live_cell`'s JSON was byte-identical in all 4 runs.
+- **Inlining further gains nothing:** `u_mix`, `h_mix` and `T_from_u`
+  inlined with shared `exp`s, still bit-identical, gave 1.001×. The time is
+  in `cycle.run`'s own loop body, not in call overhead.
+- So C gives **~1.1×**, the low end of the estimate, and **B+C together give
+  ~2–2.7×**. *(Was: "an estimated 10–30%" and "start `T_from_u`'s Newton
+  from the last temperature instead of 800 K".)*
+- Scripts: `$CLAUDE_JOB_DIR/tmp/c1.py`, `c2.py` (runtime patches; nothing in
+  `dieselsim/` was changed).
 
 ### D. A coarser grid for custom engines
 For example 6 rpm × 4 loads: 48 cells instead of 96, ~2× less work.

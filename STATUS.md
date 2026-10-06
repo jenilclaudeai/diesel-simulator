@@ -1,7 +1,7 @@
 # Status
 
-**Updated:** 2026-10-05, end of session 5. Read this section first; the
-dated sections below it are history.
+**Updated:** 2026-10-05, session 6. Read this section first; the dated
+sections below it are history.
 
 ## Start here
 
@@ -14,8 +14,8 @@ landscape).
 |---|---|
 | 1–3: physics truth, solver port, real-time loop | done (REVIEW-003 to -005) |
 | 4: audio | done; the owner signed it off by ear 2026-09-30 (REVIEW-006) |
-| 5: Enjoy mode | **built; the owner's Android check is done and found a few bugs** (see below) |
-| 6: Expert mode | not started (custom engines, ADR-014, anticipate part of it) |
+| 5: Enjoy mode | **exit-ready (REVIEW-007): one item left, the owner's re-check on the phone (M-1)** |
+| 6: Expert mode | **planned, for decision:** `reviews/PROPOSAL-phase6.md` |
 | 7: Environment and projects | not started |
 | 8: Polish and host | Pages hosting done early (#85); the rest not started |
 
@@ -37,6 +37,93 @@ landscape).
     download for phones.
 - The Derate lamp means protection: charge air above 80 °C, or an overheat
   derate.
+
+**Waiting on the owner:**
+1. **Close Phase 5: REVIEW-007's M-1.** On the S9+, on the live site: after
+   a stall, hold the clutch and tap Restart (B-01); shift without the
+   clutch (B-02); and say whether the sound plays without crackle and the
+   drive is smooth. Then Phase 5 is done.
+   - The bug sheet: https://docs.google.com/spreadsheets/d/1giP18zulUFOkOyXFj7sj0JRSGR8SydxNb2owMN0COV8/edit
+     The owner's Bugs tab, and a Tracker tab that `IMPORTDATA`s
+     `reviews/ANDROID-BUGS.csv` from `main` (refreshed hourly; the first
+     time it may need "Allow access"). **Update the CSV, never the
+     sheet.** The Drive connector reads the sheet but can't edit cells.
+2. **Decide Phase 6's plan:** `reviews/PROPOSAL-phase6.md`. Scope A/B/C
+   (recommended B: PLAN's full scope, staged), which fields, the
+   development presets, and durability's default length.
+3. **The grid-build plan is deferred by the owner until v1 is complete**
+   (2026-10-05). Option A (the ETA) shipped in #88. *(Was: "Decide the
+   grid-build plan".)*
+4. **Copy the Features tab into the bug sheet** (template
+   `12mLsfoFBwh_5Zqai6zpHpv3yZSBx45jvFgf3ZnYZyNY`: tab menu → Copy to →
+   Existing spreadsheet). Its status columns read `reviews/FEATURES.csv`.
+5. **Listening:** `out/listen/review003m5_*.wav`; is `hd_i6`'s idle tick
+   too quiet? (Details in the session 6 section below.)
+
+**Known defects and follow-ups** (none blocking):
+- The dev preset `single` sags on the tractor's torque converter in
+  "Auto". It is recorded as KNOWN in the suite. The exact fix is to size
+  each converter from its engine's own full-load torque at stall; that
+  touches every engine and the live fixtures.
+- The V8 fires evenly every 90°. With no separate cylinder banks, a
+  cross-plane V8's per-bank "burble" is absent.
+- `truck127`'s grid has 13 unsettled cells and `v8hd`'s has 8,
+  period-averaged (FINDING-013). Look only if they show on the dials.
+- Live friction costs a whole frame every 6th frame on a low-end phone (6×
+  throttling): decide after the Android check.
+- Older follow-ups are in "Next actions" at the end of this file.
+
+**Repository:**
+- #86, #87 and #88 merged 2026-10-05; `main` equals the tested top
+  (`8040506`), 0 lines differ. Pages deployed it.
+- Open: **#89** (docs: live statuses, STATUS condensed, option C measured, REVIEW-007, the Phase 6 proposal).
+- Remote branches: `main`, the merged `docs/pages-live`,
+  `docs/grid-build-plan` and `fix/b04-stop-eta` (safe to delete), and
+  `fix/steady-state-controllers`. Keep the last one: it is the only copy of
+  the FINDING-013 option A experiment.
+- The owner merges PRs. Stacked PRs: retarget each child to `main` after
+  its parent merges, then check `main` by content (memory:
+  stack-merge-trap).
+
+**Tests, read from finished runs (CI on #88, 2026-10-05; units locally):**
+
+| suite | result |
+|---|---|
+| `python3 tests/test_physics.py` | 71 passed, 0 failed, 3 known (with scipy); 66 + 4 skipped (without) |
+| Pyodide suite | 59 passed, 0 failed, 2 known, 12 skipped |
+| `tools/fixtures/gen_fixtures.py --check` | 7 modules current |
+| `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |
+| `web/physics npm test` | 5 + 36 + 10 + 11 = 62 |
+| `web/solver npm test` | cache 20, live-grid scheduler 12, round trip 22 |
+| `web/app npm test` | 58 unit tests |
+| e2e (`web/app`) | dyno 15, grid 9, drive 7, sound 6, enjoy 21, custom 5 |
+
+CI runs all of them except the manual `web/solver npm run test:live-real`.
+Its jobs: physics on Python 3.10 and 3.12, Pyodide, fixtures, solver, web
+app, web e2e, grid e2e, and custom-engine e2e.
+
+**This Mac** (see Housekeeping):
+- Node 22.23.3 at `~/.cache/dieselsim/node-v22.23.3-darwin-arm64/bin`
+  (prepend to PATH).
+- scipy in `~/.cache/dieselsim/venv/bin/python`.
+- Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
+  (`CHROME_PATH` for e2e).
+- The CoreAudio output is stuck, so the e2e uses Chrome's fake audio sink.
+- A LAN dev server needs `npm start -- --host 0.0.0.0 --ssl` for sound
+  (secure context). The live site makes it unnecessary.
+
+**First thing next session:** read this section; check the bug sheet for
+new rows and the owner's re-check of B-01/B-02; ask for the grid-build
+decision. *(Was, in session 6: "check whether #86 merged, and ask the owner
+for the Android bug sheet's link. Verify each bug, fix them, then write
+REVIEW-007 and close Phase 5.")*
+
+---
+
+## Session 6 (2026-10-05): the Android bugs, the bug sheet, the grid-build plan
+
+*(Moved here from "Waiting on the owner" when #86–#88 merged; the text is
+unchanged.)*
 
 **Waiting on the owner:**
 1. **The Android bug list.** The owner did the Android check (reported
@@ -176,60 +263,6 @@ landscape).
      single knob.
 4. **Merge #86** (docs only; CI 9/9 green on `1fcf32e`), then retarget `docs/grid-build-plan`'s PR to `main`.
 
-**Known defects and follow-ups** (none blocking):
-- The dev preset `single` sags on the tractor's torque converter in
-  "Auto". It is recorded as KNOWN in the suite. The exact fix is to size
-  each converter from its engine's own full-load torque at stall; that
-  touches every engine and the live fixtures.
-- The V8 fires evenly every 90°. With no separate cylinder banks, a
-  cross-plane V8's per-bank "burble" is absent.
-- `truck127`'s grid has 13 unsettled cells and `v8hd`'s has 8,
-  period-averaged (FINDING-013). Look only if they show on the dials.
-- Live friction costs a whole frame every 6th frame on a low-end phone (6×
-  throttling): decide after the Android check.
-- Older follow-ups are in "Next actions" at the end of this file.
-
-**Repository:**
-- Open PRs, a stack: #86 (docs; CI green) ← #87 (grid-build proposal, tracker) ← #88 (B-01, B-02, B-04 fixes). Merge in order, retargeting each child to `main` after its parent merges.
-- Remote branches: `main`, `docs/pages-live` (#86), and
-  `fix/steady-state-controllers`. Keep the last one: it is the only copy of
-  the FINDING-013 option A experiment.
-- The owner merges PRs. Stacked PRs: retarget each child to `main` after
-  its parent merges, then check `main` by content (memory:
-  stack-merge-trap).
-
-**Tests, read from finished runs (2026-10-03/05):**
-
-| suite | result |
-|---|---|
-| `python3 tests/test_physics.py` | 71 passed, 0 failed, 3 known (with scipy); 66 + 4 skipped (without) |
-| `tools/fixtures/gen_fixtures.py --check` | 7 modules current |
-| `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |
-| `web/physics npm test` | 5 + 36 + 10 + 11 = 62 |
-| `web/solver npm test` | cache 20, live-grid scheduler 8, round trip 22 |
-| `web/app npm test` | 56 unit tests |
-| e2e (`web/app`) | dyno 15, grid 9, drive 7, sound 6, enjoy 19, custom 4 |
-
-CI runs all of them except the manual `web/solver npm run test:live-real`.
-Its jobs: physics on Python 3.10 and 3.12, Pyodide, fixtures, solver, web
-app, web e2e, grid e2e, and custom-engine e2e.
-
-**This Mac** (see Housekeeping):
-- Node 22.23.3 at `~/.cache/dieselsim/node-v22.23.3-darwin-arm64/bin`
-  (prepend to PATH).
-- scipy in `~/.cache/dieselsim/venv/bin/python`.
-- Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
-  (`CHROME_PATH` for e2e).
-- The CoreAudio output is stuck, so the e2e uses Chrome's fake audio sink.
-- A LAN dev server needs `npm start -- --host 0.0.0.0 --ssl` for sound
-  (secure context). The live site makes it unnecessary.
-
-**First thing next session:** read this section, check whether #86 merged,
-and ask the owner for the Android bug sheet's link. Verify each bug, fix
-them, then write REVIEW-007 and close Phase 5. *(Was: "check whether #86
-merged and whether the owner has done the Android check, then ask. If the
-check went well, write REVIEW-007 and close Phase 5. If it found problems,
-fix those first." The check is done and found problems.)*
 
 ---
 
