@@ -322,6 +322,22 @@ NOx and is **not** in the solver today — either add it or state its absence.
 
 Project save/load as JSON (OPEN-C).
 
+**Decided 2026-10-07 (ADR-016, from `reviews/PROPOSAL-phase7.md`):**
+- Weather reaches Drive and Enjoy through a per-engine torque-correction
+  table, measured within 1.15% of converged solves.
+- The ECU knows absolute pressure (MAP boost target, smoke map on absolute
+  pressure) on the common-rail engines; the mechanical single stays
+  uncompensated.
+- Humidity: ISO 8178's K_H on reported NOx (a stated correction, not a
+  cycle effect).
+- Cold-flow: below the fuel's CFPP, fuel flow is capped in the live loop.
+- Five real-place presets, numbers shown and editable.
+- Projects: saved and opened on `/spec`; `/drive` and `/enjoy` can open
+  them.
+- Build order: presets, environment on the solving pages, the ECU, the
+  Drive table, humidity, cold-flow, projects. (REVIEW-008 m-3, keeping
+  `/spec` edits across a reload, shipped first in #103.)
+
 ---
 
 ## Phase 8 — Polish and host
@@ -330,6 +346,8 @@ Project save/load as JSON (OPEN-C).
 https://jenilclaudeai.github.io/diesel-simulator/, published from `main`.
 Metric/imperial toggle. Accessibility: gauges need text
 alternatives, and warnings must not be encoded in colour alone.
+Vibration on phones in `/enjoy` (the owner's Feat Prop P01, ADR-016),
+patterned on firing frequency and load; Android Chrome only.
 
 ---
 
@@ -337,6 +355,18 @@ alternatives, and warnings must not be encoded in colour alone.
 
 Tyre model and grip limit (ADR-002) · suspension, weight transfer, chassis ·
 backend, accounts, payments, telemetry collection · multiplayer · 3D models.
+
+### v2, after v1 (the owner's Feat Prop list, ADR-016)
+
+In the owner's priority order (1 is highest):
+1. **P04, grid builds on a backend** (priority 1). `PROPOSAL-grid-build.md`
+   already weighs a build server.
+2. **P02, Google sign-in** (2).
+3. **P03, free and paid roles** (3) and **P05, grid builds on AWS Lambda**
+   (3). Lambda's 15-minute limit means one invocation per cell, which
+   ADR-014's pieces already allow.
+
+Each reopens ADR-003's static hosting, so each needs its own proposal.
 
 ---
 

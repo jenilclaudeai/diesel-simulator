@@ -961,3 +961,71 @@ so each half is usable and reviewable.
   traces, engine angle for the manifolds (FINDING-008).
 - The grid-build speed work (`PROPOSAL-grid-build.md`) waits until after
   v1, by the owner's decision of the same day.
+
+---
+
+## ADR-016 — Phase 7 (Environment and projects): the proposal's six recommendations; v2 is a separate list
+
+**Status:** Accepted (2026-10-07). The owner answered four direct questions
+(session 7): "Accept all" for `reviews/PROPOSAL-phase7.md`, "On /spec" for
+the project file, "v2, after v1" for Feat Prop P02–P05, and "1 is highest"
+for the Feat Prop priority scale.
+
+### Decision
+
+1. **Weather in Drive and Enjoy: option A.** A per-engine table of torque
+   factors at a few airs, fitted from converged solves and interpolated at
+   run time. Measured: within 1.15% of converged solves on held-out air,
+   where a density ratio is off by 28.7%. Sound and friction stay the
+   grid's (standard air).
+2. **The ECU at altitude: option 2 for the common-rail engines, 1 for the
+   mechanical single.**
+   - Option 2 is an ECU that knows absolute pressure: an absolute (MAP)
+     boost target, and a smoke map on absolute manifold pressure.
+   - Option 1 is uncompensated: what FINDING-025's fix ships.
+   - Chosen per engine ("ECU: modern / mechanical").
+3. **Humidity: ISO 8178's K_H factor on reported NOx.** No water vapour in
+   the cycle; the page says it is a correction.
+4. **Cold-flow: yes.** Below the fuel's CFPP the filter waxes and fuel flow
+   is capped, in the live loop (Python and the TS port, with a fixture).
+5. **Presets: five real places and seasons**, each shown with its numbers
+   and editable. The proposal's list: sea level temperate (the standard
+   air), hot desert summer, cold continental winter, high plateau
+   (≈ 3500 m), humid tropics.
+6. **Projects (ADR-007's file), saved and opened on `/spec`.** "Save
+   project" and "Open project" replace Export/Import spec, and old spec
+   files still open. `/drive` and `/enjoy` can open a project. The file
+   carries a format version; the environment joins it.
+
+And, for the owner's "Feat Prop" list (the bug sheet, read 2026-10-06):
+
+7. **P01 (vibrations on a phone) is v1**, in `/enjoy`. Android Chrome only:
+   iOS Safari has no Vibration API.
+8. **P02–P05 are v2, after v1.** That's Google sign-in, free/paid roles,
+   grid builds on a backend and on AWS Lambda. v1 stays a static site
+   (ADR-003), and PLAN's out-of-scope list stands. **Priority 1 is
+   highest**, so the owner's order for v2 is P04 (grid on a backend), then
+   P02 (sign-in), then P03 and P05.
+
+### Rationale
+
+Each recommendation came with measurements (the proposal's "Three
+measurements") and was offered with its alternatives. The owner took all
+six. P02–P05 each need a server, which PLAN and ADR-003 rule out for v1,
+and the grid-build plan was already deferred until after v1 (2026-10-05).
+
+### Consequences
+
+- Build order, from the proposal: presets; environment on the solving
+  pages; the ECU change; the Drive correction table; humidity; cold-flow;
+  projects. REVIEW-008 m-3, the persistence the projects need, shipped
+  ahead in #103.
+- The ECU change touches `turbo.py` and `cycle.py`, both hashed. If the
+  absolute target equals ratio × 101325 Pa, no cell moves at standard air,
+  and the grids can be re-stamped rather than rebuilt. That must be proven,
+  as for FINDING-025, not assumed.
+- On the fast solving pages a part-load weather delta can be FINDING-013's
+  convergence gap. Weather comparisons are labelled with the measured gap,
+  or kept to full load.
+- v2's first item is P04: the grid-build plan (`PROPOSAL-grid-build.md`)
+  already weighs a build server.
