@@ -31,6 +31,8 @@
     <app-engine-form [engine]="custom()" [disabled]="running()" (changed)="customChanged($event)" />
   }
 
+  @if (!isCustom()) { <app-spec-status [engine]="engine()" [solvedWith]="grid() ? solvedWith() : undefined" [busy]="running()" again="Rebuild the grid" (rerun)="build()" /> }
+
   <p class="status" role="status" aria-live="polite">
     @switch (solver.status()) {
       @case ('loading') { Loading Python and numpy into your browser. About 9 MB the first time. }

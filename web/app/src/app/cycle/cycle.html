@@ -32,10 +32,7 @@
     </button>
   </div>
 
-  @if (editsHere()) {
-    <p class="note edits">With your spec edits: {{ editsHere() }} {{ editsHere() === 1 ? 'field' : 'fields' }} changed on this engine.
-      <a routerLink="/spec">Edit</a></p>
-  }
+  <app-spec-status [engine]="engine()" [solvedWith]="result() ? solvedWith() : undefined" [busy]="running()" again="Solve again" (rerun)="solve()" />
 
   <p class="status" role="status" aria-live="polite">
     @switch (solver.status()) {

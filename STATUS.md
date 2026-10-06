@@ -106,9 +106,22 @@ landscape).
   - Units 78 (+12); the units pass without `physics-version.ts`, as on CI.
 - **Stage 1 is complete.** The stack: #89 ← #90 (solve_cycle) ← #91
   (FINDING-024) ← #92 (cycle page) ← #93 (durability) ← the spec-editor PR.
-- **Stage 2 next** (ADR-015): the four ADR-009 schematics; the
-  invalidation banner; the sweep page (overrides plus `solvePoint` per
-  value); the durability page (life consumed, 1,000 h default).
+- **Stage 2, in progress** (the owner, 2026-10-06: "complete the phase 6",
+  taking the recommended option wherever input was wanted):
+  - **Done: spec edits on every solving page, and the invalidation
+    banner** (`feat/edits-everywhere`, stacked on the spec-editor PR).
+    - Dyno, Grid and Cycle solve the edits on their engine. `SpecStatus`
+      says which edits apply, and "these results are out of date" with
+      Solve again / Run the pull again / Rebuild the grid.
+    - `LastResults` keeps each page's results across navigation; without
+      it the banner could never show, since edits happen on another page.
+    - `e2e:spec` 8: the kept 148.9 bar result is flagged after a CR 18
+      edit, and re-solved at native Python's 157.5. Mutants 2 of 2, after
+      a fix: they first crashed the test instead of failing a check, and my
+      runner counted a crash as "survived". Both now report cleanly.
+    - Dyno e2e 15, unchanged.
+  - Next: the sweep page; the durability page; the four schematics; then
+    REVIEW-008.
 3. **The grid-build plan is deferred by the owner until v1 is complete**
    (2026-10-05). Option A (the ETA) shipped in #88. *(Was: "Decide the
    grid-build plan".)*

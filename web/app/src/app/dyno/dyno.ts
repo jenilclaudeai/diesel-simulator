@@ -7,6 +7,9 @@ import { poolSize } from '../solver/pool-size';
 import { achieved, type CustomEngine, EXAMPLE_ENGINE, headline } from '../engine/custom-engine';
 import { EngineForm } from '../engine/engine-form';
 import { describe, SolverService } from '../solver/solver.service';
+import { SpecEdits } from '../spec/spec-edits';
+import { refKey, SpecStatus } from '../spec/spec-status';
+import { LastResults } from '../spec/last-results';
 import { dualAxis } from './axis';
 import { accuracyNote } from './accuracy-note';
 import { GRID_VERSION } from '../solver/physics-version';
@@ -21,18 +24,21 @@ const fmt2 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2, minimu
 
 @Component({
   selector: 'app-dyno',
-  imports: [RouterLink, EngineForm],
+  imports: [RouterLink, EngineForm, SpecStatus],
   templateUrl: './dyno.html',
   styleUrl: './dyno.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Dyno implements OnInit {
   protected readonly solver = inject(SolverService);
+  private readonly edits = inject(SpecEdits);
+  /** refKey() of the engine the current pull was run with (the stale banner compares it) */
+  protected readonly solvedWith = signal<string | undefined>(undefined);
   protected readonly fmt0 = fmt0;
   protected readonly fmt1 = fmt1;
   protected readonly fmt2 = fmt2;
 
-  protected readonly engine = signal('crdi15');
+  protected readonly engine = signal(inject(SpecEdits).base());
   /** ADR-014: the "Custom engine" choice, its numbers, and the builder's description of it */
   protected readonly CUSTOM = '__custom';
   protected readonly custom = signal<CustomEngine>(EXAMPLE_ENGINE);
@@ -121,9 +127,14 @@ export class Dyno implements OnInit {
            `peak power ${fmt0.format(pk.power.powerKw)} kilowatts at ${fmt0.format(pk.power.rpm)} rpm.`;
   });
 
+  private readonly kept = inject(LastResults);
+
   ngOnInit(): void {
     // Expert-mode page: the solver is the whole point, so start loading now.
     this.solver.start().catch(() => { /* surfaced through solver.error() */ });
+    // back from the spec editor: the last pull, flagged out of date if the edits changed since
+    const k = this.kept.get<{ engine: string; points: Pt[]; solvedWith: string; elapsedS: number }>('dyno');
+    if (k) { this.engine.set(k.engine); this.points.set(k.points); this.solvedWith.set(k.solvedWith); this.elapsedS.set(k.elapsedS); }
   }
 
   protected selectEngine(key: string): void {
@@ -143,7 +154,7 @@ export class Dyno implements OnInit {
   }
 
   private engineRef(): EngineRef {
-    return this.isCustom() ? { headline: headline(this.custom()) } : { preset: this.engine() };
+    return this.isCustom() ? { headline: headline(this.custom()) } : this.edits.engineRef(this.engine());
   }
 
   /** The builder's own rpm range and the requested numbers, for the chart and the comparison. */
@@ -208,6 +219,7 @@ export class Dyno implements OnInit {
     this.points.set([]);
     this.runError.set(undefined);
     this.elapsedS.set(undefined);
+    this.solvedWith.set(this.isCustom() ? undefined : refKey(this.engineRef()));
     const t0 = performance.now();
     const rpms = this.rpms();
     try {
@@ -217,6 +229,7 @@ export class Dyno implements OnInit {
         this.points.update(p => [...p, { rpm, torque: r.torque, powerKw: r.power / 1000, r }]);
       }
       this.elapsedS.set((performance.now() - t0) / 1000);
+      if (!this.isCustom()) this.kept.set('dyno', { engine: this.engine(), points: this.points(), solvedWith: this.solvedWith()!, elapsedS: this.elapsedS()! });
     } catch (e) {
       this.runError.set(describe(e));
     } finally {
