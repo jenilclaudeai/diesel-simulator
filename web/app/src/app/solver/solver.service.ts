@@ -1,4 +1,5 @@
-import { Injectable, signal } from '@angular/core';
+import { inject, Injectable, signal } from '@angular/core';
+import { EnvChoice } from '../weather/env-choice';
 import {
   buildLiveGrid, CachedSolver, IndexedDbGridCache, IndexedDbPieceStore, liveBuildKey, SolverError, WorkerSolver,
   type CompressorMap, type CycleResult, type LiveBuildProgress, type SpecDescription,
@@ -19,6 +20,8 @@ export class SolverService {
   readonly status = signal<SolverStatus>('idle');
   readonly info = signal<RuntimeInfo | undefined>(undefined);
   readonly error = signal<string | undefined>(undefined);
+  /** Phase 7 (ADR-016): the environment presets arrive with the runtime info */
+  private readonly env = inject(EnvChoice);
 
   /**
    * The grid cache keys with WebCrypto, which browsers only expose on https
@@ -146,6 +149,7 @@ export class SolverService {
         throw new SolverError('protocol', 'this page and its physics bundle are from different builds; reload the page');
       }
       this.info.set(info);
+      this.env.presets.set(info.environments ?? []);
       this.status.set('ready');
       return info;
     } catch (e) {

@@ -31,6 +31,7 @@
     <app-engine-form [engine]="custom()" [disabled]="running()" (changed)="customChanged($event)" />
   }
 
+  <app-env-picker [partLoad]="true" />
   @if (!isCustom()) { <app-spec-status [engine]="engine()" [solvedWith]="grid() ? solvedWith() : undefined" [busy]="running()" again="Rebuild the grid" (rerun)="build()" /> }
 
   <p class="status" role="status" aria-live="polite">

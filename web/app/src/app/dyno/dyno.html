@@ -40,6 +40,7 @@
     }
   }
 
+  <app-env-picker />
   @if (!isCustom()) { <app-spec-status [engine]="engine()" [solvedWith]="points().length ? solvedWith() : undefined" [busy]="running()" again="Run the pull again" (rerun)="run()" /> }
 
   <p class="status" role="status" aria-live="polite">

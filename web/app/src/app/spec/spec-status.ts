@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output } f
 import { RouterLink } from '@angular/router';
 import type { EngineRef } from '@dieselsim/solver';
 import { SpecEdits } from './spec-edits';
+import { EnvChoice } from '../weather/env-choice';
 
 /** A stable key for an engine reference: overrides sorted, so equal edits give equal keys. */
 export function refKey(ref: EngineRef): string {
@@ -29,7 +30,7 @@ export function isStale(solvedWith: string | undefined, now: EngineRef): boolean
   template: `
     @if (stale()) {
       <div class="stale" role="alert">
-        <strong>These results are out of date.</strong> They were solved before your latest spec edits.
+        <strong>These results are out of date.</strong> They were solved before your latest spec edits or a change of environment.
         <button type="button" class="rerun" (click)="rerun.emit()" [disabled]="busy()">{{ again() }}</button>
       </div>
     }
@@ -50,6 +51,7 @@ export function isStale(solvedWith: string | undefined, now: EngineRef): boolean
 })
 export class SpecStatus {
   private readonly edits = inject(SpecEdits);
+  private readonly env = inject(EnvChoice);
   /** the engine the page has selected (a preset key) */
   readonly engine = input.required<string>();
   /** refKey() of what the page's current results were solved with, or undefined if it has none */
@@ -58,5 +60,5 @@ export class SpecStatus {
   readonly again = input('Solve again');
   readonly rerun = output<void>();
   protected readonly count = computed(() => (this.engine() === this.edits.base() ? this.edits.count() : 0));
-  protected readonly stale = computed(() => isStale(this.solvedWith(), this.edits.engineRef(this.engine())));
+  protected readonly stale = computed(() => isStale(this.solvedWith(), this.env.solveRef(this.edits.engineRef(this.engine()))));
 }

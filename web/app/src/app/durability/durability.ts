@@ -5,6 +5,8 @@ import { buildPlot, type PlotModel } from '../cycle/plots';
 import { describe, SolverService } from '../solver/solver.service';
 import { LastResults } from '../spec/last-results';
 import { SpecEdits } from '../spec/spec-edits';
+import { EnvChoice } from '../weather/env-choice';
+import { EnvPicker } from '../weather/env-picker';
 import { refKey, SpecStatus } from '../spec/spec-status';
 import { estimateS, fmtDuration } from './durability-plan';
 
@@ -23,7 +25,7 @@ interface Kept { engine: string; hours: number; stepH: number; rows: Row[]; solv
  */
 @Component({
   selector: 'app-durability',
-  imports: [RouterLink, SpecStatus],
+  imports: [RouterLink, SpecStatus, EnvPicker],
   templateUrl: './durability.html',
   styleUrl: '../cycle/cycle.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -31,6 +33,7 @@ interface Kept { engine: string; hours: number; stepH: number; rows: Row[]; solv
 export class DurabilityPage implements OnInit {
   protected readonly solver = inject(SolverService);
   private readonly edits = inject(SpecEdits);
+  private readonly env = inject(EnvChoice);
   private readonly kept = inject(LastResults);
   protected readonly fmt0 = fmt0;
   protected readonly fmt1 = fmt1;
@@ -91,7 +94,7 @@ export class DurabilityPage implements OnInit {
 
   protected async run(): Promise<void> {
     if (this.running()) return;
-    const engine = this.edits.engineRef(this.engine());
+    const engine = this.env.solveRef(this.edits.engineRef(this.engine()));
     this.running.set(true);
     this.stop = false;
     this.rows.set([]);
