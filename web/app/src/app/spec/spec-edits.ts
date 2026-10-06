@@ -32,21 +32,44 @@ export function parseSpecFile(text: string): SpecFile | string {
   return { preset: o['preset'], overrides: out };
 }
 
+/** Where the edits are kept between visits (REVIEW-008 m-3): this browser's localStorage. */
+export const EDITS_KEY = 'dieselsim-spec-edits';
+export const DEFAULT_BASE = 'crdi15';
+
+/** The kept edits, if any and if they still pass parseSpecFile (a field renamed since is dropped, not shown). */
+function keptEdits(): SpecFile | undefined {
+  let text: string | null = null;
+  try { text = globalThis.localStorage?.getItem(EDITS_KEY) ?? null; } catch { return undefined; }
+  if (!text) return undefined;
+  const f = parseSpecFile(text);
+  return typeof f === 'string' ? undefined : f;
+}
+
+function keep(f: SpecFile): void {
+  try {
+    if (f.preset === DEFAULT_BASE && !Object.keys(f.overrides).length) globalThis.localStorage?.removeItem(EDITS_KEY);
+    else globalThis.localStorage?.setItem(EDITS_KEY, JSON.stringify(f));
+  } catch { /* storage off (private mode, quota): the edits stay in memory, as before */ }
+}
+
 /**
  * The spec editor's edits, shared with the pages that solve (Phase 6,
  * ADR-015): a base engine and the fields changed on it. Changing the base
- * engine drops the edits; they belong to one engine.
+ * engine drops the edits; they belong to one engine. Kept in this browser
+ * across reloads (REVIEW-008 m-3); every change goes through a method here.
  */
 @Injectable({ providedIn: 'root' })
 export class SpecEdits {
-  readonly base = signal('crdi15');
-  readonly overrides = signal<Overrides>({});
+  private readonly kept = keptEdits();
+  readonly base = signal(this.kept?.preset ?? DEFAULT_BASE);
+  readonly overrides = signal<Overrides>(this.kept?.overrides ?? {});
   readonly count = computed(() => Object.keys(this.overrides()).length);
 
   setBase(key: string): void {
     if (key === this.base()) return;
     this.base.set(key);
     this.overrides.set({});
+    keep(this.toFile());
   }
 
   /** Set a field; a value equal to the engine's own removes the override. */
@@ -54,15 +77,17 @@ export class SpecEdits {
     const next = { ...this.overrides() };
     if (value === engineValue) delete next[path]; else next[path] = value;
     this.overrides.set(next);
+    keep(this.toFile());
   }
 
   reset(path: string): void {
     const next = { ...this.overrides() };
     delete next[path];
     this.overrides.set(next);
+    keep(this.toFile());
   }
 
-  resetAll(): void { this.overrides.set({}); }
+  resetAll(): void { this.overrides.set({}); keep(this.toFile()); }
 
   /** The engine a page should solve: the edits apply only to their own base engine. */
   engineRef(preset: string): EngineRef {
@@ -74,5 +99,6 @@ export class SpecEdits {
   load(f: SpecFile): void {
     this.base.set(f.preset);
     this.overrides.set({ ...f.overrides });
+    keep(this.toFile());
   }
 }

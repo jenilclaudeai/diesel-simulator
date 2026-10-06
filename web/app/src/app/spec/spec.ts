@@ -5,7 +5,7 @@ import type { CompressorMap, CycleResult, SpecField } from '@dieselsim/solver';
 import { DriveBuild } from '../engine/drive-build';
 import { editedEngine } from '../engine/my-engines';
 import { describe, SolverService } from '../solver/solver.service';
-import { parseSpecFile, SpecEdits } from './spec-edits';
+import { DEFAULT_BASE, parseSpecFile, SpecEdits } from './spec-edits';
 import { LastResults } from './last-results';
 import { Schematic } from './schematic';
 import { refKey } from './spec-status';
@@ -88,6 +88,9 @@ export class SpecPage implements OnInit {
     effect(() => {
       const base = this.edits.base();
       if (this.solver.status() !== 'ready') return;
+      // edits kept from an earlier visit may name an engine this build no longer has
+      const info = this.solver.info();
+      if (info && !info.presets.includes(base)) { this.edits.load({ preset: DEFAULT_BASE, overrides: {} }); return; }
       this.engineValues.set(undefined);
       this.loadError.set(undefined);
       this.solver.describeSpec({ preset: base })

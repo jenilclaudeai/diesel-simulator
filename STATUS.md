@@ -1,23 +1,23 @@
 # Status
 
-**Updated:** 2026-10-06, session 6. Read this section first; the dated
-sections below it are history.
+**Updated:** 2026-10-06, end of session 7. Read this section first; the
+dated sections below it are history.
 
 ## Start here
 
 **The app is live:** https://jenilclaudeai.github.io/diesel-simulator/
 It is published from `main` by `.github/workflows/pages.yml` on every merge.
 Pages: `/` (Dyno pull), `/grid`, `/drive` (engineering), `/enjoy` (phones,
-landscape). Phase 6 adds `/cycle`, `/spec`, `/sweep` and `/durability` once
-its stack merges.
+landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
+*(Was: "Phase 6 adds … once its stack merges".)*
 
 | phase | state |
 |---|---|
 | 1–3: physics truth, solver port, real-time loop | done (REVIEW-003 to -005) |
 | 4: audio | done; the owner signed it off by ear 2026-09-30 (REVIEW-006) |
 | 5: Enjoy mode | **exit-ready (REVIEW-007): one item left, the owner's re-check on the phone (M-1)** |
-| 6: Expert mode | **complete (REVIEW-008), on the stack #89–#99, waiting to merge** |
-| 7: Environment and projects | not started |
+| 6: Expert mode | **done (REVIEW-008); all of #89–#99 on `main` and live** |
+| 7: Environment and projects | **proposed (`reviews/PROPOSAL-phase7.md`), waiting on the owner's six decisions**; FINDING-025 fixed on the way |
 | 8: Polish and host | Pages hosting done early (#85); the rest not started |
 
 **What Phase 5 has** (all merged):
@@ -40,8 +40,8 @@ its stack merges.
   derate.
 
 **Waiting on the owner:**
-0. **Merge #100** (CI: Pyodide's limit 30 → 45 min; see Repository).
-   *(Was: "Merge #96 once its checks are green" — done 2026-10-06 06:30 UTC.)*
+0. ~~**Merge #100**~~ Done 2026-10-06 17:39 UTC. *(Was: "Merge #96 once
+   its checks are green" — done 06:30 UTC.)*
 1. **Close Phase 5: REVIEW-007's M-1.** On the S9+, on the live site: after
    a stall, hold the clutch and tap Restart (B-01); shift without the
    clutch (B-02); and say whether the sound plays without crackle and the
@@ -79,15 +79,32 @@ its stack merges.
 3. **The grid-build plan is deferred by the owner until v1 is complete**
    (2026-10-05). Option A (the ETA) shipped in #88. *(Was: "Decide the
    grid-build plan".)*
-3b. **Decide Phase 7's plan: `reviews/PROPOSAL-phase7.md` (#102), six
-   decisions.**
+3b. **Decide Phase 7's plan: `reviews/PROPOSAL-phase7.md` (#102, merged
+   2026-10-06), six decisions.** Nothing that depends on them is built
+   until then. *(Was: "Nothing in Phase 7 is built until then." Too broad:
+   projects and persistence were decided by ADR-007, so they went ahead.)*
+   - **Started, needing no decision: REVIEW-008 m-3,** `/spec` edits kept
+     across a reload (#103, branch `fix/m3-edits-kept`).
+     - `SpecEdits` keeps base + overrides in `localStorage`, saved on every
+       change and checked against the schema when restored.
+     - The page says the results are solved again.
+     - An unknown kept engine falls back to crdi15.
+     - Units 104 (+3), with 8 of 8 mutants caught; e2e:spec +1 check
+       (a real reload): 12 of 12 locally. With restore disabled, exactly
+       that check fails ("0 fields changed, compression ratio 16") and
+       the other 11 pass.
+   - **Next, needing your call on the UX:** the project file (ADR-007:
+     spec + vehicle + gearbox, versioned, environment later). Where should
+     Save/Open live? One proposal: on `/spec`, replacing "Export spec",
+     with `/drive` and `/enjoy` able to open one.
    - Weather in Drive: a per-engine correction table, measured within 1.15%
      of converged solves on held-out air (recommended); or a grid per
      preset; or solving pages only.
    - The ECU at altitude: the boost control holds a pressure ratio, so
      converged light load gains 8.2% torque on a 90 kPa hill.
    - Humidity, cold-flow, the presets, and your "Feat Prop" list.
-   - It builds on #101 (FINDING-025): merge that first.
+   - It builds on #101 (FINDING-025), now merged. *(Was: "merge that
+     first".)*
 4. **Copy the Features tab into the bug sheet** (template
    `12mLsfoFBwh_5Zqai6zpHpv3yZSBx45jvFgf3ZnYZyNY`: tab menu → Copy to →
    Existing spreadsheet). Its status columns read `reviews/FEATURES.csv`.
@@ -109,7 +126,8 @@ its stack merges.
      to 1.
    - Nothing is started on any of them. (This is not item 4's Features tab;
      that one is still to copy.)
-7. **Merge #101 (FINDING-025)**, then decide its open question in Phase 7.
+7. ~~**Merge #101 (FINDING-025)**~~ Done 2026-10-06 17:41 UTC. Its open
+   question is now decision 2 of the Phase 7 proposal (item 3b).
    The modelled ECU is now **uncompensated**: the pedal gives fuel, so at
    altitude torque falls and smoke rises. Keep that, or add a barometric
    derate, or torque-based control? (See Session 7 below.) *(Was: "…should
@@ -118,7 +136,7 @@ its stack merges.
    correction.)*
 
 **Session 7 (2026-10-06): FINDING-025, the spec's ambient reached no solve**
-(branch `fix/spec-ambient`, #101):
+(#101, merged 2026-10-06 17:41 UTC):
 - Found while reading the solver's inputs for Phase 7 (environment).
   `/spec` offers ambient pressure and temperature as primary fields, but
   `operating_point` used fixed defaults, 101325 Pa / 298 K. An edit to
@@ -176,6 +194,24 @@ its stack merges.
   in `STATUS.md` (1 file, +15/−1). CI on `main` passed 9 of 9, and Pages
   deployed it. #96's run before the merge (`76f6617`) also passed 9 of 9;
   Pyodide reported 64 passed, 0 failed, 2 known, 13 skipped.
+- **2026-10-06, 17:39–17:42 UTC: #100, #101 and #102 merged, in that
+  order.** `main` (`1ed9f11`) has exactly the tree simulated from the
+  three tested PR heads before the merge (`2d99396f`, 0 lines differing).
+  Against #101's tested tip it differs only in #102's two docs files.
+  - Pages deployed it. The live site serves the re-stamped grids
+    (`grid_hash` `f298469f`).
+  - The CI runs on the first two merges ended *cancelled*: superseded by
+    the next merge (memory: utc-timestamps).
+  - CI on `main` (`1ed9f11`, run 37505597658): **9 of 9 green**, every job
+    read. Pyodide: 65 passed, 0 failed, 2 known, 13 skipped.
+  - **Pyodide took 30.3 min: it would have been cancelled under the old
+    30-minute limit**, so #100 was needed. The Python jobs are close too:
+    3.10 took 22.6 min and 3.12 21.4 min, against a 30-minute limit
+    (REVIEW-008 M-4 set it). If either passes ~26 min, raise it as #100 did
+    (measure 20 runs first).
+  - No PR is open. Remote branches safe to delete: `ci/pyodide-timeout`,
+    `fix/spec-ambient`, `docs/phase7-proposal`, plus those listed below.
+- Earlier (kept as written):
 - **Open: #100, Pyodide's CI limit 30 → 45 min.** Measured over the last
   20 passing CI runs: Pyodide took 12.2–27.7 min, and 12 of the 20 took
   26.4–27.7 min, within 2.3–3.6 min of the old limit. Python 3.10 peaks at
@@ -225,13 +261,13 @@ its stack merges.
 | suite | result |
 |---|---|
 | `python3 tests/test_physics.py` | 78 passed, 0 failed, 3 known (with scipy; on #101's final tree, 2026-10-06). *Was (#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
-| Pyodide suite | 64 passed, 0 failed, 2 known, 13 skipped (CI on #99). *Was (#88):* 59 / 0 / 2 / 12 |
+| Pyodide suite | 65 passed, 0 failed, 2 known, 13 skipped (CI on #101's final tree, `b6ea065`). *Was (#99):* 64 / 0 / 2 / 13; *(#88):* 59 / 0 / 2 / 12 |
 | `tools/fixtures/gen_fixtures.py --check` | 7 modules current |
 | `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |
 | `web/physics npm test` | 5 + 36 + 10 + 11 = 62 |
 | `web/solver npm test` | cache 20, live-grid scheduler 12, round trip 29 |
-| `web/app npm test` | 101 unit tests (pass without `physics-version.ts`); `check:labels` 6 of 10 templates |
-| e2e (`web/app`) | dyno 15, grid 9, drive 7, sound 6, enjoy 21, custom 7, cycle 8, spec 11, sweep 6, durability 5 |
+| `web/app npm test` | 104 unit tests (pass without `physics-version.ts`; #103's tree, 2026-10-06). *Was:* 101. `check:labels` 6 of 10 templates |
+| e2e (`web/app`) | dyno 15, grid 9, drive 7, sound 6, enjoy 21, custom 7, cycle 8, spec 12 (*was* 11; +the reload check, #103), sweep 6, durability 5 |
 
 CI runs all of them except the manual `web/solver npm run test:live-real`.
 Its jobs: physics on Python 3.10 and 3.12, Pyodide, fixtures, solver, web
@@ -247,13 +283,15 @@ app, web e2e, grid e2e, and custom-engine e2e.
 - A LAN dev server needs `npm start -- --host 0.0.0.0 --ssl` for sound
   (secure context). The live site makes it unnecessary.
 
-**First thing next session:** read this section. Check whether #100 and
-#101 merged, and that `main` matches by content. Check the bug sheet for new
-rows, the owner's re-check of B-01/B-02, and the answers to items 6 and 7.
-Then write the Phase 7 proposal (environment and projects; REVIEW-008 m-3
-and FINDING-025's ECU question belong there), in the form of
-`reviews/PROPOSAL-phase6.md`. The grid-build plan waits until v1 is
-complete. *(Was, at the end of session 6: "Check which of #89–#99
+**First thing next session:** read this section. Check the bug sheet for
+new rows, the owner's re-check of B-01/B-02 (it closes Phase 5), and the
+answers to Phase 7's six decisions (item 3b) and the "Feat Prop" questions
+(item 6). Then write the ADR(s) for those decisions and start Phase 7 in
+the order the proposal gives. The grid-build plan waits until v1 is
+complete. *(Was, in session 7: "Check whether #100 and #101 merged, and that
+`main` matches by content. Check the bug sheet for new rows, the owner's
+re-check of B-01/B-02, and the answers to items 6 and 7. Then write the
+Phase 7 proposal …")* *(Was, at the end of session 6: "Check which of #89–#99
 merged, and that `main` matches by content. Check the bug sheet for new rows
 and the owner's re-check of B-01/B-02. Then plan Phase 7 (environment and
 projects; REVIEW-008 m-3 belongs there).")* *(Was, earlier in session 6: "…check the bug sheet for new
