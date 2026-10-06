@@ -144,8 +144,9 @@ export interface CycleResult {
   /** degrees in the same 0..720 convention; soc_* are -1 where combustion did not start */
   events: { ivo: number; ivc: number; evo: number; evc: number; soi_main: number; soi_pilot: number;
             soc_main: number; soc_pilot: number; inj_dur_main: number };
-  /** where the compressor runs on its map (null without a turbo): corrected flow, kg/s; pressure ratio */
-  compressor: { pr: number; m_corr: number; u: number; eta: number; surge_margin: number } | null;
+  /** where the compressor runs on its map (null without a turbo): corrected flow, kg/s; pressure ratio;
+   *  T_in, K: the inlet temperature the flow is corrected from, the spec's ambient (FINDING-025) */
+  compressor: { pr: number; m_corr: number; u: number; eta: number; surge_margin: number; T_in: number } | null;
   theta: number[]; V: number[]; p: number[]; p_motored: number[]; T: number[]; hrr: number[];
   lift_int: number[]; lift_exh: number[]; p_int_manifold: number[]; p_exh_manifold: number[];
 }

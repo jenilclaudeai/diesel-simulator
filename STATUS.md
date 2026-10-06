@@ -51,10 +51,12 @@ its stack merges.
      `reviews/ANDROID-BUGS.csv` from `main` (refreshed hourly; the first
      time it may need "Allow access"). **Update the CSV, never the
      sheet.** The Drive connector reads the sheet but can't edit cells.
-2. **Merge Phase 6's stack, in order:** #89 → #90 → #91 → #92 → #93 → #94 →
+2. ~~**Merge Phase 6's stack**~~ **Done 2026-10-06: #89–#99 are all on
+   `main`** (#96 last, at 06:30 UTC, carrying #97–#99). `main` matched #99's
+   tested tip by content. *(Was: "**Merge Phase 6's stack, in order:** #89 → #90 → #91 → #92 → #93 → #94 →
    #95 → #96 → #97 → #98 → #99 (REVIEW-008). After each merge, retarget the
    next PR to `main` (`gh pr edit <n> --base main`), then check `main` by
-   content (memory: stack-merge-trap). Pages publishes each merge.
+   content (memory: stack-merge-trap). Pages publishes each merge.")*
    - **What Phase 6 has** (REVIEW-008):
      - `/spec`: every field (188, 181 editable) in 7 subsystem groups, with
        ADR-009's four live schematics and JSON export and import.
@@ -82,6 +84,68 @@ its stack merges.
    Existing spreadsheet). Its status columns read `reviews/FEATURES.csv`.
 5. **Listening:** `out/listen/review003m5_*.wav`; is `hd_i6`'s idle tick
    too quiet? (Details in the session 6 section below.)
+6. **Your "Feat Prop" tab (new in the bug sheet, read 2026-10-06): which are
+   v1?** P01 vibrations (priority 3), P02 Google sign-in (2), P03 free/paid
+   roles (3), P04 grid on a backend (1), P05 grid on AWS Lambda (3).
+   - P02–P05 each need a server. PLAN puts "backend, accounts, payments,
+     telemetry collection" **out of scope for v1** (`PLAN.md`, "Deliberately
+     out of scope"), and the static, header-free hosting is ADR-003's
+     design.
+   - P04/P05 are also the grid-build plan you deferred until v1 is complete
+     (item 3; `reviews/PROPOSAL-grid-build.md` already weighs a build
+     server).
+   - P01 fits v1 as it stands: phone haptics in `/enjoy` (Android Chrome has
+     `navigator.vibrate`; iOS Safari does not).
+   - Also: is priority 1 the highest or the lowest? The empty rows default
+     to 1.
+   - Nothing is started on any of them. (This is not item 4's Features tab;
+     that one is still to copy.)
+7. **Merge #101 (FINDING-025)**, then decide its open question in Phase 7.
+   The modelled ECU is now **uncompensated**: the pedal gives fuel, so at
+   altitude torque falls and smoke rises. Keep that, or add a barometric
+   derate, or torque-based control? (See Session 7 below.) *(Was: "…should
+   the modelled ECU derate from a barometric sensor, or fuel like an
+   uncompensated pump?" The first fix was neither; see FINDING-025's
+   correction.)*
+
+**Session 7 (2026-10-06): FINDING-025, the spec's ambient reached no solve**
+(branch `fix/spec-ambient`, #101):
+- Found while reading the solver's inputs for Phase 7 (environment).
+  `/spec` offers ambient pressure and temperature as primary fields, but
+  `operating_point` used fixed defaults, 101325 Pa / 298 K. An edit to
+  3000 m or 45 °C moved **0 of 8** Dyno outputs; passing them directly
+  moved all 8. `thermal.ambient_p` was read nowhere.
+- Fixed: None now means the spec's ambient, **except** in the fuel-limit
+  chain's calibration, which stays at the rating's air (101325 Pa / 298 K,
+  `engine.RATING_P_AMB`). The compressor point's inlet temperature is the
+  spec's, returned as `T_in`.
+- **Corrected in place:** the first fix also calibrated at the spec's air.
+  Half load at 2000 m then got 13.5% more fuel and 4.6% more torque, which
+  matches no real ECU. It was found while measuring for the Phase 7
+  proposal and changed before merge.
+  - Now the same pedal gives the same fuel in any air (uncompensated). At
+    3000 m: 198 N·m (−12%), soot 2.9×. At 2000 m, half load: −6.2%.
+- At standard ambient nothing changes: old and new code agree **bit for
+  bit**, 20 of 21 replies by sha256 on all 10 engines. The 21st,
+  `solve_cycle`, differs only by the added `T_in` key; its other 51 values
+  are identical.
+- So the grids were re-stamped `15593c2d` → `42da745d` → `f298469f`, with
+  `tools/restamp_grids.py`'s proof, not rebuilt.
+- `test_spec_ambient_reaches_the_solve`: 6 parts; baseline passes, 5 of 5
+  mutants caught, including the first fix.
+- Open, for Phase 7: keep the uncompensated ECU, or add a barometric
+  derate (`cycle.fuel_smoke_limit` assumes 101325 Pa) or torque-based
+  control? Details in `reviews/FINDING-025.md`.
+- Also measured, for the proposal (crdi15, through the bridge):
+  - Cetane 40 → 55 moves torque and BSFC under 0.3% and NOx by 4–8%. Its
+    visible effects (hard starts, knock) are not modelled.
+  - Final code, crdi15 2500 rpm full load (1500 rpm half load in
+    brackets):
+    - 2000 m: torque −6.7% (−6.2%), BSFC +7.2%, soot +88% (+54%);
+    - −10 °C: torque +1.3% (+4.7%), soot −29%;
+    - 40 °C: torque −0.4% (−1.5%), soot +12%.
+  - *(Was, from the first fix: "−10 °C: soot −36%, NOx −27%; 2000 m at
+    full load: soot ×2.9, BSFC +14%".)*
 
 **Known defects and follow-ups** (none blocking):
 - The dev preset `single` sags on the tractor's torque converter in
@@ -151,7 +215,7 @@ its stack merges.
 
 | suite | result |
 |---|---|
-| `python3 tests/test_physics.py` | 77 passed, 0 failed, 3 known (with scipy). *Was (#88):* 71 / 0 / 3 |
+| `python3 tests/test_physics.py` | 78 passed, 0 failed, 3 known (with scipy; on #101's final tree, 2026-10-06). *Was (#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
 | Pyodide suite | 64 passed, 0 failed, 2 known, 13 skipped (CI on #99). *Was (#88):* 59 / 0 / 2 / 12 |
 | `tools/fixtures/gen_fixtures.py --check` | 7 modules current |
 | `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |
@@ -174,11 +238,16 @@ app, web e2e, grid e2e, and custom-engine e2e.
 - A LAN dev server needs `npm start -- --host 0.0.0.0 --ssl` for sound
   (secure context). The live site makes it unnecessary.
 
-**First thing next session:** read this section. Check which of #89–#99
+**First thing next session:** read this section. Check whether #100 and
+#101 merged, and that `main` matches by content. Check the bug sheet for new
+rows, the owner's re-check of B-01/B-02, and the answers to items 6 and 7.
+Then write the Phase 7 proposal (environment and projects; REVIEW-008 m-3
+and FINDING-025's ECU question belong there), in the form of
+`reviews/PROPOSAL-phase6.md`. The grid-build plan waits until v1 is
+complete. *(Was, at the end of session 6: "Check which of #89–#99
 merged, and that `main` matches by content. Check the bug sheet for new rows
 and the owner's re-check of B-01/B-02. Then plan Phase 7 (environment and
-projects; REVIEW-008 m-3 belongs there). The grid-build plan waits until v1
-is complete. *(Was, earlier in session 6: "…check the bug sheet for new
+projects; REVIEW-008 m-3 belongs there).")* *(Was, earlier in session 6: "…check the bug sheet for new
 rows and the owner's re-check of B-01/B-02; ask for the grid-build
 decision.")* *(Was, in session 6: "check whether #86 merged, and ask the owner
 for the Android bug sheet's link. Verify each bug, fix them, then write
