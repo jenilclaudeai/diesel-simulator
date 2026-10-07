@@ -977,7 +977,9 @@ for the Feat Prop priority scale.
    factors at a few airs, fitted from converged solves and interpolated at
    run time. Measured: within 1.15% of converged solves on held-out air,
    where a density ratio is off by 28.7%. Sound and friction stay the
-   grid's (standard air).
+   grid's (standard air). *(2026-10-08: the 1.15% was measured before
+   item 2's ECU (#107). On today's code it is 20.3%, mostly FINDING-026;
+   re-measured after the fix. The decision stands.)*
 2. **The ECU at altitude: option 2 for the common-rail engines, 1 for the
    mechanical single.**
    - Option 2 is an ECU that knows absolute pressure: an absolute (MAP)
