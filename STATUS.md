@@ -216,6 +216,13 @@ landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
     is converged now, and the no-absolute-target mutant fails it.
 - The count guards (spec-meta units, round trip) moved 188 → 189 for the
   new field, deliberately.
+- CI on #107: 9 of 9, Pyodide 67/0/2/13 (the new test runs unmodified
+  there). But **Python 3.10 took 27.0 min against its 30-minute limit**.
+  - Over 24 passing runs it had taken 11.2–22.9 min; this PR's tests add
+    ~4 min, and runner speed varies ~2×.
+  - So the physics job's limit is now **45** (as #100 did for Pyodide,
+    which has since run up to 32.9 min, over its old 30). Python 3.12 has
+    reached 22.8 min.
 
 **Phase 7, step 1 of 7 (2026-10-07): the environment presets**
 (#105, branch `feat/env-presets`; ADR-016's order):
