@@ -1,7 +1,21 @@
 # Status
 
-**Updated:** 2026-10-06, end of session 7. Read this section first; the
-dated sections below it are history.
+**Updated:** 2026-10-07, start of session 8. Read this section first; the
+dated sections below it are history. *(Was: "2026-10-06, end of session
+7".)*
+
+**Session 8, start (2026-10-07):** `main` is `ea88e5f` (#107 merged 09:27
+UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
+- The bug sheet, read through the Drive connector: **no new bugs** (B-05
+  onward are empty), and no note yet of the B-01/B-02 re-check, so Phase 5
+  is still open on REVIEW-007 M-1.
+- **New since ADR-016: a sixth "Feat Prop" row**, "Randomness in drive
+  mode": "terrain, desert, speed breaker, traffic with visuals", priority
+  2. It reuses the ID **P05** (the AWS Lambda row is P05 too). Not in
+  ADR-016 or PLAN, so nothing is built. Item 6 below asks.
+- Next, by ADR-016's order: **step 4, the Drive correction table**.
+- The main checkout on this Mac was on the stale `docs/pages-live`
+  (2026-10-05); this session works in a worktree off `main`.
 
 ## Start here
 
@@ -131,6 +145,15 @@ landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
      to 1.
    - Nothing is started on any of them. (This is not item 4's Features tab;
      that one is still to copy.)
+   - **Open (session 8): the new row, "Randomness in drive mode"**
+     (priority 2, ID P05 again). v1 or v2? And a new ID for it (P06)?
+     What it touches: the live loop already has a grade (`live.py:679`,
+     sin/cos form, ±20% from the keys) and a rolling resistance (`Crr`, a
+     constant per vehicle), so random hills, and surfaces as a varying
+     `Crr`, are within v1's physics.
+     "Speed breakers" are a bump (suspension, out of scope) unless
+     modelled as a short grade and a speed limit. "Traffic with visuals"
+     needs a scene, near PLAN's out-of-scope "3D models".
 7. ~~**Merge #101 (FINDING-025)**~~ Done 2026-10-06 17:41 UTC. Its open
    question is now decision 2 of the Phase 7 proposal (item 3b).
    The modelled ECU is now **uncompensated**: the pedal gives fuel, so at
