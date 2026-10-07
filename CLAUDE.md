@@ -135,6 +135,8 @@ grep its readers and solve with it changed.
   each file changes only by the hash. It refuses otherwise. The "can't
   reach a cell" half is yours: a grep, and
   `test_live_grid_pieces_match_the_shipped_grid`.
+  `tools/ab_rating_air.py <tree>` prints sha256s of 21 bridge replies at
+  the rating's air; diff an old tree's against the new one's (FINDING-026).
 - A roster engine's file must be **`engines/<key>.json`**. Under any other
   name its grid records no engine-file fingerprint, and the tests do not
   find it. `load_engine_dir` registers every file in `engines/`, so

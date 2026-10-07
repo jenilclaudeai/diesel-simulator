@@ -18,7 +18,7 @@ import numpy as np
 
 from . import thermo
 from .config import T_COOLANT_REF, WALL_FOLLOW, EngineSpec, get_preset
-from .cycle import CycleSolver, CycleResult
+from .cycle import CycleSolver, CycleResult, egr_boost_raise
 from .friction import FrictionModel
 from .kinematics import SliderCrank
 from .lubrication import Oil
@@ -457,10 +457,14 @@ class DieselEngine:
         # air its boost target is the rating's absolute pressure (MAP), capped at
         # the compressor's map limit, and its smoke limiter closes on the air the
         # cycle actually traps. At the rating's air neither acts, by construction.
+        # FINDING-026: the cap holds for the target the VGT chases, which
+        # cycle.run raises for EGR; capped before that raise, it ended above the
+        # compressor's limit and the vanes jammed shut (Leh, light load: -76%).
         modern = self.spec.ecu_modern and not self._calibrating
         off_rating = p_amb != RATING_P_AMB or T_amb != RATING_T_AMB
         if modern and off_rating and boost is not None and p_amb != RATING_P_AMB:
-            boost = min(boost * RATING_P_AMB / p_amb, self.spec.turbo.pr_max_ref)
+            boost = min(boost * RATING_P_AMB / p_amb,
+                        self.spec.turbo.pr_max_ref / egr_boost_raise(self.spec, egr))
 
         limiter = modern and off_rating
         cyc = self.cycle.run(

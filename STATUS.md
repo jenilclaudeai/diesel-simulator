@@ -34,6 +34,15 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
     A now, then C measured, then D, then step 4 re-measured.
   - The `hatch15` table run was stopped part-way: it measured the
     defective code.
+  - **Fix A built** on `fix/finding-026-cap` (PR stacked on #109):
+    - at the rating's air, 21 of 21 replies are identical (the new
+      `tools/ab_rating_air.py`, itself mutation-tested);
+    - grids re-stamped `0f1cc94c` → `172454a3` with `restamp_grids.py`'s
+      proof;
+    - `test_modern_cap_holds_with_egr_on`: baseline 5 of 5, 3 of 3 mutants
+      caught. The first mutant run was void (a symlinked `tests/`) and was
+      redone; see the finding.
+    - Fixtures: 7 of 7 current. Audit: 0 dead, 2 frozen (known), 0 tiny.
   - **Decided 2026-10-08:** custom engines get the table too, built in the
     browser, as resumable pieces a server can run later (ADR-016 addendum;
     the owner plans to move heavy processing server-side in v2).

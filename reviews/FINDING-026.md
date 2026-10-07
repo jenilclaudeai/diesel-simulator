@@ -3,8 +3,10 @@
 **Opened by:** session 8 (2026-10-08), measuring Phase 7 step 4 (the Drive
 weather table) on `main` after #107.
 **Lens:** PHY1 (lead), PHY2, QA2
-**Status:** **open.** Fix A is measured below, in a scratch copy, and is
-not yet on any branch. Options C and D are for the owner.
+**Status:** **fix A built** on `fix/finding-026-cap` (stacked on this
+finding's PR), with its test and re-stamp proof below. Options C and D are
+for the owner. *(Was: "open. Fix A is measured below, in a scratch copy,
+and is not yet on any branch.")*
 **Reproduce:** the session-8 scripts (`diag_vgt.py`, `diag_roster.py`),
 described below. They are not kept in the repo; the numbers are.
 
@@ -133,7 +135,41 @@ was decided. Then C, measured, before step 4's table, then D stated. Step
 Each must be proven bit-identical at the rating's air and the grids
 re-stamped with `tools/restamp_grids.py`, as for FINDING-025 and #107.
 
+## Fix A, built (`fix/finding-026-cap`)
+
+- `cycle.egr_boost_raise(spec, egr_cmd)` is the raise, one function for
+  `cycle.run` and the cap. The modern target is now
+  `min(target × 101325 / p_amb, pr_max_ref / raise)`, so the target the
+  vanes chase stays ≤ `pr_max_ref`.
+- **At the rating's air nothing moves.** `tools/ab_rating_air.py` (new,
+  kept): `solve_point` at 1200/0.3 and 2400/1.0 on all 10 engines, plus
+  crdi15's `solve_cycle`. Old against new: **21 of 21 replies identical**
+  by sha256. The tool itself is tested: a mutant raise (0.42 → 0.43, which
+  acts at the rating's air) changes 8 of the 21.
+- Grids re-stamped `0f1cc94c` → `172454a3` by `tools/restamp_grids.py`.
+  The pre-change tree hashes to the grids' stamp, and each of the 10 grids
+  and the accuracy table changes only in its 64-byte hash.
+- `test_modern_cap_holds_with_egr_on`: crdi15 at Leh, converged, 5 parts.
+  Baseline passes (PR 3.29 / 3.30 against 3.30; vanes 0.362; 115.5 vs
+  117.4 N·m). Mutants, each tree probed to run its own code first:
+  - the original code fails 4 parts;
+  - no cap fails 4;
+  - the cap divided twice by the raise (an over-cap) fails 1 part.
+
+  3 of 3 caught, by assertion. The over-cap passed the first version of
+  the test, so the "reaches the limit" part was added.
+- **Corrected in place:** the first mutation run was void. The mutant
+  trees linked `tests/` to the clone, so `tests/..` resolved to the clone
+  and every mutant ran the fixed code: four identical passes. An
+  `abspath` check didn't see it. The trees now copy `tests/`, the runner
+  asserts with `realpath`, and the run was redone.
+
 ## Notes
+
+- **NOTE (QA2):** `tools/audit_dead_signals.py` solves at standard air
+  only, so a control pinned off the rating's air is invisible to it. It
+  reported 0 dead, 2 frozen (the known ring-film clamp), 0 tiny with fix A,
+  as before.
 
 - **NOTE:** the shipped grids' recorded `spec` has no `ecu_modern` key.
   They were re-stamped after #107, not rebuilt, so that record predates the
