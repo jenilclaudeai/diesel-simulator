@@ -30,6 +30,7 @@ import numpy as np
 
 from .config import PRESETS
 from .engine import DieselEngine
+from .environment import describe_environments
 from .grid import GRID_CYCLES, SOURCE_KEYS, solve_cell
 from .overrides import OverrideError, apply_overrides
 
@@ -139,8 +140,11 @@ def source_hash():
 # the solver and never shapes a cell (no cell solve imports it, checked by
 # the suite), and prebuilt grids come from tools/build_live_grids.py; it was
 # added for ADR-014, whose entry points would otherwise stale every grid on
-# each edit. Everything else in the package can change a cell.
-GRID_HASH_EXCLUDES = ("live.py", "livesound.py", "bridge.py")
+# each edit. environment.py (Phase 7, ADR-016) is data: a preset reaches a
+# cell only as spec overrides, which the grid records, and no cell solve
+# imports it (checked by the same test). Everything else in the package can
+# change a cell.
+GRID_HASH_EXCLUDES = ("live.py", "livesound.py", "bridge.py", "environment.py")
 
 
 def grid_hash():
@@ -177,6 +181,8 @@ def runtime_info(_req_json="{}"):
         "preset_info": {k: _preset_info(k) for k in sorted(PRESETS)},
         "grid_cycles": GRID_CYCLES,
         "source_keys": list(SOURCE_KEYS),
+        # Phase 7 (ADR-016): the five places, each with the spec overrides it sets
+        "environments": describe_environments(),
     })
 
 

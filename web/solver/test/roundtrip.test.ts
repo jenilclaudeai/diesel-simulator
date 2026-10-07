@@ -53,6 +53,13 @@ const info = await solver.ready();
 check("ready() loads runtime", info.contract === 1 && info.presets.includes("crdi15"),
       `python ${info.python}, numpy ${info.numpy}, load ${info.load_s.toFixed(1)} s`);
 check("ready() is idempotent", (await solver.ready()) === info);
+// Phase 7 (ADR-016): the presets come from dieselsim/environment.py, loaded in the worker
+const envs = info.environments ?? [];
+const plateau = envs.find(e => e.key === "plateau");
+check("runtime info carries the five environment presets (dieselsim/environment.py, in the worker)",
+      envs.map(e => e.key).join() === "standard,desert,winter,plateau,tropics"
+      && !!plateau && Math.abs(plateau.overrides["thermal.ambient_p"]! / 65764 - 1) < 1e-4,
+      envs.map(e => `${e.key} ${(e.p_amb / 1000).toFixed(1)} kPa ${e.T_C} °C`).join("; "));
 
 const pt = await solver.solvePoint({ engine: { preset: "crdi15" }, rpm: 1800, load: 0.6 });
 const rel = Math.abs(pt.torque - NATIVE_TORQUE) / NATIVE_TORQUE;

@@ -179,6 +179,38 @@ landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
   - *(Was, from the first fix: "−10 °C: soot −36%, NOx −27%; 2000 m at
     full load: soot ×2.9, BSFC +14%".)*
 
+**Phase 7, step 1 of 7 (2026-10-07): the environment presets**
+(#105, branch `feat/env-presets`; ADR-016's order):
+- `dieselsim/environment.py`: five real places, each the air and the fuel
+  sold there, with sources.
+  - Standard (25 °C, sea level, ISO 8178's 10.71 g/kg).
+  - Jaisalmer in May (42 °C, IS 1460 summer diesel, CFPP 18 °C).
+  - Rovaniemi on a January morning (−20 °C, EN 590 arctic class 2, −32 °C).
+  - Leh in June (3500 m = 657.6 hPa ICAO, IS 1460 winter, 6 °C).
+  - Mumbai in July (29 °C, 85% RH).
+  - Two climate details are marked "approx." in the file rather than given
+    false precision.
+- A preset reaches the solver only as spec overrides (ambient p and T,
+  cetane). So the module is in `GRID_HASH_EXCLUDES`: the grid hash is still
+  `f298469f`, and the existing exclusion test proves no cell solve loads it.
+- `runtime_info` carries the five (typed `EnvironmentPreset` in
+  `solver-port.ts`). There's no new port method.
+- crdi15 2500/1.0, against standard air's 225.9 N·m:
+  - Leh 193.0 (−14.6%; AFR 29.4 → 19.2);
+  - Rovaniemi 228.4;
+  - Jaisalmer 222.7 (exhaust +22 K);
+  - Mumbai 225.5.
+- Tests:
+  - `test_environment_presets_reach_the_solve`, 10 parts, each preset
+    solved (FINDING-025's lesson). Baseline passes; 7 of 7 mutants caught,
+    none by error. One first crashed with a KeyError, which counts as
+    broken, so the test now reads the field defensively.
+  - The hash guard catches the exclusion being removed (`3d33b535` vs
+    `f298469f`).
+  - Round trip +1 (the presets arrive from a real Pyodide worker); its
+    mutant is caught.
+- Humidity and CFPP are carried, not yet used: steps 5 and 6.
+
 **Known defects and follow-ups** (none blocking):
 - The dev preset `single` sags on the tractor's torque converter in
   "Auto". It is recorded as KNOWN in the suite. The exact fix is to size
@@ -265,12 +297,12 @@ landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
 
 | suite | result |
 |---|---|
-| `python3 tests/test_physics.py` | 78 passed, 0 failed, 3 known (with scipy; on #101's final tree, 2026-10-06). *Was (#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
+| `python3 tests/test_physics.py` | 79 passed, 0 failed, 3 known (with scipy; #105's tree, 2026-10-07). *Was (#101's final tree):* 78 / 0 / 3; *(#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
 | Pyodide suite | 65 passed, 0 failed, 2 known, 13 skipped (CI on #101's final tree, `b6ea065`). *Was (#99):* 64 / 0 / 2 / 13; *(#88):* 59 / 0 / 2 / 12 |
 | `tools/fixtures/gen_fixtures.py --check` | 7 modules current |
 | `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |
 | `web/physics npm test` | 5 + 36 + 10 + 11 = 62 |
-| `web/solver npm test` | cache 20, live-grid scheduler 12, round trip 29 |
+| `web/solver npm test` | cache 20, live-grid scheduler 12, round trip 30 (#105; *was* 29) |
 | `web/app npm test` | 104 unit tests (pass without `physics-version.ts`; #103's tree, 2026-10-06). *Was:* 101. `check:labels` 6 of 10 templates |
 | e2e (`web/app`) | dyno 15, grid 9, drive 7, sound 6, enjoy 21, custom 7, cycle 8, spec 12 (*was* 11; +the reload check, #103), sweep 6, durability 5 |
 
