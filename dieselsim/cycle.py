@@ -290,7 +290,12 @@ class CycleSolver:
     def run(self, rpm, fuel_mg_per_cycle, turbo, egr_cmd=0.0,
             p_amb=101325.0, T_amb=298.0, n_cycles=12, boost_target=None,
             soi_shift=0.0, state0=None, spool_accel=14.0,
-            check_convergence=False) -> CycleResult:
+            check_convergence=False, smoke_afr=None) -> CycleResult:
+        """smoke_afr: a modern ECU's smoke limiter (ADR-016 item 2). Each cycle's
+        fuel is capped at the fresh air the previous cycle trapped / smoke_afr,
+        so the limiter settles with the turbo inside one solve, as an ECU acting
+        on its MAP sensor does. None (the default, and always at the rating's
+        air): the commanded fuel every cycle, exactly as before."""
         spec, g, thb = self.spec, self.spec.geom, self.spec.thermal
         nc = g.n_cyl
         om = 2.0 * math.pi * rpm / 60.0
@@ -375,7 +380,19 @@ class CycleSolver:
         h_exh_wall = 165.0 * V_exh ** 0.66
 
         cycle_means = []
+        m_fuel_cmd = m_fuel
         for cyc in range(n_cycles):
+            if smoke_afr and cyc > 0:
+                m_air_prev = float(np.mean(m_trap * (1.0 - yb_trap)))
+                mf = min(m_fuel_cmd, m_air_prev / smoke_afr) if m_air_prev > 0.0 else m_fuel_cmd
+                if mf != m_fuel:
+                    m_fuel = mf
+                    rail = self.rail_pressure(rpm, m_fuel * 1e6)
+                    f_pilot = spec.inj.pilot_fraction if (spec.inj.pilot_enabled
+                                                          and m_fuel > 0) else 0.0
+                    mdot_inj, inj_dur = self.injection_profile(m_fuel, rail, rpm)
+                    dur_pilot = inj_dur * f_pilot
+                    dur_main = inj_dur * (1.0 - f_pilot)
             last = (cyc == n_cycles - 1)
             accel = 1.0 if cyc >= n_cycles - 2 else spool_accel
             cm_yb = cm_megr = cm_mc = cm_pint = 0.0

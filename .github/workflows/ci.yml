@@ -35,8 +35,10 @@ jobs:
     runs-on: ubuntu-latest
     # 30, not 20: with Phase 6's tests the suite took 11-20 min on the same
     # tree depending on runner load, and 3 of 22 runs were killed at 20m15s
-    # (REVIEW-008 M-4)
-    timeout-minutes: 30
+    # (REVIEW-008 M-4). 45, not 30: over 24 passing runs (2026-10-06/07)
+    # Python 3.10 took 11.2-22.9 min, then 27.0 with Phase 7's tests (#107),
+    # 3 min short of the limit; runner speed varies ~2x
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:

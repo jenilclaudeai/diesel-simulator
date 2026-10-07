@@ -58,7 +58,7 @@ landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
    next PR to `main` (`gh pr edit <n> --base main`), then check `main` by
    content (memory: stack-merge-trap). Pages publishes each merge.")*
    - **What Phase 6 has** (REVIEW-008):
-     - `/spec`: every field (188, 181 editable) in 7 subsystem groups, with
+     - `/spec`: every field (188, 181 editable; 189 with Phase 7's `ecu_modern`) in 7 subsystem groups, with
        ADR-009's four live schematics and JSON export and import.
      - Its edits are solved on Dyno, Grid, Cycle, Sweep and Durability,
        with an "out of date" banner. **Drive it** builds an edited engine's
@@ -178,6 +178,51 @@ landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
     - 40 °C: torque −0.4% (−1.5%), soot +12%.
   - *(Was, from the first fix: "−10 °C: soot −36%, NOx −27%; 2000 m at
     full load: soot ×2.9, BSFC +14%".)*
+
+**Phase 7, step 3 of 7 (2026-10-07): the ECU knows absolute pressure**
+(#107, branch `feat/ecu-absolute`; ADR-016 item 2):
+- `spec.ecu_modern` (true by default; the NA singles and any NA builder
+  engine are false, i.e. mechanical). A new `/spec` field: 189 fields, 181
+  editable.
+- **Off the rating's air only** (`engine.operating_point`):
+  - the boost target becomes the rating's absolute pressure (MAP), capped
+    at the compressor's map limit `turbo.pr_max_ref`;
+  - the smoke limiter caps each cycle's fuel at the air the previous cycle
+    trapped / `afr_limit` (`cycle.run(smoke_afr=)`), so it settles with the
+    turbo inside one solve.
+- A first version trimmed fuel and re-solved. On a small saturated turbo
+  that chased its own tail (less fuel, less exhaust energy, less boost):
+  after 2 re-solves hatch15 at Leh was still smoky (AFR 15.33 against
+  16.0). It was replaced before commit.
+- At the rating's air nothing moves, by construction: old and new code
+  agree **bit for bit, 21 of 21 replies on all 10 engines**. Grids
+  re-stamped `f298469f` → `0f1cc94c` with `tools/restamp_grids.py`'s proof.
+- Converged, old ECU against modern:
+
+  | case | old | modern |
+  |---|---|---|
+  | crdi15 full load, Leh | 198.8 N·m, soot 0.054 | 210.3 N·m, soot 0.036 |
+  | hatch15 full load, Leh (sea level 260.1) | 238.4 N·m at AFR 14.4, turbo 287k rpm | 184.9 N·m at AFR 16.0 (its limit), 243k rpm |
+  | crdi15 2800/0.3, 90 kPa (sea level 54.77) | 59.25 (+8.2%) | 53.78 (−1.8%) |
+  | the mechanical single, Leh | 15.24 | 15.24 (unchanged, as designed) |
+
+- `test_modern_ecu_knows_absolute_pressure`: 6 parts. It inlines hatch15's
+  brochure numbers, so it runs under Pyodide (no `engines/` there).
+  Baseline passes; 6 of 6 mutants caught. Getting there took two fixes,
+  recorded here:
+  - The first mutant run's baseline failed, so the run was void and
+    redone. A strengthened part had moved a reference fuel.
+  - The light-load part couldn't fail on fast solves (FINDING-013), so it
+    is converged now, and the no-absolute-target mutant fails it.
+- The count guards (spec-meta units, round trip) moved 188 → 189 for the
+  new field, deliberately.
+- CI on #107: 9 of 9, Pyodide 67/0/2/13 (the new test runs unmodified
+  there). But **Python 3.10 took 27.0 min against its 30-minute limit**.
+  - Over 24 passing runs it had taken 11.2–22.9 min; this PR's tests add
+    ~4 min, and runner speed varies ~2×.
+  - So the physics job's limit is now **45** (as #100 did for Pyodide,
+    which has since run up to 32.9 min, over its old 30). Python 3.12 has
+    reached 22.8 min.
 
 **Phase 7, step 1 of 7 (2026-10-07): the environment presets**
 (#105, merged 2026-10-07 08:20 UTC; ADR-016's order):
@@ -333,7 +378,7 @@ from the CI-tested tree only in #104's four docs files, with 0 code paths;
 
 | suite | result |
 |---|---|
-| `python3 tests/test_physics.py` | 79 passed, 0 failed, 3 known (with scipy; #105's tree, 2026-10-07). *Was (#101's final tree):* 78 / 0 / 3; *(#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
+| `python3 tests/test_physics.py` | 80 passed, 0 failed, 3 known (with scipy; #107's tree, 2026-10-07). *Was (#105):* 79 / 0 / 3; *(#101's final tree):* 78 / 0 / 3; *(#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
 | Pyodide suite | 65 passed, 0 failed, 2 known, 13 skipped (CI on #101's final tree, `b6ea065`). *Was (#99):* 64 / 0 / 2 / 13; *(#88):* 59 / 0 / 2 / 12 |
 | `tools/fixtures/gen_fixtures.py --check` | 7 modules current |
 | `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |

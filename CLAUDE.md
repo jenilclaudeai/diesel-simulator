@@ -96,6 +96,11 @@ grep its readers and solve with it changed.
   only a fresh engine was clean. A cold solve on a used engine still differs
   from a *warm* one on a fresh engine -- compare like with like.
 - `dpdtheta_max` measures compression; read **`dpdtheta_comb`**.
+- Off the rating's air (101325 Pa / 298 K), a modern ECU (`spec.ecu_modern`,
+  ADR-016) targets absolute boost and caps each cycle's fuel at
+  trapped air / `afr_limit`. There, **`op.fuel_mg` is the fuel injected,
+  not the pedal's command**. The calibration always runs at the rating's
+  air (FINDING-025), so at standard air nothing changes.
 - Read `h_ring_mid`, not `h_ring_tdc` (always its 12 nm clamp).
 - Use `n_cycles >= 9`; at 6 the drift is 10.8%.
 - `CycleTraces.theta`: per-cylinder arrays are in that cylinder's own crank

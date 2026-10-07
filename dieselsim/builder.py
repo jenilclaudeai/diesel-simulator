@@ -113,6 +113,8 @@ def build_engine(name: str,
                       crank_gear_teeth=max(18, int(0.18 * bore * 1000)),
                       cam_gear_teeth=max(36, int(0.36 * bore * 1000)),
                       injpump_gear_teeth=max(27, int(0.27 * bore * 1000)))
+    # ADR-016: a naturally aspirated build is the mechanical kind (single10)
+    spec.ecu_modern = bool(turbocharged)
 
     # ---- valve train: area follows bore --------------------------------
     lash = displacement >= 4.0 if mechanical_lash is None else bool(mechanical_lash)

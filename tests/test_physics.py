@@ -2009,6 +2009,80 @@ def test_environment_presets_reach_the_solve():
           + f"3500 m = {pressure_at(3500.0) / 100:.1f} hPa")
 
 
+def test_modern_ecu_knows_absolute_pressure():
+    """ADR-016 item 2: a modern ECU (spec.ecu_modern) knows absolute pressure.
+    Off the rating's air its boost target is the rating's absolute pressure,
+    capped at the compressor's map limit, and its smoke limiter caps each
+    cycle's fuel at the trapped air / afr_limit. A mechanical pump
+    (ecu_modern False) is uncompensated: same pedal, same fuel. At the
+    rating's air the two are identical, by construction (the grids were
+    re-stamped on that, with an old-vs-new A/B on every engine). Fast solves,
+    9 cycles, except the light-load pair (converged). Parts:
+    - at the rating's air, modern and mechanical solve identically;
+    - mechanical at Leh (65.8 kPa): the rating's fuel, uncompensated;
+    - modern at Leh, crdi15 full load: the turbo holds more boost pressure,
+      so more torque and leaner than mechanical;
+    - modern at Leh, hatch15 full load (a small turbo): the smoke limiter
+      holds AFR at its limit, where mechanical runs rich, and delivers less
+      fuel than commanded;
+    - modern at 90 kPa, crdi15 light load: boost pressure within 5% of sea
+      level's (absolute target). The pressure-ratio target let it fall with
+      ambient, and light load gained 8.2% torque in thin air (PROPOSAL-phase7
+      measurement 3)."""
+    from dieselsim import bridge
+    from dieselsim.builder import from_dict
+    from dieselsim.engine import DieselEngine
+    LEH = (65764.0, 293.15)
+    # engines/hatch15.json, inlined so the test runs under Pyodide too (which has no engines/)
+    HATCH15 = {"name": "1.5 L four, 115 ps", "displacement": 1.5, "n_cyl": 4, "rated_rpm": 4000,
+               "peak_torque": 260, "peak_power": 85, "plateau": [2000, 2750], "boost_map_rise": 0.12, "afr_limit": 16.0}
+
+    def op(key, rpm, load, air=None, modern=None, afr_limit=None, converged=False):
+        s = from_dict(HATCH15) if key == "hatch15" else bridge._resolve_spec({"preset": key})
+        if afr_limit is not None:
+            s.afr_limit = afr_limit
+        if air:
+            s.thermal.ambient_p, s.thermal.ambient_T = air
+        if modern is not None:
+            s.ecu_modern = modern
+        e = DieselEngine(spec=s)
+        return e.operating_point(rpm, load=load, converged=True) if converged else e.operating_point(rpm, load=load, n_cycles=9)
+
+    # afr_limit 35: a limiter that acted at the rating's air would bind here (AFR ~29), so a lost gate shows
+    std_m, std_x = op("crdi15", 2500, 1.0, modern=True, afr_limit=35.0), op("crdi15", 2500, 1.0, modern=False, afr_limit=35.0)
+    std_n = op("crdi15", 2500, 1.0, modern=False)          # the pedal's fuel at the normal afr_limit
+    leh_m, leh_x = op("crdi15", 2500, 1.0, LEH, True), op("crdi15", 2500, 1.0, LEH, False)
+    hat_m, hat_x = op("hatch15", 2000, 1.0, LEH, True), op("hatch15", 2000, 1.0, LEH, False)
+    hat_cmd = op("hatch15", 2000, 1.0, modern=True).fuel_mg      # the pedal's fuel, at the rating's air
+    # converged: at light load a fast solve's boost hasn't settled (FINDING-013), and a 5% band can't tell
+    # the two targets apart there (measured: 234 -> 228 kPa without the absolute target, 229 with it)
+    lite_std = op("crdi15", 2800, 0.3, converged=True)
+    lite_90 = op("crdi15", 2800, 0.3, (90000.0, 283.0), True, converged=True)
+    afr_lim = HATCH15["afr_limit"]
+    parts = {
+        "rating's air (afr_limit 35, where a limiter would bind): modern and mechanical identical": (std_m.torque, std_m.fuel_mg, std_m.cycle.afr)
+        == (std_x.torque, std_x.fuel_mg, std_x.cycle.afr),
+        "mechanical at Leh: the rating's fuel": leh_x.fuel_mg == std_n.fuel_mg,
+        "modern at Leh: more boost, torque and air than mechanical": leh_m.cycle.p_intake > 1.1 * leh_x.cycle.p_intake
+        and leh_m.torque > leh_x.torque and leh_m.cycle.afr > leh_x.cycle.afr,
+        "modern at Leh: boost ratio within the compressor's map limit (+5%)":
+        leh_m.cycle.p_intake / LEH[0] <= 1.05 * bridge._resolve_spec({"preset": "crdi15"}).turbo.pr_max_ref,
+        "modern at Leh, small turbo: AFR held at the limit (within 5%), mechanical rich":
+        0.99 * afr_lim <= hat_m.cycle.afr <= 1.05 * afr_lim
+        and hat_x.cycle.afr < 0.97 * afr_lim and hat_m.fuel_mg < 0.95 * hat_cmd,
+        "modern at 90 kPa, light load: boost pressure held (absolute target)":
+        abs(lite_90.cycle.p_intake / lite_std.cycle.p_intake - 1.0) < 0.05,
+    }
+    bad = [k for k, ok in parts.items() if not ok]
+    check("modern ECU knows absolute pressure (ADR-016)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ")
+          + f"crdi15 2500/1.0 at Leh: modern {leh_m.torque:.1f} N.m, MAP {leh_m.cycle.p_intake / 1e3:.0f} kPa, AFR {leh_m.cycle.afr:.1f}; "
+          + f"mechanical {leh_x.torque:.1f}, {leh_x.cycle.p_intake / 1e3:.0f} kPa, AFR {leh_x.cycle.afr:.1f}; "
+          + f"hatch15 2000/1.0 at Leh: AFR {hat_m.cycle.afr:.2f} (limit {afr_lim}; mechanical {hat_x.cycle.afr:.2f}), "
+          + f"fuel {hat_m.fuel_mg:.1f} of {hat_cmd:.1f} mg; crdi15 2800/0.3 MAP {lite_std.cycle.p_intake / 1e3:.0f} -> "
+          + f"{lite_90.cycle.p_intake / 1e3:.0f} kPa at 90 kPa")
+
+
 def test_live_grid_pieces_match_the_shipped_grid():
     """ADR-014 step 3: a browser worker builds a drivable grid from the
     bridge's pieces, and tools/build_live_grids.py now builds with the same
@@ -2176,7 +2250,7 @@ def main():
                test_ramps_have_their_own_height,
                test_custom_engine_json,
                test_describe_engine, test_solve_cycle, test_mfb50_counts_combustion_before_tdc, test_durability_steps,
-               test_spec_editor_schema, test_spec_ambient_reaches_the_solve, test_environment_presets_reach_the_solve,
+               test_spec_editor_schema, test_spec_ambient_reaches_the_solve, test_environment_presets_reach_the_solve, test_modern_ecu_knows_absolute_pressure,
                test_live_grid_pieces_match_the_shipped_grid,
                test_na_engines_idle_on_a_converter,
                test_flat_tappet_wears_more_than_roller,

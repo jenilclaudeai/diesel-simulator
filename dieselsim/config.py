@@ -356,6 +356,11 @@ class EngineSpec:
     rated_rpm: float = 1800.0
     max_rpm: float = 2200.0
     afr_limit: float = 19.0          # smoke-limited air/fuel ratio
+    # ADR-016 item 2: the ECU knows absolute pressure (MAP and baro sensors).
+    # True: off the rating's air the boost target is absolute and the smoke
+    # limiter closes on the trapped air. False: a mechanical pump, uncompensated
+    # (same pedal, same fuel, at any altitude). Nothing changes at rating air.
+    ecu_modern: bool = True          # ECU reads absolute pressure (MAP, baro); false: a mechanical pump
     afr_stoich: float = 14.5
     # ---- rated limits -------------------------------------------------
     # Real engines are not sold at whatever the smoke limit allows: the ECU
@@ -677,6 +682,7 @@ def industrial_single() -> EngineSpec:
                       crank_gear_teeth=24, cam_gear_teeth=48,
                       injpump_gear_teeth=48)
     spec.turbo = Turbo(enabled=False)
+    spec.ecu_modern = False          # a mechanical pump: no MAP, no baro (ADR-016)
     spec.inj = Injection(n_holes=4, hole_dia=0.24e-3, rail_pressure_max=280e5,
                          rail_pressure_idle=180e5, soi_deg_btdc=16.0,
                          pilot_enabled=False, cetane_number=48.0)
