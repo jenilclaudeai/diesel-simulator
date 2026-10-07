@@ -98,7 +98,7 @@ const loadS = (Date.now() - t0) / 1000;
 const about = await page.$eval(".about", e => e.textContent);
 check("Python boots in the page's worker", /Python 3\.14/.test(about), `ready after ${loadS.toFixed(0)} s`);
 check("worker runs the physics this build expects", about.includes(physics.slice(0, 12)), physics.slice(0, 12));
-const engines = await page.$$eval("select option", o => o.map(x => x.textContent.trim()).filter(t => t !== "Custom engine…"));
+const engines = await page.$$eval("select:not(.env) option", o => o.map(x => x.textContent.trim()).filter(t => t !== "Custom engine…"));
 check("engine list comes from the solver", engines.length === 5, engines.join(" | "));
 check("page is not showing a cache-off warning", !about.includes("caching is off"));
 

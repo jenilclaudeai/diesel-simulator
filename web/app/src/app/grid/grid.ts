@@ -5,6 +5,8 @@ import { type CustomEngine, EXAMPLE_ENGINE, headline } from '../engine/custom-en
 import { EngineForm } from '../engine/engine-form';
 import { describe, SolverService } from '../solver/solver.service';
 import { SpecEdits } from '../spec/spec-edits';
+import { EnvChoice } from '../weather/env-choice';
+import { EnvPicker } from '../weather/env-picker';
 import { refKey, SpecStatus } from '../spec/spec-status';
 import { LastResults } from '../spec/last-results';
 import { gridAxes, N_LOAD, N_RPM } from './grid-axes';
@@ -16,7 +18,7 @@ const fmt2 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2, minimu
 
 @Component({
   selector: 'app-grid',
-  imports: [RouterLink, EngineForm, SpecStatus],
+  imports: [RouterLink, EngineForm, SpecStatus, EnvPicker],
   templateUrl: './grid.html',
   styleUrl: '../dyno/dyno.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -24,6 +26,7 @@ const fmt2 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2, minimu
 export class GridPage implements OnInit {
   protected readonly solver = inject(SolverService);
   private readonly edits = inject(SpecEdits);
+  private readonly env = inject(EnvChoice);
   /** refKey() of the engine the current grid was built for (the stale banner compares it) */
   protected readonly solvedWith = signal<string | undefined>(undefined);
   protected readonly fmt0 = fmt0;
@@ -102,7 +105,7 @@ export class GridPage implements OnInit {
   }
 
   private engineRef(): EngineRef {
-    return this.isCustom() ? { headline: headline(this.custom()) } : this.edits.engineRef(this.engine());
+    return this.env.solveRef(this.isCustom() ? { headline: headline(this.custom()) } : this.edits.engineRef(this.engine()));
   }
 
   protected async build(): Promise<void> {

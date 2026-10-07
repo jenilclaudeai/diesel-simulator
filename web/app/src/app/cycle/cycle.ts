@@ -3,6 +3,8 @@ import { RouterLink } from '@angular/router';
 import type { CycleResult, PresetInfo } from '@dieselsim/solver';
 import { describe, SolverService } from '../solver/solver.service';
 import { SpecEdits } from '../spec/spec-edits';
+import { EnvChoice } from '../weather/env-choice';
+import { EnvPicker } from '../weather/env-picker';
 import { refKey, SpecStatus } from '../spec/spec-status';
 import { LastResults } from '../spec/last-results';
 
@@ -23,7 +25,7 @@ const deg = (v: number) => `${v >= 0 ? '+' : '−'}${fmt1.format(Math.abs(v))}°
  */
 @Component({
   selector: 'app-cycle',
-  imports: [RouterLink, SpecStatus],
+  imports: [RouterLink, SpecStatus, EnvPicker],
   templateUrl: './cycle.html',
   styleUrl: './cycle.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -31,6 +33,7 @@ const deg = (v: number) => `${v >= 0 ? '+' : '−'}${fmt1.format(Math.abs(v))}°
 export class CyclePage implements OnInit {
   protected readonly solver = inject(SolverService);
   protected readonly edits = inject(SpecEdits);
+  private readonly env = inject(EnvChoice);
   protected readonly fmt0 = fmt0;
 
   /** starts on the spec editor's engine, so its edits are what gets solved */
@@ -165,7 +168,7 @@ export class CyclePage implements OnInit {
     this.error.set(undefined);
     const t0 = performance.now();
     try {
-      const engine = this.edits.engineRef(this.engine());
+      const engine = this.env.solveRef(this.edits.engineRef(this.engine()));
       this.result.set(await this.solver.solveCycle({ engine, rpm: this.rpm(), load: this.load() }));
       this.solvedWith.set(refKey(engine));
       this.kept.set<Kept>('cycle', { engine: this.engine(), rpm: this.rpm(), load: this.load(), result: this.result()!,

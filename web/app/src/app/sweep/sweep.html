@@ -43,6 +43,7 @@
       {{ plan().length }} points: {{ plan().map(fmtV).join(', ') }}.</p>
   }
 
+  <app-env-picker [partLoad]="true" />
   <app-spec-status [engine]="engine()" [solvedWith]="rows().length ? solvedWith() : undefined" [busy]="running()" again="Run the sweep again" (rerun)="run()" />
 
   <p class="status" role="status" aria-live="polite">

@@ -32,6 +32,7 @@
     </button>
   </div>
 
+  <app-env-picker [partLoad]="true" />
   <app-spec-status [engine]="engine()" [solvedWith]="result() ? solvedWith() : undefined" [busy]="running()" again="Solve again" (rerun)="solve()" />
 
   <p class="status" role="status" aria-live="polite">

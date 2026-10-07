@@ -21,6 +21,11 @@ rpm = round((info["idle_rpm"] + 0.6 * (info["rated_rpm"] - info["idle_rpm"])) / 
 engine = {"preset": PRESET}
 if os.environ.get("OVERRIDES"):
     engine["overrides"] = json.loads(os.environ["OVERRIDES"])
+# ENVIRONMENT=plateau solves it in a Phase 7 preset (ADR-016), with the overrides the page gets from
+# runtime_info: the same source, dieselsim/environment.py
+if os.environ.get("ENVIRONMENT"):
+    from dieselsim.environment import ENVIRONMENTS  # noqa: E402
+    engine["overrides"] = {**ENVIRONMENTS[os.environ["ENVIRONMENT"]].overrides(), **engine.get("overrides", {})}
 s = json.loads(bridge.solve_cycle(json.dumps({"engine": engine, "rpm": rpm, "load": LOAD})))["summary"]
 print(json.dumps({"rpm": rpm, "p_max_bar": s["p_max"] / 1e5, "mfb50": s["mfb50"],
                   "imep_net_bar": s["imep_net"] / 1e5, "theta_pmax": s["theta_pmax"]}))

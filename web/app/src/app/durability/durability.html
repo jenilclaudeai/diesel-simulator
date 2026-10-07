@@ -26,6 +26,7 @@
   <p class="note cost">The duty cycle is idle, 62% and 85% of rated speed, and rated, at rising load. {{ fmt0.format(hours()) }} hours
     take {{ fmtDuration(estimate()) }} here. It stops between blocks when you press Stop.</p>
 
+  <app-env-picker [partLoad]="true" />
   <app-spec-status [engine]="engine()" [solvedWith]="rows().length && !running() ? solvedWith() : undefined" [busy]="running()" again="Run it again" (rerun)="run()" />
 
   <p class="status" role="status" aria-live="polite">

@@ -5,6 +5,8 @@ import { buildPlot, type PlotModel } from '../cycle/plots';
 import { describe, SolverService } from '../solver/solver.service';
 import { LastResults } from '../spec/last-results';
 import { SpecEdits } from '../spec/spec-edits';
+import { EnvChoice } from '../weather/env-choice';
+import { EnvPicker } from '../weather/env-picker';
 import { FIELDS, GROUPS, label, readOnly, unitFor } from '../spec/spec-meta';
 import { refKey, SpecStatus } from '../spec/spec-status';
 import { defaultRange, sweepValues } from './sweep-plan';
@@ -25,7 +27,7 @@ interface Kept { engine: string; field: string; from: number; to: number; steps:
  */
 @Component({
   selector: 'app-sweep',
-  imports: [RouterLink, SpecStatus],
+  imports: [RouterLink, SpecStatus, EnvPicker],
   templateUrl: './sweep.html',
   styleUrl: '../cycle/cycle.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -33,6 +35,7 @@ interface Kept { engine: string; field: string; from: number; to: number; steps:
 export class SweepPage implements OnInit {
   protected readonly solver = inject(SolverService);
   private readonly edits = inject(SpecEdits);
+  private readonly env = inject(EnvChoice);
   private readonly kept = inject(LastResults);
   protected readonly fmt0 = fmt0;
   protected readonly fmt1 = fmt1;
@@ -102,7 +105,7 @@ export class SweepPage implements OnInit {
 
   constructor() {
     effect(() => {
-      const ref = this.edits.engineRef(this.engine());
+      const ref = this.env.solveRef(this.edits.engineRef(this.engine()));
       if (this.solver.status() !== 'ready') return;
       this.values.set(undefined);
       this.solver.describeSpec(ref).then(d => this.values.set(Object.fromEntries(d.fields.map(f => [f.path, f.value]))))
@@ -127,7 +130,7 @@ export class SweepPage implements OnInit {
   protected async run(): Promise<void> {
     const values = this.plan();
     if (this.running() || values.length < 2) return;
-    const base = this.edits.engineRef(this.engine()) as { preset: string; overrides?: Record<string, number | boolean> };
+    const base = this.env.solveRef(this.edits.engineRef(this.engine())) as { preset: string; overrides?: Record<string, number | boolean> };
     this.running.set(true);
     this.stop = false;
     this.rows.set([]);

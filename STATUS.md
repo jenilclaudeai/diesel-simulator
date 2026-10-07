@@ -180,7 +180,7 @@ landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
     full load: soot ×2.9, BSFC +14%".)*
 
 **Phase 7, step 1 of 7 (2026-10-07): the environment presets**
-(#105, branch `feat/env-presets`; ADR-016's order):
+(#105, merged 2026-10-07 08:20 UTC; ADR-016's order):
 - `dieselsim/environment.py`: five real places, each the air and the fuel
   sold there, with sources.
   - Standard (25 °C, sea level, ISO 8178's 10.71 g/kg).
@@ -210,6 +210,42 @@ landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
   - Round trip +1 (the presets arrive from a real Pyodide worker); its
     mutant is caught.
 - Humidity and CFPP are carried, not yet used: steps 5 and 6.
+
+**Phase 7, step 2 of 7 (2026-10-07): the environment on the solving pages**
+(#106: built as a draft stacked on #105, retargeted to `main` after #104 and
+#105 merged at 08:20 UTC, then marked ready. Its merge into `main` differed
+from the CI-tested tree only in #104's four docs files, with 0 code paths;
+`main` was merged in and CI re-ran on the real base):
+- A picker on Dyno, Grid, Cycle, Sweep and Durability shows the chosen
+  place's numbers and fuel. It's kept across reloads, like the edits.
+- On the part-load pages it carries FINDING-013's caveat. At Leh the
+  Cycle page's default point (2700/0.6, a fast solve) shows net IMEP
+  *rising*, 11.07 → 12.07 bar, while peak pressure falls 140.1 → 108.5
+  bar: the fast-solve gap plus the pressure-ratio boost control (the
+  proposal's measurements 2 and 3). Step 3 addresses the latter.
+- `weather/env-choice.ts`: `withEnvironment(ref, overrides)` puts the
+  environment *under* the page's own overrides, so an explicit spec edit
+  wins. Standard air adds nothing, so its references, results and cache
+  keys are unchanged. `/spec` and "Drive it" stay at standard air
+  (ADR-016 item 1).
+- The out-of-date banner now counts a change of environment.
+- Found on the way: `.gitignore` ignores every `env/` directory
+  (virtualenvs). A first `web/app/src/app/env/` would never have been
+  committed, so the directory is `weather/`.
+- Tests:
+  - units 109 (+5), also without `physics-version.ts`; 6 of 6 mutants
+    caught by assertions;
+  - e2e:cycle 9 (+1): Leh marks the result out of date, and solved again
+    it is native Python's for the plateau preset (108.5 bar, IMEP 12.07);
+    with the page ignoring the environment, exactly that check fails
+    (140.1 bar shown against native's 108.5).
+  - **Missed, and caught by CI (corrected in place):** I ran only the
+    Cycle and Spec e2e locally. CI's Dyno and Grid e2e failed: each
+    "engine list comes from the solver" check read every `<option>` on the
+    page, and the picker added the five places. Both are now scoped to
+    `select:not(.env)`. Locally, every e2e on a page with the picker
+    passes: dyno 15, grid 9, cycle 9, sweep 6, durability 5, custom 7,
+    spec 12.
 
 **Known defects and follow-ups** (none blocking):
 - The dev preset `single` sags on the tractor's torque converter in
@@ -303,8 +339,8 @@ landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
 | `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |
 | `web/physics npm test` | 5 + 36 + 10 + 11 = 62 |
 | `web/solver npm test` | cache 20, live-grid scheduler 12, round trip 30 (#105; *was* 29) |
-| `web/app npm test` | 104 unit tests (pass without `physics-version.ts`; #103's tree, 2026-10-06). *Was:* 101. `check:labels` 6 of 10 templates |
-| e2e (`web/app`) | dyno 15, grid 9, drive 7, sound 6, enjoy 21, custom 7, cycle 8, spec 12 (*was* 11; +the reload check, #103), sweep 6, durability 5 |
+| `web/app npm test` | 109 unit tests (pass without `physics-version.ts`; #106's tree, 2026-10-07). *Was:* 104 (#103), 101. `check:labels` 6 of 10 templates |
+| e2e (`web/app`) | dyno 15, grid 9, drive 7, sound 6, enjoy 21, custom 7, cycle 9 (*was* 8; +the environment check, #106), spec 12 (*was* 11; +the reload check, #103), sweep 6, durability 5 |
 
 CI runs all of them except the manual `web/solver npm run test:live-real`.
 Its jobs: physics on Python 3.10 and 3.12, Pyodide, fixtures, solver, web

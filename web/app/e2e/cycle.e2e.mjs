@@ -1,6 +1,7 @@
 // The cycle page (Phase 6, ADR-015) in a real headless Chrome, against native
 // Python: the page's default point for crdi15 solved in the browser's worker,
-// its numbers checked against e2e/native_cycle.py, its four plots drawn with
+// its numbers checked against e2e/native_cycle.py (in standard air and in the plateau
+// environment preset, Phase 7), its four plots drawn with
 // the right number of points, its events marked, its figures labelled.
 //
 //   npm run build:pages && CHROME_PATH=... npm run e2e:cycle      (~1 min)
@@ -104,6 +105,33 @@ check("events marked: main SOI, main SOC, MFB50 and p max on p–θ; the four va
   `p–θ ${pt?.markers.join(",")}; lift ${vl?.markers.join(",")}, overlap ${vl?.shade}`);
 check("it solved in the browser in a reasonable time", solveS < 120, `${solveS.toFixed(1)} s`);
 await page.screenshot({ path: path.join(out, "cycle.png"), fullPage: true });
+
+// Phase 7 (ADR-016): the same point in Leh in June (3500 m). The choice marks the result out of
+// date, and solved again it is native Python's for the plateau preset's overrides.
+let refPlateau;
+try {
+  refPlateau = JSON.parse(process.env.NATIVE_CYCLE_PLATEAU ?? execFileSync("python3", [path.join(here, "native_cycle.py")],
+    { cwd: path.resolve(here, "..", "..", ".."), encoding: "utf8", env: { ...process.env, ENVIRONMENT: "plateau" } }));
+} catch (e) { refPlateau = { p_max_bar: NaN, imep_net_bar: NaN }; }
+await page.select("select.env", "plateau");
+await page.waitForSelector("app-spec-status .stale", { timeout: 5000 }).catch(() => {});
+const envStale = await page.$eval("app-spec-status .stale", e => e.textContent.replace(/\s+/g, " ").trim()).catch(() => "");
+const envNote = await page.$eval("p.env-note", e => e.textContent.replace(/\s+/g, " ").trim()).catch(() => "");
+await page.click("button.run");
+await page.waitForFunction(() => !document.querySelector("app-spec-status .stale") && !document.querySelector("button.run[disabled]"),
+  { timeout: 5 * 60_000, polling: 500 }).catch(() => {});
+const high = await page.evaluate(() => {
+  const row = name => [...document.querySelectorAll(".cycle-data tr")].find(tr => tr.querySelector("th")?.textContent.trim() === name)
+    ?.querySelector("td")?.textContent.trim() ?? "";
+  return { peak: row("Peak pressure"), imep: row("IMEP, net (gross)") };
+});
+check("Leh in June: the choice marks the result out of date; solved again it is native Python's for the plateau preset",
+  /out of date/.test(envStale) && /Leh/.test(envNote) && /65\.8 kPa/.test(envNote) && /FINDING-013/.test(envNote)
+  && num(high.peak).toFixed(1) === refPlateau.p_max_bar.toFixed(1) && num(high.imep).toFixed(2) === refPlateau.imep_net_bar.toFixed(2)
+  && num(high.peak) < peakBar,
+  `"${envNote.slice(0, 60)}…"; page ${high.peak}, IMEP ${high.imep}; native ${refPlateau.p_max_bar.toFixed(1)} bar, `
+  + `IMEP ${refPlateau.imep_net_bar.toFixed(2)} (standard air ${shown.peak})`);
+await page.select("select.env", "standard");
 check("no page errors or console errors", problems.length === 0, problems.slice(0, 3).join(" | "));
 
 await browser.close();

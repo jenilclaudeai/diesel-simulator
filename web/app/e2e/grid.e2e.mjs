@@ -85,7 +85,7 @@ if (!(await page.$("select:not([disabled])"))) {
   await page.screenshot({ path: path.join(out, "grid-failed.png"), fullPage: true });
   process.exit(1);
 }
-const engines = await page.$$eval("select option", o => o.map(x => x.textContent.trim()).filter(t => t !== "Custom engine…"));
+const engines = await page.$$eval("select:not(.env) option", o => o.map(x => x.textContent.trim()).filter(t => t !== "Custom engine…"));
 check("grid page boots Python in its worker", engines.length === 5, `engine list from the solver: ${engines.join(" | ")}`);
 
 // ADR-014: a custom engine, described by the builder (its build path is the Dyno's; not built here, ~9 min)

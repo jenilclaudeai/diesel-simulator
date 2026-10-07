@@ -8,6 +8,8 @@ import { achieved, type CustomEngine, EXAMPLE_ENGINE, headline } from '../engine
 import { EngineForm } from '../engine/engine-form';
 import { describe, SolverService } from '../solver/solver.service';
 import { SpecEdits } from '../spec/spec-edits';
+import { EnvChoice } from '../weather/env-choice';
+import { EnvPicker } from '../weather/env-picker';
 import { refKey, SpecStatus } from '../spec/spec-status';
 import { LastResults } from '../spec/last-results';
 import { dualAxis } from './axis';
@@ -24,7 +26,7 @@ const fmt2 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2, minimu
 
 @Component({
   selector: 'app-dyno',
-  imports: [RouterLink, EngineForm, SpecStatus, DriveBuild],
+  imports: [RouterLink, EngineForm, SpecStatus, DriveBuild, EnvPicker],
   templateUrl: './dyno.html',
   styleUrl: './dyno.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -32,6 +34,7 @@ const fmt2 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2, minimu
 export class Dyno implements OnInit {
   protected readonly solver = inject(SolverService);
   private readonly edits = inject(SpecEdits);
+  private readonly env = inject(EnvChoice);
   /** refKey() of the engine the current pull was run with (the stale banner compares it) */
   protected readonly solvedWith = signal<string | undefined>(undefined);
   protected readonly fmt0 = fmt0;
@@ -151,7 +154,7 @@ export class Dyno implements OnInit {
   }
 
   private engineRef(): EngineRef {
-    return this.isCustom() ? { headline: headline(this.custom()) } : this.edits.engineRef(this.engine());
+    return this.env.solveRef(this.isCustom() ? { headline: headline(this.custom()) } : this.edits.engineRef(this.engine()));
   }
 
   /** The builder's own rpm range and the requested numbers, for the chart and the comparison. */
