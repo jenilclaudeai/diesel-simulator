@@ -18,8 +18,11 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
     browser, as resumable pieces a server can run later (ADR-016 addendum;
     the owner plans to move heavy processing server-side in v2).
 - **The randomness row, discussed 2026-10-08** (the owner: "the whole idea
-  of randomness is to keep the user engaged and make it interesting"). My
-  recommendation, not yet decided (item 6):
+  of randomness is to keep the user engaged and make it interesting").
+  **Decided 2026-10-08 ("Agreed, tiers 1–2 in v1, rename it P06"; ADR-016
+  addendum, PLAN Phase 8):** tiers 1–2 are v1, tier 3 is v2, the ID is
+  P06. *(Was: "My recommendation, not yet decided (item 6):")* The
+  recommendation as accepted:
   - Measured: `/enjoy` has no road at all; it's a flat, endless road. The
     only grade control is `[`/`]` on `/drive`
     (`web/physics/src/live/engine.ts:511`). No wind, nothing random, in
@@ -41,6 +44,13 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
     measurements first.
 - The main checkout on this Mac was on the stale `docs/pages-live`
   (2026-10-05); this session works in a worktree off `main`.
+- **2026-10-08: `~/Documents` became unreadable** to this session ("Operation
+  not permitted" for `ls`, the shell and the file reader alike, while
+  `~/.claude` still works): most likely macOS's Files and Folders
+  permission for Documents. Nothing was lost (all pushed). Work continues in
+  a fresh clone under the job's own directory. To restore it, check System
+  Settings → Privacy & Security → Files and Folders (or Full Disk Access)
+  for the terminal app running Claude Code.
 
 ## Start here
 
@@ -170,8 +180,12 @@ landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
      to 1.
    - Nothing is started on any of them. (This is not item 4's Features tab;
      that one is still to copy.)
-   - **Open (session 8): the new row, "Randomness in drive mode"**
-     (priority 2, ID P05 again). v1 or v2? And a new ID for it (P06)?
+   - ~~**Open (session 8)**~~ **Decided 2026-10-08: P06, tiers 1–2 v1,
+     tier 3 v2** (see "Session 8, start" above). **For the owner:** the
+     sheet still says P05 in Feat Prop cell A7. The connector can't edit
+     cells, so please change it to P06. *(Was: "Open (session 8): the new
+     row, "Randomness in drive mode" (priority 2, ID P05 again). v1 or
+     v2? And a new ID for it (P06)?")* The analysis at the time:
      What it touches: the live loop already has a grade (`live.py:679`,
      sin/cos form, ±20% from the keys) and a rolling resistance (`Crr`, a
      constant per vehicle), so random hills, and surfaces as a varying

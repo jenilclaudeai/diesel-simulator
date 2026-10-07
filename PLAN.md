@@ -349,6 +349,14 @@ alternatives, and warnings must not be encoded in colour alone.
 Vibration on phones in `/enjoy` (the owner's Feat Prop P01, ADR-016),
 patterned on firing frequency and load; Android Chrome only.
 
+**Random roads (the owner's P06, tiers 1–2, ADR-016 addendum,
+2026-10-08):** a seeded random route the engine feels (hills, surfaces as
+rolling resistance, headwind, altitude through Phase 7's weather table), a
+2D "road ahead" strip, speed breakers as a slow zone plus a jolt (no
+suspension, stated), and goals on a route. One PRNG in Python and TS, so
+the live fixture holds. Its own proposal comes after Phase 7 step 4, and
+places the build in the order.
+
 ---
 
 ## Deliberately out of scope for v1
@@ -365,6 +373,9 @@ In the owner's priority order (1 is highest):
 3. **P03, free and paid roles** (3) and **P05, grid builds on AWS Lambda**
    (3). Lambda's 15-minute limit means one invocation per cell, which
    ADR-014's pieces already allow.
+4. **P06 tier 3, drawn traffic and scenery** (P06 is priority 2; its tiers
+   1–2, random roads and goals, are v1). Needs a renderer, near the
+   out-of-scope 3D models; needs no server.
 
 Each reopens ADR-003's static hosting, so each needs its own proposal.
 
