@@ -179,38 +179,6 @@ landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
   - *(Was, from the first fix: "−10 °C: soot −36%, NOx −27%; 2000 m at
     full load: soot ×2.9, BSFC +14%".)*
 
-**Phase 7, step 1 of 7 (2026-10-07): the environment presets**
-(#105, branch `feat/env-presets`; ADR-016's order):
-- `dieselsim/environment.py`: five real places, each the air and the fuel
-  sold there, with sources.
-  - Standard (25 °C, sea level, ISO 8178's 10.71 g/kg).
-  - Jaisalmer in May (42 °C, IS 1460 summer diesel, CFPP 18 °C).
-  - Rovaniemi on a January morning (−20 °C, EN 590 arctic class 2, −32 °C).
-  - Leh in June (3500 m = 657.6 hPa ICAO, IS 1460 winter, 6 °C).
-  - Mumbai in July (29 °C, 85% RH).
-  - Two climate details are marked "approx." in the file rather than given
-    false precision.
-- A preset reaches the solver only as spec overrides (ambient p and T,
-  cetane). So the module is in `GRID_HASH_EXCLUDES`: the grid hash is still
-  `f298469f`, and the existing exclusion test proves no cell solve loads it.
-- `runtime_info` carries the five (typed `EnvironmentPreset` in
-  `solver-port.ts`). There's no new port method.
-- crdi15 2500/1.0, against standard air's 225.9 N·m:
-  - Leh 193.0 (−14.6%; AFR 29.4 → 19.2);
-  - Rovaniemi 228.4;
-  - Jaisalmer 222.7 (exhaust +22 K);
-  - Mumbai 225.5.
-- Tests:
-  - `test_environment_presets_reach_the_solve`, 10 parts, each preset
-    solved (FINDING-025's lesson). Baseline passes; 7 of 7 mutants caught,
-    none by error. One first crashed with a KeyError, which counts as
-    broken, so the test now reads the field defensively.
-  - The hash guard catches the exclusion being removed (`3d33b535` vs
-    `f298469f`).
-  - Round trip +1 (the presets arrive from a real Pyodide worker); its
-    mutant is caught.
-- Humidity and CFPP are carried, not yet used: steps 5 and 6.
-
 **Phase 7, step 3 of 7 (2026-10-07): the ECU knows absolute pressure**
 (#107, branch `feat/ecu-absolute`; ADR-016 item 2):
 - `spec.ecu_modern` (true by default; the NA singles and any NA builder
@@ -248,6 +216,38 @@ landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
     is converged now, and the no-absolute-target mutant fails it.
 - The count guards (spec-meta units, round trip) moved 188 → 189 for the
   new field, deliberately.
+
+**Phase 7, step 1 of 7 (2026-10-07): the environment presets**
+(#105, branch `feat/env-presets`; ADR-016's order):
+- `dieselsim/environment.py`: five real places, each the air and the fuel
+  sold there, with sources.
+  - Standard (25 °C, sea level, ISO 8178's 10.71 g/kg).
+  - Jaisalmer in May (42 °C, IS 1460 summer diesel, CFPP 18 °C).
+  - Rovaniemi on a January morning (−20 °C, EN 590 arctic class 2, −32 °C).
+  - Leh in June (3500 m = 657.6 hPa ICAO, IS 1460 winter, 6 °C).
+  - Mumbai in July (29 °C, 85% RH).
+  - Two climate details are marked "approx." in the file rather than given
+    false precision.
+- A preset reaches the solver only as spec overrides (ambient p and T,
+  cetane). So the module is in `GRID_HASH_EXCLUDES`: the grid hash is still
+  `f298469f`, and the existing exclusion test proves no cell solve loads it.
+- `runtime_info` carries the five (typed `EnvironmentPreset` in
+  `solver-port.ts`). There's no new port method.
+- crdi15 2500/1.0, against standard air's 225.9 N·m:
+  - Leh 193.0 (−14.6%; AFR 29.4 → 19.2);
+  - Rovaniemi 228.4;
+  - Jaisalmer 222.7 (exhaust +22 K);
+  - Mumbai 225.5.
+- Tests:
+  - `test_environment_presets_reach_the_solve`, 10 parts, each preset
+    solved (FINDING-025's lesson). Baseline passes; 7 of 7 mutants caught,
+    none by error. One first crashed with a KeyError, which counts as
+    broken, so the test now reads the field defensively.
+  - The hash guard catches the exclusion being removed (`3d33b535` vs
+    `f298469f`).
+  - Round trip +1 (the presets arrive from a real Pyodide worker); its
+    mutant is caught.
+- Humidity and CFPP are carried, not yet used: steps 5 and 6.
 
 **Known defects and follow-ups** (none blocking):
 - The dev preset `single` sags on the tractor's torque converter in
