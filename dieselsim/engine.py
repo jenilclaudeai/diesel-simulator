@@ -452,14 +452,28 @@ class DieselEngine:
         if not warm_start:
             self.turbo.reset()
 
+        boost = self.boost_target(rpm, load_est)
+        # ADR-016 item 2: a modern ECU knows absolute pressure. Off the rating's
+        # air its boost target is the rating's absolute pressure (MAP), capped at
+        # the compressor's map limit, and its smoke limiter closes on the air the
+        # cycle actually traps. At the rating's air neither acts, by construction.
+        modern = self.spec.ecu_modern and not self._calibrating
+        off_rating = p_amb != RATING_P_AMB or T_amb != RATING_T_AMB
+        if modern and off_rating and boost is not None and p_amb != RATING_P_AMB:
+            boost = min(boost * RATING_P_AMB / p_amb, self.spec.turbo.pr_max_ref)
+
+        limiter = modern and off_rating
         cyc = self.cycle.run(
             rpm, fuel_mg, self.turbo, egr_cmd=egr, p_amb=p_amb, T_amb=T_amb,
-            boost_target=self.boost_target(rpm, load_est),
+            boost_target=boost,
             soi_shift=self.soi_schedule(rpm, load_est),
             state0=self._state if warm_start else None,
+            smoke_afr=self.spec.afr_limit if limiter else None,
             **(dict(n_cycles=self.CONVERGED_CYCLES, spool_accel=1.0,
                     check_convergence=True) if conv
                else dict(n_cycles=n_cycles)))
+        if limiter:
+            fuel_mg = cyc.m_fuel * 1e6       # what the limiter let the injectors deliver
         self._state = cyc.state
 
         fr = self.friction.evaluate(cyc.traces.theta, cyc.traces.p[0], rpm,

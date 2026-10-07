@@ -140,6 +140,25 @@ derate or torque-based control? That is Phase 7's decision. The smoke map's
 fixed 101325 Pa (`cycle.fuel_smoke_limit`) is where a barometric correction
 would go.
 
+**Answered (2026-10-07, ADR-016 item 2; Phase 7 step 3, #107).** The
+common-rail engines get an ECU that knows absolute pressure
+(`spec.ecu_modern`); the NA singles stay mechanical, as above. It was
+built differently from the sentence before this one:
+- No barometric factor on `fuel_smoke_limit`. Off the rating's air, the
+  boost target is absolute: the rating's MAP, capped at the compressor's
+  map limit.
+- The smoke limiter is closed on the air each cycle actually traps
+  (`cycle.run(smoke_afr=)`), the way an ECU acts on its MAP sensor.
+- At the rating's air neither acts, by construction. Old and new code
+  agreed bit for bit on all 10 engines, and the grids were re-stamped
+  `f298469f` → `0f1cc94c`.
+- Converged, crdi15 at Leh (3500 m): 210.3 N·m and 33% less soot, against
+  the mechanical pump's 198.8.
+- The small-turbo hatch15 at Leh is held at its AFR limit: −29% torque
+  against sea level, and 41% less soot than the mechanical pump.
+- The light-load gain from PROPOSAL-phase7's measurement 3 (+8.2%) is
+  gone: −1.8%.
+
 ## The grid hash
 
 `engine.py` is hashed, so each edit made all 10 prebuilt grids stale by

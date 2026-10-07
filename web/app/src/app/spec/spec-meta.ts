@@ -18,7 +18,7 @@ export interface Group { key: string; title: string; classes: string[]; primary:
 /** Grouped by physical subsystem, not class name (PLAN.md Phase 6); most influential first. */
 export const GROUPS: readonly Group[] = [
   { key: 'ratings', title: 'Ratings and limits', classes: ['EngineSpec'],
-    primary: ['idle_rpm', 'rated_rpm', 'max_rpm', 'afr_limit', 'torque_limit', 'power_limit', 'p_max_limit', 'T_exh_limit', 'boost_map_rise'] },
+    primary: ['idle_rpm', 'rated_rpm', 'max_rpm', 'afr_limit', 'ecu_modern', 'torque_limit', 'power_limit', 'p_max_limit', 'T_exh_limit', 'boost_map_rise'] },
   { key: 'cylinder', title: 'Cylinder and crank', classes: ['Geometry'],
     primary: ['geom.bore', 'geom.stroke', 'geom.compression_ratio', 'geom.conrod', 'geom.flywheel_inertia'] },
   { key: 'injection', title: 'Injection and fuel', classes: ['Injection'],
@@ -56,7 +56,7 @@ export function groupFields(g: Group): { primary: SchemaRow[]; more: SchemaRow[]
 
 const LABELS: Record<string, string> = {
   idle_rpm: 'Idle speed', rated_rpm: 'Rated speed', max_rpm: 'Maximum speed (governor)',
-  afr_limit: 'Smoke limit (minimum air-fuel ratio)', torque_limit: 'Torque limit', power_limit: 'Power limit',
+  afr_limit: 'Smoke limit (minimum air-fuel ratio)', ecu_modern: 'Modern ECU (knows absolute pressure)', torque_limit: 'Torque limit', power_limit: 'Power limit',
   p_max_limit: 'Peak cylinder pressure limit', T_exh_limit: 'Exhaust temperature limit',
   boost_map_rise: 'Boost map rise', 'geom.bore': 'Bore', 'geom.stroke': 'Stroke',
   'geom.compression_ratio': 'Compression ratio', 'geom.conrod': 'Connecting rod length',

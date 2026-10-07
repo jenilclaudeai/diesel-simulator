@@ -65,8 +65,8 @@ const layout = await page.evaluate(() => ({
   editable: document.querySelectorAll("tr[data-path] input").length,
   cr: Number(document.querySelector('tr[data-path="geom.compression_ratio"] input').value),
 }));
-check("every field, in seven subsystems: 188 rows, 180 of them editable",
-  layout.groups.length === 7 && layout.rows === 188 && layout.editable === 180,
+check("every field, in seven subsystems: 189 rows, 181 of them editable",
+  layout.groups.length === 7 && layout.rows === 189 && layout.editable === 181,
   `${layout.groups.join(" | ")}; ${layout.rows} rows, ${layout.editable} inputs; compression ratio ${layout.cr}`);
 
 // ADR-009: the four live schematics, drawn from the spec

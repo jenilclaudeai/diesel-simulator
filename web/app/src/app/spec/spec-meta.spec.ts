@@ -4,7 +4,7 @@ import { FIELDS, GROUPS, groupFields, groupOf, label, noteRest, readOnly, UNIT_F
 describe('spec editor metadata', () => {
   it('every field belongs to exactly one group', () => {
     const counts = FIELDS.map(f => GROUPS.filter(g => g.classes.includes(f.cls)).length);
-    expect(FIELDS.length).toBe(188);
+    expect(FIELDS.length).toBe(189);   // 188 + ecu_modern (ADR-016)
     expect(counts.every(c => c === 1)).toBe(true);
   });
 
@@ -29,8 +29,8 @@ describe('spec editor metadata', () => {
     }
   });
 
-  it('text, lists and n_cyl are read-only: 180 editable (181 by type in Python, less n_cyl)', () => {
-    expect(FIELDS.filter(f => !readOnly(f)).length).toBe(180);
+  it('text, lists and n_cyl are read-only: 181 editable (182 by type in Python, less n_cyl)', () => {
+    expect(FIELDS.filter(f => !readOnly(f)).length).toBe(181);
     expect(readOnly(FIELDS.find(f => f.path === 'geom.n_cyl')!)).toBe(true);
     expect(readOnly(FIELDS.find(f => f.path === 'geom.firing_order')!)).toBe(true);
   });
@@ -55,7 +55,7 @@ describe('spec editor metadata', () => {
 
   it('every curated field has a unit, or is a ratio or a switch', () => {
     const unitless = new Set(['afr_limit', 'boost_map_rise', 'geom.compression_ratio', 'inj.n_holes', 'inj.pilot_enabled',
-      'inj.cetane_number', 'turbo.enabled', 'turbo.vgt', 'turbo.pr_max_ref', 'oil.viscosity_index']);
+      'inj.cetane_number', 'turbo.enabled', 'turbo.vgt', 'ecu_modern', 'turbo.pr_max_ref', 'oil.viscosity_index']);
     for (const g of GROUPS) for (const p of g.primary) {
       const f = FIELDS.find(x => x.path === p)!;
       if (!unitless.has(p)) expect(unitFor(f), p).not.toBe('');
