@@ -232,6 +232,13 @@ then mark it ready):
     it is native Python's for the plateau preset (108.5 bar, IMEP 12.07);
     with the page ignoring the environment, exactly that check fails
     (140.1 bar shown against native's 108.5).
+  - **Missed, and caught by CI (corrected in place):** I ran only the
+    Cycle and Spec e2e locally. CI's Dyno and Grid e2e failed: each
+    "engine list comes from the solver" check read every `<option>` on the
+    page, and the picker added the five places. Both are now scoped to
+    `select:not(.env)`. Locally, every e2e on a page with the picker
+    passes: dyno 15, grid 9, cycle 9, sweep 6, durability 5, custom 7,
+    spec 12.
 
 **Known defects and follow-ups** (none blocking):
 - The dev preset `single` sags on the tractor's torque converter in
