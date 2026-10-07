@@ -14,6 +14,31 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
   2. It reuses the ID **P05** (the AWS Lambda row is P05 too). Not in
   ADR-016 or PLAN, so nothing is built. Item 6 below asks.
 - Next, by ADR-016's order: **step 4, the Drive correction table**.
+  - **Decided 2026-10-08:** custom engines get the table too, built in the
+    browser, as resumable pieces a server can run later (ADR-016 addendum;
+    the owner plans to move heavy processing server-side in v2).
+- **The randomness row, discussed 2026-10-08** (the owner: "the whole idea
+  of randomness is to keep the user engaged and make it interesting"). My
+  recommendation, not yet decided (item 6):
+  - Measured: `/enjoy` has no road at all; it's a flat, endless road. The
+    only grade control is `[`/`]` on `/drive`
+    (`web/physics/src/live/engine.ts:511`). No wind, nothing random, in
+    either loop.
+  - Tier 1, v1: a **seeded random route** the engine feels: hills (grade
+    by distance), surfaces (`Crr`: tarmac, gravel, sand), headwind, and
+    altitude along the route through step 4's table (a pass where power
+    fades as the air thins). A 2D "road ahead" strip. Speed breakers as a
+    slow zone plus a jolt (phone vibration, P01), with no suspension, and
+    the page says so.
+  - Tier 2, v1: goals on a route (reach the pass without overheating, an
+    economy run, a time to beat), from outputs the loop already has.
+  - Tier 3, v2: drawn traffic and scenery (a renderer, near PLAN's
+    out-of-scope 3D). A lead car to follow, shown as a gap readout, is 1D
+    and could come earlier.
+  - Constraints: one PRNG in both Python and TS, so the fixture holds
+    (ADR-004); sand is rolling resistance only, no grip (ADR-002).
+  - Proposed order: after step 4, with its own short proposal and
+    measurements first.
 - The main checkout on this Mac was on the stale `docs/pages-live`
   (2026-10-05); this session works in a worktree off `main`.
 

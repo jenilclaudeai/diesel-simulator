@@ -1029,3 +1029,15 @@ and the grid-build plan was already deferred until after v1 (2026-10-05).
   or kept to full load.
 - v2's first item is P04: the grid-build plan (`PROPOSAL-grid-build.md`)
   already weighs a build server.
+
+### Addendum (2026-10-08): custom engines get the weather table too
+
+Item 1 left one choice open: build the correction table for custom engines
+in the browser (~7–8 min more on 8 cores, the proposal's estimate, not yet
+measured), or keep them at standard air and say so. **The owner chose:
+the browser builds it** ("Yes, browser should be able to build the weather
+table"), noting that all heavy processing is meant to move to a server
+later (v2's P04/P05). So the table is built from the same kind of
+independent, resumable pieces as ADR-014's grid, through bridge functions:
+the browser's worker pool runs them now, and a server or one Lambda
+invocation per piece can run the same pieces later without rework.
