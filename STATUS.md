@@ -180,7 +180,7 @@ landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
     full load: soot ×2.9, BSFC +14%".)*
 
 **Phase 7, step 1 of 7 (2026-10-07): the environment presets**
-(#105, branch `feat/env-presets`; ADR-016's order):
+(#105, merged 2026-10-07 08:20 UTC; ADR-016's order):
 - `dieselsim/environment.py`: five real places, each the air and the fuel
   sold there, with sources.
   - Standard (25 °C, sea level, ISO 8178's 10.71 g/kg).
@@ -212,8 +212,10 @@ landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
 - Humidity and CFPP are carried, not yet used: steps 5 and 6.
 
 **Phase 7, step 2 of 7 (2026-10-07): the environment on the solving pages**
-(#106, a **draft stacked on #105**: retarget it to `main` once #105 merges,
-then mark it ready):
+(#106: built as a draft stacked on #105, retargeted to `main` after #104 and
+#105 merged at 08:20 UTC, then marked ready. Its merge into `main` differed
+from the CI-tested tree only in #104's four docs files, with 0 code paths;
+`main` was merged in and CI re-ran on the real base):
 - A picker on Dyno, Grid, Cycle, Sweep and Durability shows the chosen
   place's numbers and fuel. It's kept across reloads, like the edits.
 - On the part-load pages it carries FINDING-013's caveat. At Leh the
