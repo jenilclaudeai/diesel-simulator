@@ -17,7 +17,7 @@ landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
 | 4: audio | done; the owner signed it off by ear 2026-09-30 (REVIEW-006) |
 | 5: Enjoy mode | **exit-ready (REVIEW-007): one item left, the owner's re-check on the phone (M-1)** |
 | 6: Expert mode | **done (REVIEW-008); all of #89–#99 on `main` and live** |
-| 7: Environment and projects | **proposed (`reviews/PROPOSAL-phase7.md`), waiting on the owner's six decisions**; FINDING-025 fixed on the way |
+| 7: Environment and projects | **decided (ADR-016, 2026-10-07): building**, in the proposal's order; FINDING-025 and REVIEW-008 m-3 done on the way |
 | 8: Polish and host | Pages hosting done early (#85); the rest not started |
 
 **What Phase 5 has** (all merged):
@@ -79,8 +79,10 @@ landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
 3. **The grid-build plan is deferred by the owner until v1 is complete**
    (2026-10-05). Option A (the ETA) shipped in #88. *(Was: "Decide the
    grid-build plan".)*
-3b. **Decide Phase 7's plan: `reviews/PROPOSAL-phase7.md` (#102, merged
-   2026-10-06), six decisions.** Nothing that depends on them is built
+3b. ~~**Decide Phase 7's plan**~~ **Decided 2026-10-07: all six
+   recommendations accepted (ADR-016);** projects on `/spec`. *(Was:
+   "Decide Phase 7's plan: `reviews/PROPOSAL-phase7.md` (#102, merged
+   2026-10-06), six decisions.")* Nothing that depends on them is built
    until then. *(Was: "Nothing in Phase 7 is built until then." Too broad:
    projects and persistence were decided by ADR-007, so they went ahead.)*
    - **Started, needing no decision: REVIEW-008 m-3,** `/spec` edits kept
@@ -110,8 +112,11 @@ landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
    Existing spreadsheet). Its status columns read `reviews/FEATURES.csv`.
 5. **Listening:** `out/listen/review003m5_*.wav`; is `hd_i6`'s idle tick
    too quiet? (Details in the session 6 section below.)
-6. **Your "Feat Prop" tab (new in the bug sheet, read 2026-10-06): which are
-   v1?** P01 vibrations (priority 3), P02 Google sign-in (2), P03 free/paid
+6. ~~**Your "Feat Prop" tab: which are v1?**~~ **Decided 2026-10-07
+   (ADR-016):** P01 vibrations is v1 (PLAN Phase 8). P02–P05 are v2, after
+   v1, in the owner's order: priority 1 is highest, so P04 comes first.
+   PLAN lists them. *(Was: "Your "Feat Prop" tab (new in the bug sheet,
+   read 2026-10-06): which are v1?")* P01 vibrations (priority 3), P02 Google sign-in (2), P03 free/paid
    roles (3), P04 grid on a backend (1), P05 grid on AWS Lambda (3).
    - P02–P05 each need a server. PLAN puts "backend, accounts, payments,
      telemetry collection" **out of scope for v1** (`PLAN.md`, "Deliberately
@@ -284,11 +289,13 @@ app, web e2e, grid e2e, and custom-engine e2e.
   (secure context). The live site makes it unnecessary.
 
 **First thing next session:** read this section. Check the bug sheet for
-new rows, the owner's re-check of B-01/B-02 (it closes Phase 5), and the
-answers to Phase 7's six decisions (item 3b) and the "Feat Prop" questions
-(item 6). Then write the ADR(s) for those decisions and start Phase 7 in
-the order the proposal gives. The grid-build plan waits until v1 is
-complete. *(Was, in session 7: "Check whether #100 and #101 merged, and that
+new rows and the owner's re-check of B-01/B-02 (it closes Phase 5). Then
+continue Phase 7 in ADR-016's order, from where the "Phase 7" item above
+says it stands. The grid-build plan, and v2, wait until v1 is complete.
+*(Was, later in session 7: "…the answers to Phase 7's six decisions (item
+3b) and the "Feat Prop" questions (item 6). Then write the ADR(s) for those
+decisions and start Phase 7…" — done: ADR-016.)* *(Was, in session 7:
+"Check whether #100 and #101 merged, and that
 `main` matches by content. Check the bug sheet for new rows, the owner's
 re-check of B-01/B-02, and the answers to items 6 and 7. Then write the
 Phase 7 proposal …")* *(Was, at the end of session 6: "Check which of #89–#99
