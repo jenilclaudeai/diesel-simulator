@@ -2083,6 +2083,52 @@ def test_modern_ecu_knows_absolute_pressure():
           + f"{lite_90.cycle.p_intake / 1e3:.0f} kPa at 90 kPa")
 
 
+def test_modern_cap_holds_with_egr_on():
+    """FINDING-026: off the rating's air the modern ECU caps its boost target at
+    the compressor's map limit, and the cap must hold for the target the VGT
+    actually chases. cycle.run raises the target for EGR, so a cap applied
+    before that raise left part load with EGR on chasing a ratio above the
+    limit: the vanes jammed on their minimum, exhaust back-pressure reached
+    5-6 bar, and crdi15 at Leh lost 30% torque at 4057/0.6 (-75% at 0.2).
+    test_modern_ecu_knows_absolute_pressure checks the limit only at full
+    load, where EGR is zero, so it passed. crdi15, Leh, converged (a fast
+    solve's boost hasn't settled at part load, FINDING-013). Parts:
+    - 4057/0.2 and 4057/0.6: the achieved pressure ratio within the limit (+1%);
+    - 4057/0.6: the ratio reaches the limit (-2%), where the absolute target
+      exceeds it (a cap divided twice by the raise passed without this part);
+    - 4057/0.2: the vanes off their minimum;
+    - 4057/0.6: torque within 10% of standard air's."""
+    from dieselsim import bridge
+    from dieselsim.engine import DieselEngine
+    LEH = (65764.0, 293.15)
+
+    def op(load, air=None):
+        s = bridge._resolve_spec({"preset": "crdi15"})
+        if air:
+            s.thermal.ambient_p, s.thermal.ambient_T = air
+        e = DieselEngine(spec=s)
+        return e, e.operating_point(4057.0, load=load, converged=True)
+
+    spec = bridge._resolve_spec({"preset": "crdi15"})
+    pr_max, vgt_min = spec.turbo.pr_max_ref, spec.turbo.vgt_min_frac
+    (_, std6), (_, leh6), (e2, leh2) = op(0.6), op(0.6, LEH), op(0.2, LEH)
+    parts = {
+        "4057/0.2 at Leh: pressure ratio within the limit": leh2.boost_pr <= 1.01 * pr_max,
+        "4057/0.6 at Leh: pressure ratio within the limit": leh6.boost_pr <= 1.01 * pr_max,
+        # the absolute target exceeds the limit here, so the cap binds: an over-cap shows as boost below it
+        "4057/0.6 at Leh: pressure ratio reaches the limit (-2%)": leh6.boost_pr >= 0.98 * pr_max,
+        "4057/0.2 at Leh: vanes off their minimum": e2.turbo.vgt_pos > vgt_min + 0.02,
+        "4057/0.6 at Leh: torque within 10% of standard air's": leh6.torque > 0.9 * std6.torque,
+    }
+    bad = [k for k, ok in parts.items() if not ok]
+    check("modern ECU's cap holds with EGR on (FINDING-026)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ")
+          + f"limit {pr_max:.2f}: PR {leh2.boost_pr:.2f} (0.2), {leh6.boost_pr:.2f} (0.6); "
+          + f"vanes {e2.turbo.vgt_pos:.3f} (min {vgt_min:.2f}); "
+          + f"torque at 0.6 {leh6.torque:.1f} vs {std6.torque:.1f} N.m; "
+          + f"exhaust {leh2.cycle.p_exhaust / 1e5:.2f} / {leh6.cycle.p_exhaust / 1e5:.2f} bar")
+
+
 def test_live_grid_pieces_match_the_shipped_grid():
     """ADR-014 step 3: a browser worker builds a drivable grid from the
     bridge's pieces, and tools/build_live_grids.py now builds with the same
@@ -2251,6 +2297,7 @@ def main():
                test_custom_engine_json,
                test_describe_engine, test_solve_cycle, test_mfb50_counts_combustion_before_tdc, test_durability_steps,
                test_spec_editor_schema, test_spec_ambient_reaches_the_solve, test_environment_presets_reach_the_solve, test_modern_ecu_knows_absolute_pressure,
+               test_modern_cap_holds_with_egr_on,
                test_live_grid_pieces_match_the_shipped_grid,
                test_na_engines_idle_on_a_converter,
                test_flat_tappet_wears_more_than_roller,

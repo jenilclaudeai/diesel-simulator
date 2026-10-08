@@ -324,7 +324,9 @@ Project save/load as JSON (OPEN-C).
 
 **Decided 2026-10-07 (ADR-016, from `reviews/PROPOSAL-phase7.md`):**
 - Weather reaches Drive and Enjoy through a per-engine torque-correction
-  table, measured within 1.15% of converged solves.
+  table, measured within 1.15% of converged solves *(before #107;
+  20.3% on today's code, mostly FINDING-026, so it is re-measured after
+  the fix)*.
 - The ECU knows absolute pressure (MAP boost target, smoke map on absolute
   pressure) on the common-rail engines; the mechanical single stays
   uncompensated.

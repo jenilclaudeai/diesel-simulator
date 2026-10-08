@@ -51,6 +51,10 @@ the turbo makes up most of the loss. A per-cell table fitted from three airs (79
 | fast (9 cycles, as the solving pages) | 3.76% | 32.6% |
 | **converged (200 cycles, as Drive's grids)** | **1.15%** | 28.7% |
 
+*(2026-10-08: true of #101's code, which this measured. On `main` after
+#107, a 12-air table is 20.3% off in torque, mostly from FINDING-026, a
+defect in the modern ECU. Step 4 re-measures it after the fix.)*
+
 **2. On the fast pages, part-load "weather effects" can be convergence
 error.** At 2800 rpm / 70%, the fast solve said a cool 90 kPa hill gives
 **+12.4%** torque. Converged, 90 kPa gives −0.6% (159.6 → 158.6 N·m). The

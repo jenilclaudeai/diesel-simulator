@@ -62,8 +62,12 @@ jobs:
     name: physics under Pyodide
     runs-on: ubuntu-latest
     # 45, not 30: over 20 passing runs (2026-10-05/06) it took 12.2-27.7 min,
-    # and 12 of them 26.4-27.7 min, within 2.3 min of the old limit
-    timeout-minutes: 45
+    # and 12 of them 26.4-27.7 min, within 2.3 min of the old limit.
+    # 60, not 45: over 22 passing runs (2026-10-06/08) it took 14.3-42.5 min,
+    # the last four 37.7-42.5 (FINDING-026's converged test, #110, is the
+    # 42.5); the same docs-only tree took 20.4 and 37.8, so runner speed
+    # varies ~2x
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: tools/pyodide

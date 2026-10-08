@@ -14,6 +14,63 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
   2. It reuses the ID **P05** (the AWS Lambda row is P05 too). Not in
   ADR-016 or PLAN, so nothing is built. Item 6 below asks.
 - Next, by ADR-016's order: **step 4, the Drive correction table**.
+  - **Paused 2026-10-08 on FINDING-026** (`reviews/FINDING-026.md`). Step
+    4's measurement, redone on today's code (312 converged `crdi15`
+    solves): the proposal's 1.15% doesn't hold any more. A 12-air table
+    is 20.3% off in torque, and 15.4% across cells. Read cell by cell, the
+    worst cells are a defect in #107's modern ECU. Off the rating's air
+    the boost target passes the compressor's limit wherever EGR is on, and
+    the VGT jams on its minimum. At Leh, light load: −74% to −76% torque
+    on crdi15, truck127 and v8hd; standard air untouched; live on the
+    solving pages' "High plateau" preset. And at high rpm and full load
+    the shaft rides the solver's numeric clamp on every VGT engine.
+  - **Fix A** (the cap applies to the target the VGT actually chases) is
+    measured in a scratch copy: v8hd 1959/0.2 −76% → −6%, truck127
+    1860/0.2 −67% → −12%, crdi15 4057/0.6 −30% → −2%; identical at
+    standard air in 25 of 25 cells. **B** (a VGT speed limit) is
+    dismissed: the vanes are already wide open where the shaft pins.
+    **For the owner:** C (a turbo-overspeed fuel derate) and D (state the
+    light-load residual, crdi15 4057/0.2 still −37%). My recommendation:
+    A now, then C measured, then D, then step 4 re-measured.
+  - The `hatch15` table run was stopped part-way: it measured the
+    defective code.
+  - **Fix A built** on `fix/finding-026-cap` (PR stacked on #109):
+    - at the rating's air, 21 of 21 replies are identical (the new
+      `tools/ab_rating_air.py`, itself mutation-tested);
+    - grids re-stamped `0f1cc94c` → `172454a3` with `restamp_grids.py`'s
+      proof;
+    - `test_modern_cap_holds_with_egr_on`: baseline 5 of 5, 3 of 3 mutants
+      caught. The first mutant run was void (a symlinked `tests/`) and was
+      redone; see the finding.
+    - Fixtures: 7 of 7 current. Audit: 0 dead, 2 frozen (known), 0 tiny.
+    - Suite (scipy venv, this Mac): 81 passed, 0 failed, 3 known, 16.3
+      min.
+    - **CI on #110: 9 of 9 green**, every job read. Pyodide: 68 passed, 0
+      failed, 2 known, 13 skipped; the new test gives the same numbers
+      there.
+    - **Pyodide took 42.5 min against its 45-minute limit.** Over 22
+      passing runs it took 14.3–42.5 min, the last four 37.7–42.5, and the
+      same docs-only tree 20.4 and 37.8. So the limit is now **60**, in
+      this PR.
+    - #108's "grid in Chrome" job failed twice, both times on Puppeteer's
+      30 s Chrome-launch timeout ("waiting for the WS endpoint URL"),
+      before any check ran. #109 and #110 contain #108's commits and
+      passed that job. **Follow-up:** raise the e2e launch timeout if it
+      recurs.
+- **Waiting on the owner (session 8):**
+  1. **Merge, in order:** #108 (docs) → retarget #109 to `main` → merge
+     #109 (docs, FINDING-026) → retarget #110 → merge #110 (fix A). Then
+     check `main` by content (memory: stack-merge-trap). #108's red check
+     is the Chrome-launch flake above.
+  2. **FINDING-026 C and D:** a turbo-overspeed fuel derate (C)? State the
+     light-load residual (D)? My recommendation: C measured next, then D.
+     Step 4 (the weather table) waits for these.
+  3. **The sheet:** rename Feat Prop A7 from P05 to P06 (the connector
+     can't edit cells).
+  4. **This Mac:** `~/Documents` is unreadable to Claude Code since
+     2026-10-08 (above); work continues in a clone under the job directory.
+  5. Still open from before: Phase 5's phone re-check (REVIEW-007 M-1),
+     the Features tab copy, and the `hd_i6` listening question.
   - **Decided 2026-10-08:** custom engines get the table too, built in the
     browser, as resumable pieces a server can run later (ADR-016 addendum;
     the owner plans to move heavy processing server-side in v2).
@@ -66,7 +123,7 @@ landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
 | 4: audio | done; the owner signed it off by ear 2026-09-30 (REVIEW-006) |
 | 5: Enjoy mode | **exit-ready (REVIEW-007): one item left, the owner's re-check on the phone (M-1)** |
 | 6: Expert mode | **done (REVIEW-008); all of #89–#99 on `main` and live** |
-| 7: Environment and projects | **decided (ADR-016, 2026-10-07): building**, in the proposal's order; FINDING-025 and REVIEW-008 m-3 done on the way |
+| 7: Environment and projects | **decided (ADR-016, 2026-10-07): building**, in the proposal's order; FINDING-025 and REVIEW-008 m-3 done on the way; steps 1–3 merged; **step 4 paused on FINDING-026** (2026-10-08) |
 | 8: Polish and host | Pages hosting done early (#85); the rest not started |
 
 **What Phase 5 has** (all merged):
@@ -249,6 +306,11 @@ landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
 - **Off the rating's air only** (`engine.operating_point`):
   - the boost target becomes the rating's absolute pressure (MAP), capped
     at the compressor's map limit `turbo.pr_max_ref`;
+    **Corrected 2026-10-08 (FINDING-026):** only where EGR is off. The cap
+    comes before `cycle.run`'s EGR raise, so at part load the VGT chases a
+    target above the limit and jams on its minimum: at Leh, light load,
+    torque fell up to 76% (v8hd 1959/0.2). The test checked the limit only
+    at full load, where EGR is zero.
   - the smoke limiter caps each cycle's fuel at the air the previous cycle
     trapped / `afr_limit` (`cycle.run(smoke_afr=)`), so it settles with the
     turbo inside one solve.
@@ -440,8 +502,8 @@ from the CI-tested tree only in #104's four docs files, with 0 code paths;
 
 | suite | result |
 |---|---|
-| `python3 tests/test_physics.py` | 80 passed, 0 failed, 3 known (with scipy; #107's tree, 2026-10-07). *Was (#105):* 79 / 0 / 3; *(#101's final tree):* 78 / 0 / 3; *(#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
-| Pyodide suite | 65 passed, 0 failed, 2 known, 13 skipped (CI on #101's final tree, `b6ea065`). *Was (#99):* 64 / 0 / 2 / 13; *(#88):* 59 / 0 / 2 / 12 |
+| `python3 tests/test_physics.py` | 81 passed, 0 failed, 3 known (with scipy; #110's tree, 2026-10-08). *Was (#107):* 80 / 0 / 3; *(#105):* 79 / 0 / 3; *(#101's final tree):* 78 / 0 / 3; *(#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
+| Pyodide suite | 68 passed, 0 failed, 2 known, 13 skipped (CI on #110, 2026-10-08). *Was (#107):* 67 / 0 / 2 / 13; *(#101's final tree, `b6ea065`):* 65 / 0 / 2 / 13; *(#99):* 64 / 0 / 2 / 13; *(#88):* 59 / 0 / 2 / 12 |
 | `tools/fixtures/gen_fixtures.py --check` | 7 modules current |
 | `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |
 | `web/physics npm test` | 5 + 36 + 10 + 11 = 62 |
