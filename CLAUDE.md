@@ -101,6 +101,11 @@ grep its readers and solve with it changed.
   trapped air / `afr_limit`. There, **`op.fuel_mg` is the fuel injected,
   not the pedal's command**. The calibration always runs at the rating's
   air (FINDING-025), so at standard air nothing changes.
+- Humidity (`thermal.ambient_humidity`, g/kg) corrects **reported** NOx
+  only: `op.nox_ppm` and `op.nox_g_kwh` carry 40 CFR 1065.670's factor;
+  `op.cycle.nox_ppm` is the cycle's own, uncorrected. Nothing else reads
+  humidity (ADR-016 item 3). The helper lives in hashed `engine.py`, not
+  in `environment.py`, which no cell solve may import.
 - Read `h_ring_mid`, not `h_ring_tdc` (always its 12 nm clamp).
 - Use `n_cycles >= 9`; at 6 the drift is 10.8%.
 - `CycleTraces.theta`: per-cylinder arrays are in that cylinder's own crank
