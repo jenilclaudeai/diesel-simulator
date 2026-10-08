@@ -11,7 +11,7 @@ export interface LiveSpec {
   max_rpm: number;
   geom: { displacement: number; flywheel_inertia: number };
   thermal: {
-    ambient_T: number; thermostat_open_T: number; thermostat_full_T: number;
+    ambient_T: number; ambient_p: number; thermostat_open_T: number; thermostat_full_T: number;
     coolant_volume: number; metal_mass: number;
   };
   cooling: {
