@@ -2129,6 +2129,67 @@ def test_modern_cap_holds_with_egr_on():
           + f"exhaust {leh2.cycle.p_exhaust / 1e5:.2f} / {leh6.cycle.p_exhaust / 1e5:.2f} bar")
 
 
+def test_humidity_corrects_reported_nox():
+    """ADR-016 item 3: humidity reaches NOx as 40 CFR 1065.670's correction,
+    normalised to ISO 8178's 10.71 g/kg, not as water vapour in the cycle.
+    crdi15 2000/0.6, fast solves (the correction follows the solve, so the
+    solve itself must not move). Parts:
+    - at the reference humidity, bit-identical to a spec that never set it;
+    - humid air (Mumbai's): NOx falls by exactly the factor, and torque,
+      fuel, boost, exhaust temperature and soot are bit-identical;
+    - dry air gives more NOx;
+    - the factor reproduces the regulation's worked example (700.5 -> 736.2
+      umol/mol at x_H2O 0.022);
+    - the presets carry their humidity to the solve (FINDING-025's lesson):
+      standard air sets exactly the reference, the tropics' NOx through the
+      bridge is lower;
+    - environment.H_REF == engine.H_REF."""
+    import json
+    from dieselsim import bridge, environment
+    from dieselsim import engine as E
+
+    def op(H=None):
+        s = bridge._resolve_spec({"preset": "crdi15"})
+        if H is not None:
+            s.thermal.ambient_humidity = H
+        return E.DieselEngine(spec=s).operating_point(2000.0, load=0.6, n_cycles=9)
+
+    keys = ("torque", "fuel_mg", "fuel_kg_h", "boost_pr", "T_exh", "soot_g_h", "p_max", "nox_ppm", "nox_g_kwh")
+    base, ref = op(), op(E.H_REF)
+    tropics = environment.ENVIRONMENTS["tropics"]
+    H_wet = environment.humidity_ratio(tropics.T_amb, tropics.p_amb, tropics.rh_pct)
+    wet, dry = op(H_wet), op(2.0)
+    k_wet = E.nox_humidity_factor(H_wet)
+    # the worked example: the H whose x_H2O is 0.022, un-normalised
+    n_a = 1000.0 / 28.96559
+    H22 = 0.022 * n_a / (1.0 - 0.022) * 18.01528
+    example = 700.5 * E.nox_humidity_factor(H22) * (9.953 * E.x_h2o(E.H_REF) + 0.832)
+
+    def solve_nox(env_key):
+        o = environment.ENVIRONMENTS[env_key].overrides()
+        r = json.loads(bridge.solve_point(json.dumps({"engine": {"preset": "crdi15", "overrides": o},
+                                                      "rpm": 2000.0, "load": 0.6})))
+        return r["nox_g_kwh"], o
+    nox_std, o_std = solve_nox("standard")
+    nox_trop, o_trop = solve_nox("tropics")
+    parts = {
+        "reference humidity: bit-identical to the default": all(getattr(base, k) == getattr(ref, k) for k in keys),
+        "humid: NOx / the factor, exactly (1e-12)": abs(wet.nox_ppm * k_wet / base.nox_ppm - 1.0) < 1e-12
+        and abs(wet.nox_g_kwh * k_wet / base.nox_g_kwh - 1.0) < 1e-12 and k_wet > 1.0,
+        "humid: nothing else moves": all(getattr(wet, k) == getattr(base, k) for k in keys[:7]),
+        "dry air: more NOx": dry.nox_g_kwh > base.nox_g_kwh,
+        "40 CFR 1065.670's worked example: 736.2": round(example, 1) == 736.2,
+        "standard air sets exactly the reference": o_std.get("thermal.ambient_humidity") == E.H_REF,
+        "the tropics' humidity reaches the bridge's solve": "thermal.ambient_humidity" in o_trop and nox_trop < nox_std,
+        "environment.H_REF == engine.H_REF": environment.H_REF == E.H_REF,
+    }
+    bad = [k for k, ok in parts.items() if not ok]
+    check("humidity corrects reported NOx (ADR-016 item 3)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ")
+          + f"crdi15 2000/0.6 NOx {base.nox_g_kwh:.3f} g/kWh at {E.H_REF} g/kg; {wet.nox_g_kwh:.3f} at "
+          + f"{H_wet:.2f} (x{1 / k_wet:.4f}); {dry.nox_g_kwh:.3f} at 2.0; example {example:.1f}")
+
+
 def test_live_grid_pieces_match_the_shipped_grid():
     """ADR-014 step 3: a browser worker builds a drivable grid from the
     bridge's pieces, and tools/build_live_grids.py now builds with the same
@@ -2297,7 +2358,7 @@ def main():
                test_custom_engine_json,
                test_describe_engine, test_solve_cycle, test_mfb50_counts_combustion_before_tdc, test_durability_steps,
                test_spec_editor_schema, test_spec_ambient_reaches_the_solve, test_environment_presets_reach_the_solve, test_modern_ecu_knows_absolute_pressure,
-               test_modern_cap_holds_with_egr_on,
+               test_modern_cap_holds_with_egr_on, test_humidity_corrects_reported_nox,
                test_live_grid_pieces_match_the_shipped_grid,
                test_na_engines_idle_on_a_converter,
                test_flat_tappet_wears_more_than_roller,

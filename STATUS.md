@@ -103,7 +103,32 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
        table, re-measured on the fixed code (the table measurement first,
        as before building).")*
      - #112's CI on its final commit: 9 of 9. **Pyodide took 46.0 min**:
-       the old 45-minute limit would have cancelled it.
+       the old 45-minute limit would have cancelled it. #113's CI: 9 of 9.
+     - **While step 4 waits on the shape: step 5, humidity, built**
+       (`feat/humidity-nox`, a PR into `main` containing #112 and #113).
+       It is ADR-016's next decided step and doesn't depend on step 4.
+       - `thermal.ambient_humidity` (g/kg, default 10.71) corrects
+         reported NOx only. The form is 40 CFR 1065.670's, normalised to
+         ISO 8178's 10.71 g/kg: humidity-only, so intake temperature isn't
+         counted twice (ADR-016 addendum; ISO 8178 itself is paywalled).
+       - It reproduces the regulation's worked example (700.5 → 736.2).
+       - The presets set it: Mumbai NOx ×0.858, Leh ×1.047, Jaisalmer
+         ×1.046, Rovaniemi ×1.187 (very dry: an extrapolation). Standard
+         air sets exactly 10.71.
+       - The picker and `/spec` say it's a correction on NOx only.
+       - At the rating's air nothing moves: 21 of 21 replies identical.
+         Grids re-stamped `172454a3` → `70fdc89e`.
+       - Tests:
+         - `test_humidity_corrects_reported_nox`: 8 parts, 6 of 6
+           mutants caught;
+         - units 114 (+2; 5 of 5 mutants);
+         - e2e cycle 11 and spec 14 (+1 each; each mutant caught);
+         - dyno 15, sweep 6, durability 5;
+         - suite 82 / 0 / 3; solver: cache 20, scheduler 12, round trip
+           30;
+         - fixtures 7 of 7; audit 0 dead, 2 frozen (known), 0 tiny.
+       - Field-count guards moved deliberately: 189 → 190 fields, 181 →
+         182 editable.
   3. **The sheet:** rename Feat Prop A7 from P05 to P06 (the connector
      can't edit cells).
   4. **This Mac:** `~/Documents` is unreadable to Claude Code since
@@ -541,14 +566,14 @@ from the CI-tested tree only in #104's four docs files, with 0 code paths;
 
 | suite | result |
 |---|---|
-| `python3 tests/test_physics.py` | 81 passed, 0 failed, 3 known (with scipy; #110's tree, 2026-10-08). *Was (#107):* 80 / 0 / 3; *(#105):* 79 / 0 / 3; *(#101's final tree):* 78 / 0 / 3; *(#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
+| `python3 tests/test_physics.py` | 82 passed, 0 failed, 3 known (with scipy; humidity's tree, 2026-10-08). *Was (#110):* 81 / 0 / 3; *(#107):* 80 / 0 / 3; *(#105):* 79 / 0 / 3; *(#101's final tree):* 78 / 0 / 3; *(#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
 | Pyodide suite | 68 passed, 0 failed, 2 known, 13 skipped (CI on #110, 2026-10-08). *Was (#107):* 67 / 0 / 2 / 13; *(#101's final tree, `b6ea065`):* 65 / 0 / 2 / 13; *(#99):* 64 / 0 / 2 / 13; *(#88):* 59 / 0 / 2 / 12 |
 | `tools/fixtures/gen_fixtures.py --check` | 7 modules current |
 | `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |
 | `web/physics npm test` | 5 + 36 + 10 + 11 = 62 |
 | `web/solver npm test` | cache 20, live-grid scheduler 12, round trip 30 (#105; *was* 29) |
-| `web/app npm test` | 112 unit tests (pass without `physics-version.ts`; D's tree, 2026-10-08). *Was:* 109 (#106), 104 (#103), 101. `check:labels` 6 of 10 templates |
-| e2e (`web/app`) | dyno 15, grid 9, drive 7, sound 6, enjoy 21, custom 7, cycle 10 (*was* 9, +FINDING-026's thin-air note; 8, +the environment check, #106), spec 13 (*was* 12, +the thin-air notes; 11, +the reload check, #103), sweep 6, durability 5 |
+| `web/app npm test` | 114 unit tests (pass without `physics-version.ts`; humidity's tree, 2026-10-08). *Was:* 112 (D's tree), 109 (#106), 104 (#103), 101. `check:labels` 6 of 10 templates |
+| e2e (`web/app`) | dyno 15, grid 9, drive 7, sound 6, enjoy 21, custom 7, cycle 11 (*was* 10, +the humidity note; 9, +FINDING-026's thin-air note; 8, +the environment check, #106), spec 14 (*was* 13, +the humidity field; 12, +the thin-air notes; 11, +the reload check, #103), sweep 6, durability 5 |
 
 CI runs all of them except the manual `web/solver npm run test:live-real`.
 Its jobs: physics on Python 3.10 and 3.12, Pyodide, fixtures, solver, web

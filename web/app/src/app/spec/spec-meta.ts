@@ -9,6 +9,7 @@
  * curated path exists.
  */
 import { ALTITUDE_NOTE } from '../weather/altitude';
+import { HUMIDITY_NOTE } from '../weather/humidity';
 import SCHEMA from './spec-schema.json';
 
 export interface SchemaRow { path: string; cls: string; type: 'number' | 'int' | 'bool' | 'string' | 'list'; note: string }
@@ -35,7 +36,7 @@ export const GROUPS: readonly Group[] = [
     primary: ['oil.hths', 'oil.viscosity_index', 'trib.ring_tangential_load', 'trib.skirt_clearance_new',
       'trib.main_clearance_new', 'trib.rod_clearance_new'] },
   { key: 'thermal', title: 'Thermal and cooling', classes: ['Thermal', 'Cooling'],
-    primary: ['thermal.ambient_T', 'thermal.ambient_p', 'thermal.coolant_T', 'thermal.thermostat_open_T',
+    primary: ['thermal.ambient_T', 'thermal.ambient_p', 'thermal.ambient_humidity', 'thermal.coolant_T', 'thermal.thermostat_open_T',
       'cooling.T_warn', 'cooling.T_derate'] },
 ];
 
@@ -75,7 +76,8 @@ const LABELS: Record<string, string> = {
   'air.egr_max_fraction': 'Maximum EGR fraction', 'oil.hths': 'Oil HTHS viscosity', 'oil.viscosity_index': 'Oil viscosity index',
   'trib.ring_tangential_load': 'Ring tangential load', 'trib.skirt_clearance_new': 'Piston skirt clearance (new)',
   'trib.main_clearance_new': 'Main bearing clearance (new)', 'trib.rod_clearance_new': 'Rod bearing clearance (new)',
-  'thermal.ambient_T': 'Ambient temperature', 'thermal.ambient_p': 'Ambient pressure', 'thermal.coolant_T': 'Coolant temperature',
+  'thermal.ambient_T': 'Ambient temperature', 'thermal.ambient_p': 'Ambient pressure', 'thermal.ambient_humidity': 'Ambient humidity',
+  'thermal.coolant_T': 'Coolant temperature',
   'thermal.thermostat_open_T': 'Thermostat opens at', 'cooling.T_warn': 'Coolant warning at', 'cooling.T_derate': 'Derate starts at',
 };
 
@@ -88,7 +90,7 @@ export function label(path: string): string {
 }
 
 /** Units config.py's comments start with, longest first so "m^2" wins over "m". */
-const UNITS = ['kg m^2', 'J/kg/K', 'kg/s', 'N/m', 'W/K', 'N.m', 'Pa.s', 'm^3', 'm^2', 'mm', 'rpm', 'deg', 'Pa', 'bar', 'kg', 'N', 'K', 'W', 's', 'm', '%'];
+const UNITS = ['kg m^2', 'g/kg', 'J/kg/K', 'kg/s', 'N/m', 'W/K', 'N.m', 'Pa.s', 'm^3', 'm^2', 'mm', 'rpm', 'deg', 'Pa', 'bar', 'kg', 'N', 'K', 'W', 's', 'm', '%'];
 /** How a unit is shown. */
 const SHOW: Record<string, string> = { 'N.m': 'N·m', 'Pa.s': 'Pa·s', deg: '°' };
 
@@ -119,6 +121,7 @@ export const NOTE_EXTRA: Record<string, string> = {
   'thermal.ambient_p': 'Below 90 kPa (about 1000 m): ' + ALTITUDE_NOTE,
   ecu_modern: 'Off sea level it holds sea-level boost up to the compressor\'s limit, with no turbo-overspeed ' +
     'protection modelled (FINDING-026).',
+  'thermal.ambient_humidity': HUMIDITY_NOTE,
 };
 
 /** What's shown beside a field: its note without the unit, then any curated addition. */

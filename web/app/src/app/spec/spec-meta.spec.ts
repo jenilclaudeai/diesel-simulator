@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { ALTITUDE_NOTE } from '../weather/altitude';
+import { HUMIDITY_NOTE } from '../weather/humidity';
 import { FIELDS, GROUPS, groupFields, groupOf, label, NOTE_EXTRA, noteFor, noteRest, readOnly, UNIT_FOR, unitFor, unitOf } from './spec-meta';
 
 describe('spec editor metadata', () => {
   it('every field belongs to exactly one group', () => {
     const counts = FIELDS.map(f => GROUPS.filter(g => g.classes.includes(f.cls)).length);
-    expect(FIELDS.length).toBe(189);   // 188 + ecu_modern (ADR-016)
+    expect(FIELDS.length).toBe(190);   // 188 + ecu_modern + ambient_humidity (ADR-016 items 2, 3)
     expect(counts.every(c => c === 1)).toBe(true);
   });
 
@@ -30,8 +31,8 @@ describe('spec editor metadata', () => {
     }
   });
 
-  it('text, lists and n_cyl are read-only: 181 editable (182 by type in Python, less n_cyl)', () => {
-    expect(FIELDS.filter(f => !readOnly(f)).length).toBe(181);
+  it('text, lists and n_cyl are read-only: 182 editable (183 by type in Python, less n_cyl)', () => {
+    expect(FIELDS.filter(f => !readOnly(f)).length).toBe(182);
     expect(readOnly(FIELDS.find(f => f.path === 'geom.n_cyl')!)).toBe(true);
     expect(readOnly(FIELDS.find(f => f.path === 'geom.firing_order')!)).toBe(true);
   });
@@ -73,6 +74,11 @@ describe('spec editor metadata', () => {
     expect(ecu.startsWith(noteRest(field('ecu_modern').note) + ' ')).toBe(true);
     expect(ecu).toContain('no turbo-overspeed');
     expect(ecu).toContain('FINDING-026');
+    // ADR-016 item 3: the humidity field, its unit and that it corrects NOx only
+    const hum = field('thermal.ambient_humidity');
+    expect(unitFor(hum)).toBe('g/kg');
+    expect(noteFor(hum)).toContain(HUMIDITY_NOTE);
+    expect(label('thermal.ambient_humidity')).toBe('Ambient humidity');
     // every other field: its own note, unchanged
     for (const f of FIELDS) if (!(f.path in NOTE_EXTRA)) expect(noteFor(f), f.path).toBe(noteRest(f.note));
   });
