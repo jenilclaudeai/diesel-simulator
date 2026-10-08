@@ -172,6 +172,15 @@ TAIL_CYCLES = 10       # cycles judged by _tail_converged
 TAIL_TOL = 1e-3        # relative spread allowed over them
 
 
+def egr_boost_raise(spec, egr_cmd):
+    """The factor run() raises the VGT's boost target by, so that EGR has
+    exhaust pressure to flow on. One function for run() and for the modern
+    ECU's cap in engine.operating_point: a cap on the target must hold for
+    the target the vanes actually chase, after this raise (FINDING-026)."""
+    egr_target = max(0.0, min(1.0, egr_cmd)) * spec.air.egr_max_fraction
+    return 1.0 + 0.42 * (egr_target / max(spec.air.egr_max_fraction, 1e-6))
+
+
 def _tail_converged(means, n=TAIL_CYCLES, tol=TAIL_TOL):
     """True when gross work and boost each vary by less than tol (relative)
     over the last n cycles. Meaningful only for a real-time solve: in an
@@ -320,9 +329,7 @@ class CycleSolver:
                  * A_egr_max if egr_target > 0 else 0.0)
         bt_eff = None
         if boost_target:
-            bt_eff = boost_target * (1.0 + 0.42 * (egr_target /
-                                                   max(spec.air.egr_max_fraction,
-                                                       1e-6)))
+            bt_eff = boost_target * egr_boost_raise(spec, egr_cmd)
 
         Ai, Ae, lift_i, lift_e = self.valve_areas()
         A_bb = self.wear.blowby_area()

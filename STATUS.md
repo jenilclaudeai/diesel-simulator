@@ -34,6 +34,43 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
     A now, then C measured, then D, then step 4 re-measured.
   - The `hatch15` table run was stopped part-way: it measured the
     defective code.
+  - **Fix A built** on `fix/finding-026-cap` (PR stacked on #109):
+    - at the rating's air, 21 of 21 replies are identical (the new
+      `tools/ab_rating_air.py`, itself mutation-tested);
+    - grids re-stamped `0f1cc94c` → `172454a3` with `restamp_grids.py`'s
+      proof;
+    - `test_modern_cap_holds_with_egr_on`: baseline 5 of 5, 3 of 3 mutants
+      caught. The first mutant run was void (a symlinked `tests/`) and was
+      redone; see the finding.
+    - Fixtures: 7 of 7 current. Audit: 0 dead, 2 frozen (known), 0 tiny.
+    - Suite (scipy venv, this Mac): 81 passed, 0 failed, 3 known, 16.3
+      min.
+    - **CI on #110: 9 of 9 green**, every job read. Pyodide: 68 passed, 0
+      failed, 2 known, 13 skipped; the new test gives the same numbers
+      there.
+    - **Pyodide took 42.5 min against its 45-minute limit.** Over 22
+      passing runs it took 14.3–42.5 min, the last four 37.7–42.5, and the
+      same docs-only tree 20.4 and 37.8. So the limit is now **60**, in
+      this PR.
+    - #108's "grid in Chrome" job failed twice, both times on Puppeteer's
+      30 s Chrome-launch timeout ("waiting for the WS endpoint URL"),
+      before any check ran. #109 and #110 contain #108's commits and
+      passed that job. **Follow-up:** raise the e2e launch timeout if it
+      recurs.
+- **Waiting on the owner (session 8):**
+  1. **Merge, in order:** #108 (docs) → retarget #109 to `main` → merge
+     #109 (docs, FINDING-026) → retarget #110 → merge #110 (fix A). Then
+     check `main` by content (memory: stack-merge-trap). #108's red check
+     is the Chrome-launch flake above.
+  2. **FINDING-026 C and D:** a turbo-overspeed fuel derate (C)? State the
+     light-load residual (D)? My recommendation: C measured next, then D.
+     Step 4 (the weather table) waits for these.
+  3. **The sheet:** rename Feat Prop A7 from P05 to P06 (the connector
+     can't edit cells).
+  4. **This Mac:** `~/Documents` is unreadable to Claude Code since
+     2026-10-08 (above); work continues in a clone under the job directory.
+  5. Still open from before: Phase 5's phone re-check (REVIEW-007 M-1),
+     the Features tab copy, and the `hd_i6` listening question.
   - **Decided 2026-10-08:** custom engines get the table too, built in the
     browser, as resumable pieces a server can run later (ADR-016 addendum;
     the owner plans to move heavy processing server-side in v2).
@@ -465,8 +502,8 @@ from the CI-tested tree only in #104's four docs files, with 0 code paths;
 
 | suite | result |
 |---|---|
-| `python3 tests/test_physics.py` | 80 passed, 0 failed, 3 known (with scipy; #107's tree, 2026-10-07). *Was (#105):* 79 / 0 / 3; *(#101's final tree):* 78 / 0 / 3; *(#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
-| Pyodide suite | 65 passed, 0 failed, 2 known, 13 skipped (CI on #101's final tree, `b6ea065`). *Was (#99):* 64 / 0 / 2 / 13; *(#88):* 59 / 0 / 2 / 12 |
+| `python3 tests/test_physics.py` | 81 passed, 0 failed, 3 known (with scipy; #110's tree, 2026-10-08). *Was (#107):* 80 / 0 / 3; *(#105):* 79 / 0 / 3; *(#101's final tree):* 78 / 0 / 3; *(#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
+| Pyodide suite | 68 passed, 0 failed, 2 known, 13 skipped (CI on #110, 2026-10-08). *Was (#107):* 67 / 0 / 2 / 13; *(#101's final tree, `b6ea065`):* 65 / 0 / 2 / 13; *(#99):* 64 / 0 / 2 / 13; *(#88):* 59 / 0 / 2 / 12 |
 | `tools/fixtures/gen_fixtures.py --check` | 7 modules current |
 | `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |
 | `web/physics npm test` | 5 + 36 + 10 + 11 = 62 |
