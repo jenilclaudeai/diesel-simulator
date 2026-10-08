@@ -2334,6 +2334,25 @@ def test_humidity_corrects_reported_nox():
           + f"{H_wet:.2f} (x{1 / k_wet:.4f}); {dry.nox_g_kwh:.3f} at 2.0; example {example:.1f}")
 
 
+def test_environments_json_is_current():
+    """Phase 7 step 4: Drive and Enjoy read the five places from a generated
+    file (they must not fetch Pyodide); it must equal environment.py's.
+    SKIPs where tools/ is absent (the Pyodide harness)."""
+    import importlib.util
+    tool = os.path.join(os.path.dirname(__file__), "..", "tools", "environments_json.py")
+    if not os.path.exists(tool):
+        RESULTS.append(("SKIP", "the places file for Drive and Enjoy is current", None, None,
+                        "tools/ not present (Pyodide harness)"))
+        return
+    spec_ = importlib.util.spec_from_file_location("environments_json", tool)
+    mod = importlib.util.module_from_spec(spec_)
+    spec_.loader.exec_module(mod)
+    with open(mod.OUT) as fh:
+        current = fh.read() == mod.content()
+    check("the places file for Drive and Enjoy is current (Phase 7 step 4)", 1.0 if current else 0.0, 1.0, 0.0,
+          "tools/environments_json.py; " + ("current" if current else "STALE: run python3 tools/environments_json.py"))
+
+
 def test_live_grid_pieces_match_the_shipped_grid():
     """ADR-014 step 3: a browser worker builds a drivable grid from the
     bridge's pieces, and tools/build_live_grids.py now builds with the same
@@ -2502,7 +2521,7 @@ def main():
                test_custom_engine_json,
                test_describe_engine, test_solve_cycle, test_mfb50_counts_combustion_before_tdc, test_durability_steps,
                test_spec_editor_schema, test_spec_ambient_reaches_the_solve, test_environment_presets_reach_the_solve, test_modern_ecu_knows_absolute_pressure,
-               test_modern_cap_holds_with_egr_on, test_humidity_corrects_reported_nox,
+               test_modern_cap_holds_with_egr_on, test_humidity_corrects_reported_nox, test_environments_json_is_current,
                test_live_grid_pieces_match_the_shipped_grid,
                test_na_engines_idle_on_a_converter,
                test_flat_tappet_wears_more_than_roller,
