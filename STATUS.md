@@ -1,7 +1,56 @@
 # Status
 
-**Updated:** 2026-10-06, end of session 7. Read this section first; the
-dated sections below it are history.
+**Updated:** 2026-10-07, start of session 8. Read this section first; the
+dated sections below it are history. *(Was: "2026-10-06, end of session
+7".)*
+
+**Session 8, start (2026-10-07):** `main` is `ea88e5f` (#107 merged 09:27
+UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
+- The bug sheet, read through the Drive connector: **no new bugs** (B-05
+  onward are empty), and no note yet of the B-01/B-02 re-check, so Phase 5
+  is still open on REVIEW-007 M-1.
+- **New since ADR-016: a sixth "Feat Prop" row**, "Randomness in drive
+  mode": "terrain, desert, speed breaker, traffic with visuals", priority
+  2. It reuses the ID **P05** (the AWS Lambda row is P05 too). Not in
+  ADR-016 or PLAN, so nothing is built. Item 6 below asks.
+- Next, by ADR-016's order: **step 4, the Drive correction table**.
+  - **Decided 2026-10-08:** custom engines get the table too, built in the
+    browser, as resumable pieces a server can run later (ADR-016 addendum;
+    the owner plans to move heavy processing server-side in v2).
+- **The randomness row, discussed 2026-10-08** (the owner: "the whole idea
+  of randomness is to keep the user engaged and make it interesting").
+  **Decided 2026-10-08 ("Agreed, tiers 1–2 in v1, rename it P06"; ADR-016
+  addendum, PLAN Phase 8):** tiers 1–2 are v1, tier 3 is v2, the ID is
+  P06. *(Was: "My recommendation, not yet decided (item 6):")* The
+  recommendation as accepted:
+  - Measured: `/enjoy` has no road at all; it's a flat, endless road. The
+    only grade control is `[`/`]` on `/drive`
+    (`web/physics/src/live/engine.ts:511`). No wind, nothing random, in
+    either loop.
+  - Tier 1, v1: a **seeded random route** the engine feels: hills (grade
+    by distance), surfaces (`Crr`: tarmac, gravel, sand), headwind, and
+    altitude along the route through step 4's table (a pass where power
+    fades as the air thins). A 2D "road ahead" strip. Speed breakers as a
+    slow zone plus a jolt (phone vibration, P01), with no suspension, and
+    the page says so.
+  - Tier 2, v1: goals on a route (reach the pass without overheating, an
+    economy run, a time to beat), from outputs the loop already has.
+  - Tier 3, v2: drawn traffic and scenery (a renderer, near PLAN's
+    out-of-scope 3D). A lead car to follow, shown as a gap readout, is 1D
+    and could come earlier.
+  - Constraints: one PRNG in both Python and TS, so the fixture holds
+    (ADR-004); sand is rolling resistance only, no grip (ADR-002).
+  - Proposed order: after step 4, with its own short proposal and
+    measurements first.
+- The main checkout on this Mac was on the stale `docs/pages-live`
+  (2026-10-05); this session works in a worktree off `main`.
+- **2026-10-08: `~/Documents` became unreadable** to this session ("Operation
+  not permitted" for `ls`, the shell and the file reader alike, while
+  `~/.claude` still works): most likely macOS's Files and Folders
+  permission for Documents. Nothing was lost (all pushed). Work continues in
+  a fresh clone under the job's own directory. To restore it, check System
+  Settings → Privacy & Security → Files and Folders (or Full Disk Access)
+  for the terminal app running Claude Code.
 
 ## Start here
 
@@ -131,6 +180,19 @@ landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
      to 1.
    - Nothing is started on any of them. (This is not item 4's Features tab;
      that one is still to copy.)
+   - ~~**Open (session 8)**~~ **Decided 2026-10-08: P06, tiers 1–2 v1,
+     tier 3 v2** (see "Session 8, start" above). **For the owner:** the
+     sheet still says P05 in Feat Prop cell A7. The connector can't edit
+     cells, so please change it to P06. *(Was: "Open (session 8): the new
+     row, "Randomness in drive mode" (priority 2, ID P05 again). v1 or
+     v2? And a new ID for it (P06)?")* The analysis at the time:
+     What it touches: the live loop already has a grade (`live.py:679`,
+     sin/cos form, ±20% from the keys) and a rolling resistance (`Crr`, a
+     constant per vehicle), so random hills, and surfaces as a varying
+     `Crr`, are within v1's physics.
+     "Speed breakers" are a bump (suspension, out of scope) unless
+     modelled as a short grade and a speed limit. "Traffic with visuals"
+     needs a scene, near PLAN's out-of-scope "3D models".
 7. ~~**Merge #101 (FINDING-025)**~~ Done 2026-10-06 17:41 UTC. Its open
    question is now decision 2 of the Phase 7 proposal (item 3b).
    The modelled ECU is now **uncompensated**: the pedal gives fuel, so at
