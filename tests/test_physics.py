@@ -1184,7 +1184,7 @@ def _toy_adr011_grid():
                 k = spec.geom.displacement / (4.0 * np.pi)
                 prow.append(dict(torque=ind - fr["fmep"] * k, fmep=fr["fmep"], fuel_mg=30.0 * l, p_rail=1.2e8,
                                  boost=1.0 + 1.2 * l, turbo_rpm=9e4, fuel_kg_h=0.3 + 12.0 * l, afr=25.0,
-                                 q_wall=0.2))
+                                 q_wall=0.2, T_exh=650.0))
                 trow.append(tr)
             perf.append(prow)
             traces.append(trow)
@@ -1230,6 +1230,150 @@ def test_adr011_live_friction():
           f"own-cell diff {own:.1e}; cold coolant only x{walls:.2f}, cold oil on top x{oil_extra:.2f}; "
           f"oil +{warmed:.1f} K in 30 s; "
           f"cold endpoint diff {cold_ok:.1e}")
+
+
+def _toy_weather(g, slope):
+    """A weather table for the toy grid whose values are linear in the air,
+    with a pressure slope that differs by cell (so blending the wrong cells shows):
+    value = cell's own (standard) + (1 + i + 2 j) slope_p[k] (p - 101325) / 1000
+            + slope_T[k] (T - 298),
+    so the live loop's blend must reproduce it exactly anywhere in range."""
+    from dieselsim import bridge
+    k_t = g.spec.geom.displacement / (4.0 * 3.141592653589793)
+    keys = list(bridge.WEATHER_KEYS)
+    vals = []
+    for i in range(len(g.rpms)):
+        row = []
+        for j in range(len(g.loads)):
+            c = dict(g.perf[i][j], torque_ind=g.perf[i][j]["torque"] + g.perf[i][j]["fmep"] * k_t)
+            row.append([[[c[k] + (1 + i + 2 * j) * slope[k][0] * (p - 101325.0) / 1000.0
+                          + slope[k][1] * (T - 298.0) for k in keys]
+                         for T in bridge.WEATHER_T_NODES] for p in bridge.WEATHER_P_NODES])
+        vals.append(row)
+    return {"p_nodes": list(bridge.WEATHER_P_NODES), "T_nodes": list(bridge.WEATHER_T_NODES), "keys": keys,
+            "range": {k: list(v) for k, v in bridge.WEATHER_RANGE.items()}, "values": vals}
+
+
+def test_weather_table_in_the_live_loop():
+    """Phase 7 step 4 (ADR-016 item 1, shape A3): the live loop adds the
+    weather table's difference from the standard air. On the toy grid, with a
+    table linear in the air (no files, so it runs under Pyodide too). Parts:
+    - delta() is exactly zero at the standard air, at any cell;
+    - it reproduces a linear table exactly in range (1e-9), between nodes and
+      past them (extrapolation), and clamps outside the table's range;
+    - a 10 s drive at the standard air with the table is bit-identical to
+      one without it;
+    - at 72 kPa / 298 K, _perf moves indicated and brake torque, fuel, boost,
+      turbo speed, AFR and exhaust temperature by exactly the table's
+      difference;
+    - weather_state() says 'standard', 'table' or 'no table'."""
+    import copy
+    from dieselsim import live as L
+    slope = {"torque_ind": (0.9, -0.2), "fuel_kg_h": (0.01, 0.002), "boost": (-0.012, 0.001),
+             "turbo_rpm": (-300.0, 50.0), "afr": (0.3, -0.05), "T_exh": (-2.0, 1.1)}
+    g = _toy_adr011_grid()
+    wt = L.WeatherTable(g.rpms, g.loads, _toy_weather(g, slope))
+    zero = all(v == 0.0 for r in g.rpms for ld in g.loads for v in wt.delta(r, ld, 101325.0, 298.0).values())
+    rpm, load = 1234.0, 0.37
+    # the cell factor (1 + i + 2 j), blended bilinearly as the grid blends: 1 + fr + 2 fl
+    fr = (rpm - g.rpms[0]) / (g.rpms[1] - g.rpms[0])
+    fl = (load - g.loads[0]) / (g.loads[1] - g.loads[0])
+    cf = 1.0 + fr + 2.0 * fl
+
+    def want_d(k, p, T):
+        return cf * slope[k][0] * (p - 101325.0) / 1000.0 + slope[k][1] * (T - 298.0)
+    worst = 0.0
+    for (p, T) in ((65764.1, 293.15), (90000.0, 263.0), (52000.0, 278.15), (101325.0, 318.15), (58000.0, 253.15)):
+        d = wt.delta(rpm, load, p, T)
+        for k in slope:
+            worst = max(worst, abs(d[k] - want_d(k, p, T)))
+    lo = wt.delta(rpm, load, 40000.0, 230.0)
+    clamped = abs(lo["torque_ind"] - want_d("torque_ind", 50000.0, 243.15)) < 1e-9
+
+    def drive(grid):
+        e = L.LiveEngine(grid, "crdi15", trans="tc")
+        trace = []
+        for n in range(600):
+            e.throttle = 0.7 if n < 400 else 0.1
+            e.step(1 / 60)
+            trace.append((e.rpm, e.torque, e.fuel_kg_h, e.boost, e.turbo_rpm, e.dl.v))
+        return trace
+    g_plain, g_wx = _toy_adr011_grid(), _toy_adr011_grid()
+    g_wx.weather = L.WeatherTable(g_wx.rpms, g_wx.loads, _toy_weather(g_wx, slope))
+    same = drive(g_plain) == drive(g_wx)
+    # off the standard air: _perf moves by the table's difference
+    states = {}
+    g_hi = _toy_adr011_grid()
+    g_hi.weather = L.WeatherTable(g_hi.rpms, g_hi.loads, _toy_weather(g_hi, slope))
+    g_no = _toy_adr011_grid()
+    for grid in (g_hi, g_no):
+        grid.spec = copy.deepcopy(grid.spec)
+        grid.spec.thermal.ambient_p = 72000.0
+    e_hi, e_no, e_std = (L.LiveEngine(x, "crdi15", trans="tc") for x in (g_hi, g_no, _toy_adr011_grid()))
+    for e in (e_hi, e_no):
+        e.T_coolant, e.T_fric = 361.0, 7.5
+    a, b = e_hi._perf(1500.0, 0.6), e_no._perf(1500.0, 0.6)
+    cf6 = 1.0 + (1500.0 - g.rpms[0]) / (g.rpms[1] - g.rpms[0]) + 2.0 * 0.6
+    want = {k: cf6 * sp * (72000.0 - 101325.0) / 1000.0 for k, (sp, _) in slope.items()}
+    moved = all(abs((a[k] - b[k]) - want[k]) < 1e-9 for k in slope) \
+        and abs((a["torque"] - b["torque"]) - want["torque_ind"]) < 1e-9
+    states = (e_std.weather_state(), e_hi.weather_state(), e_no.weather_state())
+    parts = {
+        "zero at the standard air, every cell": zero,
+        "a linear table reproduced exactly, in range and past the nodes": worst < 1e-9,
+        "clamped outside the range": clamped,
+        "standard air: a 10 s drive with the table is bit-identical": same,
+        "72 kPa: torque, fuel, boost, turbo, AFR, T_exh move by the table's difference": moved,
+        "weather_state: standard, table, no table": states == ("standard", "table", "no table"),
+    }
+    bad = [k for k, ok in parts.items() if not ok]
+    check("weather table in the live loop (Phase 7 step 4)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ")
+          + f"worst linear-table error {worst:.1e}; torque at 72 kPa {a['torque'] - b['torque']:+.3f} N.m "
+          + f"(want {want['torque_ind']:+.3f}); states {states}")
+
+
+def test_weather_pieces_match_the_grid():
+    """Phase 7 step 4: a weather piece at the standard air is the grid's own
+    cell (the table's standard node is taken from the grid, so the two must
+    agree, or the table's differences carry an offset). crdi15, one cell,
+    converged, through bridge.live_weather_cell, to GOLDEN_TOL; and every
+    shipped table's standard node equals its grid's warm cells exactly."""
+    if _no_prebuilt_grids("weather pieces match the grid"):
+        return
+    import json
+    from dieselsim import bridge
+    with open(os.path.join(GRID_DIR, "crdi15.json")) as fh:
+        g = json.load(fh)
+    i, j = 4, 3
+    got = json.loads(bridge.live_weather_cell(json.dumps({"engine": {"preset": "crdi15"}, "rpm": g["rpms"][i],
+                                                          "load": g["loads"][j], "fuel_limit": g["fuel_limits"][i],
+                                                          "p": 101325.0, "T": 298.0})))["values"]
+    k_t = bridge._resolve_spec({"preset": "crdi15"}).geom.displacement / (4.0 * 3.141592653589793)
+    c = g["perf"][i][j]
+    want = [c["torque"] + c["fmep"] * k_t if k == "torque_ind" else c[k] for k in bridge.WEATHER_KEYS]
+    worst = max(abs(a - b) / max(abs(b), 1e-12) for a, b in zip(got, want))
+    tables, std_bad = 0, []
+    for f in sorted(os.listdir(GRID_DIR)):
+        if not f.endswith(".json"):
+            continue
+        with open(os.path.join(GRID_DIR, f)) as fh:
+            d = json.load(fh)
+        if "weather" not in d:
+            continue
+        tables += 1
+        sp, sT = bridge.WEATHER_STD
+        kt = d["spec"]["geom"]["displacement"] / (4.0 * 3.141592653589793)
+        for ii, row in enumerate(d["perf"]):
+            for jj, cell in enumerate(row):
+                std = d["weather"]["values"][ii][jj][sp][sT]
+                ref = [cell["torque"] + cell["fmep"] * kt if k == "torque_ind" else cell[k] for k in bridge.WEATHER_KEYS]
+                if std != ref:
+                    std_bad.append(f"{f} [{ii}][{jj}]")
+    ok = worst <= GOLDEN_TOL and not std_bad
+    check("weather pieces match the grid (Phase 7 step 4)", 1.0 if ok else 0.0, 1.0, 0.0,
+          f"crdi15 [{i}][{j}] at the standard air: worst {worst:.1e} (tolerance {GOLDEN_TOL:.0e}); "
+          f"{tables} shipped tables, standard node off the grid in {len(std_bad)} cells {std_bad[:3]}")
 
 
 def test_grid_hash_ignores_the_live_loop():
@@ -2376,7 +2520,7 @@ def main():
                test_lockup_key_by_transmission,
                test_manual_gearbox,
                test_lockup_and_coast_downshifts,
-               test_adr011_live_friction,
+               test_adr011_live_friction, test_weather_table_in_the_live_loop, test_weather_pieces_match_the_grid,
                test_grid_hash_ignores_the_live_loop,
                test_livesound_firing_peaks_and_sources,
                test_livesound_carries_physics,

@@ -27,6 +27,8 @@ app's "Import grid" reads it.
 Run:  python3 tools/build_live_grids.py [preset ...]      (~15 min per grid, 6 cores)
       python3 tools/build_live_grids.py --engine my.json [--out my.grid.json]
       python3 tools/build_live_grids.py --annotate        (add spec + engine view to existing files)
+      python3 tools/build_live_grids.py --weather [key|path ...]   (Phase 7 step 4: add the weather
+            table, 390 converged solves per grid, ~35-60 min on 6 cores; WEATHER_WORKERS to change)
       --size RxL (e.g. 2x2): a smaller grid, for smoke tests only
 """
 import json
@@ -93,6 +95,55 @@ def cell(task):
                                                    "fuel_limit": flim, "cold": cold})))
 
 
+def weather_piece(task):
+    ref, rpm, load, flim, p, T = task
+    return json.loads(bridge.live_weather_cell(json.dumps({"engine": ref, "rpm": rpm, "load": load,
+                                                           "fuel_limit": flim, "p": p, "T": T})))
+
+
+def grid_engine_ref(data):
+    """The bridge's form of the engine a grid file records."""
+    if data.get("engine_json"):
+        return {"headline": data["engine_json"]}
+    if data.get("base"):
+        return {"preset": data["base"], "overrides": data.get("overrides") or {}}
+    return {"preset": data["preset"]}
+
+
+def add_weather(path, pool, ghash):
+    """Phase 7 step 4: add the weather table (shape A3) to an existing grid
+    file, leaving every other byte as it was. Refused for a stale grid: the
+    table's solves must come from the code that solved its cells."""
+    with open(path) as fh:
+        text = fh.read()
+    data = json.loads(text)
+    if json.dumps(data, separators=(",", ":")) + "\n" != text:
+        raise SystemExit(f"{path}: doesn't round-trip through JSON byte for byte; refusing to rewrite it")
+    if data.get("grid_hash") != ghash:
+        raise SystemExit(f"{path}: grid stamp {str(data.get('grid_hash'))[:12]} is not this tree's {ghash[:12]}: "
+                         "rebuild the grid first")
+    data.pop("weather", None)
+    ref = grid_engine_ref(data)
+    plan = json.loads(bridge.live_weather_plan(json.dumps({"rpms": data["rpms"], "loads": data["loads"]})))
+    tasks = [(ref, data["rpms"][q["i"]], data["loads"][q["j"]], data["fuel_limits"][q["i"]], q["p"], q["T"])
+             for q in plan["pieces"] + plan["check"]]
+    t0 = time.time()
+    got = pool.map(weather_piece, tasks)
+    n = len(plan["pieces"])
+    table = json.loads(bridge.live_weather_assemble(json.dumps({
+        "engine": ref, "grid": {k: data[k] for k in ("rpms", "loads", "perf")},
+        "pieces": got[:n], "checks": got[n:]})))
+    table["build_s"] = round(time.time() - t0)
+    data["weather"] = table
+    with open(path, "w") as fh:
+        fh.write(json.dumps(data, separators=(",", ":")) + "\n")
+    chk = table.get("check")
+    print(f"{os.path.basename(path)}: weather table, {len(tasks)} converged solves in {table['build_s']} s, "
+          f"{table['unsettled']} unsettled; "
+          + (f"Leh check worst {chk['worst_pct_of_full_load']:.2f}% of full-load torque" if chk
+             else "no check cells in a grid this small"), flush=True)
+
+
 def annotate(path):
     with open(path) as fh:
         data = json.load(fh)
@@ -152,6 +203,16 @@ def main():
         val = args[i + 1]
         del args[i:i + 2]
         return val
+    if "--weather" in args:
+        # Phase 7 step 4: add weather tables to existing grid files (keys or paths)
+        args.remove("--weather")
+        paths = [a if a.endswith(".json") else os.path.join(OUT, f"{a}.json") for a in args] \
+            or sorted(os.path.join(OUT, f) for f in os.listdir(OUT) if f.endswith(".json"))
+        ghash = grid_hash()
+        with get_context("spawn").Pool(min(int(os.environ.get("WEATHER_WORKERS", 6)), os.cpu_count() or 1)) as pool:
+            for p in paths:
+                add_weather(p, pool, ghash)
+        return
     engine_path, out_path, size = opt("--engine"), opt("--out"), opt("--size")
     size = tuple(int(x) for x in size.split("x")) if size else (N_RPM, N_LOAD)
     custom = custom_engine(engine_path) if engine_path else None

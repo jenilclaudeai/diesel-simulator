@@ -535,3 +535,100 @@ def live_grid_assemble(req_json):
     data.update(req.get("extra") or {})
     data.update(live_annotation(spec))
     return json.dumps(data, separators=(",", ":"))
+
+
+# ==========================================================================
+# Phase 7 step 4 (ADR-016 item 1, shape A3: reviews/PROPOSAL-weather-table.md):
+# the weather table. For every cell of an engine's drivable grid, warm, on
+# its row's fuel, a converged solve at 8 airs: 3 pressures x 3 temperatures
+# without the standard air, which is the grid's own cell. The live loop
+# blends it over cells and air and adds the difference from standard air
+# (dieselsim/live.py WeatherTable). Built from the same pieces natively
+# (tools/build_live_grids.py --weather) and in the browser, so a server can
+# run them later (v2's P04).
+# ==========================================================================
+WEATHER_P_NODES = (58000.0, 72000.0, 101325.0)   # Pa: about 4300 m, 2800 m, sea level
+WEATHER_T_NODES = (253.15, 298.0, 318.15)        # K: -20, 25, 45 C
+WEATHER_KEYS = ("torque_ind", "fuel_kg_h", "boost", "turbo_rpm", "afr", "T_exh")
+# the live loop clamps the air to this box: linear extrapolation a little past the
+# nodes was measured (52 kPa: within 5.5% of full-load torque); further is not
+WEATHER_RANGE = {"p": (50000.0, 105000.0), "T": (243.15, 323.15)}
+# the build's own held-out check, written into the file: Leh's air at six cells
+WEATHER_CHECK_AIR = (65764.1, 293.15)
+WEATHER_CHECK_CELLS = ((2, 3), (2, 5), (4, 3), (4, 5), (6, 3), (6, 5))
+WEATHER_STD = (2, 1)   # the standard air's node: (101325 Pa, 298 K), the grid's own cells
+
+
+def live_weather_plan(req_json):
+    """The weather table's pieces for a grid of the given axes: every cell at
+    each non-standard node air, then the held-out check."""
+    req = json.loads(req_json)
+    n_rpm, n_load = len(req["rpms"]), len(req["loads"])
+    airs = [(p, T) for ip, p in enumerate(WEATHER_P_NODES) for iT, T in enumerate(WEATHER_T_NODES)
+            if (ip, iT) != WEATHER_STD]
+    check = [c for c in WEATHER_CHECK_CELLS if c[0] < n_rpm and c[1] < n_load]
+    return json.dumps({"p_nodes": list(WEATHER_P_NODES), "T_nodes": list(WEATHER_T_NODES), "keys": list(WEATHER_KEYS),
+                       "pieces": [{"i": i, "j": j, "p": p, "T": T}
+                                  for i in range(n_rpm) for j in range(n_load) for (p, T) in airs],
+                       "check": [{"i": i, "j": j, "p": WEATHER_CHECK_AIR[0], "T": WEATHER_CHECK_AIR[1]}
+                                 for (i, j) in check]})
+
+
+def _weather_values(spec, perf):
+    k_t = spec.geom.displacement / (4.0 * math.pi)
+    v = dict(perf)
+    v["torque_ind"] = perf["torque"] + perf["fmep"] * k_t
+    return [float(v[k]) for k in WEATHER_KEYS]
+
+
+def live_weather_cell(req_json):
+    """One piece: a cell, warm, converged, on its row's fuel, at one air (the
+    spec's ambient set to it). Returns the table's keys, in order."""
+    req = json.loads(req_json)
+    spec = _resolve_spec(req.get("engine"))
+    spec.thermal.ambient_p = float(_num(req, "p", lo=30000.0, hi=120000.0))
+    spec.thermal.ambient_T = float(_num(req, "T", lo=200.0, hi=340.0))
+    _, perf = solve_cell(spec, _num(req, "rpm", lo=300.0, hi=10000.0), _num(req, "load", lo=0.0, hi=1.0),
+                         converged=True, fuel_limit=float(_num(req, "fuel_limit", lo=0.0)))
+    return json.dumps({"values": _weather_values(spec, perf), "settled": float(perf.get("settled", 1.0))})
+
+
+def live_weather_assemble(req_json):
+    """The grid file's "weather" key, from the grid (its warm cells are the
+    standard air's node) and the pieces as live_weather_cell returned them, in
+    the plan's order; and the held-out check: the worst |table - solved|
+    torque, in % of the standard air's full-load torque at that rpm."""
+    req = json.loads(req_json)
+    grid, pieces, checks = req["grid"], req["pieces"], req.get("checks") or []
+    spec = _resolve_spec(req.get("engine"))
+    plan = json.loads(live_weather_plan(json.dumps({"rpms": grid["rpms"], "loads": grid["loads"]})))
+    if len(pieces) != len(plan["pieces"]) or (checks and len(checks) != len(plan["check"])):
+        raise RequestError(f"{len(pieces)} pieces and {len(checks)} checks for a plan of "
+                           f"{len(plan['pieces'])} and {len(plan['check'])}")
+    n_rpm, n_load = len(grid["rpms"]), len(grid["loads"])
+    nP, nT = len(WEATHER_P_NODES), len(WEATHER_T_NODES)
+    vals = [[[[None] * nT for _ in range(nP)] for _ in range(n_load)] for _ in range(n_rpm)]
+    for i in range(n_rpm):
+        for j in range(n_load):
+            vals[i][j][WEATHER_STD[0]][WEATHER_STD[1]] = _weather_values(spec, grid["perf"][i][j])
+    unsettled = 0
+    for piece, got in zip(plan["pieces"], pieces):
+        ip, iT = WEATHER_P_NODES.index(piece["p"]), WEATHER_T_NODES.index(piece["T"])
+        vals[piece["i"]][piece["j"]][ip][iT] = got["values"]
+        unsettled += got.get("settled", 1.0) < 0.5
+    table = {"p_nodes": list(WEATHER_P_NODES), "T_nodes": list(WEATHER_T_NODES), "keys": list(WEATHER_KEYS),
+             "range": {k: list(v) for k, v in WEATHER_RANGE.items()}, "values": vals, "unsettled": unsettled}
+    if checks:
+        from .live import WeatherTable
+        wt = WeatherTable(grid["rpms"], grid["loads"], table)
+        k_t = spec.geom.displacement / (4.0 * math.pi)
+        worst = 0.0
+        for c, got in zip(plan["check"], checks):
+            rpm, load = grid["rpms"][c["i"]], grid["loads"][c["j"]]
+            full = grid["perf"][c["i"]][-1]["torque"] + grid["perf"][c["i"]][-1]["fmep"] * k_t
+            base = vals[c["i"]][c["j"]][WEATHER_STD[0]][WEATHER_STD[1]][0]
+            pred = base + wt.delta(rpm, load, c["p"], c["T"])["torque_ind"]
+            worst = max(worst, 100.0 * abs(pred - got["values"][0]) / max(abs(full), 1e-9))
+        table["check"] = {"place": "Leh", "p": WEATHER_CHECK_AIR[0], "T": WEATHER_CHECK_AIR[1],
+                          "cells": len(checks), "worst_pct_of_full_load": worst}
+    return json.dumps(table, separators=(",", ":"))

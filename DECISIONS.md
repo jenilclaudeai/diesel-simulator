@@ -1099,3 +1099,17 @@ point, 0.01688 mol/mol, is 0.05% off it.
   presets set it. Nothing but the reported NOx moves.
 - If the owner prefers an ISO-style form, only `engine.nox_humidity_factor`
   changes.
+
+### Addendum (2026-10-09): item 1's shape is A3
+
+`reviews/PROPOSAL-weather-table.md` measured four shapes for item 1's
+table on today's code (624 converged solves). **The owner chose A3**
+("A3, go ahead"): every grid cell, warm, at 8 airs. The airs are 3
+pressures (58, 72 and 101.3 kPa) × 3 temperatures (−20, 25 and 45 °C),
+less the standard air, which is the grid's own cell.
+
+Measured: 2.4–3.6% of full-load torque at the presets, and 5.2–5.5% down
+to 52 kPa. About 390 converged solves per engine (with 6 held-out checks at
+Leh, whose worst error the file records), and about 1.3 h extra per custom
+engine in a browser. The proposal's 1.15% (measured before #107's ECU) is
+superseded by these numbers.

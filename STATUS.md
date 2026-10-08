@@ -102,6 +102,18 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
        climbing roads can't use). *(Was: "Next: step 4, the weather
        table, re-measured on the fixed code (the table measurement first,
        as before building).")*
+     - **Decided 2026-10-09: A3** ("A3, go ahead"; ADR-016 addendum).
+       **Being built on `feat/weather-table`** (from #114's head, into
+       `main`):
+       - `bridge.live_weather_plan` / `live_weather_cell` /
+         `live_weather_assemble`: 384 pieces plus 6 Leh checks per grid,
+         the same pieces natively and in a browser.
+       - `live.WeatherTable`, used in `LiveEngine._perf` off the
+         standard air (skipped at it).
+       - `tools/build_live_grids.py --weather` adds the table to an
+         existing grid file and refuses a stale grid.
+       - The grid hash is unchanged (`70fdc89e`): `bridge.py` and
+         `live.py` are excluded from it.
      - #112's CI on its final commit: 9 of 9. **Pyodide took 46.0 min**:
        the old 45-minute limit would have cancelled it. #113's CI: 9 of 9.
      - **While step 4 waits on the shape: step 5, humidity, built**
