@@ -60,9 +60,12 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
       passed that job. **Follow-up:** raise the e2e launch timeout if it
       recurs.
 - **Waiting on the owner (session 8):**
-  1. **Merge #111, then the D PR, both into `main`** (neither is stacked,
-     so no retargeting; merging D's PR first would bring #111's commits
-     too).
+  1. ~~**Merge #111**~~ **Done 2026-10-08 06:37 UTC.** `main` (`9582848`)
+     equals the tested tip `4795cb3`, 0 files differing. CI on #111: 9 of
+     9, every job read; Pyodide 42.7 min (limit now 60). **Next: merge
+     #112** (D, into `main`; CI 9 of 9 on its code). *(Was: "Merge #111,
+     then the D PR, both into `main` (neither is stacked, so no
+     retargeting; merging D's PR first would bring #111's commits too).")*
      - *What happened (2026-10-08 05:44–05:49 UTC):* #108 merged into
        `main`, but #109 merged into `docs/session8-start` and #110 into
        `docs/finding-026`, not retargeted (memory: stack-merge-trap). So
