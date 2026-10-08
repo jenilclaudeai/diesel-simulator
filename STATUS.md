@@ -14,6 +14,26 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
   2. It reuses the ID **P05** (the AWS Lambda row is P05 too). Not in
   ADR-016 or PLAN, so nothing is built. Item 6 below asks.
 - Next, by ADR-016's order: **step 4, the Drive correction table**.
+  - **Paused 2026-10-08 on FINDING-026** (`reviews/FINDING-026.md`). Step
+    4's measurement, redone on today's code (312 converged `crdi15`
+    solves): the proposal's 1.15% doesn't hold any more. A 12-air table
+    is 20.3% off in torque, and 15.4% across cells. Read cell by cell, the
+    worst cells are a defect in #107's modern ECU. Off the rating's air
+    the boost target passes the compressor's limit wherever EGR is on, and
+    the VGT jams on its minimum. At Leh, light load: −74% to −76% torque
+    on crdi15, truck127 and v8hd; standard air untouched; live on the
+    solving pages' "High plateau" preset. And at high rpm and full load
+    the shaft rides the solver's numeric clamp on every VGT engine.
+  - **Fix A** (the cap applies to the target the VGT actually chases) is
+    measured in a scratch copy: v8hd 1959/0.2 −76% → −6%, truck127
+    1860/0.2 −67% → −12%, crdi15 4057/0.6 −30% → −2%; identical at
+    standard air in 25 of 25 cells. **B** (a VGT speed limit) is
+    dismissed: the vanes are already wide open where the shaft pins.
+    **For the owner:** C (a turbo-overspeed fuel derate) and D (state the
+    light-load residual, crdi15 4057/0.2 still −37%). My recommendation:
+    A now, then C measured, then D, then step 4 re-measured.
+  - The `hatch15` table run was stopped part-way: it measured the
+    defective code.
   - **Decided 2026-10-08:** custom engines get the table too, built in the
     browser, as resumable pieces a server can run later (ADR-016 addendum;
     the owner plans to move heavy processing server-side in v2).
@@ -66,7 +86,7 @@ landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
 | 4: audio | done; the owner signed it off by ear 2026-09-30 (REVIEW-006) |
 | 5: Enjoy mode | **exit-ready (REVIEW-007): one item left, the owner's re-check on the phone (M-1)** |
 | 6: Expert mode | **done (REVIEW-008); all of #89–#99 on `main` and live** |
-| 7: Environment and projects | **decided (ADR-016, 2026-10-07): building**, in the proposal's order; FINDING-025 and REVIEW-008 m-3 done on the way |
+| 7: Environment and projects | **decided (ADR-016, 2026-10-07): building**, in the proposal's order; FINDING-025 and REVIEW-008 m-3 done on the way; steps 1–3 merged; **step 4 paused on FINDING-026** (2026-10-08) |
 | 8: Polish and host | Pages hosting done early (#85); the rest not started |
 
 **What Phase 5 has** (all merged):
@@ -249,6 +269,11 @@ landscape), and Phase 6's `/cycle`, `/spec`, `/sweep` and `/durability`.
 - **Off the rating's air only** (`engine.operating_point`):
   - the boost target becomes the rating's absolute pressure (MAP), capped
     at the compressor's map limit `turbo.pr_max_ref`;
+    **Corrected 2026-10-08 (FINDING-026):** only where EGR is off. The cap
+    comes before `cycle.run`'s EGR raise, so at part load the VGT chases a
+    target above the limit and jams on its minimum: at Leh, light load,
+    torque fell up to 76% (v8hd 1959/0.2). The test checked the limit only
+    at full load, where EGR is zero.
   - the smoke limiter caps each cycle's fuel at the air the previous cycle
     trapped / `afr_limit` (`cycle.run(smoke_afr=)`), so it settles with the
     turbo inside one solve.
