@@ -133,12 +133,13 @@ def add_weather(path, pool, ghash):
     table = json.loads(bridge.live_weather_assemble(json.dumps({
         "engine": ref, "grid": {k: data[k] for k in ("rpms", "loads", "perf")},
         "pieces": got[:n], "checks": got[n:]})))
-    table["build_s"] = round(time.time() - t0)
+    # no build_s inside the table: the browser's build writes the same keys (test:live-real)
+    build_s = round(time.time() - t0)
     data["weather"] = table
     with open(path, "w") as fh:
         fh.write(json.dumps(data, separators=(",", ":")) + "\n")
     chk = table.get("check")
-    print(f"{os.path.basename(path)}: weather table, {len(tasks)} converged solves in {table['build_s']} s, "
+    print(f"{os.path.basename(path)}: weather table, {len(tasks)} converged solves in {build_s} s, "
           f"{table['unsettled']} unsettled; "
           + (f"Leh check worst {chk['worst_pct_of_full_load']:.2f}% of full-load torque" if chk
              else "no check cells in a grid this small"), flush=True)
