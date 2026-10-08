@@ -8,6 +8,7 @@
  * order and words on top of it, and spec-meta.spec.ts checks that every
  * curated path exists.
  */
+import { ALTITUDE_NOTE } from '../weather/altitude';
 import SCHEMA from './spec-schema.json';
 
 export interface SchemaRow { path: string; cls: string; type: 'number' | 'int' | 'bool' | 'string' | 'list'; note: string }
@@ -108,6 +109,21 @@ export function noteRest(note: string): string {
     if (n.startsWith(u + ' ') || n.startsWith(u + ',') || n.startsWith(u + '\t')) return n.slice(u.length).replace(/^[,\s]+/, '');
   }
   return n;
+}
+
+/**
+ * Said beside a field after its config.py note. Kept here, not in config.py: that file is in the grid
+ * hash, so a comment there would make every prebuilt grid stale (FINDING-026's thin-air limits).
+ */
+export const NOTE_EXTRA: Record<string, string> = {
+  'thermal.ambient_p': 'Below 90 kPa (about 1000 m): ' + ALTITUDE_NOTE,
+  ecu_modern: 'Off sea level it holds sea-level boost up to the compressor\'s limit, with no turbo-overspeed ' +
+    'protection modelled (FINDING-026).',
+};
+
+/** What's shown beside a field: its note without the unit, then any curated addition. */
+export function noteFor(f: SchemaRow): string {
+  return [noteRest(f.note), NOTE_EXTRA[f.path] ?? ''].filter(Boolean).join(' ');
 }
 
 /** Units for curated fields whose config.py comment doesn't start with one (checked by hand against the model). */
