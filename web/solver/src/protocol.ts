@@ -22,7 +22,8 @@ export type Request =
   | { type: "cancel"; id: number };
 
 /** The bridge functions a drivable-grid build calls (ADR-014 step 3); JSON in, JSON out. */
-export const LIVE_FNS = ["live_grid_plan", "live_row_limit", "live_cell", "live_grid_assemble"] as const;
+export const LIVE_FNS = ["live_grid_plan", "live_row_limit", "live_cell", "live_grid_assemble",
+  "live_weather_plan", "live_weather_cell", "live_weather_assemble"] as const;   // the last three: Phase 7 step 4
 export type LiveFn = (typeof LIVE_FNS)[number];
 
 /** The bridge functions a durability run is stepped with (Phase 6, ADR-015); JSON in, JSON out. */

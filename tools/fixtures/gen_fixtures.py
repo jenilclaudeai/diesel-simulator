@@ -27,6 +27,7 @@ Run:  python3 tools/fixtures/gen_fixtures.py           (write)
 The --check comparison is numeric, not textual: Linux and macOS libm may
 differ in the last ulp, which is far inside every tolerance here.
 """
+import copy
 import json
 import math
 import os
@@ -272,6 +273,27 @@ def live_grid_adr011(key="crdi15"):
     return grid
 
 
+def live_weather_table(gj, key="crdi15"):
+    """Phase 7 step 4: a weather table for the live fixture's grid, assembled by
+    bridge.live_weather_assemble (the real format) from deterministic synthetic
+    pieces -- non-linear in the air and different per cell, so both loops'
+    blending is exercised. No solves: the fixture tests the port, not physics."""
+    from dieselsim import bridge
+    plan = json.loads(bridge.live_weather_plan(json.dumps({"rpms": gj["rpms"], "loads": gj["loads"]})))
+    k_t = DieselEngine(preset=key).spec.geom.displacement / (4.0 * math.pi)
+    pieces = []
+    for q in plan["pieces"]:
+        c = gj["perf"][q["i"]][q["j"]]
+        x, y = (q["p"] - 101325.0) / 43325.0, (q["T"] - 298.0) / 45.0      # about -1..0 and -1..0.45
+        s = 1.0 + 0.1 * q["i"] + 0.05 * q["j"]
+        std = [c["torque"] + c["fmep"] * k_t, c["fuel_kg_h"], c["boost"], c["turbo_rpm"], c["afr"], c["T_exh"]]
+        off = [s * (40.0 * x + 6.0 * x * x - 9.0 * y), -0.4 * s * x * x, s * (-0.9 * x + 0.1 * y),
+               s * (-6.0e4 * x + 4.0e3 * y), s * (12.0 * x - 3.0 * y * x), s * (-60.0 * x + 25.0 * y)]
+        pieces.append({"values": [a + b for a, b in zip(std, off)], "settled": 1.0})
+    return json.loads(bridge.live_weather_assemble(json.dumps({
+        "engine": {"preset": key}, "grid": {k: gj[k] for k in ("rpms", "loads", "perf")}, "pieces": pieces})))
+
+
 def adr011_grid_object(gj):
     from dieselsim.live import Adr011Grid
     return Adr011Grid.from_json(gj)
@@ -372,9 +394,13 @@ def live_inputs():
                        {"name": "adr011_cold", "trans": "tc", "grid": "adr011", "script": live_script(), "init": {}},
                        {"name": "adr011_warm", "trans": "dct", "grid": "adr011", "script": live_script(),
                         "init": {"T_coolant": 361.0, "T_oil": 373.0}},
+                       # Phase 7 step 4: Leh's air, through the weather table
+                       {"name": "adr011_weather", "trans": "dct", "grid": "adr011", "air": [65764.1, 293.15],
+                        "script": live_script(), "init": {"T_coolant": 361.0, "T_oil": 373.0}},
                        {"name": "tc_kickdown", "trans": "tc", "script": live_script_kickdown(),
                         "init": {"dl.v": 20.0, "dl.gb.gear": 5, "dl.gb.gear_from": 5,
                                  "dl.w_in": 20.0 / 0.315 * 0.67 * 4.30, "rpm": 20.0 / 0.315 * 0.67 * 4.30 * 60.0 / (2.0 * math.pi)}}],
+            "weather_table": live_weather_table(live_grid_adr011(key)),
             "sample_every": 45}
 
 
@@ -384,6 +410,11 @@ def live_run(inp, drv):
     g = inp["grid"]
     grid = (adr011_grid_object(live_grid_adr011(inp["preset"])) if drv.get("grid") == "adr011"
             else PerfGrid(spec, g["rpms"], g["loads"], g["perf"]))
+    if drv.get("air"):                    # Phase 7 step 4: the weather table, at this air
+        from dieselsim.live import WeatherTable
+        grid.weather = WeatherTable(grid.rpms, grid.loads, inp["weather_table"])
+        grid.spec = copy.deepcopy(grid.spec)
+        grid.spec.thermal.ambient_p, grid.spec.thermal.ambient_T = drv["air"]
     live = LiveEngine(grid, inp["preset"], trans=drv["trans"])
     for k, v in drv["init"].items():      # dotted paths: "dl.gb.gear"
         *path, last = k.split(".")
@@ -624,7 +655,11 @@ def compare_live(got, want, tol):
             if a != b and not (isinstance(b, int) and isinstance(a, float) and a == b):
                 worst[:] = [math.inf, f"{path}: {a!r} vs {b!r}"]
         else:
-            r = abs(a - b) / max(abs(b), 1e-9)
+            # relative, floored at 1e-6: a quantity that is zero on one platform (a locked
+            # converter's slip, 0.0 on the Mac) is ~1e-14 on another (Linux CI: 5.7e-14,
+            # adr011_weather, Phase 7 step 4), which a 1e-9 floor read as 5.7e-5 "stale".
+            # Anything above 1e-6 is judged as before; a real change to a small value still shows.
+            r = abs(a - b) / max(abs(b), 1e-6)
             if r > worst[0]:
                 worst[:] = [r, path]
     for tr in want:

@@ -1184,7 +1184,7 @@ def _toy_adr011_grid():
                 k = spec.geom.displacement / (4.0 * np.pi)
                 prow.append(dict(torque=ind - fr["fmep"] * k, fmep=fr["fmep"], fuel_mg=30.0 * l, p_rail=1.2e8,
                                  boost=1.0 + 1.2 * l, turbo_rpm=9e4, fuel_kg_h=0.3 + 12.0 * l, afr=25.0,
-                                 q_wall=0.2))
+                                 q_wall=0.2, T_exh=650.0))
                 trow.append(tr)
             perf.append(prow)
             traces.append(trow)
@@ -1230,6 +1230,150 @@ def test_adr011_live_friction():
           f"own-cell diff {own:.1e}; cold coolant only x{walls:.2f}, cold oil on top x{oil_extra:.2f}; "
           f"oil +{warmed:.1f} K in 30 s; "
           f"cold endpoint diff {cold_ok:.1e}")
+
+
+def _toy_weather(g, slope):
+    """A weather table for the toy grid whose values are linear in the air,
+    with a pressure slope that differs by cell (so blending the wrong cells shows):
+    value = cell's own (standard) + (1 + i + 2 j) slope_p[k] (p - 101325) / 1000
+            + slope_T[k] (T - 298),
+    so the live loop's blend must reproduce it exactly anywhere in range."""
+    from dieselsim import bridge
+    k_t = g.spec.geom.displacement / (4.0 * 3.141592653589793)
+    keys = list(bridge.WEATHER_KEYS)
+    vals = []
+    for i in range(len(g.rpms)):
+        row = []
+        for j in range(len(g.loads)):
+            c = dict(g.perf[i][j], torque_ind=g.perf[i][j]["torque"] + g.perf[i][j]["fmep"] * k_t)
+            row.append([[[c[k] + (1 + i + 2 * j) * slope[k][0] * (p - 101325.0) / 1000.0
+                          + slope[k][1] * (T - 298.0) for k in keys]
+                         for T in bridge.WEATHER_T_NODES] for p in bridge.WEATHER_P_NODES])
+        vals.append(row)
+    return {"p_nodes": list(bridge.WEATHER_P_NODES), "T_nodes": list(bridge.WEATHER_T_NODES), "keys": keys,
+            "range": {k: list(v) for k, v in bridge.WEATHER_RANGE.items()}, "values": vals}
+
+
+def test_weather_table_in_the_live_loop():
+    """Phase 7 step 4 (ADR-016 item 1, shape A3): the live loop adds the
+    weather table's difference from the standard air. On the toy grid, with a
+    table linear in the air (no files, so it runs under Pyodide too). Parts:
+    - delta() is exactly zero at the standard air, at any cell;
+    - it reproduces a linear table exactly in range (1e-9), between nodes and
+      past them (extrapolation), and clamps outside the table's range;
+    - a 10 s drive at the standard air with the table is bit-identical to
+      one without it;
+    - at 72 kPa / 298 K, _perf moves indicated and brake torque, fuel, boost,
+      turbo speed, AFR and exhaust temperature by exactly the table's
+      difference;
+    - weather_state() says 'standard', 'table' or 'no table'."""
+    import copy
+    from dieselsim import live as L
+    slope = {"torque_ind": (0.9, -0.2), "fuel_kg_h": (0.01, 0.002), "boost": (-0.012, 0.001),
+             "turbo_rpm": (-300.0, 50.0), "afr": (0.3, -0.05), "T_exh": (-2.0, 1.1)}
+    g = _toy_adr011_grid()
+    wt = L.WeatherTable(g.rpms, g.loads, _toy_weather(g, slope))
+    zero = all(v == 0.0 for r in g.rpms for ld in g.loads for v in wt.delta(r, ld, 101325.0, 298.0).values())
+    rpm, load = 1234.0, 0.37
+    # the cell factor (1 + i + 2 j), blended bilinearly as the grid blends: 1 + fr + 2 fl
+    fr = (rpm - g.rpms[0]) / (g.rpms[1] - g.rpms[0])
+    fl = (load - g.loads[0]) / (g.loads[1] - g.loads[0])
+    cf = 1.0 + fr + 2.0 * fl
+
+    def want_d(k, p, T):
+        return cf * slope[k][0] * (p - 101325.0) / 1000.0 + slope[k][1] * (T - 298.0)
+    worst = 0.0
+    for (p, T) in ((65764.1, 293.15), (90000.0, 263.0), (52000.0, 278.15), (101325.0, 318.15), (58000.0, 253.15)):
+        d = wt.delta(rpm, load, p, T)
+        for k in slope:
+            worst = max(worst, abs(d[k] - want_d(k, p, T)))
+    lo = wt.delta(rpm, load, 40000.0, 230.0)
+    clamped = abs(lo["torque_ind"] - want_d("torque_ind", 50000.0, 243.15)) < 1e-9
+
+    def drive(grid):
+        e = L.LiveEngine(grid, "crdi15", trans="tc")
+        trace = []
+        for n in range(600):
+            e.throttle = 0.7 if n < 400 else 0.1
+            e.step(1 / 60)
+            trace.append((e.rpm, e.torque, e.fuel_kg_h, e.boost, e.turbo_rpm, e.dl.v))
+        return trace
+    g_plain, g_wx = _toy_adr011_grid(), _toy_adr011_grid()
+    g_wx.weather = L.WeatherTable(g_wx.rpms, g_wx.loads, _toy_weather(g_wx, slope))
+    same = drive(g_plain) == drive(g_wx)
+    # off the standard air: _perf moves by the table's difference
+    states = {}
+    g_hi = _toy_adr011_grid()
+    g_hi.weather = L.WeatherTable(g_hi.rpms, g_hi.loads, _toy_weather(g_hi, slope))
+    g_no = _toy_adr011_grid()
+    for grid in (g_hi, g_no):
+        grid.spec = copy.deepcopy(grid.spec)
+        grid.spec.thermal.ambient_p = 72000.0
+    e_hi, e_no, e_std = (L.LiveEngine(x, "crdi15", trans="tc") for x in (g_hi, g_no, _toy_adr011_grid()))
+    for e in (e_hi, e_no):
+        e.T_coolant, e.T_fric = 361.0, 7.5
+    a, b = e_hi._perf(1500.0, 0.6), e_no._perf(1500.0, 0.6)
+    cf6 = 1.0 + (1500.0 - g.rpms[0]) / (g.rpms[1] - g.rpms[0]) + 2.0 * 0.6
+    want = {k: cf6 * sp * (72000.0 - 101325.0) / 1000.0 for k, (sp, _) in slope.items()}
+    moved = all(abs((a[k] - b[k]) - want[k]) < 1e-9 for k in slope) \
+        and abs((a["torque"] - b["torque"]) - want["torque_ind"]) < 1e-9
+    states = (e_std.weather_state(), e_hi.weather_state(), e_no.weather_state())
+    parts = {
+        "zero at the standard air, every cell": zero,
+        "a linear table reproduced exactly, in range and past the nodes": worst < 1e-9,
+        "clamped outside the range": clamped,
+        "standard air: a 10 s drive with the table is bit-identical": same,
+        "72 kPa: torque, fuel, boost, turbo, AFR, T_exh move by the table's difference": moved,
+        "weather_state: standard, table, no table": states == ("standard", "table", "no table"),
+    }
+    bad = [k for k, ok in parts.items() if not ok]
+    check("weather table in the live loop (Phase 7 step 4)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ")
+          + f"worst linear-table error {worst:.1e}; torque at 72 kPa {a['torque'] - b['torque']:+.3f} N.m "
+          + f"(want {want['torque_ind']:+.3f}); states {states}")
+
+
+def test_weather_pieces_match_the_grid():
+    """Phase 7 step 4: a weather piece at the standard air is the grid's own
+    cell (the table's standard node is taken from the grid, so the two must
+    agree, or the table's differences carry an offset). crdi15, one cell,
+    converged, through bridge.live_weather_cell, to GOLDEN_TOL; and every
+    shipped table's standard node equals its grid's warm cells exactly."""
+    if _no_prebuilt_grids("weather pieces match the grid"):
+        return
+    import json
+    from dieselsim import bridge
+    with open(os.path.join(GRID_DIR, "crdi15.json")) as fh:
+        g = json.load(fh)
+    i, j = 4, 3
+    got = json.loads(bridge.live_weather_cell(json.dumps({"engine": {"preset": "crdi15"}, "rpm": g["rpms"][i],
+                                                          "load": g["loads"][j], "fuel_limit": g["fuel_limits"][i],
+                                                          "p": 101325.0, "T": 298.0})))["values"]
+    k_t = bridge._resolve_spec({"preset": "crdi15"}).geom.displacement / (4.0 * 3.141592653589793)
+    c = g["perf"][i][j]
+    want = [c["torque"] + c["fmep"] * k_t if k == "torque_ind" else c[k] for k in bridge.WEATHER_KEYS]
+    worst = max(abs(a - b) / max(abs(b), 1e-12) for a, b in zip(got, want))
+    tables, std_bad = 0, []
+    for f in sorted(os.listdir(GRID_DIR)):
+        if not f.endswith(".json"):
+            continue
+        with open(os.path.join(GRID_DIR, f)) as fh:
+            d = json.load(fh)
+        if "weather" not in d:
+            continue
+        tables += 1
+        sp, sT = bridge.WEATHER_STD
+        kt = d["spec"]["geom"]["displacement"] / (4.0 * 3.141592653589793)
+        for ii, row in enumerate(d["perf"]):
+            for jj, cell in enumerate(row):
+                std = d["weather"]["values"][ii][jj][sp][sT]
+                ref = [cell["torque"] + cell["fmep"] * kt if k == "torque_ind" else cell[k] for k in bridge.WEATHER_KEYS]
+                if std != ref:
+                    std_bad.append(f"{f} [{ii}][{jj}]")
+    ok = worst <= GOLDEN_TOL and not std_bad
+    check("weather pieces match the grid (Phase 7 step 4)", 1.0 if ok else 0.0, 1.0, 0.0,
+          f"crdi15 [{i}][{j}] at the standard air: worst {worst:.1e} (tolerance {GOLDEN_TOL:.0e}); "
+          f"{tables} shipped tables, standard node off the grid in {len(std_bad)} cells {std_bad[:3]}")
 
 
 def test_grid_hash_ignores_the_live_loop():
@@ -2129,6 +2273,86 @@ def test_modern_cap_holds_with_egr_on():
           + f"exhaust {leh2.cycle.p_exhaust / 1e5:.2f} / {leh6.cycle.p_exhaust / 1e5:.2f} bar")
 
 
+def test_humidity_corrects_reported_nox():
+    """ADR-016 item 3: humidity reaches NOx as 40 CFR 1065.670's correction,
+    normalised to ISO 8178's 10.71 g/kg, not as water vapour in the cycle.
+    crdi15 2000/0.6, fast solves (the correction follows the solve, so the
+    solve itself must not move). Parts:
+    - at the reference humidity, bit-identical to a spec that never set it;
+    - humid air (Mumbai's): NOx falls by exactly the factor, and torque,
+      fuel, boost, exhaust temperature and soot are bit-identical;
+    - dry air gives more NOx;
+    - the factor reproduces the regulation's worked example (700.5 -> 736.2
+      umol/mol at x_H2O 0.022);
+    - the presets carry their humidity to the solve (FINDING-025's lesson):
+      standard air sets exactly the reference, the tropics' NOx through the
+      bridge is lower;
+    - environment.H_REF == engine.H_REF."""
+    import json
+    from dieselsim import bridge, environment
+    from dieselsim import engine as E
+
+    def op(H=None):
+        s = bridge._resolve_spec({"preset": "crdi15"})
+        if H is not None:
+            s.thermal.ambient_humidity = H
+        return E.DieselEngine(spec=s).operating_point(2000.0, load=0.6, n_cycles=9)
+
+    keys = ("torque", "fuel_mg", "fuel_kg_h", "boost_pr", "T_exh", "soot_g_h", "p_max", "nox_ppm", "nox_g_kwh")
+    base, ref = op(), op(E.H_REF)
+    tropics = environment.ENVIRONMENTS["tropics"]
+    H_wet = environment.humidity_ratio(tropics.T_amb, tropics.p_amb, tropics.rh_pct)
+    wet, dry = op(H_wet), op(2.0)
+    k_wet = E.nox_humidity_factor(H_wet)
+    # the worked example: the H whose x_H2O is 0.022, un-normalised
+    n_a = 1000.0 / 28.96559
+    H22 = 0.022 * n_a / (1.0 - 0.022) * 18.01528
+    example = 700.5 * E.nox_humidity_factor(H22) * (9.953 * E.x_h2o(E.H_REF) + 0.832)
+
+    def solve_nox(env_key):
+        o = environment.ENVIRONMENTS[env_key].overrides()
+        r = json.loads(bridge.solve_point(json.dumps({"engine": {"preset": "crdi15", "overrides": o},
+                                                      "rpm": 2000.0, "load": 0.6})))
+        return r["nox_g_kwh"], o
+    nox_std, o_std = solve_nox("standard")
+    nox_trop, o_trop = solve_nox("tropics")
+    parts = {
+        "reference humidity: bit-identical to the default": all(getattr(base, k) == getattr(ref, k) for k in keys),
+        "humid: NOx / the factor, exactly (1e-12)": abs(wet.nox_ppm * k_wet / base.nox_ppm - 1.0) < 1e-12
+        and abs(wet.nox_g_kwh * k_wet / base.nox_g_kwh - 1.0) < 1e-12 and k_wet > 1.0,
+        "humid: nothing else moves": all(getattr(wet, k) == getattr(base, k) for k in keys[:7]),
+        "dry air: more NOx": dry.nox_g_kwh > base.nox_g_kwh,
+        "40 CFR 1065.670's worked example: 736.2": round(example, 1) == 736.2,
+        "standard air sets exactly the reference": o_std.get("thermal.ambient_humidity") == E.H_REF,
+        "the tropics' humidity reaches the bridge's solve": "thermal.ambient_humidity" in o_trop and nox_trop < nox_std,
+        "environment.H_REF == engine.H_REF": environment.H_REF == E.H_REF,
+    }
+    bad = [k for k, ok in parts.items() if not ok]
+    check("humidity corrects reported NOx (ADR-016 item 3)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ")
+          + f"crdi15 2000/0.6 NOx {base.nox_g_kwh:.3f} g/kWh at {E.H_REF} g/kg; {wet.nox_g_kwh:.3f} at "
+          + f"{H_wet:.2f} (x{1 / k_wet:.4f}); {dry.nox_g_kwh:.3f} at 2.0; example {example:.1f}")
+
+
+def test_environments_json_is_current():
+    """Phase 7 step 4: Drive and Enjoy read the five places from a generated
+    file (they must not fetch Pyodide); it must equal environment.py's.
+    SKIPs where tools/ is absent (the Pyodide harness)."""
+    import importlib.util
+    tool = os.path.join(os.path.dirname(__file__), "..", "tools", "environments_json.py")
+    if not os.path.exists(tool):
+        RESULTS.append(("SKIP", "the places file for Drive and Enjoy is current", None, None,
+                        "tools/ not present (Pyodide harness)"))
+        return
+    spec_ = importlib.util.spec_from_file_location("environments_json", tool)
+    mod = importlib.util.module_from_spec(spec_)
+    spec_.loader.exec_module(mod)
+    with open(mod.OUT) as fh:
+        current = fh.read() == mod.content()
+    check("the places file for Drive and Enjoy is current (Phase 7 step 4)", 1.0 if current else 0.0, 1.0, 0.0,
+          "tools/environments_json.py; " + ("current" if current else "STALE: run python3 tools/environments_json.py"))
+
+
 def test_live_grid_pieces_match_the_shipped_grid():
     """ADR-014 step 3: a browser worker builds a drivable grid from the
     bridge's pieces, and tools/build_live_grids.py now builds with the same
@@ -2297,7 +2521,7 @@ def main():
                test_custom_engine_json,
                test_describe_engine, test_solve_cycle, test_mfb50_counts_combustion_before_tdc, test_durability_steps,
                test_spec_editor_schema, test_spec_ambient_reaches_the_solve, test_environment_presets_reach_the_solve, test_modern_ecu_knows_absolute_pressure,
-               test_modern_cap_holds_with_egr_on,
+               test_modern_cap_holds_with_egr_on, test_humidity_corrects_reported_nox, test_environments_json_is_current,
                test_live_grid_pieces_match_the_shipped_grid,
                test_na_engines_idle_on_a_converter,
                test_flat_tappet_wears_more_than_roller,
@@ -2315,7 +2539,7 @@ def main():
                test_lockup_key_by_transmission,
                test_manual_gearbox,
                test_lockup_and_coast_downshifts,
-               test_adr011_live_friction,
+               test_adr011_live_friction, test_weather_table_in_the_live_loop, test_weather_pieces_match_the_grid,
                test_grid_hash_ignores_the_live_loop,
                test_livesound_firing_peaks_and_sources,
                test_livesound_carries_physics,

@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-10-07, start of session 8. Read this section first; the
+**Updated:** 2026-10-09, session 8 (Phase 7 step 4 done, in #115). Read this section first; the
 dated sections below it are history. *(Was: "2026-10-06, end of session
 7".)*
 
@@ -29,9 +29,11 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
     1860/0.2 −67% → −12%, crdi15 4057/0.6 −30% → −2%; identical at
     standard air in 25 of 25 cells. **B** (a VGT speed limit) is
     dismissed: the vanes are already wide open where the shaft pins.
-    **For the owner:** C (a turbo-overspeed fuel derate) and D (state the
-    light-load residual, crdi15 4057/0.2 still −37%). My recommendation:
-    A now, then C measured, then D, then step 4 re-measured.
+    **Decided 2026-10-08:** C declined (no fuel cut), D stated (item 2
+    below). *(Was: "For the owner: C (a turbo-overspeed fuel derate) and D
+    (state the light-load residual, crdi15 4057/0.2 still −37%). My
+    recommendation: A now, then C measured, then D, then step 4
+    re-measured.")*
   - The `hatch15` table run was stopped part-way: it measured the
     defective code.
   - **Fix A built** on `fix/finding-026-cap` (PR stacked on #109):
@@ -55,16 +57,179 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
     - #108's "grid in Chrome" job failed twice, both times on Puppeteer's
       30 s Chrome-launch timeout ("waiting for the WS endpoint URL"),
       before any check ran. #109 and #110 contain #108's commits and
-      passed that job. **Follow-up:** raise the e2e launch timeout if it
-      recurs.
+      passed that job. ~~**Follow-up:** raise the e2e launch timeout if it
+      recurs.~~ **It recurred on #115 (2026-10-09), a third time. Every
+      e2e launch now gives Chrome 120 s** (#115).
 - **Waiting on the owner (session 8):**
-  1. **Merge, in order:** #108 (docs) → retarget #109 to `main` → merge
-     #109 (docs, FINDING-026) → retarget #110 → merge #110 (fix A). Then
-     check `main` by content (memory: stack-merge-trap). #108's red check
-     is the Chrome-launch flake above.
-  2. **FINDING-026 C and D:** a turbo-overspeed fuel derate (C)? State the
-     light-load residual (D)? My recommendation: C measured next, then D.
-     Step 4 (the weather table) waits for these.
+  0. **Now (2026-10-09): merge #115.** It carries #112 (D), #113 (the
+     table proposal) and #114 (humidity), all open and all targeting
+     `main`, so merging #115 alone brings all four. CI on #115's code
+     (`25ebbaf`): 9 of 9, every job read. Then check `main` by content.
+     Also open for the owner:
+     - FINDING-027 (the NA single's ignition cliff in cold, thin air):
+       A, state it (recommended now), or B, with step 6.
+     - The sheet's P06 rename; the Phase 5 phone re-check;
+       `~/Documents` access for Claude Code.
+     - **Next by ADR-016's order: step 6, cold-flow** (Drive now has its
+       air, so a CFPP cap has something to read), then step 7, projects.
+  1. ~~**Merge #111**~~ **Done 2026-10-08 06:37 UTC.** `main` (`9582848`)
+     equals the tested tip `4795cb3`, 0 files differing. CI on #111: 9 of
+     9, every job read; Pyodide 42.7 min (limit now 60). **Next: merge
+     #112** (D, into `main`; CI 9 of 9 on its code). *(Was: "Merge #111,
+     then the D PR, both into `main` (neither is stacked, so no
+     retargeting; merging D's PR first would bring #111's commits too).")*
+     - *What happened (2026-10-08 05:44–05:49 UTC):* #108 merged into
+       `main`, but #109 merged into `docs/session8-start` and #110 into
+       `docs/finding-026`, not retargeted (memory: stack-merge-trap). So
+       `main` (`b8f80b8`) had neither FINDING-026 nor fix A. **#111**
+       brings both, from `fix/finding-026-cap` (`4795cb3`, the tree CI
+       passed 9 of 9 on #110).
+     - *(Was: "Merge, in order: #108 (docs) → retarget #109 to `main` →
+       merge #109 (docs, FINDING-026) → retarget #110 → merge #110 (fix A).
+       Then check `main` by content (memory: stack-merge-trap). #108's red
+       check is the Chrome-launch flake above.")*
+  2. ~~**FINDING-026 C and D**~~ **Decided 2026-10-08: "C: No don't cut the
+     fuel. then D."** D is built on `fix/finding-026-state`: the thin-air
+     note on the solving pages' picker and on `/spec`'s ambient-pressure
+     and ECU fields. Units 112 (6 of 6 mutants caught); e2e:cycle 10 and
+     e2e:spec 13 (+1 each, each mutant caught). FINDING-026 is closed.
+     *(Was: "a turbo-overspeed fuel derate (C)? State the light-load
+     residual (D)? My recommendation: C measured next, then D. Step 4 (the
+     weather table) waits for these.")*
+     - ~~**Next: step 4, the weather table, re-measured**~~ **Re-measured
+       2026-10-08: the table's shape needs your decision**
+       (`reviews/PROPOSAL-weather-table.md`). 624 converged solves
+       (crdi15, hatch15). Felt torque error, as a share of full-load
+       torque at that rpm:
+       - the 12-air table at the presets: 2.0–2.35%; at any air down to
+         52 kPa, 3.8–5.2%;
+       - but blending from coarse cells to the others costs 7.8–10.2%
+         (the smoke-limit knee);
+       - no correction (Drive today): 32.6–35.3% at Leh.
+
+       The options: A1 coarse cells; A2 all cells × 11 airs; **A3 all
+       cells × 8 airs (recommended: 2.4–3.6% at the presets, ~1.3 h extra
+       in a browser for a custom engine)**; A4 all cells × the presets
+       only (exact there, but Drive limited to five places, which P06's
+       climbing roads can't use). *(Was: "Next: step 4, the weather
+       table, re-measured on the fixed code (the table measurement first,
+       as before building).")*
+     - **Decided 2026-10-09: A3** ("A3, go ahead"; ADR-016 addendum).
+       **Being built on `feat/weather-table`** (from #114's head, into
+       `main`):
+       - `bridge.live_weather_plan` / `live_weather_cell` /
+         `live_weather_assemble`: 384 pieces plus 6 Leh checks per grid,
+         the same pieces natively and in a browser.
+       - `live.WeatherTable`, used in `LiveEngine._perf` off the
+         standard air (skipped at it).
+       - `tools/build_live_grids.py --weather` adds the table to an
+         existing grid file and refuses a stale grid.
+       - The grid hash is unchanged (`70fdc89e`): `bridge.py` and
+         `live.py` are excluded from it.
+       - **Progress (2026-10-09):**
+         - Python, TypeScript, Drive and Enjoy, and the browser build are
+           all built and tested (the commits on `feat/weather-table`).
+         - The ten tables are being built natively, roster first, from a
+           frozen copy of the tree (`$CLAUDE_JOB_DIR/tmp/buildtree`, log
+           `weather_build.log`). **`hatch15` is done:** 390 solves in 46
+           min, 13 unsettled, Leh check 2.35% of full-load torque (the
+           proposal measured 2.35%). `tmp/scripts/copy_back.py` copies
+           each table in and proves only the `weather` key was added (its
+           `build_s` dropped).
+         - Tests:
+           - Python: the live-loop table test 6 parts, 7 of 7 mutants;
+             the pieces test, a standard-air piece = the grid cell
+             exactly (0.0). Its fuel-ignoring mutant is equivalent within
+             tolerance (3e-7: it recalibrates the same limit), so it is
+             recorded, not counted.
+           - TypeScript loop vs Python: 9.9e-15 per step, 49 events
+             identical, 2 of 2 mutants.
+           - Scheduler 15, 3 of 3 mutants; units 119, 7 of 7 compiled
+             mutants (two broken ones redone so they compile).
+           - e2e:drive 9: at Leh the page's worker vs native Python on
+             hatch15's table, 59 events identical and 3.55e-16 final;
+             Leh's 60 s drive ends at 71.9 km/h against 79.1.
+             **Corrected in place:** the first run read 5.3e-7, because I
+             gave native a rounded 65764.1 Pa while the page used
+             environments.json's 65764.0576. The test now reads the
+             page's own numbers.
+         - ~~Still to do: the other nine tables (about 45 min each); the
+           browser-vs-native table (`test:live-real`, manual, once the
+           CPU is free); CI; STATUS for the PR.~~ **Done 2026-10-09:
+           all ten grids carry a table.** Each one's own Leh check (6
+           held-out cells, % of full-load torque):
+
+           | grid | Leh check | unsettled / 390 | build |
+           |---|---|---|---|
+           | hatch15 | 2.35% | 13 | 46 min |
+           | crdi22 | 2.75% | 19 | 56 min |
+           | truck127 | 2.46% | 67 | 67 min |
+           | v8hd | 2.78% | 60 | 85 min |
+           | single10 | **7.20%** | 1 | 17 min |
+           | crdi15 | 2.04% | 17 | 52 min |
+           | crdi_1p5 | 1.52% | 68 | 51 min |
+           | ld_i4 | 2.35% | 8 | 51 min |
+           | hd_i6 | **4.72%** | 1 | 72 min |
+           | single | 0.30% | 1 | 18 min |
+
+           - The two outliers are measured, not guessed. single10
+             misfires in the model at 58 kPa / −20 °C (FINDING-027, open
+             for the owner). hd_i6's smoke limiter binds at 58 kPa but
+             not at Leh, a knee between pressure nodes, within A3's
+             measured 5.2–5.5% anywhere.
+           - truck127, v8hd and crdi_1p5 have many unsettled solves in
+             thin air (their VGT/EGR loops oscillate), period-averaged as
+             FINDING-013 does; their checks are still 1.5–2.8%.
+           - copy_back.py proved for each file that only the `weather`
+             key was added.
+         - Suite 85 / 0 / 3 (+3); fixtures 7 of 7; audit 0 dead, 2 frozen
+           (known), 0 tiny; units 119; the generated places and schema
+           files current. In all ten shipped tables the standard-air node
+           equals the grid's cells in every one of the 480 cells.
+         - `test:live-real` (manual), the browser's 2 × 2 grid with its
+           table against native: numbers within 1.35e-12 (the table
+           included), and 42 pieces counted. **One structural failure,
+           fixed:** the browser's file put the table before the spec and
+           engine view, and the native file after them.
+           `live_grid_assemble` now puts it last. **Rerun: 4 of 4**,
+           the same structure (27 fields, keys in order), numbers within
+           1.35e-12, built in 22 min on 2 Node Pyodide workers.
+         - **PR #115's first CI: 8 of 9.** The fixtures job called the
+           live fixture stale at one value: `adr011_weather`, snapshot
+           12's converter slip, 0.0 on the Mac and about 5.7e-14 on Linux.
+           The check's relative floor of 1e-9 made that 5.7e-5. It is now
+           1e-6 for the live module, with the measurement in its comment;
+           anything above 1e-6 is judged as before. The check still
+           catches a real change: a ×1.001 weather mutant is stale (an
+           event moves a step). Every other value and module was within
+           tolerance on Linux. Rerun: the fixtures job passed.
+     - #112's CI on its final commit: 9 of 9. **Pyodide took 46.0 min**:
+       the old 45-minute limit would have cancelled it. #113's CI: 9 of 9.
+     - **While step 4 waits on the shape: step 5, humidity, built**
+       (`feat/humidity-nox`, a PR into `main` containing #112 and #113).
+       It is ADR-016's next decided step and doesn't depend on step 4.
+       - `thermal.ambient_humidity` (g/kg, default 10.71) corrects
+         reported NOx only. The form is 40 CFR 1065.670's, normalised to
+         ISO 8178's 10.71 g/kg: humidity-only, so intake temperature isn't
+         counted twice (ADR-016 addendum; ISO 8178 itself is paywalled).
+       - It reproduces the regulation's worked example (700.5 → 736.2).
+       - The presets set it: Mumbai NOx ×0.858, Leh ×1.047, Jaisalmer
+         ×1.046, Rovaniemi ×1.187 (very dry: an extrapolation). Standard
+         air sets exactly 10.71.
+       - The picker and `/spec` say it's a correction on NOx only.
+       - At the rating's air nothing moves: 21 of 21 replies identical.
+         Grids re-stamped `172454a3` → `70fdc89e`.
+       - Tests:
+         - `test_humidity_corrects_reported_nox`: 8 parts, 6 of 6
+           mutants caught;
+         - units 114 (+2; 5 of 5 mutants);
+         - e2e cycle 11 and spec 14 (+1 each; each mutant caught);
+         - dyno 15, sweep 6, durability 5;
+         - suite 82 / 0 / 3; solver: cache 20, scheduler 12, round trip
+           30;
+         - fixtures 7 of 7; audit 0 dead, 2 frozen (known), 0 tiny.
+       - Field-count guards moved deliberately: 189 → 190 fields, 181 →
+         182 editable.
   3. **The sheet:** rename Feat Prop A7 from P05 to P06 (the connector
      can't edit cells).
   4. **This Mac:** `~/Documents` is unreadable to Claude Code since
@@ -502,14 +667,14 @@ from the CI-tested tree only in #104's four docs files, with 0 code paths;
 
 | suite | result |
 |---|---|
-| `python3 tests/test_physics.py` | 81 passed, 0 failed, 3 known (with scipy; #110's tree, 2026-10-08). *Was (#107):* 80 / 0 / 3; *(#105):* 79 / 0 / 3; *(#101's final tree):* 78 / 0 / 3; *(#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
-| Pyodide suite | 68 passed, 0 failed, 2 known, 13 skipped (CI on #110, 2026-10-08). *Was (#107):* 67 / 0 / 2 / 13; *(#101's final tree, `b6ea065`):* 65 / 0 / 2 / 13; *(#99):* 64 / 0 / 2 / 13; *(#88):* 59 / 0 / 2 / 12 |
+| `python3 tests/test_physics.py` | 85 passed, 0 failed, 3 known (with scipy; #115's tree, 2026-10-09; CI 3.10 and 3.12 the same). *Was (humidity's tree):* 82 / 0 / 3; *(#110):* 81 / 0 / 3; *(#107):* 80 / 0 / 3; *(#105):* 79 / 0 / 3; *(#101's final tree):* 78 / 0 / 3; *(#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
+| Pyodide suite | 70 passed, 0 failed, 2 known, 15 skipped (CI on #115, 2026-10-09; 45.6 min of its 60). *Was (#114):* 69 / 0 / 2 / 13; *(#110):* 68 / 0 / 2 / 13; *(#107):* 67 / 0 / 2 / 13; *(#101's final tree, `b6ea065`):* 65 / 0 / 2 / 13; *(#99):* 64 / 0 / 2 / 13; *(#88):* 59 / 0 / 2 / 12 |
 | `tools/fixtures/gen_fixtures.py --check` | 7 modules current |
 | `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |
-| `web/physics npm test` | 5 + 36 + 10 + 11 = 62 |
-| `web/solver npm test` | cache 20, live-grid scheduler 12, round trip 30 (#105; *was* 29) |
-| `web/app npm test` | 109 unit tests (pass without `physics-version.ts`; #106's tree, 2026-10-07). *Was:* 104 (#103), 101. `check:labels` 6 of 10 templates |
-| e2e (`web/app`) | dyno 15, grid 9, drive 7, sound 6, enjoy 21, custom 7, cycle 9 (*was* 8; +the environment check, #106), spec 12 (*was* 11; +the reload check, #103), sweep 6, durability 5 |
+| `web/physics npm test` | 5 + 41 + 10 + 11 = 67 (#115: +5, the weather drive). *Was:* 5 + 36 + 10 + 11 = 62 |
+| `web/solver npm test` | cache 20, live-grid scheduler 15, round trip 30 (#115: +3 scheduler, the weather pieces). *Was:* scheduler 12 (#105); round trip 29 |
+| `web/app npm test` | 119 unit tests (pass without `physics-version.ts`; #115's tree, 2026-10-09). *Was:* 114 (humidity's tree), 112 (D's tree), 109 (#106), 104 (#103), 101. `check:labels` 6 of 10 templates |
+| e2e (`web/app`) | (CI on #115) dyno 15, grid 9, drive 9 (*was* 7; +Leh against native, +Leh slower), sound 6, enjoy 22 (*was* 21; +the place on the start screen), custom 7, cycle 11 (*was* 10, +the humidity note; 9, +FINDING-026's thin-air note; 8, +the environment check, #106), spec 14 (*was* 13, +the humidity field; 12, +the thin-air notes; 11, +the reload check, #103), sweep 6, durability 5 |
 
 CI runs all of them except the manual `web/solver npm run test:live-real`.
 Its jobs: physics on Python 3.10 and 3.12, Pyodide, fixtures, solver, web

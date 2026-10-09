@@ -53,7 +53,8 @@ try {
 }
 check("native Python drive available", !!ref, ref ? `${ref.events.length} events in ${((Date.now() - t0) / 1000).toFixed(0)} s` : "");
 
-const browser = await puppeteer.launch({
+const browser = await puppeteer.launch({ timeout: 120_000,   // Chrome's start: 30 s timed out on loaded CI runners (#108, #115)
+ 
   executablePath: process.env.CHROME_PATH,
   args: ["--no-sandbox", "--disable-dev-shm-usage", ...(process.env.CHROME_ARGS?.split(" ") ?? [])],
   headless: process.env.CHROME_HEADLESS === "shell" ? "shell" : true,
@@ -107,6 +108,43 @@ if (ref) {
   }
   check("final state within 1e-6 of native Python after 60 s", worst <= TERMINAL,
     `worst rel ${worst.toExponential(2)} at ${where || "-"}; ${(res.final.v * 3.6).toFixed(2)} km/h, oil ${(res.final.T_oil - 273.15).toFixed(1)} C`);
+}
+
+// ---- 4. Phase 7 step 4: Leh's air through hatch15's weather table, the worker vs native Python ----
+{
+  // the page's own numbers for Leh (environments.json), so both sides drive in the same air to the bit
+  const places = JSON.parse(fs.readFileSync(path.resolve(here, "..", "src", "app", "weather", "environments.json"), "utf8"));
+  const lehPlace = places.find(p => p.key === "plateau");
+  const LEH = [lehPlace.p_amb, lehPlace.T_amb], PRESET = "hatch15";
+  const run = args => JSON.parse(execFileSync("python3", [path.join(here, "native_drive.py"), PRESET, "tc", ...args],
+    { encoding: "utf8", cwd: path.resolve(here, "..", "..", ".."), maxBuffer: 64 << 20 }));
+  let leh, std;
+  try { leh = run(LEH.map(String)); std = run([]); } catch (e) { console.log(`native Leh reference failed: ${String(e.message).split("\n")[0]}`); }
+  await page.goto(`http://localhost:${port}${BASE}drive?e2e`, { waitUntil: "load" });
+  await page.waitForFunction(() => !!globalThis.__drive, { timeout: 30_000 });
+  await page.select("select.drive-env", "plateau");
+  const got = await page.evaluate(async ([preset, script]) => {
+    await globalThis.__drive.load(preset, "tc");
+    const r = await globalThis.__drive.script(script, {});
+    return { ...r, info: globalThis.__drive.info() };
+  }, [PRESET, leh?.script ?? { dt: 1 / 60, n: 1, throttle: [0], brake: [], grade: [], keys: [] }]);
+  const note = await page.$eval("p.drive-env-note", e => e.textContent.replace(/\s+/g, " ").trim()).catch(() => "");
+  let worst = Infinity, where = "";
+  if (leh) {
+    worst = 0;
+    for (const [k, want] of Object.entries(leh.final)) {
+      const r = Math.abs(got.final[k] - want) / Math.max(Math.abs(want), 1e-9);
+      if (!(r <= worst)) { worst = r; where = `${k} (${got.final[k]} vs ${want})`; }
+    }
+  }
+  const sameEvents = !!leh && JSON.stringify(got.events) === JSON.stringify(leh.events);
+  check("Leh on /drive: hatch15's weather table corrects the worker as it does native Python (events, final within 1e-6)",
+    !!leh && leh.weather === "table" && got.info?.weather === "table" && sameEvents && worst <= TERMINAL,
+    `native ${leh?.weather}, page ${got.info?.weather}; ${got.events?.length} events, same ${sameEvents}; worst rel ${worst.toExponential?.(2)} at ${where || "-"}`);
+  check("and thinner air is slower: Leh's 60 s drive ends slower than standard air's, and the page says why",
+    !!std && !!leh && leh.final.v < std.final.v && /weather table/.test(note) && /65\.8 kPa/.test(note),
+    `${((leh?.final.v ?? 0) * 3.6).toFixed(1)} vs ${((std?.final.v ?? 0) * 3.6).toFixed(1)} km/h; "${note.slice(0, 80)}…"`);
+  await page.select("select.drive-env", "standard");
 }
 
 check("no page errors, console errors or failed requests", problems.length === 0, problems.slice(0, 3).join(" ; "));

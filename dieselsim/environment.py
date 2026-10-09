@@ -62,7 +62,11 @@ class Environment:
 
     def overrides(self) -> dict:
         """The spec fields this environment sets (the bridge's dotted paths)."""
-        out = {"thermal.ambient_p": self.p_amb, "thermal.ambient_T": self.T_amb}
+        out = {"thermal.ambient_p": self.p_amb, "thermal.ambient_T": self.T_amb,
+               # ADR-016 item 3: NOx's humidity correction. The standard air is the reference
+               # exactly (its Magnus value is 10.7099...), so it changes nothing.
+               "thermal.ambient_humidity": H_REF if self.key == "standard"
+               else humidity_ratio(self.T_amb, self.p_amb, self.rh_pct)}
         if self.cetane is not None:
             out["inj.cetane_number"] = self.cetane
         return out

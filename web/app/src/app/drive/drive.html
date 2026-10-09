@@ -31,6 +31,8 @@
         <option value="manual" [selected]="trans() === 'manual'">Manual, clutch pedal</option>
       </select>
     </label>
+    <app-drive-env class="field place" [state]="dashInfo()?.weather" [checkPct]="dashInfo()?.weather_check_pct"
+                   (changed)="stop()" />
     <button type="button" class="run" (click)="start()" [disabled]="status() === 'loading'">
       {{ status() === 'driving' ? 'Restart' : 'Start engine' }}
     </button>
