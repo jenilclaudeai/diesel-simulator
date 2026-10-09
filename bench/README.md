@@ -22,6 +22,8 @@ comparing hardware.
 Options: `--workers N` (default: the native tool's pool, min(6, cores));
 `--engine KEY` (default `crdi15`).
 
-The browser figure is an estimate. It uses ADR-014's measured slowdown of
-Pyodide against native Python (×2.65, on a Mac) and the app's pool (cores
-− 1, at most 6); the browser itself was not run.
+The browser figure is an estimate and a range. It scales the native
+estimate by this project's two measured whole browser builds on one 8-core
+Mac (21.5 and 27.5 min in Chrome against 14.8 min natively, 6 workers
+each: ×1.45–1.86), on the app's pool (cores − 1, at most 6). The browser
+itself is not run.

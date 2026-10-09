@@ -20,9 +20,13 @@ Two modes:
   --full (~15-25 min on a 6-8 core laptop): builds the whole grid and
     times it. The exact number, and the check on the estimate.
 
-It also estimates the browser's build (ADR-014: Pyodide measured 2.65x
-slower than native CPython per piece, on a Mac; the browser pool is
-cores - 1, at most 6), and says it is an estimate.
+It also estimates the browser's build, as a range, and says it is one: the
+native estimate scaled by this project's two measured whole browser builds
+on one 8-core Mac (21.5 and 27.5 min in Chrome on 6 workers, against 14.8
+min natively for the same 8 x 6 grid on 6 workers: x1.45-1.86), on the
+app's pool (cores - 1, at most 6). Not ADR-014's x2.65: that was measured
+single-threaded, and these piece times are taken under full load, which
+would count the load twice.
 
 Run (from the repo root; numpy is the only dependency):
     python3 tools/bench_grid.py                 # quick
@@ -48,7 +52,9 @@ REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, REPO)
 
 N_RPM, N_LOAD = 8, 6                    # bridge.LIVE_N_RPM, LIVE_N_LOAD
-PYODIDE_SLOWDOWN = 2.65                 # ADR-014: Pyodide vs native CPython, per piece (measured on a Mac)
+# the browser against native, whole builds on one 8-core Mac, both on 6 workers: Chrome 21.5 and
+# 27.5 min (STATUS, session 5 parts 17 and 18) against native 14.8 min (crdi15's shipped grid)
+BROWSER_RATIO = (21.5 / 14.8, 27.5 / 14.8)
 
 
 def native_workers():
@@ -188,7 +194,7 @@ def run(engine="crdi15", workers=None, full=False, log=print):
         "pieces": len(rpms) + 2 * len(rpms) * len(loads),
         "mean_piece_s": {"row": means[0], "warm_cell": means[1], "cold_cell": means[2]},
         "estimate_native_s": est,
-        "estimate_browser_s": estimate_build_seconds(*(m * PYODIDE_SLOWDOWN for m in means), bw),
+        "estimate_browser_s": [estimate_build_seconds(*(m * r for m in means), bw) for r in BROWSER_RATIO],
         "browser_workers": bw,
         "machine": machine(), "date": datetime.datetime.now().isoformat(timespec="seconds"),
     })
@@ -215,8 +221,9 @@ def report(r):
     else:
         lines.append(f"ESTIMATE: a full grid natively ~ {r['estimate_native_s'] / 60:.1f} min "
                      f"(this quick run took {r['benchmark_s'] / 60:.1f} min; --full measures it exactly)")
-    lines.append(f"browser : ~ {r['estimate_browser_s'] / 60:.0f} min on {r['browser_workers']} workers "
-                 f"(an estimate: Pyodide x{PYODIDE_SLOWDOWN}, measured on a Mac, ADR-014)")
+    lo, hi = r["estimate_browser_s"]
+    lines.append(f"browser : ~ {lo / 60:.0f}-{hi / 60:.0f} min on {r['browser_workers']} workers (an estimate: "
+                 f"x{BROWSER_RATIO[0]:.2f}-{BROWSER_RATIO[1]:.2f} of native, from two whole browser builds on a Mac)")
     return "\n".join(lines)
 
 
