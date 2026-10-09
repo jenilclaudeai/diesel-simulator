@@ -1113,3 +1113,8 @@ to 52 kPa. About 390 converged solves per engine (with 6 held-out checks at
 Leh, whose worst error the file records), and about 1.3 h extra per custom
 engine in a browser. The proposal's 1.15% (measured before #107's ECU) is
 superseded by these numbers.
+
+*Outcome (2026-10-09):* all ten grids carry a table, and each records its
+own Leh check: 0.3–2.8%, except single10 at 7.2% (a misfire in cold, thin
+air, FINDING-027) and hd_i6 at 4.7% (a smoke-limit knee between pressure
+nodes). The pages show each engine's own figure.

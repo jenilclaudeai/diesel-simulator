@@ -532,8 +532,14 @@ def live_grid_assemble(req_json):
             "src_f32": col("warm", "src_f32"), "src_cold_f32": col("cold", "src_f32"),
             "src_meta": col("warm", "meta"), "src_meta_cold": col("cold", "meta"),
             "unsettled_cells": unsettled, "build_s": int(req.get("build_s", 0))}
-    data.update(req.get("extra") or {})
+    extra = dict(req.get("extra") or {})
+    # Phase 7 step 4: a weather table goes last, where tools/build_live_grids.py --weather
+    # appends it to an existing file, so the browser's file and the native one match key for key
+    weather = extra.pop("weather", None)
+    data.update(extra)
     data.update(live_annotation(spec))
+    if weather is not None:
+        data["weather"] = weather
     return json.dumps(data, separators=(",", ":"))
 
 

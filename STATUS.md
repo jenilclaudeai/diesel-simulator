@@ -141,9 +141,47 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
              gave native a rounded 65764.1 Pa while the page used
              environments.json's 65764.0576. The test now reads the
              page's own numbers.
-         - Still to do: the other nine tables (about 45 min each); the
+         - ~~Still to do: the other nine tables (about 45 min each); the
            browser-vs-native table (`test:live-real`, manual, once the
-           CPU is free); CI; STATUS for the PR.
+           CPU is free); CI; STATUS for the PR.~~ **Done 2026-10-09:
+           all ten grids carry a table.** Each one's own Leh check (6
+           held-out cells, % of full-load torque):
+
+           | grid | Leh check | unsettled / 390 | build |
+           |---|---|---|---|
+           | hatch15 | 2.35% | 13 | 46 min |
+           | crdi22 | 2.75% | 19 | 56 min |
+           | truck127 | 2.46% | 67 | 67 min |
+           | v8hd | 2.78% | 60 | 85 min |
+           | single10 | **7.20%** | 1 | 17 min |
+           | crdi15 | 2.04% | 17 | 52 min |
+           | crdi_1p5 | 1.52% | 68 | 51 min |
+           | ld_i4 | 2.35% | 8 | 51 min |
+           | hd_i6 | **4.72%** | 1 | 72 min |
+           | single | 0.30% | 1 | 18 min |
+
+           - The two outliers are measured, not guessed. single10
+             misfires in the model at 58 kPa / −20 °C (FINDING-027, open
+             for the owner). hd_i6's smoke limiter binds at 58 kPa but
+             not at Leh, a knee between pressure nodes, within A3's
+             measured 5.2–5.5% anywhere.
+           - truck127, v8hd and crdi_1p5 have many unsettled solves in
+             thin air (their VGT/EGR loops oscillate), period-averaged as
+             FINDING-013 does; their checks are still 1.5–2.8%.
+           - copy_back.py proved for each file that only the `weather`
+             key was added.
+         - Suite 85 / 0 / 3 (+3); fixtures 7 of 7; audit 0 dead, 2 frozen
+           (known), 0 tiny; units 119; the generated places and schema
+           files current. In all ten shipped tables the standard-air node
+           equals the grid's cells in every one of the 480 cells.
+         - `test:live-real` (manual), the browser's 2 × 2 grid with its
+           table against native: numbers within 1.35e-12 (the table
+           included), and 42 pieces counted. **One structural failure,
+           fixed:** the browser's file put the table before the spec and
+           engine view, and the native file after them.
+           `live_grid_assemble` now puts it last. **Rerun: 4 of 4**,
+           the same structure (27 fields, keys in order), numbers within
+           1.35e-12, built in 22 min on 2 Node Pyodide workers.
      - #112's CI on its final commit: 9 of 9. **Pyodide took 46.0 min**:
        the old 45-minute limit would have cancelled it. #113's CI: 9 of 9.
      - **While step 4 waits on the shape: step 5, humidity, built**
