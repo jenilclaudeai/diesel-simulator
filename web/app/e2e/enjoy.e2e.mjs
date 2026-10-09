@@ -46,7 +46,8 @@ const check = (name, ok, note = "") => {
 };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-const browser = await puppeteer.launch({
+const browser = await puppeteer.launch({ timeout: 120_000,   // Chrome's start: 30 s timed out on loaded CI runners (#108, #115)
+ 
   executablePath: process.env.CHROME_PATH,
   // a fake real-time audio sink: the test judges the page, not this machine's speakers
   args: ["--no-sandbox", "--disable-dev-shm-usage", "--autoplay-policy=no-user-gesture-required",

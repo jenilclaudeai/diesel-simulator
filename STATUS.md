@@ -57,8 +57,9 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
     - #108's "grid in Chrome" job failed twice, both times on Puppeteer's
       30 s Chrome-launch timeout ("waiting for the WS endpoint URL"),
       before any check ran. #109 and #110 contain #108's commits and
-      passed that job. **Follow-up:** raise the e2e launch timeout if it
-      recurs.
+      passed that job. ~~**Follow-up:** raise the e2e launch timeout if it
+      recurs.~~ **It recurred on #115 (2026-10-09), a third time. Every
+      e2e launch now gives Chrome 120 s** (#115).
 - **Waiting on the owner (session 8):**
   1. ~~**Merge #111**~~ **Done 2026-10-08 06:37 UTC.** `main` (`9582848`)
      equals the tested tip `4795cb3`, 0 files differing. CI on #111: 9 of
@@ -190,7 +191,7 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
            anything above 1e-6 is judged as before. The check still
            catches a real change: a ×1.001 weather mutant is stale (an
            event moves a step). Every other value and module was within
-           tolerance on Linux. Rerun pending.
+           tolerance on Linux. Rerun: the fixtures job passed.
      - #112's CI on its final commit: 9 of 9. **Pyodide took 46.0 min**:
        the old 45-minute limit would have cancelled it. #113's CI: 9 of 9.
      - **While step 4 waits on the shape: step 5, humidity, built**

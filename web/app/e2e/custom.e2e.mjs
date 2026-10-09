@@ -36,7 +36,8 @@ const check = (name, ok, note = "") => {
   results.push(ok);
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${note ? "  -- " + note : ""}`);
 };
-const browser = await puppeteer.launch({
+const browser = await puppeteer.launch({ timeout: 120_000,   // Chrome's start: 30 s timed out on loaded CI runners (#108, #115)
+ 
   executablePath: process.env.CHROME_PATH, headless: true, protocolTimeout: 45 * 60_000,
   args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-audio-output", "--autoplay-policy=no-user-gesture-required"],
 });
