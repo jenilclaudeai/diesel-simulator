@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-10-07, start of session 8. Read this section first; the
+**Updated:** 2026-10-09, session 8 (Phase 7 step 4 done, in #115). Read this section first; the
 dated sections below it are history. *(Was: "2026-10-06, end of session
 7".)*
 
@@ -61,6 +61,17 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
       recurs.~~ **It recurred on #115 (2026-10-09), a third time. Every
       e2e launch now gives Chrome 120 s** (#115).
 - **Waiting on the owner (session 8):**
+  0. **Now (2026-10-09): merge #115.** It carries #112 (D), #113 (the
+     table proposal) and #114 (humidity), all open and all targeting
+     `main`, so merging #115 alone brings all four. CI on #115's code
+     (`25ebbaf`): 9 of 9, every job read. Then check `main` by content.
+     Also open for the owner:
+     - FINDING-027 (the NA single's ignition cliff in cold, thin air):
+       A, state it (recommended now), or B, with step 6.
+     - The sheet's P06 rename; the Phase 5 phone re-check;
+       `~/Documents` access for Claude Code.
+     - **Next by ADR-016's order: step 6, cold-flow** (Drive now has its
+       air, so a CFPP cap has something to read), then step 7, projects.
   1. ~~**Merge #111**~~ **Done 2026-10-08 06:37 UTC.** `main` (`9582848`)
      equals the tested tip `4795cb3`, 0 files differing. CI on #111: 9 of
      9, every job read; Pyodide 42.7 min (limit now 60). **Next: merge
@@ -656,14 +667,14 @@ from the CI-tested tree only in #104's four docs files, with 0 code paths;
 
 | suite | result |
 |---|---|
-| `python3 tests/test_physics.py` | 82 passed, 0 failed, 3 known (with scipy; humidity's tree, 2026-10-08). *Was (#110):* 81 / 0 / 3; *(#107):* 80 / 0 / 3; *(#105):* 79 / 0 / 3; *(#101's final tree):* 78 / 0 / 3; *(#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
-| Pyodide suite | 68 passed, 0 failed, 2 known, 13 skipped (CI on #110, 2026-10-08). *Was (#107):* 67 / 0 / 2 / 13; *(#101's final tree, `b6ea065`):* 65 / 0 / 2 / 13; *(#99):* 64 / 0 / 2 / 13; *(#88):* 59 / 0 / 2 / 12 |
+| `python3 tests/test_physics.py` | 85 passed, 0 failed, 3 known (with scipy; #115's tree, 2026-10-09; CI 3.10 and 3.12 the same). *Was (humidity's tree):* 82 / 0 / 3; *(#110):* 81 / 0 / 3; *(#107):* 80 / 0 / 3; *(#105):* 79 / 0 / 3; *(#101's final tree):* 78 / 0 / 3; *(#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
+| Pyodide suite | 70 passed, 0 failed, 2 known, 15 skipped (CI on #115, 2026-10-09; 45.6 min of its 60). *Was (#114):* 69 / 0 / 2 / 13; *(#110):* 68 / 0 / 2 / 13; *(#107):* 67 / 0 / 2 / 13; *(#101's final tree, `b6ea065`):* 65 / 0 / 2 / 13; *(#99):* 64 / 0 / 2 / 13; *(#88):* 59 / 0 / 2 / 12 |
 | `tools/fixtures/gen_fixtures.py --check` | 7 modules current |
 | `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |
-| `web/physics npm test` | 5 + 36 + 10 + 11 = 62 |
-| `web/solver npm test` | cache 20, live-grid scheduler 12, round trip 30 (#105; *was* 29) |
-| `web/app npm test` | 114 unit tests (pass without `physics-version.ts`; humidity's tree, 2026-10-08). *Was:* 112 (D's tree), 109 (#106), 104 (#103), 101. `check:labels` 6 of 10 templates |
-| e2e (`web/app`) | dyno 15, grid 9, drive 7, sound 6, enjoy 21, custom 7, cycle 11 (*was* 10, +the humidity note; 9, +FINDING-026's thin-air note; 8, +the environment check, #106), spec 14 (*was* 13, +the humidity field; 12, +the thin-air notes; 11, +the reload check, #103), sweep 6, durability 5 |
+| `web/physics npm test` | 5 + 41 + 10 + 11 = 67 (#115: +5, the weather drive). *Was:* 5 + 36 + 10 + 11 = 62 |
+| `web/solver npm test` | cache 20, live-grid scheduler 15, round trip 30 (#115: +3 scheduler, the weather pieces). *Was:* scheduler 12 (#105); round trip 29 |
+| `web/app npm test` | 119 unit tests (pass without `physics-version.ts`; #115's tree, 2026-10-09). *Was:* 114 (humidity's tree), 112 (D's tree), 109 (#106), 104 (#103), 101. `check:labels` 6 of 10 templates |
+| e2e (`web/app`) | (CI on #115) dyno 15, grid 9, drive 9 (*was* 7; +Leh against native, +Leh slower), sound 6, enjoy 22 (*was* 21; +the place on the start screen), custom 7, cycle 11 (*was* 10, +the humidity note; 9, +FINDING-026's thin-air note; 8, +the environment check, #106), spec 14 (*was* 13, +the humidity field; 12, +the thin-air notes; 11, +the reload check, #103), sweep 6, durability 5 |
 
 CI runs all of them except the manual `web/solver npm run test:live-real`.
 Its jobs: physics on Python 3.10 and 3.12, Pyodide, fixtures, solver, web
