@@ -82,6 +82,13 @@ const place = await page.evaluate(() => {
 });
 check("the place is picked on the start screen: five places, standard air first (Phase 7 step 4)",
   !!place && place.n === 5 && place.value === "standard" && !place.inTop, JSON.stringify(place));
+// Phase 7 step 6: the fuel, beside it
+const fuel = await page.evaluate(() => {
+  const s = document.querySelector("main.dash select.drive-fuel");
+  return s ? { n: s.options.length, value: s.value } : null;
+});
+check("the fuel is picked beside it: sold here first, then summer, winter and arctic (Phase 7 step 6)",
+  !!fuel && fuel.n === 4 && fuel.value === "local", JSON.stringify(fuel));
 await tapEl("button.start");
 await page.waitForFunction(() => globalThis.__enjoy.view(), { timeout: 60_000 });
 await sleep(1500);

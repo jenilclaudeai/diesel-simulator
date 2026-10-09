@@ -85,6 +85,7 @@
       <div><dt>Friction (live)</dt><dd>{{ fmt2.format(s.fmep_bar) }} bar FMEP</dd></div>
       <div><dt>Boost</dt><dd>{{ fmt2.format(s.boost) }} pressure ratio</dd></div>
       <div><dt>Grade</dt><dd>{{ fmt0.format(100 * s.grade) }}%</dd></div>
+      <div><dt>Fuel</dt><dd class="fuel-state">{{ fmt1.format(s.T_fuel - 273.15) }} °C · filter passes {{ fmt0.format(100 * s.wax_frac) }}%{{ s.fuel_waxed ? ' · waxed' : '' }}</dd></div>
       <div><dt>Trip</dt><dd>{{ fmt1.format(s.trip_km) }} km · {{ fmt2.format(s.trip_L) }} L</dd></div>
     </dl>
     <p class="about">Loop {{ fmt0.format(s.hz) }} Hz, frame {{ fmt0.format(s.frames) }}.</p>

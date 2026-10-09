@@ -32,6 +32,7 @@ function view(): LiveView {
     tank_L: e.tank_L, out_of_fuel: e.out_of_fuel, fuel_kg_h: e.fuel_kg_h,
     fan_on: e.fan_on, T_charge: e.T_charge, derate: e.derate, engine_stopped: e.engine_stopped,
     derate_heat: e.derate_heat,
+    T_fuel: e.T_fuel, wax_frac: e.wax_frac, fuel_waxed: e.fuel_waxed,
   };
 }
 
@@ -118,6 +119,7 @@ addEventListener('message', (ev: MessageEvent<ToWorker>) => {
       const grid = new Adr011Grid(spec, m.grid);
       // a custom engine names its vehicle (ADR-014); a roster grid's preset picks its own
       live = new LiveEngine(grid, m.grid.vehicle ?? m.grid.preset, m.trans, m.grid.engine_view);
+      if (m.cfpp !== undefined) live.fuel_cfpp = m.cfpp;   // Phase 7 step 6: the fuel picked
       frames = 0; held.clear();
       post({ type: 'info', info: info() });
       post({ type: 'state', view: view() });

@@ -73,7 +73,7 @@ export class DrivePage implements OnDestroy {
     // e2e hook (only with ?e2e): run a frame-exact script through the real worker
     if (typeof location !== 'undefined' && location.search.includes('e2e')) {
       (globalThis as Record<string, unknown>)['__drive'] = {
-        load: (preset: string, trans: Transmission) => this.s.load(preset, trans, false, this.env.air()),
+        load: (preset: string, trans: Transmission) => this.s.load(preset, trans, false, this.env.air(), this.env.cfpp()),
         info: () => this.s.info(),
         script: (script: DriveScript, init: Record<string, number> = {}) => this.s.runScript(script, init),
         key: (key: string, down: boolean) => this.s.key(key, down),
@@ -96,12 +96,12 @@ export class DrivePage implements OnDestroy {
     releaseFocus();
     const g = this.imported();
     const p = this.preset();
-    if (p === IMPORTED && g) await this.s.loadGrid(g, this.trans(), true, this.env.air());
+    if (p === IMPORTED && g) await this.s.loadGrid(g, this.trans(), true, this.env.air(), this.env.cfpp());
     else if (p.startsWith(MY)) {
       const saved = await engineLibrary().grid(p.slice(MY.length)).catch(() => undefined);
-      if (saved) await this.s.loadGrid(saved, this.trans(), true, this.env.air());
+      if (saved) await this.s.loadGrid(saved, this.trans(), true, this.env.air(), this.env.cfpp());
       else this.s.error.set('that engine is no longer saved in this browser');
-    } else await this.s.load(p, this.trans(), true, this.env.air());
+    } else await this.s.load(p, this.trans(), true, this.env.air(), this.env.cfpp());
   }
 
   /** "Import grid": a custom engine's grid file (tools/build_live_grids.py --engine). */

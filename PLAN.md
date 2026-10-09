@@ -339,6 +339,9 @@ Project save/load as JSON (OPEN-C).
   to ISO's 10.71 g/kg: humidity-only, so intake temperature isn't counted
   twice. ADR-016 addendum.)*
 - Cold-flow: below the fuel's CFPP, fuel flow is capped in the live loop.
+  *(Built 2026-10-10 with a fuel picker on `/drive` and `/enjoy`, the
+  owner's choice: sold here, summer, winter or arctic. Summer diesel in
+  Rovaniemi won't start; ADR-016 addendum.)*
 - Five real-place presets, numbers shown and editable.
 - Projects: saved and opened on `/spec`; `/drive` and `/enjoy` can open
   them.

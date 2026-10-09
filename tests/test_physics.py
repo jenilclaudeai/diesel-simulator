@@ -1333,6 +1333,106 @@ def test_weather_table_in_the_live_loop():
           + f"(want {want['torque_ind']:+.3f}); states {states}")
 
 
+def test_cold_flow_in_the_live_loop():
+    """Phase 7 step 6 (ADR-016 item 4; the owner chose a fuel picker): below
+    the fuel's CFPP its filter waxes and caps the fuel, in the live loop. On
+    the toy grid (no files: runs under Pyodide). Parts:
+    - a fuel whose CFPP is far below the air changes nothing in a 10 s drive;
+    - the filter's share: 1 at CFPP + 2 K, 0 at CFPP - 6 K, 0.5 at CFPP - 2 K;
+    - summer diesel (CFPP 18 C) at -20 C: waxed out, no fuel, the reason
+      said, and a restart refused with it;
+    - part-waxed (share 0.5), warm and running: full throttle gives at most
+      half of full-load fuel;
+    - running, the fuel warms toward the ambient + 60% of the coolant's rise
+      (tau 420 s), as stated;
+    - a part-waxed engine that doesn't run is told why after 3 s, not before;
+    - but not a coasting car whose rpm reads low through a shift."""
+    import copy
+    import math
+    from dieselsim import live as L
+
+    def engine(T_amb=298.0, cfpp=None):
+        g = _toy_adr011_grid()
+        g.spec = copy.deepcopy(g.spec)
+        g.spec.thermal.ambient_T = T_amb
+        e = L.LiveEngine(g, "crdi15", trans="tc")
+        e.fuel_cfpp = cfpp
+        return e
+
+    def drive(e, n=600):
+        out = []
+        for k in range(n):
+            e.throttle = 0.7 if k < 400 else 0.1
+            e.step(1 / 60)
+            out.append((e.rpm, e.torque, e.fuel_kg_h, e.dl.v))
+        return out
+    none_vs_far = drive(engine()) == drive(engine(cfpp=200.0))
+    e = engine(cfpp=280.0)
+    share = []
+    for dT in (2.0, -6.0, -2.0):
+        e.T_fuel = 280.0 + dT
+        e._cold_flow(0.0)
+        share.append(e.wax_frac)
+    # summer diesel at -20 C
+    w = engine(T_amb=253.15, cfpp=291.15)
+    for _ in range(120):
+        w.throttle = 0.8
+        w.step(1 / 60)
+    hint_wax = w.hint
+    L.handle_key(w, "i")
+    waxed_ok = w.fuel_waxed and w.fuel_kg_h == 0.0 and "gels below 18 C" in hint_wax and "fuel waxed" in w.hint
+    # part-waxed, warm, running: the cap. Against the same engine without a CFPP, one step from
+    # the same state: the load (demand x the turbo-lag factor) is exactly the share times it
+    p, u = engine(cfpp=298.0 + 2.0), engine()   # T_fuel = 298 = CFPP - 2 K: share 0.5
+    for x in (p, u):
+        x.T_coolant, x.rpm = 361.0, 1500.0
+    p._cold_flow(0.0)
+    share_p = p.wax_frac
+    for x in (p, u):
+        x.throttle = 1.0
+        x.step(1 / 60)
+    capped = share_p == 0.5 and abs(p.load_eff - 0.5 * u.load_eff) < 1e-12 and u.load_eff > 0.0
+    # warming, running
+    r = engine(T_amb=270.0, cfpp=200.0)
+    r.T_coolant, r.rpm = 361.0, 1500.0
+    T0, target = r.T_fuel, 270.0 + 0.6 * (361.0 - 270.0)
+    for _ in range(600):
+        r.T_coolant, r.rpm = 361.0, 1500.0      # held, to test the fuel's own first-order lag
+        r._cold_flow(0.1)
+    want = target + (T0 - target) * (1.0 - 0.1 / 420.0) ** 600
+    warmed = abs(r.T_fuel - want) < 1e-9 and abs(want - (target + (T0 - target) * math.exp(-60.0 / 420.0))) < 0.01
+    # the message waits 3 s
+    q = engine(T_amb=265.15, cfpp=265.15)      # share 0.75; held at a crank, not running
+    hints = []
+    for k in range(4 * 60):
+        q.rpm = 50.0
+        q.stalled = True
+        q._cold_flow(1 / 60)
+        hints.append((k, q.hint))
+    before = all(h == "" for k, h in hints if (k + 1) / 60 < 3.0 - 1e-9)
+    after = any("not enough to start cold" in h for k, h in hints if (k + 1) / 60 >= 3.0)
+    # ... and a car coasting at 10 m/s whose rpm reads low (through a shift) isn't told it can't start
+    c = engine(T_amb=265.15, cfpp=265.15)
+    for _ in range(4 * 60):
+        c.rpm, c.dl.v = 50.0, 10.0
+        c._cold_flow(1 / 60)
+    coasting_quiet = c.hint == "" and c.starve_t == 0.0
+    parts = {
+        "a fuel far below its CFPP changes nothing": none_vs_far,
+        "the share: 1 at CFPP + 2 K, 0 at CFPP - 6 K, 0.5 at CFPP - 2 K": share == [1.0, 0.0, 0.5],
+        "summer diesel at -20 C: waxed out, no fuel, said, restart refused": waxed_ok,
+        "part-waxed: full throttle capped at the filter's share": capped,
+        "running, the fuel warms at the stated rate": warmed,
+        "not running: told why after 3 s, not before": before and after,
+        "coasting with a low rpm: not told it can't start": coasting_quiet,
+    }
+    bad = [k for k, ok in parts.items() if not ok]
+    check("cold-flow in the live loop (Phase 7 step 6)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ")
+          + f"shares {share}; waxed hint '{hint_wax[:40]}'; load {p.load_eff:.3f} vs {u.load_eff:.3f} uncapped; "
+          + f"fuel {T0 - 273.15:.1f} -> {r.T_fuel - 273.15:.2f} C in 60 s")
+
+
 def test_weather_pieces_match_the_grid():
     """Phase 7 step 4: a weather piece at the standard air is the grid's own
     cell (the table's standard node is taken from the grid, so the two must
@@ -2347,8 +2447,10 @@ def test_environments_json_is_current():
     spec_ = importlib.util.spec_from_file_location("environments_json", tool)
     mod = importlib.util.module_from_spec(spec_)
     spec_.loader.exec_module(mod)
-    with open(mod.OUT) as fh:
-        current = fh.read() == mod.content()
+    current = True
+    for path, make in mod.FILES:              # the places and (Phase 7 step 6) the fuel grades
+        with open(path) as fh:
+            current = current and fh.read() == make()
     check("the places file for Drive and Enjoy is current (Phase 7 step 4)", 1.0 if current else 0.0, 1.0, 0.0,
           "tools/environments_json.py; " + ("current" if current else "STALE: run python3 tools/environments_json.py"))
 
@@ -2539,7 +2641,8 @@ def main():
                test_lockup_key_by_transmission,
                test_manual_gearbox,
                test_lockup_and_coast_downshifts,
-               test_adr011_live_friction, test_weather_table_in_the_live_loop, test_weather_pieces_match_the_grid,
+               test_adr011_live_friction, test_weather_table_in_the_live_loop, test_cold_flow_in_the_live_loop,
+               test_weather_pieces_match_the_grid,
                test_grid_hash_ignores_the_live_loop,
                test_livesound_firing_peaks_and_sources,
                test_livesound_carries_physics,

@@ -147,6 +147,26 @@ if (ref) {
   await page.select("select.drive-env", "standard");
 }
 
+// ---- 5. Phase 7 step 6: summer diesel in Rovaniemi waxes, through the real worker ----
+{
+  await page.goto(`http://localhost:${port}${BASE}drive?e2e`, { waitUntil: "load" });
+  await page.waitForFunction(() => !!globalThis.__drive, { timeout: 30_000 });
+  await page.select("select.drive-env", "winter");
+  await page.select("select.drive-fuel", "summer");
+  const fuelNote = await page.$eval("p.drive-fuel-note", e => e.textContent.replace(/\s+/g, " ").trim()).catch(() => "");
+  await page.evaluate(async () => { await globalThis.__drive.load("hatch15", "tc"); globalThis.__drive.run(); });
+  await new Promise(r => setTimeout(r, 2500));
+  const seen = await page.evaluate(() => ({
+    status: document.querySelector("p.status[role=status]")?.textContent.replace(/\s+/g, " ").trim() ?? "",
+    fuel: document.querySelector("dd.fuel-state")?.textContent.replace(/\s+/g, " ").trim() ?? "",
+  }));
+  check("summer diesel in Rovaniemi (-20 C): the page says it won't start, and the worker's fuel waxes out, saying why",
+    /won't start/.test(fuelNote) && /gels below 18 C/.test(seen.status) && /waxed/.test(seen.fuel) && /-20\.0 °C/.test(seen.fuel),
+    `note "${fuelNote.slice(0, 60)}…"; status "${seen.status.slice(0, 60)}…"; fuel "${seen.fuel}"`);
+  await page.select("select.drive-fuel", "local");
+  await page.select("select.drive-env", "standard");
+}
+
 check("no page errors, console errors or failed requests", problems.length === 0, problems.slice(0, 3).join(" ; "));
 await browser.close();
 server.close();

@@ -1118,3 +1118,29 @@ superseded by these numbers.
 own Leh check: 0.3–2.8%, except single10 at 7.2% (a misfire in cold, thin
 air, FINDING-027) and hd_i6 at 4.7% (a smoke-limit knee between pressure
 nodes). The pages show each engine's own figure.
+
+### Addendum (2026-10-10): item 4, cold-flow, and how a driver gets waxed fuel
+
+Every place sells the right fuel (Rovaniemi arctic diesel at −20 °C, Leh
+winter diesel at 20 °C), so a wax cap fed only by the place would never
+act: an input nothing feeds, FINDING-025's pattern. **The owner chose a
+fuel picker** ("A fuel picker"), over extra "wrong fuel" places or an
+editable temperature.
+- `/drive`, and `/enjoy`'s start screen, show Fuel beside Place: sold here
+  (the default), summer (CFPP 18 °C), winter (6 °C) or arctic (−32 °C).
+  The grades are `environment.FUELS`, from the same sources as the places.
+- The live loop (Python and TypeScript, fixture-matched):
+  - The fuel starts at the ambient. Running, it warms toward the ambient
+    plus 60% of the coolant's rise over about 7 minutes; stopped, it
+    drifts back over about 30.
+  - The filter passes all the fuel down to CFPP + 2 K and none at
+    CFPP − 6 K. That share caps the governor's demand.
+  - Below 12% the engine is waxed out: no fuel, the reason given, and a
+    restart refused.
+  - A part-waxed engine that can't start says why after 3 s with the car
+    standing.
+  - These are approximations, stated as such.
+- With the five places, each grade either flows or gels: no place's
+  temperature falls inside a grade's waxing band. The limp, part-waxed
+  path is exercised by the loop's tests and fixture, and is there for
+  P06's roads.

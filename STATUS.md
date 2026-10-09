@@ -70,8 +70,47 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
        A, state it (recommended now), or B, with step 6.
      - The sheet's P06 rename; the Phase 5 phone re-check;
        `~/Documents` access for Claude Code.
-     - **Next by ADR-016's order: step 6, cold-flow** (Drive now has its
-       air, so a CFPP cap has something to read), then step 7, projects.
+     - ~~**Next by ADR-016's order: step 6, cold-flow**~~ **Step 6 built
+       (2026-10-10, `feat/cold-flow`, from #115's head, into `main`).**
+       - **The owner's decision:** a fuel picker; every place sells the
+         right fuel, so nothing would wax otherwise (ADR-016 addendum).
+       - Fuel beside Place on `/drive` and `/enjoy`'s start screen: sold
+         here, summer (CFPP 18 °C), winter (6 °C), arctic (−32 °C).
+         `fuels.json` is generated with the places.
+       - The live loop: the fuel's own temperature; the filter's share
+         (1 at CFPP + 2 K, 0 at −6 K) caps the governor's demand; below
+         12% it's waxed out (no fuel, the reason said, restart refused).
+         A part-waxed engine that can't start says so after 3 s
+         standing.
+       - Sanity on hatch15: summer diesel at −20 °C never fires.
+         −8 °C at the filter's 75% starts and runs capped, then warms
+         −8 → 4.5 °C in 3 min, full flow from about 90 s. At 37% it
+         won't start and says why. Arctic at −20 °C runs.
+       - **Corrected in place:**
+         - my first part-waxed message fired at the first step, before
+           the engine could catch; now it waits 3 s;
+         - then it fired while a car coasted (rpm reads 60 through the
+           DCT's coast, with or without a CFPP); now the car must stand.
+       - With the five places every grade either flows or gels: the
+         limp band is reached only in tests and the fixture, until P06's
+         roads.
+       - Tests, read from finished runs on this Mac:
+         - `test_cold_flow_in_the_live_loop`: 7 parts, 7 of 7 mutants.
+         - The live fixture gains `adr011_waxed` and `adr011_limp`; the 8
+           existing drives are identical apart from the five new state
+           keys. TypeScript vs Python: per step ≤ 5.8e-15, every event
+           and message at the same step, 3 of 3 TypeScript mutants.
+           **Corrected in place:** the first waxed drive sat at 0%, where
+           the cap alone gives no fuel, so a "waxed fuel still flows"
+           mutant went unseen. It now sits at 5% (CFPP −14.4 °C at
+           −20 °C), and the mutant is caught.
+         - Units 122 (+3); e2e drive 10 (+1, Rovaniemi with summer
+           diesel) and enjoy 23 (+1, the fuel on the start screen), each
+           mutant caught.
+         - Suite 86 / 0 / 3; fixtures 7 of 7; audit unchanged; places,
+           fuels and schema files current; grid hash unchanged
+           (`70fdc89e`).
+       - Then step 7, projects.
   1. ~~**Merge #111**~~ **Done 2026-10-08 06:37 UTC.** `main` (`9582848`)
      equals the tested tip `4795cb3`, 0 files differing. CI on #111: 9 of
      9, every job read; Pyodide 42.7 min (limit now 60). **Next: merge
