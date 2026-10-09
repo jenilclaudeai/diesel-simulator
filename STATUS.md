@@ -114,6 +114,36 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
          existing grid file and refuses a stale grid.
        - The grid hash is unchanged (`70fdc89e`): `bridge.py` and
          `live.py` are excluded from it.
+       - **Progress (2026-10-09):**
+         - Python, TypeScript, Drive and Enjoy, and the browser build are
+           all built and tested (the commits on `feat/weather-table`).
+         - The ten tables are being built natively, roster first, from a
+           frozen copy of the tree (`$CLAUDE_JOB_DIR/tmp/buildtree`, log
+           `weather_build.log`). **`hatch15` is done:** 390 solves in 46
+           min, 13 unsettled, Leh check 2.35% of full-load torque (the
+           proposal measured 2.35%). `tmp/scripts/copy_back.py` copies
+           each table in and proves only the `weather` key was added (its
+           `build_s` dropped).
+         - Tests:
+           - Python: the live-loop table test 6 parts, 7 of 7 mutants;
+             the pieces test, a standard-air piece = the grid cell
+             exactly (0.0). Its fuel-ignoring mutant is equivalent within
+             tolerance (3e-7: it recalibrates the same limit), so it is
+             recorded, not counted.
+           - TypeScript loop vs Python: 9.9e-15 per step, 49 events
+             identical, 2 of 2 mutants.
+           - Scheduler 15, 3 of 3 mutants; units 119, 7 of 7 compiled
+             mutants (two broken ones redone so they compile).
+           - e2e:drive 9: at Leh the page's worker vs native Python on
+             hatch15's table, 59 events identical and 3.55e-16 final;
+             Leh's 60 s drive ends at 71.9 km/h against 79.1.
+             **Corrected in place:** the first run read 5.3e-7, because I
+             gave native a rounded 65764.1 Pa while the page used
+             environments.json's 65764.0576. The test now reads the
+             page's own numbers.
+         - Still to do: the other nine tables (about 45 min each); the
+           browser-vs-native table (`test:live-real`, manual, once the
+           CPU is free); CI; STATUS for the PR.
      - #112's CI on its final commit: 9 of 9. **Pyodide took 46.0 min**:
        the old 45-minute limit would have cancelled it. #113's CI: 9 of 9.
      - **While step 4 waits on the shape: step 5, humidity, built**

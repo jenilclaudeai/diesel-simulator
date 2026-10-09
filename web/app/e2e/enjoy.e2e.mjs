@@ -74,6 +74,13 @@ const view = () => page.evaluate(() => globalThis.__enjoy.view());
 async function tapEl(sel) { const p = await at(sel, 0.5); await touch("touchStart", [p]); await sleep(60); await touch("touchEnd", []); }
 
 await page.goto(`http://localhost:${port}${BASE}enjoy?e2e`, { waitUntil: "load" });
+// Phase 7 step 4: the place, on the start screen (not in the top bar, which B-02's layout rules guard)
+const place = await page.evaluate(() => {
+  const s = document.querySelector("main.dash select.drive-env");
+  return s ? { n: s.options.length, value: s.value, inTop: !!s.closest("header.top") } : null;
+});
+check("the place is picked on the start screen: five places, standard air first (Phase 7 step 4)",
+  !!place && place.n === 5 && place.value === "standard" && !place.inTop, JSON.stringify(place));
 await tapEl("button.start");
 await page.waitForFunction(() => globalThis.__enjoy.view(), { timeout: 60_000 });
 await sleep(1500);
