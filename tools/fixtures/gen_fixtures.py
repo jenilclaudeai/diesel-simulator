@@ -655,7 +655,11 @@ def compare_live(got, want, tol):
             if a != b and not (isinstance(b, int) and isinstance(a, float) and a == b):
                 worst[:] = [math.inf, f"{path}: {a!r} vs {b!r}"]
         else:
-            r = abs(a - b) / max(abs(b), 1e-9)
+            # relative, floored at 1e-6: a quantity that is zero on one platform (a locked
+            # converter's slip, 0.0 on the Mac) is ~1e-14 on another (Linux CI: 5.7e-14,
+            # adr011_weather, Phase 7 step 4), which a 1e-9 floor read as 5.7e-5 "stale".
+            # Anything above 1e-6 is judged as before; a real change to a small value still shows.
+            r = abs(a - b) / max(abs(b), 1e-6)
             if r > worst[0]:
                 worst[:] = [r, path]
     for tr in want:

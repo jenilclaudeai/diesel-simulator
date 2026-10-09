@@ -182,6 +182,15 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
            `live_grid_assemble` now puts it last. **Rerun: 4 of 4**,
            the same structure (27 fields, keys in order), numbers within
            1.35e-12, built in 22 min on 2 Node Pyodide workers.
+         - **PR #115's first CI: 8 of 9.** The fixtures job called the
+           live fixture stale at one value: `adr011_weather`, snapshot
+           12's converter slip, 0.0 on the Mac and about 5.7e-14 on Linux.
+           The check's relative floor of 1e-9 made that 5.7e-5. It is now
+           1e-6 for the live module, with the measurement in its comment;
+           anything above 1e-6 is judged as before. The check still
+           catches a real change: a ×1.001 weather mutant is stale (an
+           event moves a step). Every other value and module was within
+           tolerance on Linux. Rerun pending.
      - #112's CI on its final commit: 9 of 9. **Pyodide took 46.0 min**:
        the old 45-minute limit would have cancelled it. #113's CI: 9 of 9.
      - **While step 4 waits on the shape: step 5, humidity, built**
