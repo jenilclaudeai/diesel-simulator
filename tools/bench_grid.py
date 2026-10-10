@@ -20,6 +20,14 @@ Two modes:
   --full (~15-25 min on a 6-8 core laptop): builds the whole grid and
     times it. The exact number, and the check on the estimate.
 
+Validated on an Apple M2 laptop (8 cores, 6 workers), 2026-10-10: --full
+measured 22.1 min, and the schedule fed that run's own piece times gave
+23.4 (+6%), so the schedule is sound. The quick mode gave 16.8 min (-24%):
+over 22 minutes of full load every piece ran slower (a row 270 s against
+182, a cell 57 s against 40) -- the machine slowing under sustained load,
+which a 5-minute run doesn't reach. So the quick figure is for a machine
+that holds its speed; to compare laptops that throttle, use --full.
+
 It also estimates the browser's build, as a range, and says it is one: the
 native estimate scaled by this project's two measured whole browser builds
 on one 8-core Mac (21.5 and 27.5 min in Chrome on 6 workers, against 14.8
@@ -221,6 +229,8 @@ def report(r):
     else:
         lines.append(f"ESTIMATE: a full grid natively ~ {r['estimate_native_s'] / 60:.1f} min "
                      f"(this quick run took {r['benchmark_s'] / 60:.1f} min; --full measures it exactly)")
+        lines.append("          if the machine slows under a long full load (thin, quiet laptops do), the real "
+                     "build is longer: on an M2 laptop quick said 16.8 min, --full measured 22.1")
     lo, hi = r["estimate_browser_s"]
     lines.append(f"browser : ~ {lo / 60:.0f}-{hi / 60:.0f} min on {r['browser_workers']} workers (an estimate: "
                  f"x{BROWSER_RATIO[0]:.2f}-{BROWSER_RATIO[1]:.2f} of native, from two whole browser builds on a Mac)")
