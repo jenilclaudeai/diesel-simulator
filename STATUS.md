@@ -1,8 +1,79 @@
 # Status
 
-**Updated:** 2026-10-10, session 8 (Phase 7 step 7 built, PR #119; all seven steps
-built). Read this section first; the dated sections below it are history.
-*(Was: "2026-10-09, session 8 (Phase 7 step 4 done, in #115)".)*
+**Updated:** 2026-10-11, session 9 (B-05 and B-06 fixed, PR open; #118 and
+#119 still waiting to merge). Read this section first; the dated sections
+below it are history. *(Was: "2026-10-10, session 8 (Phase 7 step 7 built,
+PR #119; all seven steps built)".)*
+
+**Session 9 (2026-10-11):**
+- **This Mac:** the repo now lives at `~/Projects/diesel-simulator`, out of
+  `~/Documents`, so the permission problem below (items 0a and 4) is gone.
+  Claude Code keys its memory by path, so the session-8 memories were
+  copied from the old path's memory folder to the new one.
+- **The bug sheet has new rows:** B-05 and B-06 (the pedal layout, dated
+  2026-10-07, not in the tracker until now), and Feat Prop **P07**,
+  "Option to select multiple parameters in sweep" (priority 1). P07 is not
+  in ADR-016 or PLAN, so nothing is built: **v1 or v2 is the owner's
+  call.** The P06 rename in the sheet is done.
+- **CI:** #118 9 of 9 on `40ec459`; #119 9 of 9 on `8e0ca1c` (its last
+  STATUS commit), every job read.
+- **B-05 and B-06, measured, then fixed** (`fix/b05-b06-pedal-layout`,
+  from #119's head, into `main`: merge #119 first). The owner chose
+  option B ("B seems like a good option, also if gear paddles are
+  reachable with right thumb, it would make easier, since it's unlikely to
+  accelerate and change gear together") over A (paddles above the right
+  pedals) and C (an automatic clutch dip).
+  - **Before**, on an emulated S9+ (846 × 411/340/300, Manual): the brake
+    sat beside the clutch on the left; the − paddle sat directly above the
+    clutch, in the same column, for the same thumb. From a right thumb
+    resting low on the throttle, − was 712–745 px away and the brake 722.
+  - **The layout now:** clutch | dash | paddles | brake + throttle. The
+    clutch is alone on the left; the brake sits beside the throttle; + over
+    − in a narrow column between the dash and the brake, at the bottom,
+    nearest the right thumb. The top bar spans the dash and the paddles.
+  - **A cost found and reduced, before commit:** the first version
+    narrowed the dash 518 → 440 px, the lamps wrapped to two rows, and the
+    dash overflowed (scrolled) 0 / 42 / 71 px at 411 / 340 / 300, against
+    0 / 1 / 24 before. With every pedal at the old brake/clutch width
+    (~68 px; the throttle was 144) the dash is 525 px, and the overflow
+    0 / 0 / 8. *The trade: the throttle is narrower than it was.*
+  - Pedal names now shrink with a narrow pedal (`min(1em, 16cqi)`): at
+    125% text "Throttle" clipped in its 68 px pedal, caught by the new
+    check.
+  - `enjoy.css` stays under its 4 kB budget (it went 44 bytes over; the
+    duplicate `.gauges` rule merged, the paddle rules compacted).
+  - *Owning a mistake:* my first downshift check expected − from 1st to
+    give neutral. It can't: the manual box's − stops at 1st
+    (`Driveline.select` clips at gear 0). The check now goes N → 1 → 2 → 1.
+  - **Tests, read from finished runs on this Mac (final tree):**
+    - `e2e:enjoy` 25 / 0 (+2): the layout at 846 × 411/340/300 with 125%
+      text (sides, paddles on the right, no overlaps, every pedal name
+      inside its pedal); with the clutch held, the right-hand paddles go
+      N → 1 → 2 → 1. B-02's layout rules still hold.
+    - Mutants, baseline 25 / 0 first, each compiled: brake on the left;
+      paddles above the clutch (M2′); no label fit; − shifting up; the
+      whole old layout. **5 of 5 caught by the new checks**, each failing
+      exactly one check. *Recorded, not counted:* a first M2 (paddle
+      column moved into the clutch's column) covered the clutch, so
+      earlier checks failed and the run crashed at B-01 before the new
+      checks ran; M2′ replaced it. M4's "not applied" guard grepped with
+      an unescaped `$` and could never fire; its result (− went to 3rd)
+      shows it applied.
+    - Units 130; `check:labels` clean; `build:pages` with no budget
+      warning. No Python or physics change, so the suite, fixtures and
+      grids are untouched.
+  - **PR #120** (into `main`; **merge #119 first**). The tracker CSV has
+    B-05 and B-06 as "In PR".
+- **Waiting on the owner (session 9):**
+  1. Merge #119 and #118 (both 9 of 9), then #120 after #119.
+  2. **P07** (multi-parameter sweep, priority 1): v1 or v2?
+  3. On the phone, after #120 is live: the new pedal layout, plus
+     REVIEW-007 M-1 (B-01, B-02, sound, smoothness). That closes Phase 5.
+  4. FINDING-027: A (state it) or B (model the cold-ignition region).
+     Step 6 shipped without B, so A is my recommendation now.
+  5. Still open: the `hd_i6` listening question; the Features tab copy.
+- **Next by PLAN after that:** Phase 8 (polish: units toggle,
+  accessibility, P01 vibration, P06 random roads' proposal).
 
 **2026-10-10, the owner's priority request: a hardware benchmark. Merged
 as #117** (10:16 UTC, at `1589f5f`).
