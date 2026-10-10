@@ -93,6 +93,12 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
      either order.** #119 contains #116 (cold-flow), which contains #112–#115,
      so merging it closes all six. Each merges cleanly with `main` and with
      the other (checked on throwaway merges). Then check `main` by content.
+     **CI, every job read, each run on its PR's current head:**
+     - #118 (`40ec459`), #116 (`f05a27f`) and #119 (`c0b5a29`): 9 of 9 each.
+     - #119's counts: physics 87 / 0 / 3 on 3.10 and 3.12; Pyodide 71 / 0
+       / 2 with 16 skipped; units 130; TS ports 51 + 10 + 11; e2e spec 18,
+       drive 10, enjoy 23, custom 7, grid 9.
+     - Pyodide took 47.4 min on #116, against the 60-minute limit.
      *(Was: "merge #115", below; #116 then carried it.)*
   0a. *(2026-10-09)* **Merge #115.** It carries #112 (D), #113 (the
      table proposal) and #114 (humidity), all open and all targeting
