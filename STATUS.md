@@ -64,6 +64,13 @@ PR #119; all seven steps built)".)*
       grids are untouched.
   - **PR #120** (into `main`; **merge #119 first**). The tracker CSV has
     B-05 and B-06 as "In PR".
+    - **CI on `5b2ff9b`: 9 of 9, every job read.** Physics 87 / 0 / 3 on
+      3.10 (30.3 min of 45) and 3.12; Pyodide 71 / 0 / 2, 16 skipped
+      (26.8 min of 60); all identical to #119's. The e2e job's own log, on
+      Linux's wider font: enjoy 25 / 0, both new checks passing with no
+      pedal name clipped; dyno 15, drive 10, sound 6, cycle 11, spec 18,
+      sweep 6, durability 5.
+    - This STATUS commit reruns CI on docs only.
 - **Waiting on the owner (session 9):**
   1. Merge #119 and #118 (both 9 of 9), then #120 after #119.
   2. **P07** (multi-parameter sweep, priority 1): v1 or v2?
