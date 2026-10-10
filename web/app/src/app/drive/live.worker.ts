@@ -32,6 +32,7 @@ function view(): LiveView {
     tank_L: e.tank_L, out_of_fuel: e.out_of_fuel, fuel_kg_h: e.fuel_kg_h,
     fan_on: e.fan_on, T_charge: e.T_charge, derate: e.derate, engine_stopped: e.engine_stopped,
     derate_heat: e.derate_heat,
+    T_fuel: e.T_fuel, wax_frac: e.wax_frac, fuel_waxed: e.fuel_waxed,
   };
 }
 
@@ -60,6 +61,8 @@ function info(): DashInfo {
     vmax_kmh: topSpeedKmh(),
     vehicle: v.name, tank_L: v.fuel_tank_L, gears: v.gears.length,
     T_warn: c.T_warn, T_derate: c.T_derate, T_shutdown: c.T_shutdown, fan_on_T: c.fan_on_T,
+    weather: e.weatherState(),
+    weather_check_pct: (e.g as Adr011Grid).weather?.d.check?.worst_pct_of_full_load ?? null,
   };
 }
 
@@ -109,9 +112,14 @@ addEventListener('message', (ev: MessageEvent<ToWorker>) => {
   const m = ev.data;
   switch (m.type) {
     case 'load': {
-      const grid = new Adr011Grid(m.grid.spec, m.grid);
+      // Phase 7 step 4: the place's air, set before the engine is made (its coolant
+      // starts at the ambient); the grid carries its weather table, if it has one
+      const spec = structuredClone(m.grid.spec);
+      if (m.air) { spec.thermal.ambient_p = m.air.p; spec.thermal.ambient_T = m.air.T; }
+      const grid = new Adr011Grid(spec, m.grid);
       // a custom engine names its vehicle (ADR-014); a roster grid's preset picks its own
       live = new LiveEngine(grid, m.grid.vehicle ?? m.grid.preset, m.trans, m.grid.engine_view);
+      if (m.cfpp !== undefined) live.fuel_cfpp = m.cfpp;   // Phase 7 step 6: the fuel picked
       frames = 0; held.clear();
       post({ type: 'info', info: info() });
       post({ type: 'state', view: view() });

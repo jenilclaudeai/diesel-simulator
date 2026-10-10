@@ -49,7 +49,8 @@ try {
   process.exit(1);
 }
 
-const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH, headless: true, protocolTimeout: 10 * 60_000,
+const browser = await puppeteer.launch({ timeout: 120_000,   // Chrome's start: 30 s timed out on loaded CI runners (#108, #115)
+  executablePath: process.env.CHROME_PATH, headless: true, protocolTimeout: 10 * 60_000,
   args: ["--no-sandbox", "--disable-dev-shm-usage"] });
 const page = await browser.newPage();
 await page.setViewport({ width: 1200, height: 1000 });
@@ -65,9 +66,23 @@ const layout = await page.evaluate(() => ({
   editable: document.querySelectorAll("tr[data-path] input").length,
   cr: Number(document.querySelector('tr[data-path="geom.compression_ratio"] input').value),
 }));
-check("every field, in seven subsystems: 189 rows, 181 of them editable",
-  layout.groups.length === 7 && layout.rows === 189 && layout.editable === 181,
+check("every field, in seven subsystems: 190 rows, 182 of them editable",
+  layout.groups.length === 7 && layout.rows === 190 && layout.editable === 182,
   `${layout.groups.join(" | ")}; ${layout.rows} rows, ${layout.editable} inputs; compression ratio ${layout.cr}`);
+const thinNotes = await page.evaluate(() => Object.fromEntries(["thermal.ambient_p", "ecu_modern"].map(p =>
+  [p, document.querySelector(`tr[data-path="${p}"] .note`)?.textContent.replace(/\s+/g, " ").trim() ?? ""])));
+check("thin air (FINDING-026): ambient pressure and the ECU switch say the model's limits beside the field",
+  /Below 90 kPa/.test(thinNotes["thermal.ambient_p"]) && /no turbo-overspeed/.test(thinNotes["thermal.ambient_p"])
+  && /mechanical pump/.test(thinNotes.ecu_modern) && /no turbo-overspeed/.test(thinNotes.ecu_modern),
+  `ambient: "${thinNotes["thermal.ambient_p"].slice(0, 50)}…"; ECU: "${thinNotes.ecu_modern.slice(0, 90)}…"`);
+const humRow = await page.evaluate(() => {
+  const tr = document.querySelector('tr[data-path="thermal.ambient_humidity"]');
+  return { value: Number(tr?.querySelector("input")?.value), unit: tr?.querySelector(".unit")?.textContent.trim() ?? "",
+    note: tr?.querySelector(".note")?.textContent.replace(/\s+/g, " ").trim() ?? "" };
+});
+check("humidity (ADR-016 item 3): its own field, 10.71 g/kg, saying it corrects NOx only",
+  humRow.value === 10.71 && humRow.unit === "g/kg" && /NOx only/.test(humRow.note) && /isn't in the cycle/.test(humRow.note),
+  `${humRow.value} ${humRow.unit}; "${humRow.note.slice(0, 80)}…"`);
 
 // ADR-009: the four live schematics, drawn from the spec
 await page.waitForSelector("figure.schematic.compressor polyline.speed", { timeout: 60_000 }).catch(() => {});

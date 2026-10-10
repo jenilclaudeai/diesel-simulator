@@ -34,6 +34,7 @@
       <label class="import">Your own engine: <input type="file" accept=".json,application/json"
         [disabled]="status() === 'loading'" (change)="importGrid($any($event.target))" aria-label="Import grid file"></label>
       @if (importError()) { <p class="err import-err">{{ importError() }}</p> }
+      <app-drive-env class="place" (changed)="stop()" />
       <p class="hint">Throttle on the right, brake on the left: press harder by sliding up. Paddles shift.</p>
     } @else if (v(); as s) {
       <ul class="lamps" aria-label="Warning lamps">

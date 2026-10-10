@@ -4,7 +4,11 @@
 //
 //   python3 tools/build_live_grids.py --engine web/solver/test/my20.engine.json \
 //       --size 2x2 --out out/grids/my20-2x2.json
+//   python3 tools/build_live_grids.py --weather out/grids/my20-2x2.json      # Phase 7 step 4
 //   cd web/solver && npm run test:live-real
+//
+// With the weather table (Phase 7 step 4) it builds 10 grid pieces and 32 weather pieces (a 2 x 2
+// grid has no held-out check cells), and compares the table with the native one like the rest.
 //
 // Pyodide agrees with native CPython to ~1e-6, not bit for bit (the fuel
 // limiter's warm-started calibration chain amplifies a 1e-10 platform
@@ -42,7 +46,7 @@ const workers = [0, 1].map(() => {
 const t0 = performance.now();
 const prog: LiveBuildProgress[] = [];
 const text = await buildLiveGrid({ headline: engineJson }, workers, {
-  key: "my20", size: [2, 2], store: new MemoryPieceStore(), storeKey: "real",
+  key: "my20", size: [2, 2], store: new MemoryPieceStore(), storeKey: "real", weather: true,
   extra: { custom: ref["custom"], vehicle: ref["vehicle"], engine_json: ref["engine_json"], engine_file_sha256: ref["engine_file_sha256"] },
   onProgress: p => { prog.push(p); if (p.done % 2 === 0) console.log(`  ${p.phase} ${p.done}/${p.total}${p.etaS ? `, ~${Math.round(p.etaS)} s left` : ""}`); },
 });
@@ -78,7 +82,9 @@ cmp(gotRest, refRest, "grid");
 check("the browser's grid has the native file's structure: keys in order, shapes, grid hash", structural.length === 0,
   structural.slice(0, 4).join("; ") || `${Object.keys(got).length} fields`);
 check(`and its numbers within ${REL} (Pyodide vs CPython)`, worst <= REL, `worst ${worst.toExponential(2)} at ${where}`);
-check("progress reported to the end", prog.at(-1)?.phase === "assemble" && prog.at(-2)?.done === 10, `built in ${secs.toFixed(0)} s with 2 workers`);
+check("progress reported to the end", prog.at(-1)?.phase === "assemble" && prog.at(-2)?.done === 10 + 32, `built in ${secs.toFixed(0)} s with 2 workers`);
+check("the weather table is there, on both sides (Phase 7 step 4)", "weather" in got && "weather" in ref,
+  `browser ${"weather" in got}, native ${"weather" in ref}`);
 const failed = results.filter(r => !r).length;
 console.log(`\n${results.length - failed} passed, ${failed} failed  (${secs.toFixed(0)} s)`);
 process.exit(failed ? 1 : 0);

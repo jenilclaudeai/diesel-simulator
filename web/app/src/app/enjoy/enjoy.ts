@@ -1,9 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, HostListener, OnDestroy, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, HostListener, inject, OnDestroy, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import type { Transmission } from '@dieselsim/physics';
 import { releaseFocus } from '../drive/drive';
 import { controlKey, MIC_KEYS, MICS } from '../drive/drive-keys';
 import { LiveSession } from '../drive/live-session';
+import { DriveEnv } from '../weather/drive-env';
+import { DriveEnvPicker } from '../weather/drive-env-picker';
 import { IMPORTED, readGridFile } from '../drive/grid-file';
 import { engineLibrary, MY, type MyEngine } from '../engine/my-engines';
 import type { GridFile, Pedals } from '../drive/protocol';
@@ -25,7 +27,7 @@ const PHASE = ['', 'shifting: torque phase', 'shifting: inertia phase'];
  */
 @Component({
   selector: 'app-enjoy',
-  imports: [RouterLink, Pedal, Gauge],
+  imports: [RouterLink, Pedal, Gauge, DriveEnvPicker],
   templateUrl: './enjoy.html',
   styleUrl: './enjoy.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -44,6 +46,7 @@ export class EnjoyPage implements OnDestroy {
   protected readonly MY = MY;
   protected readonly manual = signal(false);
   private readonly s = new LiveSession();
+  private readonly env = inject(DriveEnv);
   protected readonly status = this.s.status;
   protected readonly error = this.s.error;
   protected readonly v = this.s.v;
@@ -111,12 +114,12 @@ export class EnjoyPage implements OnDestroy {
     if (!this.soundOn()) await this.s.soundStart();
     const g = this.imported();
     const p = this.preset();
-    if (p === IMPORTED && g) await this.s.loadGrid(g, this.trans(), true);
+    if (p === IMPORTED && g) await this.s.loadGrid(g, this.trans(), true, this.env.air(), this.env.cfpp());
     else if (p.startsWith(MY)) {
       const saved = await engineLibrary().grid(p.slice(MY.length)).catch(() => undefined);
-      if (saved) await this.s.loadGrid(saved, this.trans(), true);
+      if (saved) await this.s.loadGrid(saved, this.trans(), true, this.env.air(), this.env.cfpp());
       else this.s.error.set('that engine is no longer saved in this browser');
-    } else await this.s.load(p, this.trans(), true);
+    } else await this.s.load(p, this.trans(), true, this.env.air(), this.env.cfpp());
   }
 
   /** "Import": a custom engine's grid file (tools/build_live_grids.py --engine). */

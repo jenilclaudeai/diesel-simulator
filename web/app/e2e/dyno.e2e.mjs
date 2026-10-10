@@ -57,7 +57,8 @@ check("native Python reference available", Object.keys(ref).length >= 3, refNote
 const physics = fs.readFileSync(path.resolve(here, "..", "src", "app", "solver", "physics-version.ts"), "utf8")
   .match(/PHYSICS_VERSION = "([0-9a-f]+)"/)[1];
 
-const browser = await puppeteer.launch({
+const browser = await puppeteer.launch({ timeout: 120_000,   // Chrome's start: 30 s timed out on loaded CI runners (#108, #115)
+ 
   executablePath: process.env.CHROME_PATH,
   args: ["--no-sandbox", "--disable-dev-shm-usage", ...(process.env.CHROME_ARGS?.split(" ") ?? [])],
   // Some Chrome builds (e.g. headless-shell) need "shell". Deliberately no

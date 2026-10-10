@@ -49,6 +49,66 @@ class PerfGrid:
 
 
 
+def _seg(nodes, x):
+    """Segment index and fraction on ascending nodes; the fraction runs past 0
+    or 1 outside them (linear extrapolation, as the shape was measured)."""
+    i = 0
+    while i < len(nodes) - 2 and x > nodes[i + 1]:
+        i += 1
+    return i, (x - nodes[i]) / (nodes[i + 1] - nodes[i])
+
+
+class WeatherTable:
+    """
+    Phase 7 step 4 (ADR-016 item 1, shape A3): a grid's weather table, as
+    bridge.live_weather_assemble writes it. For every grid cell, warm, the
+    table's keys at 3 x 3 node airs (the standard air's node is the grid's own
+    cell). The live loop adds delta(): the cell-blended value at its air less
+    the value at the standard air -- so at the standard air nothing changes,
+    and indicated torque moves while friction and sound stay the grid's.
+
+    Measured for this shape (PROPOSAL-weather-table.md): 2.4-3.6% of full-load
+    torque at the presets, 5.2-5.5% down to 52 kPa. The air is clamped to the
+    table's range. The order of every sum is fixed, for the TypeScript port.
+    """
+
+    def __init__(self, rpms, loads, table):
+        self.rpms, self.loads = [float(x) for x in rpms], [float(x) for x in loads]
+        self.p_nodes, self.T_nodes = list(table["p_nodes"]), list(table["T_nodes"])
+        self.keys = list(table["keys"])
+        self.values = table["values"]               # [i_rpm][j_load][ip][iT][k]
+        self.p_range, self.T_range = tuple(table["range"]["p"]), tuple(table["range"]["T"])
+        self.std = (self.p_nodes.index(101325.0), self.T_nodes.index(298.0))
+        self.check = table.get("check")
+
+    def delta(self, rpm, load, p, T):
+        """{key: value at (p, T) - value at the standard air}, bilinear in
+        (rpm, load) like the grid, bilinear in (p, T) over the nodes."""
+        r = min(max(rpm, self.rpms[0]), self.rpms[-1])
+        ld = min(max(load, self.loads[0]), self.loads[-1])
+        i, fr = _seg(self.rpms, r)
+        j, fl = _seg(self.loads, ld)
+        p = min(max(p, self.p_range[0]), self.p_range[1])
+        T = min(max(T, self.T_range[0]), self.T_range[1])
+        ip, a = _seg(self.p_nodes, p)
+        iT, b = _seg(self.T_nodes, T)
+        cells = ((i, j, (1 - fr) * (1 - fl)), (i, j + 1, (1 - fr) * fl),
+                 (i + 1, j, fr * (1 - fl)), (i + 1, j + 1, fr * fl))
+        airs = ((ip, iT, (1 - a) * (1 - b)), (ip, iT + 1, (1 - a) * b),
+                (ip + 1, iT, a * (1 - b)), (ip + 1, iT + 1, a * b))
+        out = {}
+        for k, key in enumerate(self.keys):
+            d = 0.0
+            for ci, cj, wc in cells:
+                v = self.values[ci][cj]
+                at = 0.0
+                for ai, aT, wa in airs:
+                    at += wa * v[ai][aT][k]
+                d += wc * (at - v[self.std[0]][self.std[1]][k])
+            out[key] = d
+        return out
+
+
 class Adr011Grid(PerfGrid):
     """
     ADR-011: the grid the live loop reads when friction is computed live.
@@ -67,8 +127,10 @@ class Adr011Grid(PerfGrid):
     """
 
     def __init__(self, spec, rpms, loads, perf, p_cyl, grid_deg, perf_cold, p_cyl_cold,
-                 T_warm, T_cold, src=None, src_cold=None):
+                 T_warm, T_cold, src=None, src_cold=None, weather=None):
         super().__init__(spec, rpms, loads, perf)
+        # Phase 7 step 4: the grid file's weather table, if it has one
+        self.weather = WeatherTable(rpms, loads, weather) if weather else None
         f64 = lambda cells: [[np.asarray(c, dtype=float) for c in row] for row in cells]  # noqa: E731
         self.p_cyl = f64(p_cyl)
         self.p_cyl_cold = f64(p_cyl_cold)
@@ -112,7 +174,8 @@ class Adr011Grid(PerfGrid):
         return cls(spec, gj["rpms"], gj["loads"], gj["perf"], cells(gj["p_cyl_f32"]), gj["grid_deg"],
                    gj["perf_cold"], cells(gj["p_cyl_cold_f32"]), gj["T_warm"], gj["T_cold"],
                    srcs(gj["src_f32"], gj["src_meta"]) if has else None,
-                   srcs(gj["src_cold_f32"], gj["src_meta_cold"]) if has else None)
+                   srcs(gj["src_cold_f32"], gj["src_meta_cold"]) if has else None,
+                   weather=gj.get("weather"))
 
     def cold_weight(self, T_coolant):
         return float(np.clip((self.T_warm - T_coolant) / (self.T_warm - self.T_cold), 0.0, 1.0))
@@ -1122,6 +1185,15 @@ class LiveEngine:
         self.hint_t = 0.0
         self.tank_L = self.veh.fuel_tank_L
         self.out_of_fuel = False
+        # ---- Phase 7 step 6 (ADR-016 item 4): cold-flow ------------------
+        # The fuel's cold-filter plugging point [K] (None: no waxing), set by
+        # the page from the fuel picked; the fuel's own temperature starts at
+        # the ambient and warms with the engine (_cold_flow).
+        self.fuel_cfpp = None
+        self.T_fuel = self.spec.thermal.ambient_T
+        self.wax_frac = 1.0            # the share of full-load fuel the filter passes
+        self.fuel_waxed = False        # too little to keep the engine running
+        self.starve_t = 0.0            # s a part-waxed engine hasn't run (its message waits 3 s)
         self.perf = grid.blend_perf(self.rpm, 0.0)
         self.lock = threading.Lock()
         if self.veh.trans == "manual":
@@ -1151,6 +1223,13 @@ class LiveEngine:
     # of idle (the governor cannot hold it); an automatic cannot stall
     STALL_FRAC = 0.45
     FRICTION_EVERY = 6         # frames between live friction evaluations (10 Hz at 60 Hz)
+    # Phase 7 step 6, cold-flow ("very close, not perfect"): the filter passes all the fuel
+    # down to CFPP + 2 K and none at CFPP - 6 K, linear between; below WAX_STALL of full-load
+    # fuel the engine can't run. The fuel in the filter warms with the engine (return fuel
+    # off the pump and rail) toward the ambient + 60% of the coolant's rise, over ~7 min;
+    # stopped, it drifts back to the ambient over ~30 min. Approximations, stated as such.
+    WAX_ABOVE, WAX_BELOW, WAX_STALL = 2.0, 6.0, 0.12
+    FUEL_TAU_RUN, FUEL_TAU_OFF, FUEL_RETURN_SHARE = 420.0, 1800.0, 0.6
 
     def _update_friction(self):
         """
@@ -1193,9 +1272,24 @@ class LiveEngine:
         g = self.g
         if self.adr011:
             p = g.blend_perf_T(rpm, load, self.T_coolant)
+            t = self.spec.thermal
+            # Phase 7 step 4: off the standard air, the weather table's difference
+            # (indicated torque, fuel, boost, turbo, AFR, exhaust); friction and
+            # sound stay the grid's. At the standard air this is skipped outright.
+            if g.weather is not None and (t.ambient_p != 101325.0 or t.ambient_T != 298.0):
+                for k, d in g.weather.delta(rpm, load, t.ambient_p, t.ambient_T).items():
+                    p[k] = p[k] + d
             p["torque"] = p["torque_ind"] - self.T_fric
             return p
         return g.blend_perf(rpm, load)
+
+    def weather_state(self):
+        """What the loop does with the air (for the page): 'standard', 'table'
+        (corrected), or 'no table' (off the standard air, but the grid has none)."""
+        t = self.spec.thermal
+        if t.ambient_p == 101325.0 and t.ambient_T == 298.0:
+            return "standard"
+        return "table" if getattr(self.g, "weather", None) is not None else "no table"
 
     # ------------------------------------------------------------------
     # ------------------------------------------------------------------
@@ -1416,7 +1510,7 @@ class LiveEngine:
             if self.hint_t == 0.0:
                 self.hint = ""
         self._cruise(dt)
-        if self.out_of_fuel or self.engine_stopped:
+        if self.out_of_fuel or self.engine_stopped or self.fuel_waxed:
             self.throttle = 0.0
             self.cruise_on = False
         if self.adr011:
@@ -1427,6 +1521,39 @@ class LiveEngine:
             self._sub(dt / n_sub)
         self._totals(dt)
         self._thermal(dt)
+        self._cold_flow(dt)
+
+    def _cold_flow(self, dt):
+        """Phase 7 step 6: the fuel's temperature, and the share of full-load
+        fuel a waxing filter passes (class constants above). Nothing without a
+        CFPP, so every drive that picks no fuel is as before."""
+        if self.fuel_cfpp is None:
+            return
+        s, T_amb = self.spec, self.spec.thermal.ambient_T
+        running = not (self.stalled or self.engine_stopped or self.fuel_waxed or self.out_of_fuel) \
+            and self.rpm > 0.5 * s.idle_rpm
+        target = T_amb + self.FUEL_RETURN_SHARE * (self.T_coolant - T_amb) if running else T_amb
+        self.T_fuel += (target - self.T_fuel) * min(1.0, dt / (self.FUEL_TAU_RUN if running else self.FUEL_TAU_OFF))
+        lo = self.fuel_cfpp - self.WAX_BELOW
+        self.wax_frac = float(np.clip((self.T_fuel - lo) / (self.WAX_ABOVE + self.WAX_BELOW), 0.0, 1.0))
+        waxed = self.wax_frac < self.WAX_STALL
+        # seconds a part-waxed engine hasn't run with the car standing: its message waits 3 s, so
+        # a cranking engine that then catches isn't told it can't start; and a coasting car
+        # (whose rpm can read low through a shift) isn't either
+        self.starve_t = self.starve_t + dt if (not waxed and not running and self.wax_frac < 1.0
+                                               and self.dl.v < 0.5) else 0.0
+        if waxed and not self.fuel_waxed:
+            self.hint = (f"fuel waxed: this diesel gels below {self.fuel_cfpp - 273.15:.0f} C "
+                         "-- it needs winter or arctic diesel here")
+            self.hint_t = 6.0
+        elif self.starve_t >= 3.0 and not self.hint:
+            # a cold start needs far more fuel than a warm idle: a part-waxed filter can starve
+            # it, and the fuel won't warm while the engine doesn't run -- so say why it's dead
+            # (floor, not round: Python and JavaScript round halves differently)
+            self.hint = (f"fuel partly waxed: the filter passes {int(self.wax_frac * 100.0)}% "
+                         "-- not enough to start cold; it needs winter or arctic diesel here")
+            self.hint_t = 6.0
+        self.fuel_waxed = waxed
 
     # ------------------------------------------------------------------
     def _sub(self, h):
@@ -1437,8 +1564,9 @@ class LiveEngine:
         if (manual and not self.stalled and rpm < self.STALL_FRAC * s.idle_rpm
                 and not self.dl.gb.neutral and self.dl.tc.cap > 0.0):
             self.stalled = True
-            self.hint = "stalled -- clutch down (z) and press i to restart"
-            self.hint_t = 4.0
+            if not self.fuel_waxed:        # the wax message says why; keep it
+                self.hint = "stalled -- clutch down (z) and press i to restart"
+                self.hint_t = 4.0
 
         # ---- governor: idle hold, droop above rated --------------------
         demand = 0.0 if self.stalled else self.throttle
@@ -1447,6 +1575,8 @@ class LiveEngine:
         if rpm > s.rated_rpm:
             x = (rpm - s.rated_rpm) / max(s.max_rpm - s.rated_rpm, 1.0)
             demand *= max(0.02, 1.0 - 0.98 * x ** 1.4)
+        if self.fuel_cfpp is not None:     # Phase 7 step 6: a waxing filter caps the fuel
+            demand = min(demand, self.wax_frac)
 
         # ---- turbo lag --------------------------------------------------
         target = self._perf(rpm, demand)
@@ -1467,7 +1597,7 @@ class LiveEngine:
         self.perf = p
         self.torque = p["torque"]
         self.fuel_kg_h = p["fuel_kg_h"]
-        if self.engine_stopped:
+        if self.engine_stopped or self.fuel_waxed:
             # no fuel at all: what is left is motoring friction
             self.torque = min(self.torque, self._perf(rpm, 0.0)["torque"])
             self.fuel_kg_h = 0.0
@@ -1578,7 +1708,9 @@ def handle_key(live: LiveEngine, c: str) -> None:
         else:
             _say(live, "auto-clutch is for the manual box")
     elif c == "i":
-        if not live.stalled:
+        if live.fuel_waxed:                # Phase 7 step 6
+            _say(live, "fuel waxed -- it won't start until the fuel is warmer, or with winter or arctic diesel")
+        elif not live.stalled:
             _say(live, "engine is running")
         elif live.dl.clutch_pedal >= 0.9 or live.dl.gb.neutral or live.dl.assist:
             live.stalled = False

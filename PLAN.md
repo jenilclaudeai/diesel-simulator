@@ -326,13 +326,22 @@ Project save/load as JSON (OPEN-C).
 - Weather reaches Drive and Enjoy through a per-engine torque-correction
   table, measured within 1.15% of converged solves *(before #107;
   20.3% on today's code, mostly FINDING-026, so it is re-measured after
-  the fix)*.
+  the fix)*. **Built 2026-10-09, shape A3** (every cell × 8 airs): all ten
+  grids carry one. Each table's held-out Leh check is 0.3–2.8%, except
+  single10 at 7.2% (FINDING-027) and hd_i6 at 4.7% (a smoke-limit knee).
+  The place is picked on `/drive` and on `/enjoy`'s start screen; custom
+  engines build their table in the browser.
 - The ECU knows absolute pressure (MAP boost target, smoke map on absolute
   pressure) on the common-rail engines; the mechanical single stays
   uncompensated.
 - Humidity: ISO 8178's K_H on reported NOx (a stated correction, not a
-  cycle effect).
+  cycle effect). *(Built 2026-10-08 as 40 CFR 1065.670's form, normalised
+  to ISO's 10.71 g/kg: humidity-only, so intake temperature isn't counted
+  twice. ADR-016 addendum.)*
 - Cold-flow: below the fuel's CFPP, fuel flow is capped in the live loop.
+  *(Built 2026-10-10 with a fuel picker on `/drive` and `/enjoy`, the
+  owner's choice: sold here, summer, winter or arctic. Summer diesel in
+  Rovaniemi won't start; ADR-016 addendum.)*
 - Five real-place presets, numbers shown and editable.
 - Projects: saved and opened on `/spec`; `/drive` and `/enjoy` can open
   them.

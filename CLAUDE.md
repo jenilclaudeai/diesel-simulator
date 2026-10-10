@@ -56,6 +56,8 @@ cd web/physics && npm ci && npm test            # TypeScript ports vs fixtures (
 python3 tools/fixtures/gen_fixtures.py --only live   # after changing dieselsim/live.py
 python3 tools/build_live_grids.py               # after a SOLVER change: prebuilt converged grids (~2 h, 10 grids)
 python3 tools/build_live_grids.py --engine my.json   # a custom engine's grid -> out/grids/ (ADR-014)
+python3 tools/build_live_grids.py --weather [key]    # add the weather table to grid files (~45-85 min each)
+python3 tools/environments_json.py --check           # the places file Drive and Enjoy read is current
 cd tools/pyodide && npm ci && npm run suite     # the same suite under Pyodide
 cd web/solver  && npm ci && npm run test:fast   # cache tests, seconds
 cd web/solver  && npm test                      # + live-grid scheduler + round trip through a real worker
@@ -101,6 +103,11 @@ grep its readers and solve with it changed.
   trapped air / `afr_limit`. There, **`op.fuel_mg` is the fuel injected,
   not the pedal's command**. The calibration always runs at the rating's
   air (FINDING-025), so at standard air nothing changes.
+- Humidity (`thermal.ambient_humidity`, g/kg) corrects **reported** NOx
+  only: `op.nox_ppm` and `op.nox_g_kwh` carry 40 CFR 1065.670's factor;
+  `op.cycle.nox_ppm` is the cycle's own, uncorrected. Nothing else reads
+  humidity (ADR-016 item 3). The helper lives in hashed `engine.py`, not
+  in `environment.py`, which no cell solve may import.
 - Read `h_ring_mid`, not `h_ring_tdc` (always its 12 nm clamp).
 - Use `n_cycles >= 9`; at 6 the drift is 10.8%.
 - `CycleTraces.theta`: per-cylinder arrays are in that cylinder's own crank
@@ -137,6 +144,14 @@ grep its readers and solve with it changed.
   `test_live_grid_pieces_match_the_shipped_grid`.
   `tools/ab_rating_air.py <tree>` prints sha256s of 21 bridge replies at
   the rating's air; diff an old tree's against the new one's (FINDING-026).
+- Every shipped grid carries a **weather table** (Phase 7 step 4, the
+  file's `weather` key). A full grid rebuild (`build_live_grids.py` without
+  `--weather`) writes a fresh file **without** it, so after a solver change
+  run `--weather` too: 384 + 6 converged solves per grid, about 8 h for all
+  ten on this Mac. A re-stamp (`restamp_grids.py`) keeps the table. It is
+  built from the same code as the cells, so the one stamp covers both. The
+  table only corrects the live loop (Drive, Enjoy); the solving pages solve
+  the air directly.
 - A roster engine's file must be **`engines/<key>.json`**. Under any other
   name its grid records no engine-file fingerprint, and the tests do not
   find it. `load_engine_dir` registers every file in `engines/`, so

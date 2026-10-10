@@ -1062,3 +1062,85 @@ Constraints carried: one PRNG in Python and TypeScript so the live fixture
 holds (ADR-004); sand is rolling resistance only, with no grip (ADR-002).
 Its own proposal, with measurements, comes after item 1's table (Phase 7
 step 4). Where the build goes in the order is decided in that proposal.
+
+### Addendum (2026-10-08): item 2's ECU in thin air (FINDING-026)
+
+Measuring item 1's table found that the modern ECU's boost cap came before
+`cycle.run`'s EGR raise. Off the rating's air the VGT then jammed on its
+minimum at part load: up to −76% torque at Leh. It is fixed (#110, fix A),
+so the target the vanes chase is capped at the compressor's limit, as item
+2 says. Nothing changed at the rating's air (21 of 21 replies identical).
+
+**The owner then decided** ("C: No don't cut the fuel. then D."):
+- **No turbo-overspeed fuel cut.** In thin air at high rpm and full load
+  the turbo runs at the solver's speed ceiling on both ECUs, with no
+  protection modelled.
+- **Stated instead:** the solving pages' environment picker (below 90 kPa)
+  and `/spec`'s ambient-pressure and ECU fields say so. So does the
+  remaining light-load pumping cost: crdi15 at Leh, 4057 rpm / 20%, −37%.
+
+### Addendum (2026-10-08): item 3 built (humidity on NOx), and which form
+
+Item 3 said "ISO 8178's K_H factor (also in 40 CFR 1065)". The two are not
+the same equation. The built form is **40 CFR 1065.670-1** for
+compression-ignition engines, `× (9.953 x_H2O + 0.832)`, normalised to
+exactly 1 at ISO 8178's reference 10.71 g/kg. The equation's own unit
+point, 0.01688 mol/mol, is 0.05% off it.
+
+- **Why this form:** it is humidity-only, and it could be read in full (ISO
+  8178 is paywalled). The older diesel forms carry a temperature term too
+  (e.g. EPA's 1 + 0.00446 (T − 25) − 0.018708 (H − 10.71)), which would
+  count intake temperature twice: the cycle already solves it.
+- **Direction:** the model's NOx is the reference humidity's. Humid air
+  reports less (Mumbai, 21.63 g/kg: ×0.858), dry air more (Leh 7.82 g/kg:
+  ×1.047; Rovaniemi 0.67 g/kg: ×1.187, an extrapolation of a linear
+  correction).
+- `thermal.ambient_humidity` (g/kg, default 10.71) is the spec's field; the
+  presets set it. Nothing but the reported NOx moves.
+- If the owner prefers an ISO-style form, only `engine.nox_humidity_factor`
+  changes.
+
+### Addendum (2026-10-09): item 1's shape is A3
+
+`reviews/PROPOSAL-weather-table.md` measured four shapes for item 1's
+table on today's code (624 converged solves). **The owner chose A3**
+("A3, go ahead"): every grid cell, warm, at 8 airs. The airs are 3
+pressures (58, 72 and 101.3 kPa) × 3 temperatures (−20, 25 and 45 °C),
+less the standard air, which is the grid's own cell.
+
+Measured: 2.4–3.6% of full-load torque at the presets, and 5.2–5.5% down
+to 52 kPa. About 390 converged solves per engine (with 6 held-out checks at
+Leh, whose worst error the file records), and about 1.3 h extra per custom
+engine in a browser. The proposal's 1.15% (measured before #107's ECU) is
+superseded by these numbers.
+
+*Outcome (2026-10-09):* all ten grids carry a table, and each records its
+own Leh check: 0.3–2.8%, except single10 at 7.2% (a misfire in cold, thin
+air, FINDING-027) and hd_i6 at 4.7% (a smoke-limit knee between pressure
+nodes). The pages show each engine's own figure.
+
+### Addendum (2026-10-10): item 4, cold-flow, and how a driver gets waxed fuel
+
+Every place sells the right fuel (Rovaniemi arctic diesel at −20 °C, Leh
+winter diesel at 20 °C), so a wax cap fed only by the place would never
+act: an input nothing feeds, FINDING-025's pattern. **The owner chose a
+fuel picker** ("A fuel picker"), over extra "wrong fuel" places or an
+editable temperature.
+- `/drive`, and `/enjoy`'s start screen, show Fuel beside Place: sold here
+  (the default), summer (CFPP 18 °C), winter (6 °C) or arctic (−32 °C).
+  The grades are `environment.FUELS`, from the same sources as the places.
+- The live loop (Python and TypeScript, fixture-matched):
+  - The fuel starts at the ambient. Running, it warms toward the ambient
+    plus 60% of the coolant's rise over about 7 minutes; stopped, it
+    drifts back over about 30.
+  - The filter passes all the fuel down to CFPP + 2 K and none at
+    CFPP − 6 K. That share caps the governor's demand.
+  - Below 12% the engine is waxed out: no fuel, the reason given, and a
+    restart refused.
+  - A part-waxed engine that can't start says why after 3 s with the car
+    standing.
+  - These are approximations, stated as such.
+- With the five places, each grade either flows or gels: no place's
+  temperature falls inside a grade's waxing band. The limp, part-waxed
+  path is exercised by the loop's tests and fixture, and is there for
+  P06's roads.
