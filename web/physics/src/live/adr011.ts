@@ -19,6 +19,61 @@ export interface Adr011GridData {
   // Phase 4, absent from grids built before it
   src_f32?: Record<SourceKey, string>[][]; src_cold_f32?: Record<SourceKey, string>[][];
   src_meta?: Record<string, number>[][]; src_meta_cold?: Record<string, number>[][];
+  // Phase 7 step 4, absent from grids without a weather table
+  weather?: WeatherTableData;
+}
+
+/** A grid's weather table, as dieselsim/bridge.py live_weather_assemble writes it. */
+export interface WeatherTableData {
+  p_nodes: number[]; T_nodes: number[]; keys: string[];
+  values: number[][][][][];          // [i_rpm][j_load][ip][iT][k]
+  range: { p: [number, number]; T: [number, number] };
+  check?: { place: string; p: number; T: number; cells: number; worst_pct_of_full_load: number };
+}
+
+/** Segment index and fraction on ascending nodes, extrapolating past the ends (live.py _seg). */
+function seg(nodes: readonly number[], x: number): [number, number] {
+  let i = 0;
+  while (i < nodes.length - 2 && x > nodes[i + 1]!) i++;
+  return [i, (x - nodes[i]!) / (nodes[i + 1]! - nodes[i]!)];
+}
+
+/**
+ * Port of dieselsim/live.py WeatherTable (Phase 7 step 4, shape A3): the difference from the
+ * standard air of the table's keys, bilinear over cells and over the air, the air clamped to the
+ * table's range. Every sum is in Python's order, so the two loops agree to the last bit.
+ */
+export class WeatherTable {
+  readonly std: [number, number];
+  constructor(readonly rpms: readonly number[], readonly loads: readonly number[], readonly d: WeatherTableData) {
+    this.std = [d.p_nodes.indexOf(101325.0), d.T_nodes.indexOf(298.0)];
+  }
+
+  delta(rpm: number, load: number, p: number, T: number): Record<string, number> {
+    const { rpms, loads, d } = this;
+    const r = Math.min(Math.max(rpm, rpms[0]!), rpms[rpms.length - 1]!);
+    const ld = Math.min(Math.max(load, loads[0]!), loads[loads.length - 1]!);
+    const [i, fr] = seg(rpms, r), [j, fl] = seg(loads, ld);
+    p = Math.min(Math.max(p, d.range.p[0]), d.range.p[1]);
+    T = Math.min(Math.max(T, d.range.T[0]), d.range.T[1]);
+    const [ip, a] = seg(d.p_nodes, p), [iT, b] = seg(d.T_nodes, T);
+    const cells: [number, number, number][] = [[i, j, (1 - fr) * (1 - fl)], [i, j + 1, (1 - fr) * fl],
+      [i + 1, j, fr * (1 - fl)], [i + 1, j + 1, fr * fl]];
+    const airs: [number, number, number][] = [[ip, iT, (1 - a) * (1 - b)], [ip, iT + 1, (1 - a) * b],
+      [ip + 1, iT, a * (1 - b)], [ip + 1, iT + 1, a * b]];
+    const out: Record<string, number> = {};
+    d.keys.forEach((key, k) => {
+      let dd = 0.0;
+      for (const [ci, cj, wc] of cells) {
+        const v = d.values[ci]![cj]!;
+        let at = 0.0;
+        for (const [ai, aT, wa] of airs) at += wa * v[ai]![aT]![k]!;
+        dd += wc * (at - v[this.std[0]]![this.std[1]]![k]!);
+      }
+      out[key] = dd;
+    });
+    return out;
+  }
 }
 
 const B64 = new Int16Array(128).fill(-1);
@@ -55,9 +110,12 @@ export class Adr011Grid extends PerfGrid {
   readonly k_torque: number; // fmep [Pa] -> mean torque [N.m]
   readonly src: Sources[][] | null;
   readonly src_cold: Sources[][] | null;
+  /** Phase 7 step 4: the grid file's weather table, if it has one (settable, as in Python) */
+  weather: WeatherTable | null;
 
   constructor(spec: LiveSpec, d: Adr011GridData) {
     super(spec, d.rpms, d.loads, d.perf);
+    this.weather = d.weather ? new WeatherTable(d.rpms, d.loads, d.weather) : null;
     this.p_cyl = d.p_cyl_f32.map(row => row.map(decodeF32));
     this.p_cyl_cold = d.p_cyl_cold_f32.map(row => row.map(decodeF32));
     this.perf_cold = d.perf_cold;

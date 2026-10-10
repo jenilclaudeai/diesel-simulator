@@ -5,11 +5,14 @@ import type { CompressorMap, CycleResult, SpecField } from '@dieselsim/solver';
 import { DriveBuild } from '../engine/drive-build';
 import { editedEngine } from '../engine/my-engines';
 import { describe, SolverService } from '../solver/solver.service';
-import { DEFAULT_BASE, parseSpecFile, SpecEdits } from './spec-edits';
+import { DEFAULT_BASE, SpecEdits } from './spec-edits';
+import { applyProject, currentProject, downloadProject, parseProject } from './project';
+import { DriveEnv, GEARBOXES } from '../weather/drive-env';
+import { DriveEnvPicker } from '../weather/drive-env-picker';
 import { LastResults } from './last-results';
 import { Schematic } from './schematic';
 import { refKey } from './spec-status';
-import { GROUPS, groupFields, label, noteRest, readOnly, type SchemaRow, unitFor } from './spec-meta';
+import { GROUPS, groupFields, label, noteFor, readOnly, type SchemaRow, unitFor } from './spec-meta';
 
 const fmtValue = (v: unknown) => typeof v === 'number' ? String(Number(v.toPrecision(6))) : Array.isArray(v) ? v.join(', ') : String(v);
 
@@ -22,7 +25,7 @@ interface Row { f: SchemaRow; label: string; unit: string; note: string; ro: boo
  */
 @Component({
   selector: 'app-spec',
-  imports: [RouterLink, NgTemplateOutlet, Schematic, DriveBuild],
+  imports: [RouterLink, NgTemplateOutlet, Schematic, DriveBuild, DriveEnvPicker],
   templateUrl: './spec.html',
   styleUrl: './spec.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -36,6 +39,13 @@ export class SpecPage implements OnInit {
   private readonly engineValues = signal<Record<string, unknown> | undefined>(undefined);
   protected readonly loadError = signal<string | undefined>(undefined);
   protected readonly fileError = signal<string | undefined>(undefined);
+  /** what an opened file left unchanged (an old spec file: the drive settings) */
+  protected readonly fileNote = signal<string | undefined>(undefined);
+  /** Phase 7 step 7: what the project drives with, shared with /drive and /enjoy */
+  protected readonly env = inject(DriveEnv);
+  protected readonly gearboxes = GEARBOXES;
+  protected readonly gearboxName: Record<string, string> = {
+    tc: 'Automatic, torque converter', dct: 'Dual clutch', manual: 'Manual, clutch pedal' };
   protected readonly filter = signal('');
   private readonly kept = inject(LastResults);
   /** every field's value as the engine stands, edits applied: what the schematics draw */
@@ -67,7 +77,7 @@ export class SpecPage implements OnInit {
     if (!vals) return [];
     const row = (f: SchemaRow): Row => {
       const engine = vals[f.path], value = f.path in ov ? ov[f.path] : engine;
-      return { f, label: label(f.path), unit: unitFor(f), note: noteRest(f.note), ro: readOnly(f), engine, value, changed: f.path in ov };
+      return { f, label: label(f.path), unit: unitFor(f), note: noteFor(f), ro: readOnly(f), engine, value, changed: f.path in ov };
     };
     const hit = (r: Row) => !q || r.label.toLowerCase().includes(q) || r.f.path.toLowerCase().includes(q) || r.note.toLowerCase().includes(q);
     return GROUPS.map(g => {
@@ -119,24 +129,22 @@ export class SpecPage implements OnInit {
     this.edits.set(r.f.path, v, r.engine);
   }
 
-  protected exportFile(): void {
-    const blob = new Blob([JSON.stringify(this.edits.toFile(), null, 1) + '\n'], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${this.edits.base()}-spec.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
+  /** Phase 7 step 7 (ADR-016 item 6): the engine and what it drives with, as a project file */
+  protected saveProject(): void { downloadProject(currentProject(this.edits, this.env)); }
 
-  protected async importFile(input: HTMLInputElement): Promise<void> {
+  /** A project, or an old spec file (the engine only) */
+  protected async openProject(input: HTMLInputElement): Promise<void> {
     this.fileError.set(undefined);
+    this.fileNote.set(undefined);
     const file = input.files?.[0];
     input.value = '';
     if (!file) return;
-    const parsed = parseSpecFile(await file.text());
+    const parsed = parseProject(await file.text());
     if (typeof parsed === 'string') { this.fileError.set(`${file.name}: ${parsed}`); return; }
-    if (!this.solver.info()?.presets.includes(parsed.preset)) { this.fileError.set(`${file.name}: unknown engine "${parsed.preset}"`); return; }
-    this.edits.load(parsed);
+    if (!this.solver.info()?.presets.includes(parsed.engine.preset)) {
+      this.fileError.set(`${file.name}: unknown engine "${parsed.engine.preset}"`); return;
+    }
+    this.fileNote.set(applyProject(parsed, this.edits, this.env) || undefined);
   }
 }
 

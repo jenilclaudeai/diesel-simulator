@@ -43,7 +43,8 @@ const server = http.createServer((req, res) => {
 }).listen(0);
 const base = `http://localhost:${server.address().port}`;
 
-const browser = await puppeteer.launch({
+const browser = await puppeteer.launch({ timeout: 120_000,   // Chrome's start: 30 s timed out on loaded CI runners (#108, #115)
+ 
   executablePath: process.env.CHROME_PATH, headless: true, protocolTimeout: 30 * 60_000,
   args: ["--no-sandbox", "--disable-dev-shm-usage"],
 });

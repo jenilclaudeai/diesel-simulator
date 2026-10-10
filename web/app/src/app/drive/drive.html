@@ -24,18 +24,25 @@
       <input type="file" accept=".json,application/json" [disabled]="status() === 'loading'"
              (change)="importGrid($any($event.target))" aria-label="Import grid file">
     </label>
+    <label class="field import open-project"><span>Project</span>
+      <input type="file" accept=".json,application/json" [disabled]="status() === 'loading'"
+             (change)="openProject($any($event.target))" aria-label="Open project">
+    </label>
     <label class="field"><span>Gearbox</span>
-      <select [disabled]="status() === 'loading'" (change)="selectTrans($any($event.target).value)">
+      <select class="drive-gearbox" [disabled]="status() === 'loading'" (change)="selectTrans($any($event.target).value)">
         <option value="tc" [selected]="trans() === 'tc'">Automatic, torque converter</option>
         <option value="dct" [selected]="trans() === 'dct'">Dual clutch</option>
         <option value="manual" [selected]="trans() === 'manual'">Manual, clutch pedal</option>
       </select>
     </label>
+    <app-drive-env class="field place" [state]="dashInfo()?.weather" [checkPct]="dashInfo()?.weather_check_pct"
+                   (changed)="stop()" />
     <button type="button" class="run" (click)="start()" [disabled]="status() === 'loading'">
       {{ status() === 'driving' ? 'Restart' : 'Start engine' }}
     </button>
   </div>
   @if (importError()) { <p class="err import-err">{{ importError() }}</p> }
+  @if (projectNote()) { <p class="project-note">{{ projectNote() }}</p> }
 
   <div class="controls sound">
     <button type="button" class="sound-toggle" (click)="toggleSound()" [disabled]="status() !== 'driving'"
@@ -83,6 +90,7 @@
       <div><dt>Friction (live)</dt><dd>{{ fmt2.format(s.fmep_bar) }} bar FMEP</dd></div>
       <div><dt>Boost</dt><dd>{{ fmt2.format(s.boost) }} pressure ratio</dd></div>
       <div><dt>Grade</dt><dd>{{ fmt0.format(100 * s.grade) }}%</dd></div>
+      <div><dt>Fuel</dt><dd class="fuel-state">{{ fmt1.format(s.T_fuel - 273.15) }} °C · filter passes {{ fmt0.format(100 * s.wax_frac) }}%{{ s.fuel_waxed ? ' · waxed' : '' }}</dd></div>
       <div><dt>Trip</dt><dd>{{ fmt1.format(s.trip_km) }} km · {{ fmt2.format(s.trip_L) }} L</dd></div>
     </dl>
     <p class="about">Loop {{ fmt0.format(s.hz) }} Hz, frame {{ fmt0.format(s.frames) }}.</p>

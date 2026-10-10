@@ -55,6 +55,12 @@ export class LiveEngine {
   hint_t = 0.0;
   tank_L: number;
   out_of_fuel = false;
+  // Phase 7 step 6: cold-flow (live.py). The fuel's CFPP [K], null: no waxing
+  fuel_cfpp: number | null = null;
+  T_fuel: number;
+  wax_frac = 1.0;     // the share of full-load fuel the filter passes
+  fuel_waxed = false; // too little to keep the engine running
+  starve_t = 0.0;     // s a part-waxed engine hasn't run (its message waits 3 s)
   perf: Perf;
   // ADR-011: friction live, from the cells' pressure traces
   adr011: boolean;
@@ -75,6 +81,15 @@ export class LiveEngine {
 
   /** frames between live friction evaluations (10 Hz at 60 Hz) */
   static readonly FRICTION_EVERY = 6;
+  /** Phase 7 step 6 (live.py's, "very close, not perfect"): full flow down to CFPP + 2 K, none at
+   *  CFPP - 6 K; below WAX_STALL the engine can't run; the fuel warms toward the ambient + 60% of the
+   *  coolant's rise over ~7 min running, and back to the ambient over ~30 min stopped. */
+  static readonly WAX_ABOVE = 2.0;
+  static readonly WAX_BELOW = 6.0;
+  static readonly WAX_STALL = 0.12;
+  static readonly FUEL_TAU_RUN = 420.0;
+  static readonly FUEL_TAU_OFF = 1800.0;
+  static readonly FUEL_RETURN_SHARE = 0.6;
 
   constructor(readonly g: PerfGrid, preset = "hd_i6", trans: Transmission = "dct", view?: EngineView) {
     this.spec = g.spec;
@@ -85,6 +100,7 @@ export class LiveEngine {
     this.T_charge = this.spec.thermal.ambient_T;
     this.T_charge_ref = this.spec.thermal.ambient_T;
     this.tank_L = this.veh.fuel_tank_L;
+    this.T_fuel = this.spec.thermal.ambient_T; // Phase 7 step 6: the fuel starts at the ambient
     this.perf = g.blendPerf(this.rpm, 0.0);
     if (this.veh.trans === "manual") {
       // a manual car is left in neutral; the driver picks a gear
@@ -140,11 +156,25 @@ export class LiveEngine {
   /** Grid performance at the live state; torque is BRAKE torque either way. */
   private perfAt(rpm: number, load: number): Perf {
     if (this.adr011) {
-      const p = (this.g as Adr011Grid).blendPerfT(rpm, load, this.T_coolant);
+      const g = this.g as Adr011Grid;
+      const p = g.blendPerfT(rpm, load, this.T_coolant);
+      const t = this.spec.thermal;
+      // Phase 7 step 4: off the standard air, the weather table's difference; friction and sound
+      // stay the grid's. At the standard air this is skipped outright (live.py _perf).
+      if (g.weather && (t.ambient_p !== 101325.0 || t.ambient_T !== 298.0)) {
+        for (const [k, d] of Object.entries(g.weather.delta(rpm, load, t.ambient_p, t.ambient_T))) p[k] = p[k]! + d;
+      }
       p["torque"] = p["torque_ind"]! - this.T_fric;
       return p;
     }
     return this.g.blendPerf(rpm, load);
+  }
+
+  /** What the loop does with the air (live.py weather_state): standard, table, or no table. */
+  weatherState(): "standard" | "table" | "no table" {
+    const t = this.spec.thermal;
+    if (t.ambient_p === 101325.0 && t.ambient_T === 298.0) return "standard";
+    return this.adr011 && (this.g as Adr011Grid).weather ? "table" : "no table";
   }
 
   /** a manual engine stalls when the clutch drags it below this fraction of idle */
@@ -321,7 +351,7 @@ export class LiveEngine {
       if (this.hint_t === 0.0) this.hint = "";
     }
     this.cruise(dt);
-    if (this.out_of_fuel || this.engine_stopped) {
+    if (this.out_of_fuel || this.engine_stopped || this.fuel_waxed) {
       this.throttle = 0.0;
       this.cruise_on = false;
     }
@@ -332,6 +362,33 @@ export class LiveEngine {
     for (let k = 0; k < n_sub; k++) this.sub(dt / n_sub);
     this.totals(dt);
     this.thermal(dt);
+    this.coldFlow(dt);
+  }
+
+  /** Phase 7 step 6 (live.py _cold_flow): the fuel's temperature and the waxing filter's share. */
+  private coldFlow(dt: number): void {
+    if (this.fuel_cfpp === null) return;
+    const s = this.spec, T_amb = s.thermal.ambient_T, L = LiveEngine;
+    const running = !(this.stalled || this.engine_stopped || this.fuel_waxed || this.out_of_fuel)
+      && this.rpm > 0.5 * s.idle_rpm;
+    const target = running ? T_amb + L.FUEL_RETURN_SHARE * (this.T_coolant - T_amb) : T_amb;
+    this.T_fuel += (target - this.T_fuel) * Math.min(1.0, dt / (running ? L.FUEL_TAU_RUN : L.FUEL_TAU_OFF));
+    const lo = this.fuel_cfpp - L.WAX_BELOW;
+    this.wax_frac = clip((this.T_fuel - lo) / (L.WAX_ABOVE + L.WAX_BELOW), 0.0, 1.0);
+    const waxed = this.wax_frac < L.WAX_STALL;
+    // seconds a part-waxed engine hasn't run with the car standing: its message waits 3 s (live.py)
+    this.starve_t = (!waxed && !running && this.wax_frac < 1.0 && this.dl.v < 0.5) ? this.starve_t + dt : 0.0;
+    if (waxed && !this.fuel_waxed) {
+      this.hint = `fuel waxed: this diesel gels below ${(this.fuel_cfpp - 273.15).toFixed(0)} C `
+        + "-- it needs winter or arctic diesel here";
+      this.hint_t = 6.0;
+    } else if (this.starve_t >= 3.0 && !this.hint) {
+      // a cold start needs far more fuel than a warm idle: say why it's dead (live.py; floor, as there)
+      this.hint = `fuel partly waxed: the filter passes ${Math.floor(this.wax_frac * 100.0)}% `
+        + "-- not enough to start cold; it needs winter or arctic diesel here";
+      this.hint_t = 6.0;
+    }
+    this.fuel_waxed = waxed;
   }
 
   private sub(h: number): void {
@@ -341,8 +398,10 @@ export class LiveEngine {
     if (manual && !this.stalled && rpm < LiveEngine.STALL_FRAC * s.idle_rpm
         && !this.dl.gb.neutral && (this.dl.tc as ManualClutch).cap > 0.0) {
       this.stalled = true;
-      this.hint = "stalled -- clutch down (z) and press i to restart";
-      this.hint_t = 4.0;
+      if (!this.fuel_waxed) {          // the wax message says why; keep it
+        this.hint = "stalled -- clutch down (z) and press i to restart";
+        this.hint_t = 4.0;
+      }
     }
 
     // ---- governor: idle hold, droop above rated ----
@@ -352,6 +411,7 @@ export class LiveEngine {
       const x = (rpm - s.rated_rpm) / Math.max(s.max_rpm - s.rated_rpm, 1.0);
       demand *= Math.max(0.02, 1.0 - 0.98 * x ** 1.4);
     }
+    if (this.fuel_cfpp !== null) demand = Math.min(demand, this.wax_frac); // a waxing filter caps the fuel
 
     // ---- turbo lag ----
     const target = this.perfAt(rpm, demand);
@@ -371,7 +431,7 @@ export class LiveEngine {
     this.perf = p;
     this.torque = p["torque"]!;
     this.fuel_kg_h = p["fuel_kg_h"]!;
-    if (this.engine_stopped) {
+    if (this.engine_stopped || this.fuel_waxed) {
       this.torque = Math.min(this.torque, this.perfAt(rpm, 0.0)["torque"]!);
       this.fuel_kg_h = 0.0;
     }
@@ -499,7 +559,8 @@ export function handleKey(live: LiveEngine, c: string): void {
       }
       break;
     case "i":
-      if (!live.stalled) say(live, "engine is running");
+      if (live.fuel_waxed) say(live, "fuel waxed -- it won't start until the fuel is warmer, or with winter or arctic diesel");
+      else if (!live.stalled) say(live, "engine is running");
       else if (live.dl.clutch_pedal >= 0.9 || gb.neutral || live.dl.assist) {
         live.stalled = false;
         live.rpm = live.spec.idle_rpm;

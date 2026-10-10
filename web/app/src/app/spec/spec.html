@@ -26,13 +26,29 @@
   <div class="actions" role="group" aria-label="Your edits">
     <span class="changed-count">{{ edits.count() }} {{ edits.count() === 1 ? 'field' : 'fields' }} changed</span>
     <button type="button" class="reset-all" (click)="edits.resetAll()" [disabled]="!edits.count()">Reset all</button>
-    <button type="button" class="export" (click)="exportFile()">Export spec (JSON)</button>
-    <label class="import">Import spec (JSON)<input #file type="file" accept="application/json,.json" (change)="importFile(file)" /></label>
+    <button type="button" class="save-project" (click)="saveProject()">Save project</button>
+    <label class="open-project">Open project<input #file type="file" accept="application/json,.json" (change)="openProject(file)" /></label>
     <a class="solve" routerLink="/cycle">Solve the cycle with {{ edits.count() ? 'these' : 'this engine' }} →</a>
   </div>
   <p class="kept-note">Your edits are kept in this browser, so a reload keeps them. Results are not: a page solves again
-    after a reload. Export the spec to keep it anywhere else.</p>
+    after a reload. Save the project to keep it anywhere else: the engine, and what it drives with below. An old spec
+    file opens too.</p>
   @if (fileError()) { <p class="err" role="alert">{{ fileError() }}</p> }
+  @if (fileNote()) { <p class="file-note">{{ fileNote() }}</p> }
+  <section class="drive-with" aria-labelledby="drive-with-h">
+    <h2 id="drive-with-h">Drive with</h2>
+    <p class="drive-with-note">Saved in the project, and what Drive and Enjoy start with. The vehicle is the engine's own.</p>
+    <div class="drive-with-row">
+      <label class="field"><span>Gearbox</span>
+        <select class="drive-gearbox" (change)="env.setGearbox($any($event.target).value)">
+          @for (g of gearboxes; track g) {
+            <option [value]="g" [selected]="g === env.gearbox()">{{ gearboxName[g] }}</option>
+          }
+        </select>
+      </label>
+      <app-drive-env />
+    </div>
+  </section>
   @if (edits.count() && solver.status() === 'ready') {
     <app-drive-build [engine]="driveRef()" [record]="driveRecord()" [extra]="driveExtra()" />
   }

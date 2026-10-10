@@ -1,8 +1,9 @@
 // The spec editor (Phase 6, ADR-015) in a real headless Chrome: every field of
 // the engine shown in its subsystem; an edit is counted and shows the engine's
-// own value; filter; a spec file imported (and a bad one refused, with the
+// own value; filter; a spec file opened (and a bad one refused, with the
 // reason); then the cycle page solves the edited engine, and its numbers are
-// native Python's for the same overrides. The edits survive a reload (m-3).
+// native Python's for the same overrides. The edits survive a reload (m-3). Projects
+// (Phase 7 step 7): opened and saved on /spec, and reaching /drive and /enjoy.
 //
 //   npm run build:pages && CHROME_PATH=... npm run e2e:spec      (~1 min)
 import http from "node:http";
@@ -49,7 +50,8 @@ try {
   process.exit(1);
 }
 
-const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH, headless: true, protocolTimeout: 10 * 60_000,
+const browser = await puppeteer.launch({ timeout: 120_000,   // Chrome's start: 30 s timed out on loaded CI runners (#108, #115)
+  executablePath: process.env.CHROME_PATH, headless: true, protocolTimeout: 10 * 60_000,
   args: ["--no-sandbox", "--disable-dev-shm-usage"] });
 const page = await browser.newPage();
 await page.setViewport({ width: 1200, height: 1000 });
@@ -65,9 +67,23 @@ const layout = await page.evaluate(() => ({
   editable: document.querySelectorAll("tr[data-path] input").length,
   cr: Number(document.querySelector('tr[data-path="geom.compression_ratio"] input').value),
 }));
-check("every field, in seven subsystems: 189 rows, 181 of them editable",
-  layout.groups.length === 7 && layout.rows === 189 && layout.editable === 181,
+check("every field, in seven subsystems: 190 rows, 182 of them editable",
+  layout.groups.length === 7 && layout.rows === 190 && layout.editable === 182,
   `${layout.groups.join(" | ")}; ${layout.rows} rows, ${layout.editable} inputs; compression ratio ${layout.cr}`);
+const thinNotes = await page.evaluate(() => Object.fromEntries(["thermal.ambient_p", "ecu_modern"].map(p =>
+  [p, document.querySelector(`tr[data-path="${p}"] .note`)?.textContent.replace(/\s+/g, " ").trim() ?? ""])));
+check("thin air (FINDING-026): ambient pressure and the ECU switch say the model's limits beside the field",
+  /Below 90 kPa/.test(thinNotes["thermal.ambient_p"]) && /no turbo-overspeed/.test(thinNotes["thermal.ambient_p"])
+  && /mechanical pump/.test(thinNotes.ecu_modern) && /no turbo-overspeed/.test(thinNotes.ecu_modern),
+  `ambient: "${thinNotes["thermal.ambient_p"].slice(0, 50)}…"; ECU: "${thinNotes.ecu_modern.slice(0, 90)}…"`);
+const humRow = await page.evaluate(() => {
+  const tr = document.querySelector('tr[data-path="thermal.ambient_humidity"]');
+  return { value: Number(tr?.querySelector("input")?.value), unit: tr?.querySelector(".unit")?.textContent.trim() ?? "",
+    note: tr?.querySelector(".note")?.textContent.replace(/\s+/g, " ").trim() ?? "" };
+});
+check("humidity (ADR-016 item 3): its own field, 10.71 g/kg, saying it corrects NOx only",
+  humRow.value === 10.71 && humRow.unit === "g/kg" && /NOx only/.test(humRow.note) && /isn't in the cycle/.test(humRow.note),
+  `${humRow.value} ${humRow.unit}; "${humRow.note.slice(0, 80)}…"`);
 
 // ADR-009: the four live schematics, drawn from the spec
 await page.waitForSelector("figure.schematic.compressor polyline.speed", { timeout: 60_000 }).catch(() => {});
@@ -111,7 +127,7 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spec-e2e-"));
 const bad = path.join(dir, "bad.json"), good = path.join(dir, "good.json");
 fs.writeFileSync(bad, JSON.stringify({ preset: "crdi15", overrides: { "geom.compresion_ratio": 17 } }));
 fs.writeFileSync(good, JSON.stringify({ preset: "crdi15", overrides: { ...EDIT, "inj.n_holes": 8 } }));
-const input = await page.$(".import input[type=file]");
+const input = await page.$(".open-project input[type=file]");   // step 7: "Open project" opens old spec files too
 await input.uploadFile(bad);
 await page.waitForSelector("p.err[role=alert]", { timeout: 5000 }).catch(() => {});
 const refused = await page.$eval("p.err[role=alert]", e => e.textContent.trim()).catch(() => "");
@@ -216,6 +232,71 @@ check("a reload keeps the edits (REVIEW-008 m-3), and the page says results are 
   kept.count === "1 field changed" && kept.cr === 17 && /kept in this browser/.test(kept.note) && /solves again/.test(kept.note),
   `after reload: ${kept.count}, compression ratio ${kept.cr}; "${kept.note.slice(0, 70)}…"`);
 await page.click("button.reset-all").catch(() => {});
+
+// Phase 7 step 7 (ADR-016 item 6): projects. Opened and saved on /spec, the
+// "Drive with" box, and the same choice reaching /drive and /enjoy (one browser).
+const project = (preset, overrides, gearbox, place, fuel) =>
+  JSON.stringify({ format: "dieselsim-project", version: 1, engine: { preset, overrides }, drive: { gearbox, place, fuel } });
+const pfile = (name, text) => { const f = path.join(dir, name); fs.writeFileSync(f, text); return f; };
+const selects = () => page.evaluate(() => Object.fromEntries(["drive-gearbox", "drive-env", "drive-fuel"]
+  .map(c => [c, document.querySelector(`select.${c}`)?.value ?? null])));
+const open = async (sel, file) => { await (await page.$(`${sel} input[type=file]`)).uploadFile(file); await new Promise(r => setTimeout(r, 400)); };
+await open(".open-project", pfile("p1.json", project("crdi15", {}, "dct", "winter", "summer")));
+const opened = await selects();
+await open(".open-project", pfile("old.json", JSON.stringify({ preset: "crdi15", overrides: { "inj.n_holes": 8 } })));
+const afterOld = { ...(await selects()), note: await page.$eval("p.file-note", e => e.textContent.trim()).catch(() => ""),
+  count: await page.$eval(".changed-count", e => e.textContent.trim()) };
+await open(".open-project", pfile("newer.json", JSON.stringify({ ...JSON.parse(project("crdi15", {}, "tc", "standard", "local")), version: 2 })));
+const newer = await page.$eval("p.err[role=alert]", e => e.textContent.trim()).catch(() => "");
+check("a project opens on /spec: its gearbox, place and fuel in the Drive with box; an old spec file sets the engine only and says so; a newer format is refused",
+  opened["drive-gearbox"] === "dct" && opened["drive-env"] === "winter" && opened["drive-fuel"] === "summer"
+  && afterOld["drive-gearbox"] === "dct" && afterOld["drive-env"] === "winter" && afterOld.count === "1 field changed"
+  && /old spec file/.test(afterOld.note) && /newer version of the app \(project format 2/.test(newer),
+  `${JSON.stringify(opened)}; old: ${afterOld.count}, "${afterOld.note.slice(0, 40)}…"; newer: "${newer}"`);
+// Save project: the file's text, caught at the download (the anchor's click, the blob kept)
+await page.evaluate(() => {
+  window.__saved = [];
+  HTMLAnchorElement.prototype.click = function () { window.__saved.push({ href: this.href, name: this.download }); };
+  URL.revokeObjectURL = () => {};
+});
+await page.select("select.drive-gearbox", "manual");
+await page.click("button.save-project");
+const saved = await page.evaluate(async () => { const s = window.__saved[0]; return s ? { name: s.name, text: await (await fetch(s.href)).text() } : null; });
+const sj = saved ? JSON.parse(saved.text) : {};
+check("Save project: <engine>-project.json, a format version, the engine's edits and the Drive with choice",
+  saved?.name === "crdi15-project.json" && sj.format === "dieselsim-project" && sj.version === 1
+  && JSON.stringify(sj.engine) === JSON.stringify({ preset: "crdi15", overrides: { "inj.n_holes": 8 } })
+  && JSON.stringify(sj.drive) === JSON.stringify({ gearbox: "manual", place: "winter", fuel: "summer" }),
+  `${saved?.name}: ${saved?.text.replace(/\s+/g, " ").slice(0, 160)}`);
+
+// /drive starts with the same choice, and opens a project itself
+await page.goto(`http://localhost:${port}${BASE}drive?e2e`, { waitUntil: "load" });
+await page.waitForSelector("select.drive-gearbox", { timeout: 60_000 });
+const onDrive = await selects();
+const engineSel = () => page.$eval(".controls select", s => s.value);
+await open(".open-project", pfile("p2.json", project("ld_i4", {}, "tc", "desert", "local")));
+const drive2 = { ...(await selects()), engine: await engineSel(), note: await page.$eval("p.project-note", e => e.textContent.trim()).catch(() => "") };
+await open(".open-project", pfile("p3.json", project("crdi15", { "geom.compression_ratio": 17 }, "manual", "plateau", "winter")));
+const drive3err = await page.$eval(".import-err", e => e.textContent.trim()).catch(() => "");
+check("/drive starts with /spec's Drive with choice; a project there picks its engine, gearbox, place and fuel; an edited engine with no grid built says how to build it",
+  onDrive["drive-gearbox"] === "manual" && onDrive["drive-env"] === "winter" && onDrive["drive-fuel"] === "summer"
+  && drive2.engine === "ld_i4" && drive2["drive-gearbox"] === "tc" && drive2["drive-env"] === "desert" && drive2["drive-fuel"] === "local"
+  && /Opened p2\.json/.test(drive2.note) && /1 edited field.*isn't built in this browser.*Build drivable grid/.test(drive3err),
+  `from /spec ${JSON.stringify(onDrive)}; p2 ${JSON.stringify(drive2)}; p3 "${drive3err.slice(0, 60)}…"`);
+
+// /enjoy: the kept gearbox (p3's manual) starts it in Manual; a dual-clutch project drives as Auto, and says so
+await page.goto(`http://localhost:${port}${BASE}enjoy?e2e`, { waitUntil: "load" });
+await page.waitForSelector("select[aria-label=Engine]", { timeout: 60_000 });
+const pressed = () => page.evaluate(() => [...document.querySelectorAll("button[aria-pressed=true]")].map(b => b.textContent.trim()));
+const enjoyStart = await pressed();
+await open(".open-project", pfile("p4.json", project("hatch15", {}, "dct", "tropics", "local")));
+const enjoy4 = { pressed: await pressed(), engine: await page.$eval("select[aria-label=Engine]", s => s.value),
+  place: await page.$eval("select.drive-env", s => s.value), note: await page.$eval("p.project-note", e => e.textContent.trim()).catch(() => "") };
+check("/enjoy starts in the kept gearbox (Manual); a project picks its engine and place, and a dual clutch drives as Auto, said",
+  enjoyStart.includes("Manual") && enjoy4.pressed.includes("Auto") && enjoy4.engine === "hatch15" && enjoy4.place === "tropics"
+  && /no dual clutch, so it drives as Auto/.test(enjoy4.note),
+  `start ${enjoyStart.join("/")}; p4 ${JSON.stringify(enjoy4).slice(0, 160)}`);
+await page.evaluate(() => localStorage.clear());
 check("no page errors or console errors", problems.length === 0, problems.slice(0, 3).join(" | "));
 
 await browser.close();

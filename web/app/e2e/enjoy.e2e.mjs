@@ -9,7 +9,9 @@
 //    it returns the throttle to 0 (a real pedal, not the keyboard's sticky one).
 // 3. Holding the brake slows the car.
 // 4. Two thumbs at once: throttle and brake both register.
-// 5. The shift paddle changes gear.
+// 5. The shift paddle changes gear; with the clutch held on the left, the
+//    paddles on the right shift up and down (B-06), and the pedals sit as in
+//    a car: the clutch alone on the left (B-05).
 // 6. The dashboard shows the truth:
 //    - both needles point where the readings say;
 //    - the trip computer counts distance and labels its figures steady-state;
@@ -46,7 +48,8 @@ const check = (name, ok, note = "") => {
 };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-const browser = await puppeteer.launch({
+const browser = await puppeteer.launch({ timeout: 120_000,   // Chrome's start: 30 s timed out on loaded CI runners (#108, #115)
+ 
   executablePath: process.env.CHROME_PATH,
   // a fake real-time audio sink: the test judges the page, not this machine's speakers
   args: ["--no-sandbox", "--disable-dev-shm-usage", "--autoplay-policy=no-user-gesture-required",
@@ -74,6 +77,20 @@ const view = () => page.evaluate(() => globalThis.__enjoy.view());
 async function tapEl(sel) { const p = await at(sel, 0.5); await touch("touchStart", [p]); await sleep(60); await touch("touchEnd", []); }
 
 await page.goto(`http://localhost:${port}${BASE}enjoy?e2e`, { waitUntil: "load" });
+// Phase 7 step 4: the place, on the start screen (not in the top bar, which B-02's layout rules guard)
+const place = await page.evaluate(() => {
+  const s = document.querySelector("main.dash select.drive-env");
+  return s ? { n: s.options.length, value: s.value, inTop: !!s.closest("header.top") } : null;
+});
+check("the place is picked on the start screen: five places, standard air first (Phase 7 step 4)",
+  !!place && place.n === 5 && place.value === "standard" && !place.inTop, JSON.stringify(place));
+// Phase 7 step 6: the fuel, beside it
+const fuel = await page.evaluate(() => {
+  const s = document.querySelector("main.dash select.drive-fuel");
+  return s ? { n: s.options.length, value: s.value } : null;
+});
+check("the fuel is picked beside it: sold here first, then summer, winter and arctic (Phase 7 step 6)",
+  !!fuel && fuel.n === 4 && fuel.value === "local", JSON.stringify(fuel));
 await tapEl("button.start");
 await page.waitForFunction(() => globalThis.__enjoy.view(), { timeout: 60_000 });
 await sleep(1500);
@@ -208,6 +225,73 @@ check("Restart: one finger is refused in touch words; with the clutch held it re
   refused.stalled && /Hold the clutch/.test(refused.hint) && !/\(z\)|press i/.test(refused.hint)
   && !restarted.stalled && restarted.rpm > 300,
   `one finger: stalled ${refused.stalled}, "${refused.hint}"; clutch held: stalled ${restarted.stalled}, ${Math.round(restarted.rpm)} rpm`);
+
+// B-05 and B-06, on the S9+'s landscape heights: as in a car, the clutch is
+// alone on the left and the brake sits beside the throttle on the right; both
+// paddles are on the right too, so the left thumb holds the clutch through a
+// shift either way (the − paddle used to sit above the clutch, for the same
+// thumb). Nothing overlaps, and every pedal's name fits inside it at 125% text
+async function sides() {
+  return page.evaluate(() => {
+    const W = innerWidth, box = s => document.querySelector(s)?.getBoundingClientRect();
+    const ov = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    const cx = b => b.left + b.width / 2;
+    const pedals = [...document.querySelectorAll("app-pedal")].map(e => ({ name: e.className.split(" ")[0], b: e.getBoundingClientRect() }));
+    const minus = box("button.paddle.minus"), plus = box("button.paddle.plus"), gauges = box(".gauges");
+    const left = pedals.filter(p => cx(p.b) < W / 2).map(p => p.name), right = pedals.filter(p => cx(p.b) >= W / 2).map(p => p.name);
+    const clear = [minus, plus].every(k => !ov(k, gauges) && pedals.every(p => !ov(k, p.b))) && !ov(minus, plus);
+    const clipped = [...document.querySelectorAll("app-pedal .name")].filter(n => {
+      const r = document.createRange(); r.selectNodeContents(n);
+      const t = r.getBoundingClientRect(), p = n.parentElement.getBoundingClientRect();
+      return t.left < p.left + 2 || t.right > p.right - 2;              // inside the 2 px border
+    }).map(n => n.textContent.trim());
+    return { left, right, paddles: cx(minus) >= W / 2 && cx(plus) >= W / 2, clear, clipped };
+  });
+}
+await tapEl(".seg button:nth-child(2)");                 // Manual again: a fresh engine (it stops it)
+await page.waitForSelector("button.start");
+await tapEl("button.start");
+await page.waitForFunction(() => globalThis.__enjoy.view()?.trans === "manual", { timeout: 30_000 });
+await sleep(800);
+const big5 = await page.addStyleTag({ content: "html { font-size: 125% !important; }" });
+const layouts = [];
+for (const h of [411, 340, 300]) {
+  await page.setViewport({ width: 846, height: h, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true, isLandscape: true });
+  await sleep(300);
+  layouts.push({ h, ...(await sides()) });
+}
+await big5.evaluate(e => e.remove());
+await page.setViewport({ width: 846, height: 340, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true, isLandscape: true });
+await sleep(300);
+check("846 x 411/340/300, text 125%: the clutch alone on the left, brake and throttle on the right, both paddles on the right, nothing overlapping, every pedal's name inside it (B-05, B-06)",
+  layouts.every(l => l.left.join() === "clutch" && l.right.join() === "brake,throttle" && l.paddles && l.clear && !l.clipped.length),
+  layouts.map(l => `${l.h}: left [${l.left}] right [${l.right}] paddles right ${l.paddles}, clear ${l.clear}${l.clipped.length ? ", clipped " + l.clipped : ""}`).join("; "));
+// the left thumb holds the clutch; the right thumb shifts N -> 1st -> 2nd, then
+// down to 1st (the manual box's − stops at 1st: only the first shift leaves
+// neutral). CDP can't lift one finger of several, so each tap is a new finger
+const clutch6 = await at(".clutch .pedal", 0.95), plus6 = await at("button.paddle.plus", 0.6),
+  plus6b = await at("button.paddle.plus", 0.4), minus6 = await at("button.paddle.minus", 0.5);
+await touch("touchStart", [clutch6]);
+await sleep(300);
+await touch("touchStart", [clutch6, plus6]);
+await sleep(300);
+await touch("touchStart", [clutch6, plus6, plus6b]);
+await sleep(300);
+const up6 = await view();
+await touch("touchStart", [clutch6, plus6, plus6b, minus6]);
+await sleep(300);
+const down6 = await view();
+// all fingers up in gear stalls it (no throttle); B-02 below needs it running, in neutral
+await touch("touchEnd", []);
+await tapEl(".seg button:nth-child(2)");
+await page.waitForSelector("button.start");
+await tapEl("button.start");
+await page.waitForFunction(() => globalThis.__enjoy.view()?.trans === "manual", { timeout: 30_000 });
+await sleep(800);
+check("with the clutch held on the left, the paddles on the right shift up and back down (B-06)",
+  String(up6.gear) === "2" && String(down6.gear) === "1" && down6.clutch > 0.9,
+  `up twice: gear ${up6.gear}; then down: gear ${down6.gear}, clutch ${down6.clutch.toFixed(2)}`);
+await page.setViewport({ width: 915, height: 412, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true, isLandscape: true });
 
 // B-02: on a short landscape phone (Chrome's toolbar showing) a clutchless
 // shift's hint printed over the strip. The checks are layout rules, not pixel

@@ -1,10 +1,14 @@
-import { ChangeDetectionStrategy, Component, computed, HostListener, OnDestroy, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, HostListener, inject, OnDestroy, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import type { Transmission } from '@dieselsim/physics';
 import { controlKey, DRIVE_PRESETS, KEY_HELP, MIC_KEYS, MICS } from './drive-keys';
 import { IMPORTED, readGridFile } from './grid-file';
 import { engineLibrary, MY, type MyEngine } from '../engine/my-engines';
 import { LiveSession } from './live-session';
+import { DriveEnv } from '../weather/drive-env';
+import { DriveEnvPicker } from '../weather/drive-env-picker';
+import { applyProject, engineChoice, parseProject } from '../spec/project';
+import { SpecEdits } from '../spec/spec-edits';
 import type { DriveScript, GridFile } from './protocol';
 
 const fmt0 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
@@ -25,7 +29,7 @@ export function releaseFocus(): void {
  */
 @Component({
   selector: 'app-drive',
-  imports: [RouterLink],
+  imports: [RouterLink, DriveEnvPicker],
   templateUrl: './drive.html',
   styleUrl: '../dyno/dyno.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -45,8 +49,13 @@ export class DrivePage implements OnDestroy {
   /** "Your engines": custom engines with a drivable grid, built in this browser (ADR-014) */
   protected readonly mine = signal<MyEngine[]>([]);
   protected readonly MY = MY;
-  protected readonly trans = signal<Transmission>('tc');
   private readonly s = new LiveSession();
+  private readonly env = inject(DriveEnv);
+  /** Phase 7 step 7: the gearbox is DriveEnv's, kept per browser and set by a project */
+  protected readonly trans = this.env.gearbox;
+  private readonly edits = inject(SpecEdits);
+  protected readonly projectNote = signal<string | undefined>(undefined);
+  protected readonly dashInfo = this.s.info;
   protected readonly status = this.s.status;
   protected readonly error = this.s.error;
   protected readonly gridStatus = this.s.gridStatus;
@@ -69,7 +78,7 @@ export class DrivePage implements OnDestroy {
     // e2e hook (only with ?e2e): run a frame-exact script through the real worker
     if (typeof location !== 'undefined' && location.search.includes('e2e')) {
       (globalThis as Record<string, unknown>)['__drive'] = {
-        load: (preset: string, trans: Transmission) => this.s.load(preset, trans, false),
+        load: (preset: string, trans: Transmission) => this.s.load(preset, trans, false, this.env.air(), this.env.cfpp()),
         info: () => this.s.info(),
         script: (script: DriveScript, init: Record<string, number> = {}) => this.s.runScript(script, init),
         key: (key: string, down: boolean) => this.s.key(key, down),
@@ -86,18 +95,39 @@ export class DrivePage implements OnDestroy {
   }
 
   protected selectPreset(p: string): void { this.preset.set(p); this.stop(); }
-  protected selectTrans(t: string): void { this.trans.set(t as Transmission); this.stop(); }
+  protected selectTrans(t: string): void { this.env.setGearbox(t); this.stop(); }
 
   protected async start(): Promise<void> {
     releaseFocus();
     const g = this.imported();
     const p = this.preset();
-    if (p === IMPORTED && g) await this.s.loadGrid(g, this.trans(), true);
+    if (p === IMPORTED && g) await this.s.loadGrid(g, this.trans(), true, this.env.air(), this.env.cfpp());
     else if (p.startsWith(MY)) {
       const saved = await engineLibrary().grid(p.slice(MY.length)).catch(() => undefined);
-      if (saved) await this.s.loadGrid(saved, this.trans(), true);
+      if (saved) await this.s.loadGrid(saved, this.trans(), true, this.env.air(), this.env.cfpp());
       else this.s.error.set('that engine is no longer saved in this browser');
-    } else await this.s.load(p, this.trans(), true);
+    } else await this.s.load(p, this.trans(), true, this.env.air(), this.env.cfpp());
+  }
+
+  /**
+   * "Open project" (Phase 7 step 7, ADR-016 item 6): the project's gearbox,
+   * place and fuel, and its engine -- the preset, or an edited engine's grid
+   * built in this browser. It becomes /spec's project too.
+   */
+  protected async openProject(input: HTMLInputElement): Promise<void> {
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    this.importError.set(undefined);
+    this.projectNote.set(undefined);
+    const parsed = parseProject(await file.text());
+    if (typeof parsed === 'string') { this.importError.set(`${file.name}: ${parsed}`); return; }
+    const note = applyProject(parsed, this.edits, this.env);
+    this.stop();
+    const c = engineChoice(parsed.engine, this.presets.map(p => p.key), this.mine());
+    if ('choice' in c) this.preset.set(c.choice);
+    else { this.importError.set(`${file.name}: ${c.reason}`); return; }
+    this.projectNote.set(`Opened ${file.name}.${note ? ' ' + note : ''}`);
   }
 
   /** "Import grid": a custom engine's grid file (tools/build_live_grids.py --engine). */
