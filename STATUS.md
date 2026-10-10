@@ -1,8 +1,36 @@
 # Status
 
-**Updated:** 2026-10-09, session 8 (Phase 7 step 4 done, in #115). Read this section first; the
-dated sections below it are history. *(Was: "2026-10-06, end of session
-7".)*
+**Updated:** 2026-10-10, session 8 (Phase 7 step 7 built, PR #PRNUM; all seven steps
+built). Read this section first; the dated sections below it are history.
+*(Was: "2026-10-09, session 8 (Phase 7 step 4 done, in #115)".)*
+
+**2026-10-10, the owner's priority request: a hardware benchmark. Merged
+as #117** (10:16 UTC, at `1589f5f`).
+- `tools/bench_grid.py` times a standard drivable grid (8 × 6, warm and
+  cold, 104 pieces) on the machine's own pool. Quick mode (~4–5 min)
+  estimates the build; `--full` builds it.
+- `bench/run_bench.sh` and `bench/run_bench.bat` set up `bench/.venv`
+  (numpy only) and run it. `test_grid_benchmark_schedule`: 6 parts, 4 of
+  4 mutants. CI on #117: 9 of 9; Linux 82 / 0 / 3 with the new test
+  passing, and Pyodide skipping it.
+- **Measured on this M2:**
+  - `--full` took 22.1 min; the schedule from its own piece times gives
+    23.4 (+6%).
+  - Quick said 16.8 (−24%): the pieces slow under sustained load.
+  - Through `run_bench.sh` (Python 3.13, numpy 2.5.3), quick said 13.0.
+  - So: `--full` for laptops that throttle, and the same Python on every
+    machine.
+  - **Corrected before merge:** the browser estimate first used ADR-014's
+    ×2.65, which counts the load twice. It is now ×1.45–1.86, from the two
+    measured Chrome builds.
+- **#117 merged before my last three commits.** The docs went to **#118**
+  (from `main`, merges alone). The third commit moved the test away from
+  #116's hunks, so it never reached `main`, and **#116 conflicted with
+  `main`**. Fixed by merging `main` into `feat/cold-flow` (`f05a27f`),
+  keeping both sides. The merged suite read 87 / 0 / 3 (86 + the
+  benchmark test).
+- *Owning a mistake:* I first read #117's CI as the first push's run. It
+  was `1589f5f`'s; the first push's run was cancelled.
 
 **Session 8, start (2026-10-07):** `main` is `ea88e5f` (#107 merged 09:27
 UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
@@ -61,7 +89,12 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
       recurs.~~ **It recurred on #115 (2026-10-09), a third time. Every
       e2e launch now gives Chrome 120 s** (#115).
 - **Waiting on the owner (session 8):**
-  0. **Now (2026-10-09): merge #115.** It carries #112 (D), #113 (the
+  0. **Now (2026-10-10): merge #PRNUM (step 7) and #118 (benchmark docs), in
+     either order.** #PRNUM contains #116 (cold-flow), which contains #112–#115,
+     so merging it closes all six. Each merges cleanly with `main` and with
+     the other (checked on throwaway merges). Then check `main` by content.
+     *(Was: "merge #115", below; #116 then carried it.)*
+  0a. *(2026-10-09)* **Merge #115.** It carries #112 (D), #113 (the
      table proposal) and #114 (humidity), all open and all targeting
      `main`, so merging #115 alone brings all four. CI on #115's code
      (`25ebbaf`): 9 of 9, every job read. Then check `main` by content.
@@ -110,7 +143,37 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
          - Suite 86 / 0 / 3; fixtures 7 of 7; audit unchanged; places,
            fuels and schema files current; grid hash unchanged
            (`70fdc89e`).
-       - Then step 7, projects.
+       - ~~Then step 7, projects.~~ **Step 7 built (2026-10-10,
+         `feat/projects`, PR #PRNUM into `main`).**
+         - **The owner's choice:** a "Drive with" box on `/spec`
+           (gearbox, place, fuel), over the engine and environment only,
+           or capturing Drive's last settings unseen. ADR-016 addendum.
+         - The project file, version 1: the engine (base + edits) and the
+           drive (`spec/project.ts`).
+           - A newer version is refused, saying so.
+           - An old spec file opens as the engine only, and the page says
+             the drive settings stayed as they were.
+           - Every field is checked, and refused in words.
+         - On `/spec`, Save and Open project replace Export/Import spec.
+         - The gearbox joins the place and the fuel in `DriveEnv`, kept
+           per browser (a new CLAUDE.md trap for e2e).
+         - `/drive` and `/enjoy` open a project:
+           - an unedited engine selects the preset, if the page has it;
+           - an edited one selects its grid in "Your engines", or says to
+             build it on `/spec` first;
+           - Enjoy drives a DCT project as Auto, and says so.
+         - Tests, read from finished runs on this Mac:
+           - units 130 (+8, `project.spec.ts`), 7 of 7 mutants;
+           - e2e:spec 18 (+4: open on `/spec`, Save project's file
+             text, `/drive` and `/enjoy` starting with the choice and
+             opening projects), 4 of 4 mutants, every one compiled;
+           - e2e:drive 10 and e2e:enjoy 23, unchanged; e2e:custom
+             7 / 0 (its file unchanged by step 7);
+           - suite 87 / 0 / 3 (no Python change in step 7); build:pages
+             clean.
+         - **Phase 7's seven steps are all built.** Next by PLAN: Phase
+           8 (polish and host), including P01 (vibration) and P06's
+           proposal.
   1. ~~**Merge #111**~~ **Done 2026-10-08 06:37 UTC.** `main` (`9582848`)
      equals the tested tip `4795cb3`, 0 files differing. CI on #111: 9 of
      9, every job read; Pyodide 42.7 min (limit now 60). **Next: merge
