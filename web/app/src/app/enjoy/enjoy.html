@@ -33,7 +33,11 @@
       @if (error()) { <p class="err">{{ error() }}</p> }
       <label class="import">Your own engine: <input type="file" accept=".json,application/json"
         [disabled]="status() === 'loading'" (change)="importGrid($any($event.target))" aria-label="Import grid file"></label>
+      <label class="import open-project">A project: <input type="file" accept=".json,application/json"
+        [disabled]="status() === 'loading'" (change)="openProject($any($event.target))" aria-label="Open project"></label>
       @if (importError()) { <p class="err import-err">{{ importError() }}</p> }
+      @if (projectNote()) { <p class="project-note">{{ projectNote() }}</p> }
+      <app-drive-env class="place" (changed)="stop()" />
       <p class="hint">Throttle on the right, brake on the left: press harder by sliding up. Paddles shift.</p>
     } @else if (v(); as s) {
       <ul class="lamps" aria-label="Warning lamps">

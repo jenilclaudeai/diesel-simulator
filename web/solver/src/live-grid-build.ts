@@ -83,10 +83,18 @@ export interface LiveBuildOptions {
   storeKey?: string;
   onProgress?: (p: LiveBuildProgress) => void;
   signal?: AbortSignal;
+  /**
+   * Phase 7 step 4 (shape A3): also build the weather table -- every warm cell at 8 airs plus 6
+   * held-out checks, released row by row like the cells -- into the file's "weather" key.
+   */
+  weather?: boolean;
 }
 
 interface Cell { perf: Record<string, number>; p_cyl_f32: string; src_f32: Record<string, string>; meta: Record<string, number> }
-type Task = { kind: "row"; i: number } | { kind: "cell"; i: number; j: number; cold: boolean };
+type Task = { kind: "row"; i: number } | { kind: "cell"; i: number; j: number; cold: boolean }
+  // a weather piece: the n-th of the weather plan's pieces then checks (bridge.live_weather_plan)
+  | { kind: "wx"; i: number; n: number };
+interface WxPiece { i: number; j: number; p: number; T: number }
 
 /**
  * A row's converged fuel calibration costs about this many cells (ADR-014:
@@ -131,13 +139,22 @@ export async function buildLiveGrid(engine: EngineRef, workers: LiveCaller[], op
   const t0 = performance.now();
   const plan = JSON.parse(await workers[0]!.liveCall("live_grid_plan", JSON.stringify({ engine, n_rpm, n_load }))) as
     { rpms: number[]; loads: number[] };
-  const total = n_rpm + 2 * n_rpm * n_load;
+  const wplan = opts.weather
+    ? JSON.parse(await workers[0]!.liveCall("live_weather_plan", JSON.stringify({ rpms: plan.rpms, loads: plan.loads }))) as
+      { pieces: WxPiece[]; check: WxPiece[] }
+    : { pieces: [], check: [] };
+  const wx: WxPiece[] = [...wplan.pieces, ...wplan.check];
+  const wxOut: (Record<string, unknown> | undefined)[] = new Array(wx.length).fill(undefined);
+  const total = n_rpm + 2 * n_rpm * n_load + wx.length;
   const flims: (number | undefined)[] = new Array(n_rpm).fill(undefined);
   const cells: Record<"warm" | "cold", (Cell | undefined)[][]> = {
     warm: plan.rpms.map(() => new Array<Cell | undefined>(n_load).fill(undefined)),
     cold: plan.rpms.map(() => new Array<Cell | undefined>(n_load).fill(undefined)),
   };
-  const sk = (t: Task) => `${prefix}:${t.kind === "row" ? `row:${t.i}` : `${t.cold ? "cold" : "warm"}:${t.i}:${t.j}`}`;
+  const sk = (t: Task) => `${prefix}:${t.kind === "row" ? `row:${t.i}` : t.kind === "wx" ? `wx:${t.n}`
+    : `${t.cold ? "cold" : "warm"}:${t.i}:${t.j}`}`;
+  // a weather piece costs what a warm cell does: timed and estimated as one
+  const timedKind = (t: Task): "row" | "cell" => (t.kind === "row" ? "row" : "cell");
   let done = 0, resumed = 0;
   // this session's timings, per kind, and the pieces in flight (for etaSeconds)
   const spent = { row: 0, cell: 0 }, timed = { row: 0, cell: 0 };
@@ -149,15 +166,17 @@ export async function buildLiveGrid(engine: EngineRef, workers: LiveCaller[], op
     const eta = etaSeconds({
       ...(timed.row ? { rowS: spent.row / timed.row } : {}), ...(timed.cell ? { cellS: spent.cell / timed.cell } : {}),
       rowsUnstarted: n_rpm - rowsDone - runningRows, cellsLeft: total - done - (n_rpm - rowsDone),
-      running: [...running].map(([t, since]) => ({ kind: t.kind, elapsedS: (now - since) / 1000 })), workers: workers.length,
+      running: [...running].map(([t, since]) => ({ kind: timedKind(t), elapsedS: (now - since) / 1000 })), workers: workers.length,
     });
     if (eta !== undefined) p.etaS = eta;
     opts.onProgress?.(p);
   };
   const cellTasks = (i: number): Task[] =>
-    [false, true].flatMap(cold => plan.loads.map((_, j) => ({ kind: "cell", i, j, cold }) as Task));
+    [...[false, true].flatMap(cold => plan.loads.map((_, j) => ({ kind: "cell", i, j, cold }) as Task)),
+     ...wx.flatMap((q, n) => (q.i === i ? [{ kind: "wx", i, n } as Task] : []))];
   const record = (t: Task, text: string) => {
     if (t.kind === "row") flims[t.i] = (JSON.parse(text) as { fuel_limit: number }).fuel_limit;
+    else if (t.kind === "wx") wxOut[t.n] = JSON.parse(text) as Record<string, unknown>;
     else cells[t.cold ? "cold" : "warm"][t.i]![t.j] = JSON.parse(text) as Cell;
   };
 
@@ -180,7 +199,11 @@ export async function buildLiveGrid(engine: EngineRef, workers: LiveCaller[], op
   // releases its cells, and a worker with nothing ready waits for a change
   const arg = (t: Task) => t.kind === "row"
     ? JSON.stringify({ engine, rpm: plan.rpms[t.i] })
-    : JSON.stringify({ engine, rpm: plan.rpms[t.i], load: plan.loads[t.j], fuel_limit: flims[t.i], cold: t.cold });
+    : t.kind === "wx"
+      ? JSON.stringify({ engine, rpm: plan.rpms[t.i], load: plan.loads[wx[t.n]!.j], fuel_limit: flims[t.i],
+                         p: wx[t.n]!.p, T: wx[t.n]!.T })
+      : JSON.stringify({ engine, rpm: plan.rpms[t.i], load: plan.loads[t.j], fuel_limit: flims[t.i], cold: t.cold });
+  const fnOf = (t: Task): LiveFn => (t.kind === "row" ? "live_row_limit" : t.kind === "wx" ? "live_weather_cell" : "live_cell");
   let failure: unknown, inFlight = 0;
   let changed!: () => void;
   let change = new Promise<void>(r => (changed = r));
@@ -198,9 +221,9 @@ export async function buildLiveGrid(engine: EngineRef, workers: LiveCaller[], op
       const started = performance.now();
       running.set(t, started);
       try {
-        const text = await w.liveCall(t.kind === "row" ? "live_row_limit" : "live_cell", arg(t));
+        const text = await w.liveCall(fnOf(t), arg(t));
         running.delete(t);
-        spent[t.kind] += (performance.now() - started) / 1000; timed[t.kind]++;
+        spent[timedKind(t)] += (performance.now() - started) / 1000; timed[timedKind(t)]++;
         record(t, text);
         if (store) await store.put(sk(t), text);
         done++;
@@ -231,8 +254,16 @@ export async function buildLiveGrid(engine: EngineRef, workers: LiveCaller[], op
   if (opts.signal?.aborted) throw new SolverError("cancelled", `live-grid build cancelled after ${done}/${total} pieces (they are kept)`);
 
   report("assemble");
+  const extra: Record<string, unknown> = { ...(opts.extra ?? {}) };
+  if (opts.weather) {
+    // the table, from the warm cells (its standard air's node) and the pieces, in the plan's order
+    extra["weather"] = JSON.parse(await workers[0]!.liveCall("live_weather_assemble", JSON.stringify({
+      engine, grid: { rpms: plan.rpms, loads: plan.loads, perf: cells.warm.map(row => row.map(c => c!.perf)) },
+      pieces: wxOut.slice(0, wplan.pieces.length), checks: wxOut.slice(wplan.pieces.length),
+    })));
+  }
   return workers[0]!.liveCall("live_grid_assemble", JSON.stringify({
     engine, key: opts.key, rpms: plan.rpms, loads: plan.loads, fuel_limits: flims,
-    warm: cells.warm, cold: cells.cold, build_s: Math.round((performance.now() - t0) / 1000), extra: opts.extra ?? {},
+    warm: cells.warm, cold: cells.cold, build_s: Math.round((performance.now() - t0) / 1000), extra,
   }));
 }

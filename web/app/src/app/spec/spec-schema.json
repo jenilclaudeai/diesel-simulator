@@ -858,6 +858,12 @@
   "note": "Pa"
  },
  {
+  "path": "thermal.ambient_humidity",
+  "cls": "Thermal",
+  "type": "number",
+  "note": "g/kg water per kg dry air (ISO 8178's reference); corrects reported NOx only"
+ },
+ {
   "path": "thermal.oil_T_start",
   "cls": "Thermal",
   "type": "number",

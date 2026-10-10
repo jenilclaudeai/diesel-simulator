@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, ou
 import { RouterLink } from '@angular/router';
 import type { EngineRef, LiveBuildProgress } from '@dieselsim/solver';
 import { poolSize } from '../solver/pool-size';
+import { buildsWeather } from './build-options';
 import { describe, SolverService } from '../solver/solver.service';
 import { refKey } from '../spec/spec-status';
 import { VEHICLE_NAMES } from './custom-engine';
@@ -107,6 +108,7 @@ export class DriveBuild {
         key: rec.key, ...(m ? { size: [Number(m[1]), Number(m[2])] as [number, number] } : {}),
         extra: { custom: true, vehicle: rec.vehicle, ...this.extra() },
         onProgress: p => this.progress.set(p), signal: this.abort.signal,
+        weather: buildsWeather(location.search),      // Phase 7 step 4
       });
       const mine: MyEngine = { ...rec, savedAt: Date.now() };
       await engineLibrary().save(mine, text);

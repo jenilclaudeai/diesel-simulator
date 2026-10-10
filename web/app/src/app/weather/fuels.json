@@ -1,0 +1,20 @@
+[
+ {
+  "key": "summer",
+  "name": "Summer diesel",
+  "cfpp_C": 18.0,
+  "sources": "IS 1460:2017 summer grade, CFPP <= 18 C (BPCL/CPCL data sheets)"
+ },
+ {
+  "key": "winter",
+  "name": "Winter diesel",
+  "cfpp_C": 6.0,
+  "sources": "IS 1460:2017 winter grade, CFPP <= 6 C (BPCL/CPCL data sheets)"
+ },
+ {
+  "key": "arctic",
+  "name": "Arctic diesel",
+  "cfpp_C": -32.0,
+  "sources": "EN 590 arctic class 2, CFPP -32 C (Neste arctic diesel)"
+ }
+]

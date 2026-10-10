@@ -102,7 +102,7 @@ export class SolverService {
    */
   async buildLiveGrid(engine: EngineRef, opts: { key: string; extra?: Record<string, unknown>; size?: [number, number];
                                                  workers?: number; onProgress?: (p: LiveBuildProgress) => void;
-                                                 signal?: AbortSignal }): Promise<string> {
+                                                 signal?: AbortSignal; weather?: boolean }): Promise<string> {
     const n = opts.workers ?? poolSize();
     const pool = Array.from({ length: n }, () => newWorkerSolver());
     // a pool worker that fails to start fails the build, as the main worker would
@@ -115,7 +115,7 @@ export class SolverService {
       const build = buildLiveGrid(engine, pool.map(p => p.solver), {
         key: opts.key, size, ...(opts.extra ? { extra: opts.extra } : {}), ...(store ? { store } : {}),
         ...(storeKey ? { storeKey } : {}), ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
-        ...(opts.signal ? { signal: opts.signal } : {}),
+        ...(opts.signal ? { signal: opts.signal } : {}), weather: opts.weather ?? true,
       });
       const text = await Promise.race([build, failed]);
       if (store && storeKey) await store.clear(storeKey).catch(() => { /* space is reclaimed next time */ });

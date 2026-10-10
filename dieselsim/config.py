@@ -278,6 +278,7 @@ class Thermal:
     port_T_exh: float = 700.0       # K
     ambient_T: float = 298.0        # K
     ambient_p: float = 101325.0     # Pa
+    ambient_humidity: float = 10.71  # g/kg water per kg dry air (ISO 8178's reference); corrects reported NOx only
     oil_T_start: float = 298.0      # K
     oil_T_target: float = 373.0     # K (100 C steady)
     # ---- warm-up / cooling system ------------------------------------
