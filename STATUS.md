@@ -1,6 +1,6 @@
 # Status
 
-**Updated:** 2026-10-10, session 8 (Phase 7 step 7 built, PR #PRNUM; all seven steps
+**Updated:** 2026-10-10, session 8 (Phase 7 step 7 built, PR #119; all seven steps
 built). Read this section first; the dated sections below it are history.
 *(Was: "2026-10-09, session 8 (Phase 7 step 4 done, in #115)".)*
 
@@ -89,8 +89,8 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
       recurs.~~ **It recurred on #115 (2026-10-09), a third time. Every
       e2e launch now gives Chrome 120 s** (#115).
 - **Waiting on the owner (session 8):**
-  0. **Now (2026-10-10): merge #PRNUM (step 7) and #118 (benchmark docs), in
-     either order.** #PRNUM contains #116 (cold-flow), which contains #112–#115,
+  0. **Now (2026-10-10): merge #119 (step 7) and #118 (benchmark docs), in
+     either order.** #119 contains #116 (cold-flow), which contains #112–#115,
      so merging it closes all six. Each merges cleanly with `main` and with
      the other (checked on throwaway merges). Then check `main` by content.
      *(Was: "merge #115", below; #116 then carried it.)*
@@ -144,7 +144,7 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
            fuels and schema files current; grid hash unchanged
            (`70fdc89e`).
        - ~~Then step 7, projects.~~ **Step 7 built (2026-10-10,
-         `feat/projects`, PR #PRNUM into `main`).**
+         `feat/projects`, PR #119 into `main`).**
          - **The owner's choice:** a "Drive with" box on `/spec`
            (gearbox, place, fuel), over the engine and environment only,
            or capturing Drive's last settings unseen. ADR-016 addendum.
