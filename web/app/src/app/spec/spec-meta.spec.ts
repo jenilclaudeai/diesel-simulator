@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { FIELDS, GROUPS, groupFields, groupOf, label, noteRest, readOnly, UNIT_FOR, unitFor, unitOf } from './spec-meta';
+import { ALTITUDE_NOTE } from '../weather/altitude';
+import { FIELDS, GROUPS, groupFields, groupOf, label, NOTE_EXTRA, noteFor, noteRest, readOnly, UNIT_FOR, unitFor, unitOf } from './spec-meta';
 
 describe('spec editor metadata', () => {
   it('every field belongs to exactly one group', () => {
@@ -61,5 +62,18 @@ describe('spec editor metadata', () => {
       if (!unitless.has(p)) expect(unitFor(f), p).not.toBe('');
     }
     for (const p of Object.keys(UNIT_FOR)) expect(FIELDS.some(f => f.path === p), p).toBe(true);
+  });
+
+  it("FINDING-026's thin-air limits are said beside ambient pressure and the ECU switch, after their own notes", () => {
+    for (const p of Object.keys(NOTE_EXTRA)) expect(FIELDS.some(f => f.path === p), p).toBe(true);
+    const field = (p: string) => FIELDS.find(f => f.path === p)!;
+    const amb = noteFor(field('thermal.ambient_p')), ecu = noteFor(field('ecu_modern'));
+    expect(amb).toContain('Below 90 kPa');
+    expect(amb).toContain(ALTITUDE_NOTE);
+    expect(ecu.startsWith(noteRest(field('ecu_modern').note) + ' ')).toBe(true);
+    expect(ecu).toContain('no turbo-overspeed');
+    expect(ecu).toContain('FINDING-026');
+    // every other field: its own note, unchanged
+    for (const f of FIELDS) if (!(f.path in NOTE_EXTRA)) expect(noteFor(f), f.path).toBe(noteRest(f.note));
   });
 });
