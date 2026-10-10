@@ -169,6 +169,11 @@ grep its readers and solve with it changed.
   lift it, and `touchEnd` lifts every finger. `at(sel, h)` is the fraction
   *up* the pedal, so 0.95 is full throttle. The stall test leaves `/enjoy`
   in Manual.
+- Since Phase 7 step 7, Drive's gearbox is kept per browser
+  (`DriveEnv.gearbox`, localStorage), like the place and the fuel, and
+  `/enjoy` starts in Manual when it is `manual`. Opening a project also
+  sets `/spec`'s edits. One e2e browser carries all of it from page to
+  page; clear `localStorage` before a check that assumes the defaults.
 
 ## Decisions
 

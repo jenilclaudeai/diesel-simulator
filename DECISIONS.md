@@ -1144,3 +1144,33 @@ editable temperature.
   temperature falls inside a grade's waxing band. The limp, part-waxed
   path is exercised by the loop's tests and fixture, and is there for
   P06's roads.
+
+### Addendum (2026-10-10): item 6, projects, and where the drive settings come from
+
+ADR-007's project is "engine spec + vehicle + gearbox configuration", and
+item 6 adds the environment. But `/spec`, where projects are saved, had no
+gearbox, place or fuel. **The owner chose a "Drive with" box on `/spec`**
+("A 'Drive with' box on /spec"), over saving the engine and the
+environment only, or capturing Drive's last settings unseen.
+- **The file** (`web/app/src/app/spec/project.ts`), version 1:
+  `{"format": "dieselsim-project", "version": 1, "engine": {"preset",
+  "overrides"}, "drive": {"gearbox", "place", "fuel"}}`. The vehicle is
+  the base engine's own. No grid is bundled (ADR-007).
+  - A newer version is refused, saying so.
+  - An old spec file (`{preset, overrides}`) opens as the engine only,
+    and the page says the drive settings stayed as they were.
+  - Every field is checked, and refused in words.
+- **`/spec`:** "Save project" and "Open project" replace Export/Import
+  spec. The "Drive with" box holds the gearbox select and the same Place
+  and Fuel picker as Drive and Enjoy.
+- **One shared choice.** The gearbox joins the place and the fuel in
+  `DriveEnv`, kept per browser. So what `/spec` shows is what Drive starts
+  with, and opening a project anywhere sets all three. It also becomes
+  `/spec`'s edits: a project is the app's one current project.
+- **`/drive` and `/enjoy` open a project** and select its engine:
+  - an unedited engine selects the preset, if that page offers it;
+  - an edited one selects its grid in "Your engines", found by the edits
+    (`editedEngine`'s key), or says to build it on `/spec` first, as
+    ADR-007 foresaw;
+  - Enjoy has no dual clutch, so a DCT project drives as Auto there, and
+    the page says so.
