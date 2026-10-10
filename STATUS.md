@@ -109,6 +109,17 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
        A, state it (recommended now), or B, with step 6.
      - The sheet's P06 rename; the Phase 5 phone re-check;
        `~/Documents` access for Claude Code.
+       - **Diagnosed 2026-10-11.** The owner had granted access, but each
+         time a different program asked. macOS privacy is per program,
+         and Claude Code installs every update as its own binary.
+         `~/.local/share/claude/versions/` holds 2.1.291, 2.1.292 and
+         2.1.293; this session ran from 2.1.292, under
+         `ClaudeCode.app`.
+       - Every program in the session was still refused: `ls`, `cat`,
+         Python and Node each got "Operation not permitted".
+       - Fix offered: Full Disk Access for `ClaudeCode.app`, or move the
+         repo out of `~/Documents`. Until then the work runs in the clone
+         under the job's `tmp/`.
      - ~~**Next by ADR-016's order: step 6, cold-flow**~~ **Step 6 built
        (2026-10-10, `feat/cold-flow`, from #115's head, into `main`).**
        - **The owner's decision:** a fuel picker; every place sells the
