@@ -67,6 +67,8 @@ cd web/app     && npm run check:labels          # every fuel figure labelled ste
 cd web/app     && npm run perf                  # synth/loop/friction cost under Chrome CPU throttling (reports only)
 cd web/app     && npm run e2e                   # browser checks (also e2e:grid, e2e:drive, e2e:sound, e2e:enjoy, e2e:custom,
                                                 # e2e:cycle, e2e:spec, e2e:sweep, e2e:durability)
+sh bench/run_bench.sh [--full]                  # hardware benchmark: a drivable grid's build time (bench/README.md;
+                                                # Windows: bench\run_bench.bat). Quick reads low on a laptop that throttles
 ```
 The app is live at https://jenilclaudeai.github.io/diesel-simulator/,
 published from `main` by `.github/workflows/pages.yml` on every merge.
