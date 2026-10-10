@@ -1062,3 +1062,19 @@ Constraints carried: one PRNG in Python and TypeScript so the live fixture
 holds (ADR-004); sand is rolling resistance only, with no grip (ADR-002).
 Its own proposal, with measurements, comes after item 1's table (Phase 7
 step 4). Where the build goes in the order is decided in that proposal.
+
+### Addendum (2026-10-08): item 2's ECU in thin air (FINDING-026)
+
+Measuring item 1's table found that the modern ECU's boost cap came before
+`cycle.run`'s EGR raise. Off the rating's air the VGT then jammed on its
+minimum at part load: up to −76% torque at Leh. It is fixed (#110, fix A),
+so the target the vanes chase is capped at the compressor's limit, as item
+2 says. Nothing changed at the rating's air (21 of 21 replies identical).
+
+**The owner then decided** ("C: No don't cut the fuel. then D."):
+- **No turbo-overspeed fuel cut.** In thin air at high rpm and full load
+  the turbo runs at the solver's speed ceiling on both ECUs, with no
+  protection modelled.
+- **Stated instead:** the solving pages' environment picker (below 90 kPa)
+  and `/spec`'s ambient-pressure and ECU fields say so. So does the
+  remaining light-load pumping cost: crdi15 at Leh, 4057 rpm / 20%, −37%.

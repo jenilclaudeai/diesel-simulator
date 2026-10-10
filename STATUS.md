@@ -29,9 +29,11 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
     1860/0.2 −67% → −12%, crdi15 4057/0.6 −30% → −2%; identical at
     standard air in 25 of 25 cells. **B** (a VGT speed limit) is
     dismissed: the vanes are already wide open where the shaft pins.
-    **For the owner:** C (a turbo-overspeed fuel derate) and D (state the
-    light-load residual, crdi15 4057/0.2 still −37%). My recommendation:
-    A now, then C measured, then D, then step 4 re-measured.
+    **Decided 2026-10-08:** C declined (no fuel cut), D stated (item 2
+    below). *(Was: "For the owner: C (a turbo-overspeed fuel derate) and D
+    (state the light-load residual, crdi15 4057/0.2 still −37%). My
+    recommendation: A now, then C measured, then D, then step 4
+    re-measured.")*
   - The `hatch15` table run was stopped part-way: it measured the
     defective code.
   - **Fix A built** on `fix/finding-026-cap` (PR stacked on #109):
@@ -58,13 +60,50 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
       passed that job. **Follow-up:** raise the e2e launch timeout if it
       recurs.
 - **Waiting on the owner (session 8):**
-  1. **Merge, in order:** #108 (docs) → retarget #109 to `main` → merge
-     #109 (docs, FINDING-026) → retarget #110 → merge #110 (fix A). Then
-     check `main` by content (memory: stack-merge-trap). #108's red check
-     is the Chrome-launch flake above.
-  2. **FINDING-026 C and D:** a turbo-overspeed fuel derate (C)? State the
-     light-load residual (D)? My recommendation: C measured next, then D.
-     Step 4 (the weather table) waits for these.
+  1. ~~**Merge #111**~~ **Done 2026-10-08 06:37 UTC.** `main` (`9582848`)
+     equals the tested tip `4795cb3`, 0 files differing. CI on #111: 9 of
+     9, every job read; Pyodide 42.7 min (limit now 60). **Next: merge
+     #112** (D, into `main`; CI 9 of 9 on its code). *(Was: "Merge #111,
+     then the D PR, both into `main` (neither is stacked, so no
+     retargeting; merging D's PR first would bring #111's commits too).")*
+     - *What happened (2026-10-08 05:44–05:49 UTC):* #108 merged into
+       `main`, but #109 merged into `docs/session8-start` and #110 into
+       `docs/finding-026`, not retargeted (memory: stack-merge-trap). So
+       `main` (`b8f80b8`) had neither FINDING-026 nor fix A. **#111**
+       brings both, from `fix/finding-026-cap` (`4795cb3`, the tree CI
+       passed 9 of 9 on #110).
+     - *(Was: "Merge, in order: #108 (docs) → retarget #109 to `main` →
+       merge #109 (docs, FINDING-026) → retarget #110 → merge #110 (fix A).
+       Then check `main` by content (memory: stack-merge-trap). #108's red
+       check is the Chrome-launch flake above.")*
+  2. ~~**FINDING-026 C and D**~~ **Decided 2026-10-08: "C: No don't cut the
+     fuel. then D."** D is built on `fix/finding-026-state`: the thin-air
+     note on the solving pages' picker and on `/spec`'s ambient-pressure
+     and ECU fields. Units 112 (6 of 6 mutants caught); e2e:cycle 10 and
+     e2e:spec 13 (+1 each, each mutant caught). FINDING-026 is closed.
+     *(Was: "a turbo-overspeed fuel derate (C)? State the light-load
+     residual (D)? My recommendation: C measured next, then D. Step 4 (the
+     weather table) waits for these.")*
+     - ~~**Next: step 4, the weather table, re-measured**~~ **Re-measured
+       2026-10-08: the table's shape needs your decision**
+       (`reviews/PROPOSAL-weather-table.md`). 624 converged solves
+       (crdi15, hatch15). Felt torque error, as a share of full-load
+       torque at that rpm:
+       - the 12-air table at the presets: 2.0–2.35%; at any air down to
+         52 kPa, 3.8–5.2%;
+       - but blending from coarse cells to the others costs 7.8–10.2%
+         (the smoke-limit knee);
+       - no correction (Drive today): 32.6–35.3% at Leh.
+
+       The options: A1 coarse cells; A2 all cells × 11 airs; **A3 all
+       cells × 8 airs (recommended: 2.4–3.6% at the presets, ~1.3 h extra
+       in a browser for a custom engine)**; A4 all cells × the presets
+       only (exact there, but Drive limited to five places, which P06's
+       climbing roads can't use). *(Was: "Next: step 4, the weather
+       table, re-measured on the fixed code (the table measurement first,
+       as before building).")*
+     - #112's CI on its final commit: 9 of 9. **Pyodide took 46.0 min**:
+       the old 45-minute limit would have cancelled it.
   3. **The sheet:** rename Feat Prop A7 from P05 to P06 (the connector
      can't edit cells).
   4. **This Mac:** `~/Documents` is unreadable to Claude Code since
@@ -508,8 +547,8 @@ from the CI-tested tree only in #104's four docs files, with 0 code paths;
 | `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |
 | `web/physics npm test` | 5 + 36 + 10 + 11 = 62 |
 | `web/solver npm test` | cache 20, live-grid scheduler 12, round trip 30 (#105; *was* 29) |
-| `web/app npm test` | 109 unit tests (pass without `physics-version.ts`; #106's tree, 2026-10-07). *Was:* 104 (#103), 101. `check:labels` 6 of 10 templates |
-| e2e (`web/app`) | dyno 15, grid 9, drive 7, sound 6, enjoy 21, custom 7, cycle 9 (*was* 8; +the environment check, #106), spec 12 (*was* 11; +the reload check, #103), sweep 6, durability 5 |
+| `web/app npm test` | 112 unit tests (pass without `physics-version.ts`; D's tree, 2026-10-08). *Was:* 109 (#106), 104 (#103), 101. `check:labels` 6 of 10 templates |
+| e2e (`web/app`) | dyno 15, grid 9, drive 7, sound 6, enjoy 21, custom 7, cycle 10 (*was* 9, +FINDING-026's thin-air note; 8, +the environment check, #106), spec 13 (*was* 12, +the thin-air notes; 11, +the reload check, #103), sweep 6, durability 5 |
 
 CI runs all of them except the manual `web/solver npm run test:live-real`.
 Its jobs: physics on Python 3.10 and 3.12, Pyodide, fixtures, solver, web
