@@ -6,6 +6,8 @@ import { controlKey, MIC_KEYS, MICS } from '../drive/drive-keys';
 import { LiveSession } from '../drive/live-session';
 import { DriveEnv } from '../weather/drive-env';
 import { DriveEnvPicker } from '../weather/drive-env-picker';
+import { applyProject, engineChoice, parseProject } from '../spec/project';
+import { SpecEdits } from '../spec/spec-edits';
 import { IMPORTED, readGridFile } from '../drive/grid-file';
 import { engineLibrary, MY, type MyEngine } from '../engine/my-engines';
 import type { GridFile, Pedals } from '../drive/protocol';
@@ -44,9 +46,12 @@ export class EnjoyPage implements OnDestroy {
   /** "Your engines": custom engines with a drivable grid, built in this browser (ADR-014) */
   protected readonly mine = signal<MyEngine[]>([]);
   protected readonly MY = MY;
-  protected readonly manual = signal(false);
   private readonly s = new LiveSession();
   private readonly env = inject(DriveEnv);
+  /** Phase 7 step 7: starts in the kept gearbox (a project's, or /spec's "Drive with"); Enjoy has auto or manual */
+  protected readonly manual = signal(this.env.gearbox() === 'manual');
+  private readonly edits = inject(SpecEdits);
+  protected readonly projectNote = signal<string | undefined>(undefined);
   protected readonly status = this.s.status;
   protected readonly error = this.s.error;
   protected readonly v = this.s.v;
@@ -120,6 +125,25 @@ export class EnjoyPage implements OnDestroy {
       if (saved) await this.s.loadGrid(saved, this.trans(), true, this.env.air(), this.env.cfpp());
       else this.s.error.set('that engine is no longer saved in this browser');
     } else await this.s.load(p, this.trans(), true, this.env.air(), this.env.cfpp());
+  }
+
+  /** "Open project" (Phase 7 step 7): as on /drive; a dual clutch drives as Auto here. */
+  protected async openProject(input: HTMLInputElement): Promise<void> {
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    this.importError.set(undefined);
+    this.projectNote.set(undefined);
+    const parsed = parseProject(await file.text());
+    if (typeof parsed === 'string') { this.importError.set(`${file.name}: ${parsed}`); return; }
+    const note = applyProject(parsed, this.edits, this.env);
+    this.stop();
+    if (parsed.drive) this.manual.set(parsed.drive.gearbox === 'manual');
+    const c = engineChoice(parsed.engine, this.presets.map(p => p.key), this.mine());
+    if ('choice' in c) this.preset.set(c.choice);
+    else { this.importError.set(`${file.name}: ${c.reason}`); return; }
+    const dct = parsed.drive?.gearbox === 'dct' ? ' Enjoy has no dual clutch, so it drives as Auto.' : '';
+    this.projectNote.set(`Opened ${file.name}.${note ? ' ' + note : ''}${dct}`);
   }
 
   /** "Import": a custom engine's grid file (tools/build_live_grids.py --engine). */

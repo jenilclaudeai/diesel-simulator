@@ -23,15 +23,23 @@ input[type="checkbox"] { width: 1.2rem; height: 1.2rem; accent-color: var(--ambe
 
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem; margin: 1.2rem 0 0; }
 .changed-count { font-weight: 600; }
-.actions button, .import { font: inherit; font-size: 0.95rem; color: var(--slate); background: var(--grey-deep);
+.actions button, .open-project { font: inherit; font-size: 0.95rem; color: var(--slate); background: var(--grey-deep);
   border: 1px solid var(--slate-faint); border-radius: 4px; padding: 0.4rem 0.8rem; cursor: pointer; }
 .actions button:disabled { opacity: 0.5; cursor: not-allowed; }
-.import input { position: absolute; width: 1px; height: 1px; opacity: 0; }
-.import:focus-within { outline: 3px solid var(--amber-ink); }
+.open-project input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.open-project:focus-within { outline: 3px solid var(--amber-ink); }
 .solve { font-weight: 700; color: var(--slate); background: var(--amber); border-radius: 4px; padding: 0.45rem 1rem; text-decoration: none; }
 
 .status { min-height: 1.6em; margin: 0.8rem 0 0.4rem; color: var(--slate-muted); }
 .err { color: var(--slate); font-weight: 600; }
+.file-note { margin: 0 0 0.6rem; max-width: 38em; color: var(--slate-muted); font-size: 0.9rem; }
+.drive-with { margin: 0.4rem 0 1rem; padding: 0.6rem 0.8rem; border: 1px solid var(--slate-faint); border-radius: 6px; max-width: 46em; }
+.drive-with h2 { margin: 0 0 0.2rem; font-size: 1.05rem; }
+.drive-with-note { margin: 0 0 0.5rem; color: var(--slate-muted); font-size: 0.85rem; }
+.drive-with-row { display: grid; gap: 0.6rem; }
+.drive-with .field { display: grid; gap: 0.3rem; font-size: 0.95rem; color: var(--slate-muted); max-width: 22em; }
+.drive-with select { font: inherit; color: var(--slate); background: var(--grey-deep); border: 1px solid var(--slate-faint);
+  border-radius: 4px; padding: 0.45rem 0.6rem; }
 .kept-note { margin: 0.4rem 0 0.6rem; max-width: 38em; color: var(--slate-muted); font-size: 0.9rem; }
 
 .group { margin-top: 1.8rem; }

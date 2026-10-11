@@ -344,7 +344,10 @@ Project save/load as JSON (OPEN-C).
   Rovaniemi won't start; ADR-016 addendum.)*
 - Five real-place presets, numbers shown and editable.
 - Projects: saved and opened on `/spec`; `/drive` and `/enjoy` can open
-  them.
+  them. *(Built 2026-10-10: version 1 holds the engine's edits plus a
+  "Drive with" box on `/spec` (gearbox, place, fuel), the owner's choice.
+  Old spec files still open. An edited engine drives once its grid is
+  built in that browser. ADR-016 addendum.)*
 - Build order: presets, environment on the solving pages, the ECU, the
   Drive table, humidity, cold-flow, projects. (REVIEW-008 m-3, keeping
   `/spec` edits across a reload, shipped first in #103.)

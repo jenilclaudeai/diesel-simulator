@@ -1,4 +1,5 @@
 import { computed, Injectable, signal } from '@angular/core';
+import type { Transmission } from '@dieselsim/physics';
 import ENVS from './environments.json';
 import FUELS_JSON from './fuels.json';
 
@@ -18,6 +19,9 @@ export interface Fuel { key: string; name: string; cfpp_C: number; sources: stri
 export const FUELS = FUELS_JSON as unknown as readonly Fuel[];
 /** The place's own fuel: what's sold there (the standard air's: the engine's own, no waxing). */
 export const SOLD_HERE = 'local';
+/** Phase 7 step 7: the gearbox is kept too, so a project's (or /spec's "Drive with") reaches /drive */
+export const DRIVE_GEARBOX_KEY = 'dieselsim-drive-gearbox';
+export const GEARBOXES: readonly Transmission[] = ['tc', 'dct', 'manual'];
 export const DRIVE_FUEL_KEY = 'dieselsim-drive-fuel';
 
 /** The fuel's cold-filter plugging point [K] for the worker, or undefined: no waxing. */
@@ -87,6 +91,13 @@ function restoreFuel(): string {
   } catch { return SOLD_HERE; }
 }
 
+function restoreGearbox(): Transmission {
+  try {
+    const k = globalThis.localStorage?.getItem(DRIVE_GEARBOX_KEY);
+    return k && GEARBOXES.includes(k as Transmission) ? (k as Transmission) : 'tc';
+  } catch { return 'tc'; }
+}
+
 @Injectable({ providedIn: 'root' })
 export class DriveEnv {
   readonly current = signal(restore());
@@ -94,6 +105,17 @@ export class DriveEnv {
   /** Phase 7 step 6: the fuel in the tank, and its CFPP for the worker */
   readonly fuel = signal(restoreFuel());
   readonly cfpp = computed(() => cfppOf(this.current(), this.fuel()));
+  /** Phase 7 step 7: the gearbox Drive starts with (Enjoy: manual or not), kept per browser */
+  readonly gearbox = signal<Transmission>(restoreGearbox());
+
+  setGearbox(t: string): void {
+    if (!GEARBOXES.includes(t as Transmission)) return;
+    this.gearbox.set(t as Transmission);
+    try {
+      if (t === 'tc') globalThis.localStorage?.removeItem(DRIVE_GEARBOX_KEY);
+      else globalThis.localStorage?.setItem(DRIVE_GEARBOX_KEY, t);
+    } catch { /* private mode: the choice lasts the page */ }
+  }
 
   setFuel(key: string): void {
     if (key !== SOLD_HERE && !FUELS.some(x => x.key === key)) return;

@@ -24,8 +24,12 @@
       <input type="file" accept=".json,application/json" [disabled]="status() === 'loading'"
              (change)="importGrid($any($event.target))" aria-label="Import grid file">
     </label>
+    <label class="field import open-project"><span>Project</span>
+      <input type="file" accept=".json,application/json" [disabled]="status() === 'loading'"
+             (change)="openProject($any($event.target))" aria-label="Open project">
+    </label>
     <label class="field"><span>Gearbox</span>
-      <select [disabled]="status() === 'loading'" (change)="selectTrans($any($event.target).value)">
+      <select class="drive-gearbox" [disabled]="status() === 'loading'" (change)="selectTrans($any($event.target).value)">
         <option value="tc" [selected]="trans() === 'tc'">Automatic, torque converter</option>
         <option value="dct" [selected]="trans() === 'dct'">Dual clutch</option>
         <option value="manual" [selected]="trans() === 'manual'">Manual, clutch pedal</option>
@@ -38,6 +42,7 @@
     </button>
   </div>
   @if (importError()) { <p class="err import-err">{{ importError() }}</p> }
+  @if (projectNote()) { <p class="project-note">{{ projectNote() }}</p> }
 
   <div class="controls sound">
     <button type="button" class="sound-toggle" (click)="toggleSound()" [disabled]="status() !== 'driving'"
