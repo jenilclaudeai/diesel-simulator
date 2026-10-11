@@ -84,8 +84,26 @@ UTC). No PR is open. Phase 7 steps 1–3 of 7 are merged (#105–#107).
      *(Was: "a turbo-overspeed fuel derate (C)? State the light-load
      residual (D)? My recommendation: C measured next, then D. Step 4 (the
      weather table) waits for these.")*
-     - **Next: step 4, the weather table, re-measured** on the fixed code
-       (the table measurement first, as before building).
+     - ~~**Next: step 4, the weather table, re-measured**~~ **Re-measured
+       2026-10-08: the table's shape needs your decision**
+       (`reviews/PROPOSAL-weather-table.md`). 624 converged solves
+       (crdi15, hatch15). Felt torque error, as a share of full-load
+       torque at that rpm:
+       - the 12-air table at the presets: 2.0–2.35%; at any air down to
+         52 kPa, 3.8–5.2%;
+       - but blending from coarse cells to the others costs 7.8–10.2%
+         (the smoke-limit knee);
+       - no correction (Drive today): 32.6–35.3% at Leh.
+
+       The options: A1 coarse cells; A2 all cells × 11 airs; **A3 all
+       cells × 8 airs (recommended: 2.4–3.6% at the presets, ~1.3 h extra
+       in a browser for a custom engine)**; A4 all cells × the presets
+       only (exact there, but Drive limited to five places, which P06's
+       climbing roads can't use). *(Was: "Next: step 4, the weather
+       table, re-measured on the fixed code (the table measurement first,
+       as before building).")*
+     - #112's CI on its final commit: 9 of 9. **Pyodide took 46.0 min**:
+       the old 45-minute limit would have cancelled it.
   3. **The sheet:** rename Feat Prop A7 from P05 to P06 (the connector
      can't edit cells).
   4. **This Mac:** `~/Documents` is unreadable to Claude Code since
