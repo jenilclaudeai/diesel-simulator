@@ -2432,6 +2432,39 @@ def test_humidity_corrects_reported_nox():
           (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ")
           + f"crdi15 2000/0.6 NOx {base.nox_g_kwh:.3f} g/kWh at {E.H_REF} g/kg; {wet.nox_g_kwh:.3f} at "
           + f"{H_wet:.2f} (x{1 / k_wet:.4f}); {dry.nox_g_kwh:.3f} at 2.0; example {example:.1f}")
+def test_grid_benchmark_schedule():
+    """tools/bench_grid.py (the hardware benchmark): its estimate schedules a
+    build as build_live_grids.py runs one -- the rows, then the warm cells,
+    then the cold cells, a pool.map each, ceil(n / workers) waves -- and its
+    quick mode samples rows over the whole grid and every load. SKIPs where
+    tools/ is absent (the Pyodide harness). Parts:
+    - 8 rows of 100 s, 48 warm cells of 20 s, 48 cold of 22 s on 6 workers:
+      2 x 100 + 8 x 20 + 8 x 22 = 536 s; on 1 worker 800 + 960 + 1056;
+    - phases don't overlap (a worker idle at the end of the rows waits);
+    - row samples are spread evenly, ends included, never repeated;
+    - load samples visit all six loads before repeating one."""
+    import importlib.util
+    tool = os.path.join(os.path.dirname(__file__), "..", "tools", "bench_grid.py")
+    if not os.path.exists(tool):
+        RESULTS.append(("SKIP", "grid benchmark's schedule", None, None, "tools/ not present (Pyodide harness)"))
+        return
+    spec_ = importlib.util.spec_from_file_location("bench_grid", tool)
+    b = importlib.util.module_from_spec(spec_)
+    spec_.loader.exec_module(b)
+    parts = {
+        "6 workers: 536 s": b.estimate_build_seconds(100.0, 20.0, 22.0, 6) == 536.0,
+        "1 worker: 2816 s": b.estimate_build_seconds(100.0, 20.0, 22.0, 1) == 800.0 + 960.0 + 1056.0,
+        "7 workers: 2 + 7 + 7 waves (phases don't overlap)": b.estimate_build_seconds(100.0, 20.0, 22.0, 7)
+        == 2 * 100.0 + 7 * 20.0 + 7 * 22.0,
+        "rows spread, ends included": b.sample_rows(8, 6) == [0, 1, 3, 4, 6, 7] and b.sample_rows(8, 1) == [4]
+        and b.sample_rows(8, 12) == list(range(8)),
+        "loads: all six before a repeat": sorted(b.sample_loads(6, 6)) == list(range(6))
+        and b.sample_loads(6, 8)[6:] == b.sample_loads(6, 6)[:2],
+        "the native pool is the build tool's": b.native_workers() == min(6, os.cpu_count() or 1),
+    }
+    bad = [k for k, ok in parts.items() if not ok]
+    check("grid benchmark's schedule (tools/bench_grid.py)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}" if bad else f"{len(parts)} of {len(parts)} parts"))
 
 
 def test_environments_json_is_current():
