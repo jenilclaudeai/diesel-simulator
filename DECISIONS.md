@@ -1078,3 +1078,24 @@ so the target the vanes chase is capped at the compressor's limit, as item
 - **Stated instead:** the solving pages' environment picker (below 90 kPa)
   and `/spec`'s ambient-pressure and ECU fields say so. So does the
   remaining light-load pumping cost: crdi15 at Leh, 4057 rpm / 20%, −37%.
+
+### Addendum (2026-10-08): item 3 built (humidity on NOx), and which form
+
+Item 3 said "ISO 8178's K_H factor (also in 40 CFR 1065)". The two are not
+the same equation. The built form is **40 CFR 1065.670-1** for
+compression-ignition engines, `× (9.953 x_H2O + 0.832)`, normalised to
+exactly 1 at ISO 8178's reference 10.71 g/kg. The equation's own unit
+point, 0.01688 mol/mol, is 0.05% off it.
+
+- **Why this form:** it is humidity-only, and it could be read in full (ISO
+  8178 is paywalled). The older diesel forms carry a temperature term too
+  (e.g. EPA's 1 + 0.00446 (T − 25) − 0.018708 (H − 10.71)), which would
+  count intake temperature twice: the cycle already solves it.
+- **Direction:** the model's NOx is the reference humidity's. Humid air
+  reports less (Mumbai, 21.63 g/kg: ×0.858), dry air more (Leh 7.82 g/kg:
+  ×1.047; Rovaniemi 0.67 g/kg: ×1.187, an extrapolation of a linear
+  correction).
+- `thermal.ambient_humidity` (g/kg, default 10.71) is the spec's field; the
+  presets set it. Nothing but the reported NOx moves.
+- If the owner prefers an ISO-style form, only `engine.nox_humidity_factor`
+  changes.

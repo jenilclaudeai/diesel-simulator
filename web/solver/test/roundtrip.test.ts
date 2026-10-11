@@ -111,7 +111,7 @@ check("the run says when it is done, and is gone after", dDone.done === true && 
 const sd = await solver.describeSpec({ preset: "crdi15", overrides: { "geom.compression_ratio": 17 } });
 const cr = sd.fields?.find(f => f.path === "geom.compression_ratio");
 check("describeSpec: every field with its dotted path, overrides applied",
-  sd.fields?.length === 189 && cr?.value === 17 && cr?.type === "number" && sd.fields.filter(f => f.type === "list").length === 2,
+  sd.fields?.length === 190 && cr?.value === 17 && cr?.type === "number" && sd.fields.filter(f => f.type === "list").length === 2,
   `${sd.fields?.length} fields; compression ratio ${String(cr?.value)}`);
 // ADR-009: the compressor map for the schematic, and the cycle's point on it
 const cmap = await solver.compressorMap({ preset: "crdi15" });

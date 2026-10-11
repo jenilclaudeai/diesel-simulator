@@ -33,6 +33,28 @@ from .wear import WearModel
 RATING_P_AMB = 101325.0     # Pa
 RATING_T_AMB = 298.0        # K
 
+# ADR-016 item 3: humidity reaches NOx as a test cell's correction, not as
+# water vapour in the cycle. The equation is 40 CFR 1065.670-1 (compression
+# ignition): corrected = measured * (9.953 x_H2O + 0.832), x_H2O the water's
+# mole fraction in the intake air. It is normalised to exactly 1 at ISO 8178's
+# reference humidity (the equation's own unit point, 0.01688 mol/mol, is 0.05%
+# off it). Humidity-only on purpose: the cycle already solves intake
+# temperature, so older forms with a temperature term would count it twice.
+# The engine's NOx is the reference humidity's; humid air gives less.
+H_REF = 10.71               # g water / kg dry air (environment.H_REF, held equal by a test)
+
+
+def x_h2o(H):
+    """The water's mole fraction in intake air of absolute humidity H [g/kg dry air]."""
+    n_w, n_a = H / 18.01528, 1000.0 / 28.96559      # mol water, mol dry air, per kg dry air
+    return n_w / (n_w + n_a)
+
+
+def nox_humidity_factor(H):
+    """40 CFR 1065.670's factor at absolute humidity H [g/kg dry air], over its
+    value at H_REF: reported NOx = the cycle's NOx / this."""
+    return (9.953 * x_h2o(H) + 0.832) / (9.953 * x_h2o(H_REF) + 0.832)
+
 
 @dataclass
 class OperatingPoint:
@@ -511,7 +533,10 @@ class DieselEngine:
         op.turbo_rpm = cyc.turbo_rpm
         op.egr_pct = cyc.egr_fraction * 100.0
         op.nox_ppm = cyc.nox_ppm
-        nox_kg_s = cyc.nox_ppm * 1e-6 * (30.0 / 28.9) * op.exhaust_kg_s
+        H = self.spec.thermal.ambient_humidity
+        if H != H_REF:   # at the reference the expression below is the old one, operand for operand
+            op.nox_ppm = cyc.nox_ppm / nox_humidity_factor(H)
+        nox_kg_s = op.nox_ppm * 1e-6 * (30.0 / 28.9) * op.exhaust_kg_s
         op.nox_g_kwh = nox_kg_s * 3.6e9 / max(P_brake, 1.0)
         soot_g_h = cyc.soot_mg_per_cycle * 1e-3 * g.n_cyl * n_fire * 3600.0
         op.soot_g_h = soot_g_h

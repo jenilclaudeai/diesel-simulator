@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { altitudeNote } from './altitude';
+import { humidityNote } from './humidity';
 import { EnvChoice, STANDARD } from './env-choice';
 
 const fmt1 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
@@ -30,6 +31,9 @@ const fmt0 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
         @if (thin(); as t) {
           <br /><span class="env-thin">{{ t }}</span>
         }
+        @if (humid(); as h) {
+          <br /><span class="env-humid">{{ h }}</span>
+        }
       </p>
     }
   `,
@@ -54,4 +58,6 @@ export class EnvPicker {
   protected readonly caveat = computed(() => this.partLoad() && this.env.current()?.key !== STANDARD);
   /** FINDING-026: what the model does in thin air, on every solving page (full load too: the turbo's ceiling) */
   protected readonly thin = computed(() => altitudeNote(this.env.current()?.p_amb));
+  /** ADR-016 item 3: off the reference humidity, the page says NOx is corrected, and only NOx */
+  protected readonly humid = computed(() => humidityNote(this.env.current()?.overrides));
 }

@@ -331,7 +331,9 @@ Project save/load as JSON (OPEN-C).
   pressure) on the common-rail engines; the mechanical single stays
   uncompensated.
 - Humidity: ISO 8178's K_H on reported NOx (a stated correction, not a
-  cycle effect).
+  cycle effect). *(Built 2026-10-08 as 40 CFR 1065.670's form, normalised
+  to ISO's 10.71 g/kg: humidity-only, so intake temperature isn't counted
+  twice. ADR-016 addendum.)*
 - Cold-flow: below the fuel's CFPP, fuel flow is capped in the live loop.
 - Five real-place presets, numbers shown and editable.
 - Projects: saved and opened on `/spec`; `/drive` and `/enjoy` can open
