@@ -9,7 +9,7 @@ import { DEFAULT_BASE, parseSpecFile, SpecEdits } from './spec-edits';
 import { LastResults } from './last-results';
 import { Schematic } from './schematic';
 import { refKey } from './spec-status';
-import { GROUPS, groupFields, label, noteRest, readOnly, type SchemaRow, unitFor } from './spec-meta';
+import { GROUPS, groupFields, label, noteFor, readOnly, type SchemaRow, unitFor } from './spec-meta';
 
 const fmtValue = (v: unknown) => typeof v === 'number' ? String(Number(v.toPrecision(6))) : Array.isArray(v) ? v.join(', ') : String(v);
 
@@ -67,7 +67,7 @@ export class SpecPage implements OnInit {
     if (!vals) return [];
     const row = (f: SchemaRow): Row => {
       const engine = vals[f.path], value = f.path in ov ? ov[f.path] : engine;
-      return { f, label: label(f.path), unit: unitFor(f), note: noteRest(f.note), ro: readOnly(f), engine, value, changed: f.path in ov };
+      return { f, label: label(f.path), unit: unitFor(f), note: noteFor(f), ro: readOnly(f), engine, value, changed: f.path in ov };
     };
     const hit = (r: Row) => !q || r.label.toLowerCase().includes(q) || r.f.path.toLowerCase().includes(q) || r.note.toLowerCase().includes(q);
     return GROUPS.map(g => {

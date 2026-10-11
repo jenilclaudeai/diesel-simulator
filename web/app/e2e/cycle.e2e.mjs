@@ -131,7 +131,12 @@ check("Leh in June: the choice marks the result out of date; solved again it is 
   && num(high.peak) < peakBar,
   `"${envNote.slice(0, 60)}…"; page ${high.peak}, IMEP ${high.imep}; native ${refPlateau.p_max_bar.toFixed(1)} bar, `
   + `IMEP ${refPlateau.imep_net_bar.toFixed(2)} (standard air ${shown.peak})`);
+const thinLeh = await page.$eval("p.env-note .env-thin", e => e.textContent.replace(/\s+/g, " ").trim()).catch(() => "");
 await page.select("select.env", "standard");
+const thinStd = await page.$eval("p.env-note .env-thin", e => e.textContent).catch(() => "");
+check("thin air: at Leh the picker says the ECU's limits (FINDING-026); at standard air it doesn't",
+  /no turbo-overspeed protection/.test(thinLeh) && /37% less torque/.test(thinLeh) && /FINDING-026/.test(thinLeh) && thinStd === "",
+  `Leh: "${thinLeh.slice(0, 70)}…"; standard: "${thinStd}"`);
 check("no page errors or console errors", problems.length === 0, problems.slice(0, 3).join(" | "));
 
 await browser.close();

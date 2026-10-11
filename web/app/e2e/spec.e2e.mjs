@@ -68,6 +68,12 @@ const layout = await page.evaluate(() => ({
 check("every field, in seven subsystems: 189 rows, 181 of them editable",
   layout.groups.length === 7 && layout.rows === 189 && layout.editable === 181,
   `${layout.groups.join(" | ")}; ${layout.rows} rows, ${layout.editable} inputs; compression ratio ${layout.cr}`);
+const thinNotes = await page.evaluate(() => Object.fromEntries(["thermal.ambient_p", "ecu_modern"].map(p =>
+  [p, document.querySelector(`tr[data-path="${p}"] .note`)?.textContent.replace(/\s+/g, " ").trim() ?? ""])));
+check("thin air (FINDING-026): ambient pressure and the ECU switch say the model's limits beside the field",
+  /Below 90 kPa/.test(thinNotes["thermal.ambient_p"]) && /no turbo-overspeed/.test(thinNotes["thermal.ambient_p"])
+  && /mechanical pump/.test(thinNotes.ecu_modern) && /no turbo-overspeed/.test(thinNotes.ecu_modern),
+  `ambient: "${thinNotes["thermal.ambient_p"].slice(0, 50)}…"; ECU: "${thinNotes.ecu_modern.slice(0, 90)}…"`);
 
 // ADR-009: the four live schematics, drawn from the spec
 await page.waitForSelector("figure.schematic.compressor polyline.speed", { timeout: 60_000 }).catch(() => {});

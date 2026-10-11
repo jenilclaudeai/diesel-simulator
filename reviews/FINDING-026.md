@@ -3,10 +3,13 @@
 **Opened by:** session 8 (2026-10-08), measuring Phase 7 step 4 (the Drive
 weather table) on `main` after #107.
 **Lens:** PHY1 (lead), PHY2, QA2
-**Status:** **fix A built** on `fix/finding-026-cap` (stacked on this
-finding's PR), with its test and re-stamp proof below. Options C and D are
-for the owner. *(Was: "open. Fix A is measured below, in a scratch copy,
-and is not yet on any branch.")*
+**Status:** **closed: A fixed, C declined, D stated.** The owner decided
+on 2026-10-08: "C: No don't cut the fuel. then D." A is in #110 (landed on
+`main` by #111). D is in `fix/finding-026-state` (below). *(Was: "fix A
+built on `fix/finding-026-cap` (stacked on this finding's PR), with its
+test and re-stamp proof below. Options C and D are for the owner." And
+before that: "open. Fix A is measured below, in a scratch copy, and is not
+yet on any branch.")*
 **Reproduce:** the session-8 scripts (`diag_vgt.py`, `diag_roster.py`),
 described below. They are not kept in the repo; the numbers are.
 
@@ -163,6 +166,38 @@ re-stamped with `tools/restamp_grids.py`, as for FINDING-025 and #107.
   and every mutant ran the fixed code: four identical passes. An
   `abspath` check didn't see it. The trees now copy `tests/`, the runner
   asserts with `realpath`, and the run was redone.
+
+## The owner's decision, and D (`fix/finding-026-state`)
+
+- **C declined:** no turbo-overspeed fuel cut. At high rpm and full load
+  in thin air the shaft keeps riding the solver's clamp (1.35 ×
+  `n_corr_ref`), on the modern and the mechanical ECU alike. That is now
+  said, not hidden.
+- **D, stated where the air is chosen:**
+  - `web/app/src/app/weather/altitude.ts` holds the statement and its
+    threshold, 90 kPa (about 1000 m; of the presets, only Leh).
+  - The solving pages' environment picker shows it below the place's
+    numbers, at full load too, because the turbo's ceiling is a full-load
+    effect.
+  - `/spec` says it beside ambient pressure and the ECU switch. The words
+    live in `spec-meta.ts`'s `NOTE_EXTRA`, not in `config.py`'s comments:
+    `config.py` is hashed, and a comment there would stale every grid.
+  - The text: "In thin air, a turbocharged engine with a modern ECU holds
+    its sea-level boost up to the compressor's limit. At light load that
+    costs pumping work (crdi15 at Leh, 4057 rpm and 20% load: 37% less
+    torque, converged), and at high rpm and full load the turbo runs at
+    the model's speed ceiling: no turbo-overspeed protection is modelled
+    (FINDING-026)."
+- **Tests:**
+  - Units 112 (+3), run without `physics-version.ts`; 6 of 6 mutants
+    caught by assertion (the threshold flipped and lowered to 60 kPa, the
+    finding dropped from the text, the ambient note removed, `noteFor`
+    dropping the addition, the addition replacing the field's own note).
+  - e2e:cycle 10 (+1): Leh shows the note, standard air doesn't. Its
+    mutant (the picker without the line) fails exactly that check.
+  - e2e:spec 13 (+1): both fields carry the note. Its mutant (`noteFor`
+    without the path) fails exactly that check. A first mutant that
+    didn't compile was refused as broken, not counted.
 
 ## Notes
 

@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { altitudeNote } from './altitude';
 import { EnvChoice, STANDARD } from './env-choice';
 
 const fmt1 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
@@ -26,6 +27,9 @@ const fmt0 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
           <br />On this page's fast solves, a part-load difference between two airs can be the solver's
           convergence gap (FINDING-013), not the weather. Compare at full load, where the two agree closely.
         }
+        @if (thin(); as t) {
+          <br /><span class="env-thin">{{ t }}</span>
+        }
       </p>
     }
   `,
@@ -48,4 +52,6 @@ export class EnvPicker {
     return `${c.place}: ${fmt1.format(c.p_amb / 1000)} kPa, ${fmt1.format(c.T_C)} °C, ${fmt0.format(c.rh_pct)}% humidity; ${fuel}.`;
   });
   protected readonly caveat = computed(() => this.partLoad() && this.env.current()?.key !== STANDARD);
+  /** FINDING-026: what the model does in thin air, on every solving page (full load too: the turbo's ceiling) */
+  protected readonly thin = computed(() => altitudeNote(this.env.current()?.p_amb));
 }
