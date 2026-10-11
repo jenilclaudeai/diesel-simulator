@@ -1,0 +1,106 @@
+[
+ {
+  "key": "standard",
+  "name": "Standard air",
+  "place": "The reference: sea level, 25 \u00b0C",
+  "altitude_m": 0.0,
+  "T_C": 24.85,
+  "rh_pct": 54.74,
+  "fuel": "the engine's own",
+  "cetane": null,
+  "cfpp_C": null,
+  "sources": "ISO 8178 reference humidity 10.71 g/kg; ICAO standard atmosphere",
+  "p_amb": 101325.0,
+  "T_amb": 298.0,
+  "overrides": {
+   "thermal.ambient_p": 101325.0,
+   "thermal.ambient_T": 298.0,
+   "thermal.ambient_humidity": 10.71
+  },
+  "humidity_g_kg": 10.710729469151895
+ },
+ {
+  "key": "desert",
+  "name": "Desert summer",
+  "place": "Jaisalmer, Rajasthan, May afternoon",
+  "altitude_m": 225.0,
+  "T_C": 42.0,
+  "rh_pct": 15.0,
+  "fuel": "BS-VI summer diesel (IS 1460)",
+  "cetane": 51.0,
+  "cfpp_C": 18.0,
+  "sources": "May mean daily maximum 41.9 C (weather2travel, IMD); afternoon RH ~13-15%; altitude ~225 m (approx.); IS 1460 summer grade",
+  "p_amb": 98651.07391336546,
+  "T_amb": 315.15,
+  "overrides": {
+   "thermal.ambient_p": 98651.07391336546,
+   "thermal.ambient_T": 315.15,
+   "thermal.ambient_humidity": 7.853774435491843,
+   "inj.cetane_number": 51.0
+  },
+  "humidity_g_kg": 7.853774435491843
+ },
+ {
+  "key": "winter",
+  "name": "Arctic winter",
+  "place": "Rovaniemi, Finland, a cold January morning",
+  "altitude_m": 201.0,
+  "T_C": -20.0,
+  "rh_pct": 85.0,
+  "fuel": "arctic diesel (EN 590 class 2)",
+  "cetane": 51.0,
+  "cfpp_C": -32.0,
+  "sources": "Rovaniemi 201 m; January daily lows -10.5 (warmest) to -29.3 C (coldest) on record (extremeweatherwatch); RH ~85% (approx.); EN 590 arctic class 2, Neste arctic diesel",
+  "p_amb": 98933.53983785397,
+  "T_amb": 253.14999999999998,
+  "overrides": {
+   "thermal.ambient_p": 98933.53983785397,
+   "thermal.ambient_T": 253.14999999999998,
+   "thermal.ambient_humidity": 0.6728932656745713,
+   "inj.cetane_number": 51.0
+  },
+  "humidity_g_kg": 0.6728932656745713
+ },
+ {
+  "key": "plateau",
+  "name": "High plateau",
+  "place": "Leh, Ladakh, June",
+  "altitude_m": 3500.0,
+  "T_C": 20.0,
+  "rh_pct": 35.0,
+  "fuel": "BS-VI winter diesel (IS 1460)",
+  "cetane": 51.0,
+  "cfpp_C": 6.0,
+  "sources": "Leh ~3500 m (11,600 ft); June highs ~21 C, lows ~7 C; RH mostly under 40% (Ladakh disaster management authority, climate-data.org); IS 1460 winter grade",
+  "p_amb": 65764.05762837266,
+  "T_amb": 293.15,
+  "overrides": {
+   "thermal.ambient_p": 65764.05762837266,
+   "thermal.ambient_T": 293.15,
+   "thermal.ambient_humidity": 7.8213146940011224,
+   "inj.cetane_number": 51.0
+  },
+  "humidity_g_kg": 7.8213146940011224
+ },
+ {
+  "key": "tropics",
+  "name": "Humid tropics",
+  "place": "Mumbai, July (monsoon)",
+  "altitude_m": 14.0,
+  "T_C": 29.0,
+  "rh_pct": 85.0,
+  "fuel": "BS-VI summer diesel (IS 1460)",
+  "cetane": 51.0,
+  "cfpp_C": 18.0,
+  "sources": "Santacruz July mean high 29 C, low 24 C; RH usually over 80% (NOAA GHCND, 53 years); altitude ~14 m (approx.); IS 1460 summer grade",
+  "p_amb": 101156.92889589473,
+  "T_amb": 302.15,
+  "overrides": {
+   "thermal.ambient_p": 101156.92889589473,
+   "thermal.ambient_T": 302.15,
+   "thermal.ambient_humidity": 21.62827491512158,
+   "inj.cetane_number": 51.0
+  },
+  "humidity_g_kg": 21.62827491512158
+ }
+]

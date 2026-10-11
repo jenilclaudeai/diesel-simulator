@@ -49,6 +49,66 @@ class PerfGrid:
 
 
 
+def _seg(nodes, x):
+    """Segment index and fraction on ascending nodes; the fraction runs past 0
+    or 1 outside them (linear extrapolation, as the shape was measured)."""
+    i = 0
+    while i < len(nodes) - 2 and x > nodes[i + 1]:
+        i += 1
+    return i, (x - nodes[i]) / (nodes[i + 1] - nodes[i])
+
+
+class WeatherTable:
+    """
+    Phase 7 step 4 (ADR-016 item 1, shape A3): a grid's weather table, as
+    bridge.live_weather_assemble writes it. For every grid cell, warm, the
+    table's keys at 3 x 3 node airs (the standard air's node is the grid's own
+    cell). The live loop adds delta(): the cell-blended value at its air less
+    the value at the standard air -- so at the standard air nothing changes,
+    and indicated torque moves while friction and sound stay the grid's.
+
+    Measured for this shape (PROPOSAL-weather-table.md): 2.4-3.6% of full-load
+    torque at the presets, 5.2-5.5% down to 52 kPa. The air is clamped to the
+    table's range. The order of every sum is fixed, for the TypeScript port.
+    """
+
+    def __init__(self, rpms, loads, table):
+        self.rpms, self.loads = [float(x) for x in rpms], [float(x) for x in loads]
+        self.p_nodes, self.T_nodes = list(table["p_nodes"]), list(table["T_nodes"])
+        self.keys = list(table["keys"])
+        self.values = table["values"]               # [i_rpm][j_load][ip][iT][k]
+        self.p_range, self.T_range = tuple(table["range"]["p"]), tuple(table["range"]["T"])
+        self.std = (self.p_nodes.index(101325.0), self.T_nodes.index(298.0))
+        self.check = table.get("check")
+
+    def delta(self, rpm, load, p, T):
+        """{key: value at (p, T) - value at the standard air}, bilinear in
+        (rpm, load) like the grid, bilinear in (p, T) over the nodes."""
+        r = min(max(rpm, self.rpms[0]), self.rpms[-1])
+        ld = min(max(load, self.loads[0]), self.loads[-1])
+        i, fr = _seg(self.rpms, r)
+        j, fl = _seg(self.loads, ld)
+        p = min(max(p, self.p_range[0]), self.p_range[1])
+        T = min(max(T, self.T_range[0]), self.T_range[1])
+        ip, a = _seg(self.p_nodes, p)
+        iT, b = _seg(self.T_nodes, T)
+        cells = ((i, j, (1 - fr) * (1 - fl)), (i, j + 1, (1 - fr) * fl),
+                 (i + 1, j, fr * (1 - fl)), (i + 1, j + 1, fr * fl))
+        airs = ((ip, iT, (1 - a) * (1 - b)), (ip, iT + 1, (1 - a) * b),
+                (ip + 1, iT, a * (1 - b)), (ip + 1, iT + 1, a * b))
+        out = {}
+        for k, key in enumerate(self.keys):
+            d = 0.0
+            for ci, cj, wc in cells:
+                v = self.values[ci][cj]
+                at = 0.0
+                for ai, aT, wa in airs:
+                    at += wa * v[ai][aT][k]
+                d += wc * (at - v[self.std[0]][self.std[1]][k])
+            out[key] = d
+        return out
+
+
 class Adr011Grid(PerfGrid):
     """
     ADR-011: the grid the live loop reads when friction is computed live.
@@ -67,8 +127,10 @@ class Adr011Grid(PerfGrid):
     """
 
     def __init__(self, spec, rpms, loads, perf, p_cyl, grid_deg, perf_cold, p_cyl_cold,
-                 T_warm, T_cold, src=None, src_cold=None):
+                 T_warm, T_cold, src=None, src_cold=None, weather=None):
         super().__init__(spec, rpms, loads, perf)
+        # Phase 7 step 4: the grid file's weather table, if it has one
+        self.weather = WeatherTable(rpms, loads, weather) if weather else None
         f64 = lambda cells: [[np.asarray(c, dtype=float) for c in row] for row in cells]  # noqa: E731
         self.p_cyl = f64(p_cyl)
         self.p_cyl_cold = f64(p_cyl_cold)
@@ -112,7 +174,8 @@ class Adr011Grid(PerfGrid):
         return cls(spec, gj["rpms"], gj["loads"], gj["perf"], cells(gj["p_cyl_f32"]), gj["grid_deg"],
                    gj["perf_cold"], cells(gj["p_cyl_cold_f32"]), gj["T_warm"], gj["T_cold"],
                    srcs(gj["src_f32"], gj["src_meta"]) if has else None,
-                   srcs(gj["src_cold_f32"], gj["src_meta_cold"]) if has else None)
+                   srcs(gj["src_cold_f32"], gj["src_meta_cold"]) if has else None,
+                   weather=gj.get("weather"))
 
     def cold_weight(self, T_coolant):
         return float(np.clip((self.T_warm - T_coolant) / (self.T_warm - self.T_cold), 0.0, 1.0))
@@ -1193,9 +1256,24 @@ class LiveEngine:
         g = self.g
         if self.adr011:
             p = g.blend_perf_T(rpm, load, self.T_coolant)
+            t = self.spec.thermal
+            # Phase 7 step 4: off the standard air, the weather table's difference
+            # (indicated torque, fuel, boost, turbo, AFR, exhaust); friction and
+            # sound stay the grid's. At the standard air this is skipped outright.
+            if g.weather is not None and (t.ambient_p != 101325.0 or t.ambient_T != 298.0):
+                for k, d in g.weather.delta(rpm, load, t.ambient_p, t.ambient_T).items():
+                    p[k] = p[k] + d
             p["torque"] = p["torque_ind"] - self.T_fric
             return p
         return g.blend_perf(rpm, load)
+
+    def weather_state(self):
+        """What the loop does with the air (for the page): 'standard', 'table'
+        (corrected), or 'no table' (off the standard air, but the grid has none)."""
+        t = self.spec.thermal
+        if t.ambient_p == 101325.0 and t.ambient_T == 298.0:
+            return "standard"
+        return "table" if getattr(self.g, "weather", None) is not None else "no table"
 
     # ------------------------------------------------------------------
     # ------------------------------------------------------------------

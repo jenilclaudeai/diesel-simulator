@@ -326,7 +326,11 @@ Project save/load as JSON (OPEN-C).
 - Weather reaches Drive and Enjoy through a per-engine torque-correction
   table, measured within 1.15% of converged solves *(before #107;
   20.3% on today's code, mostly FINDING-026, so it is re-measured after
-  the fix)*.
+  the fix)*. **Built 2026-10-09, shape A3** (every cell × 8 airs): all ten
+  grids carry one. Each table's held-out Leh check is 0.3–2.8%, except
+  single10 at 7.2% (FINDING-027) and hd_i6 at 4.7% (a smoke-limit knee).
+  The place is picked on `/drive` and on `/enjoy`'s start screen; custom
+  engines build their table in the browser.
 - The ECU knows absolute pressure (MAP boost target, smoke map on absolute
   pressure) on the common-rail engines; the mechanical single stays
   uncompensated.

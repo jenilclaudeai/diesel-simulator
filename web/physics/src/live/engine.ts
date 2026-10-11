@@ -140,11 +140,25 @@ export class LiveEngine {
   /** Grid performance at the live state; torque is BRAKE torque either way. */
   private perfAt(rpm: number, load: number): Perf {
     if (this.adr011) {
-      const p = (this.g as Adr011Grid).blendPerfT(rpm, load, this.T_coolant);
+      const g = this.g as Adr011Grid;
+      const p = g.blendPerfT(rpm, load, this.T_coolant);
+      const t = this.spec.thermal;
+      // Phase 7 step 4: off the standard air, the weather table's difference; friction and sound
+      // stay the grid's. At the standard air this is skipped outright (live.py _perf).
+      if (g.weather && (t.ambient_p !== 101325.0 || t.ambient_T !== 298.0)) {
+        for (const [k, d] of Object.entries(g.weather.delta(rpm, load, t.ambient_p, t.ambient_T))) p[k] = p[k]! + d;
+      }
       p["torque"] = p["torque_ind"]! - this.T_fric;
       return p;
     }
     return this.g.blendPerf(rpm, load);
+  }
+
+  /** What the loop does with the air (live.py weather_state): standard, table, or no table. */
+  weatherState(): "standard" | "table" | "no table" {
+    const t = this.spec.thermal;
+    if (t.ambient_p === 101325.0 && t.ambient_T === 298.0) return "standard";
+    return this.adr011 && (this.g as Adr011Grid).weather ? "table" : "no table";
   }
 
   /** a manual engine stalls when the clutch drags it below this fraction of idle */

@@ -24,7 +24,8 @@ export interface DriveScript {
 }
 
 export type ToWorker =
-  | { type: 'load'; grid: GridFile; trans: Transmission }
+  // air: Phase 7 step 4, the place's ambient pressure [Pa] and temperature [K]; absent is standard air
+  | { type: 'load'; grid: GridFile; trans: Transmission; air?: { p: number; T: number } }
   | { type: 'key'; key: string; down: boolean }
   | { type: 'run' | 'pause' }
   | { type: 'script'; script: DriveScript; init: Record<string, number> }
@@ -60,6 +61,9 @@ export interface DashInfo {
   vmax_kmh: number;          // the speedometer's scale: min(gearing, drag-limited top speed)
   vehicle: string; tank_L: number; gears: number;
   T_warn: number; T_derate: number; T_shutdown: number; fan_on_T: number;
+  /** Phase 7 step 4: what the loop does with the air, and the table's measured worst at Leh */
+  weather: 'standard' | 'table' | 'no table';
+  weather_check_pct: number | null;
 }
 
 export type FromWorker =

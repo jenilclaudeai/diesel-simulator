@@ -1,7 +1,7 @@
 # PROPOSAL — Phase 7 step 4: the weather table's shape, measured
 
 **Date:** 2026-10-08 (session 8)
-**Status:** for the owner's decision. Nothing is built.
+**Status:** **decided 2026-10-09: A3** ("A3, go ahead"; ADR-016 addendum). Being built. *(Was: "for the owner's decision. Nothing is built.")*
 **Lenses:** PM, PHY2 (interpolation error), SW1/SW2 (format, cost), QA2
 
 ADR-016 item 1 decided **a per-engine table of torque factors** for Drive

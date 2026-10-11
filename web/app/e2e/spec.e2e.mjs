@@ -49,7 +49,8 @@ try {
   process.exit(1);
 }
 
-const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH, headless: true, protocolTimeout: 10 * 60_000,
+const browser = await puppeteer.launch({ timeout: 120_000,   // Chrome's start: 30 s timed out on loaded CI runners (#108, #115)
+  executablePath: process.env.CHROME_PATH, headless: true, protocolTimeout: 10 * 60_000,
   args: ["--no-sandbox", "--disable-dev-shm-usage"] });
 const page = await browser.newPage();
 await page.setViewport({ width: 1200, height: 1000 });

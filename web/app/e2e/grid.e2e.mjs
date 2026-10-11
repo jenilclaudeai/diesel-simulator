@@ -58,7 +58,8 @@ try {
 const nRef = ref ? Object.keys(ref.cells).length : 0;
 check("native Python grid available", nRef === 48, `${nRef} cells in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
 
-const browser = await puppeteer.launch({
+const browser = await puppeteer.launch({ timeout: 120_000,   // Chrome's start: 30 s timed out on loaded CI runners (#108, #115)
+ 
   executablePath: process.env.CHROME_PATH,
   args: ["--no-sandbox", "--disable-dev-shm-usage", ...(process.env.CHROME_ARGS?.split(" ") ?? [])],
   headless: process.env.CHROME_HEADLESS === "shell" ? "shell" : true,

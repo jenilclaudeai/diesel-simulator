@@ -76,7 +76,8 @@ function harmonics(x, rate, f0, k = 4, at = f0) {
 }
 
 const N_CYL = 4;                    // crdi15
-const browser = await puppeteer.launch({
+const browser = await puppeteer.launch({ timeout: 120_000,   // Chrome's start: 30 s timed out on loaded CI runners (#108, #115)
+ 
   executablePath: process.env.CHROME_PATH,
   // a fake audio sink that runs in real time: the test judges what the
   // worklet renders, not whether this machine's speakers are awake (a stuck

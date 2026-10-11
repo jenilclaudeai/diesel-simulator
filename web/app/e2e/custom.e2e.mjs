@@ -36,7 +36,8 @@ const check = (name, ok, note = "") => {
   results.push(ok);
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${note ? "  -- " + note : ""}`);
 };
-const browser = await puppeteer.launch({
+const browser = await puppeteer.launch({ timeout: 120_000,   // Chrome's start: 30 s timed out on loaded CI runners (#108, #115)
+ 
   executablePath: process.env.CHROME_PATH, headless: true, protocolTimeout: 45 * 60_000,
   args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-audio-output", "--autoplay-policy=no-user-gesture-required"],
 });
@@ -48,7 +49,7 @@ page.on("console", m => { if (m.type() === "error") problems.push(`console: ${m.
 const t0 = Date.now();
 const status = () => page.$eval(".build-status", e => e.textContent.replace(/\s+/g, " ").trim()).catch(() => "");
 
-await page.goto(`http://localhost:${port}${BASE}?e2e&gridsize=2x2`, { waitUntil: "load" });
+await page.goto(`http://localhost:${port}${BASE}?e2e&gridsize=2x2&noweather`, { waitUntil: "load" });
 await page.waitForFunction(() => { const s = document.querySelector("select"); return s && !s.disabled && s.options.length > 1; },
   { timeout: 120_000, polling: 250 });
 await page.select("select", "__custom");
@@ -97,7 +98,7 @@ await page.screenshot({ path: path.join(out, "custom-enjoy.png") });
 
 // Phase 6 (proposal item 5): an engine edited in the spec editor is built, saved and driven the same way
 await page.setViewport({ width: 1100, height: 900 });
-await page.goto(`http://localhost:${port}${BASE}spec?e2e&gridsize=2x2`, { waitUntil: "load" });
+await page.goto(`http://localhost:${port}${BASE}spec?e2e&gridsize=2x2&noweather`, { waitUntil: "load" });
 await page.waitForSelector('tr[data-path="idle_rpm"] input', { timeout: 120_000 }).catch(() => {});
 const setValue = (p, v) => page.$eval(`tr[data-path="${p}"] input`, (el, val) => {
   el.value = String(val);

@@ -28,7 +28,13 @@ class Fake implements LiveCaller {
         return JSON.stringify({ perf: { rpm: a["rpm"], load: a["load"], cold: a["cold"] ? 1 : 0, flim: a["fuel_limit"] },
                                 p_cyl_f32: "", src_f32: {}, meta: {} });
       }
-      return arg;                                   // assemble: echo what it was given
+      // Phase 7 step 4: two airs per cell, and one held-out check
+      if (fn === "live_weather_plan") {
+        const pieces = RPMS.flatMap((_, i) => LOADS.flatMap((_, j) => [58000, 72000].map(p => ({ i, j, p, T: 298 }))));
+        return JSON.stringify({ pieces, check: [{ i: 2, j: 1, p: 65000, T: 293 }] });
+      }
+      if (fn === "live_weather_cell") return JSON.stringify({ values: [a["rpm"], a["load"], a["fuel_limit"], a["p"]], settled: 1 });
+      return arg;                                   // the assemblies: echo what they were given
     } finally { Fake.live--; }
   }
 }
@@ -132,6 +138,39 @@ const opts = { key: "t", size: [3, 2] as [number, number] };
   check("etaSeconds: nothing timed, no answer; 12 cells of 10 s on 3 workers, 40 s; a row counts as 4 cells until cells are timed",
     none === undefined && cells === 40 && early !== undefined && Math.abs(early - (10 / 3 + 12 * 10 / 3)) < 1e-9,
     `${none} / ${cells} / ${early}`);
+}
+
+// 7. Phase 7 step 4: the weather table's pieces, row by row, into the file; resumable
+{
+  const ws = [new Fake(), new Fake()];
+  const prog: LiveBuildProgress[] = [];
+  const out = JSON.parse(await buildLiveGrid({ preset: "x" }, ws, { ...opts, weather: true, onProgress: p => prog.push(p) }));
+  const calls = all(ws), wxCalls = calls.filter(c => c.fn === "live_weather_cell");
+  const wxa = calls.find(c => c.fn === "live_weather_assemble")?.arg as
+    { pieces: { values: number[] }[]; checks: { values: number[] }[]; grid: { perf: { rpm: number }[][] } } | undefined;
+  const onRowFuel = wxCalls.every(c => c.arg["fuel_limit"] === (c.arg["rpm"] as number) / 100);
+  const inOrder = !!wxa && wxa.pieces.length === 12 && wxa.checks.length === 1
+    && wxa.pieces.every((q, n) => q.values[0] === RPMS[Math.floor(n / 4)] && q.values[1] === LOADS[Math.floor(n / 2) % 2]
+      && q.values[3] === [58000, 72000][n % 2])
+    && wxa.checks[0]!.values[3] === 65000 && wxa.grid.perf[2]![1]!.rpm === 3000;
+  check("weather: 12 pieces and 1 check, each once, on its row's fuel, handed to the assembly in the plan's order",
+    wxCalls.length === 13 && onRowFuel && inOrder, `${wxCalls.length} weather solves; in order ${inOrder}`);
+  check("weather: the table goes into the file, and the progress counts its pieces",
+    out.extra?.weather !== undefined && prog.at(-2)?.done === 15 + 13 && prog.at(-2)?.total === 28,
+    `last count ${prog.at(-2)?.done}/${prog.at(-2)?.total}; table in the file ${out.extra?.weather !== undefined}`);
+  // cancel mid-way, then resume: only the missing pieces are redone, weather ones too
+  const store = new MemoryPieceStore(), ac = new AbortController();
+  try {
+    await buildLiveGrid({ preset: "x" }, [new Fake(), new Fake()], { ...opts, weather: true, store, storeKey: "w",
+      signal: ac.signal, onProgress: p => { if (p.done >= 12) ac.abort(); } });
+  } catch { /* cancelled */ }
+  await sleep(60);
+  const kept = store.map.size, keptWx = [...store.map.keys()].filter(k => k.startsWith("w:wx:")).length;
+  const ws2 = [new Fake(), new Fake()];
+  await buildLiveGrid({ preset: "x" }, ws2, { ...opts, weather: true, store, storeKey: "w" });
+  const redone = all(ws2).filter(c => ["live_row_limit", "live_cell", "live_weather_cell"].includes(c.fn)).length;
+  check("weather: a resumed build redoes only the missing pieces, weather ones included",
+    redone === 28 - kept && kept > 0 && kept < 28, `${kept} kept (${keptWx} weather), redid ${redone} of ${28 - kept}`);
 }
 
 const failed = results.filter(r => !r).length;

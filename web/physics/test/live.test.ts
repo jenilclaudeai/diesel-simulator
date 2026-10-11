@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import type { LiveSpec, Perf } from "../src/live/common.js";
 import { handleKey, LiveEngine, pedalReturn, type LiveState } from "../src/live/engine.js";
 import { PerfGrid } from "../src/live/grid.js";
-import { Adr011Grid, type Adr011GridData } from "../src/live/adr011.js";
+import { Adr011Grid, type Adr011GridData, type WeatherTableData } from "../src/live/adr011.js";
 import type { EngineView } from "../src/friction.js";
 import { finishVehicle, vehicleFor, type Transmission } from "../src/live/vehicle.js";
 
@@ -24,7 +24,9 @@ const fx = JSON.parse(readFileSync(path.resolve(here, "..", "..", "fixtures", "l
   inputs: {
     preset: string; spec: LiveSpec; sample_every: number; engine_view: EngineView;
     grid: { rpms: number[]; loads: number[]; perf: Perf[][] };
-    drives: { name: string; trans: Transmission; script: Script; init: Record<string, number>; grid?: string }[];
+    drives: { name: string; trans: Transmission; script: Script; init: Record<string, number>; grid?: string;
+      air?: [number, number] }[];
+    weather_table: WeatherTableData;
   };
   outputs: Record<string, {
     veh: Record<string, unknown>;
@@ -49,10 +51,17 @@ const check = (name: string, ok: boolean, note = "") => {
 
 const PER_STEP = 1e-12, TERMINAL = 1e-6;
 const grid = new PerfGrid(fx.inputs.spec, fx.inputs.grid.rpms, fx.inputs.grid.loads, fx.inputs.grid.perf);
-const adrGrid = new Adr011Grid(fx.inputs.spec,
-  JSON.parse(readFileSync(path.resolve(here, "..", "..", "fixtures", "live_grid.json"), "utf8")) as Adr011GridData);
-const fresh = (tr: Transmission, g?: string) => g === "adr011"
-  ? new LiveEngine(adrGrid, fx.inputs.preset, tr, fx.inputs.engine_view)
+const adrData = JSON.parse(readFileSync(path.resolve(here, "..", "..", "fixtures", "live_grid.json"), "utf8")) as Adr011GridData;
+const adrGrid = new Adr011Grid(fx.inputs.spec, adrData);
+/** Phase 7 step 4: the ADR-011 grid with the fixture's weather table, its spec at the drive's air. */
+const weatherGrid = (air: [number, number]) => {
+  const spec = structuredClone(fx.inputs.spec);
+  spec.thermal.ambient_p = air[0];
+  spec.thermal.ambient_T = air[1];
+  return new Adr011Grid(spec, { ...adrData, weather: fx.inputs.weather_table });
+};
+const fresh = (tr: Transmission, g?: string, air?: [number, number]) => g === "adr011"
+  ? new LiveEngine(air ? weatherGrid(air) : adrGrid, fx.inputs.preset, tr, fx.inputs.engine_view)
   : new LiveEngine(grid, fx.inputs.preset, tr);
 
 /** Worst relative difference between two states; Infinity on a structural or exact mismatch. */
@@ -83,7 +92,7 @@ function diffState(got: LiveState, want: LiveState): { worst: number; where: str
 
 /** The fixture generator's live_run(), in TypeScript. */
 function drive(d: (typeof fx.inputs.drives)[number]) {
-  const live = fresh(d.trans, d.grid), sc = d.script;
+  const live = fresh(d.trans, d.grid, d.air), sc = d.script;
   for (const [k, v] of Object.entries(d.init)) {  // dotted paths: "dl.gb.gear"
     const path = k.split("."), last = path.pop()!;
     let obj = live as unknown as Record<string, unknown>;
@@ -125,7 +134,7 @@ for (const drv of fx.inputs.drives) {
   // ---- per-step ----
   let worst = 0, where = "";
   for (const s of out.snapshots) {
-    const e = fresh(drv.trans, drv.grid);
+    const e = fresh(drv.trans, drv.grid, drv.air);
     e.setState(s.before);
     e.step(drv.script.dt);
     const d = diffState(e.getState(), s.after);
