@@ -2,11 +2,12 @@
 .enjoy {
   position: fixed; inset: 0; overflow: hidden;
   background: var(--slate); color: var(--grey);
-  display: grid; grid-template-columns: minmax(84px, 17vw) 1fr minmax(84px, 17vw);
+  /* clutch | dash | paddles | brake + throttle (B-05, B-06) */
+  display: grid; grid-template-columns: minmax(64px, 8vw) 1fr minmax(56px, 7vw) minmax(136px, 17vw);
   grid-template-rows: auto 1fr; gap: 10px; padding: 10px;
   overscroll-behavior: none; touch-action: manipulation;
 }
-.top { grid-column: 2; grid-row: 1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; }
+.top { grid-column: 2 / span 2; grid-row: 1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; }
 .top .home { color: var(--grey); font-weight: 700; text-decoration: none; margin-right: 6px; }
 .top select, .top button, .dash button {
   font: inherit; font-size: 0.95rem; color: var(--grey); background: rgba(223, 227, 220, 0.12);
@@ -21,13 +22,14 @@
 .enjoy button[aria-pressed="true"] { background: var(--amber); color: var(--slate); border-color: var(--amber); }
 button:disabled { opacity: 0.45; }
 
+/* B-06: low beside the brake, where a right thumb resting on the throttle reaches them;
+   the left thumb keeps the clutch */
+.paddles { grid-column: 3; grid-row: 2; align-self: end; display: grid; gap: 8px; }
 .paddle {
-  grid-row: 1; align-self: start; font: inherit; font-size: 2rem; font-weight: 700; line-height: 1;
-  min-height: 56px; border-radius: 12px; border: 2px solid rgba(223, 227, 220, 0.5);
+  font: inherit; font-size: 2rem; font-weight: 700; line-height: 1;
+  height: max(56px, 22vh); border-radius: 12px; border: 2px solid #dfe3dc80;
   background: rgba(223, 227, 220, 0.14); color: var(--grey); touch-action: manipulation;
 }
-.paddle.minus { grid-column: 1; }
-.paddle.plus { grid-column: 3; }
 .paddle:active:not(:disabled) { background: var(--amber); color: var(--slate); }
 
 /* B-02: when the dash can't fit (a short phone, a wide font), the strip scrolls; nothing overlaps */
@@ -42,7 +44,7 @@ button:disabled { opacity: 0.45; }
 .lamp.on { color: var(--slate); background: #8fc7a4; border-color: #8fc7a4; }
 .lamp.warn.on { background: #e0634f; border-color: #e0634f; color: #fff; }
 
-.gauges { flex: 1; min-height: min-content; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 6px; }
+.gauges { flex: 1; min-height: min-content; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 6px; position: relative; }
 .gauges app-gauge { height: 100%; max-height: 42vh; min-height: 120px; }
 .mid { display: flex; flex-direction: column; align-items: center; text-align: center; min-width: 7.5em; }
 /* B-02: the floor was 2.4rem; on a 300-350 px landscape phone (Chrome's toolbar showing) the
@@ -51,7 +53,6 @@ button:disabled { opacity: 0.45; }
 .mid .mode { opacity: 0.85; font-size: 0.9rem; }
 .mid .phase { min-height: 1.2em; color: var(--amber); font-size: 0.85rem; }
 .mid .digits { font-size: 0.85rem; opacity: 0.85; }
-.gauges { position: relative; }
 /* B-02: the hint is a toast over the dials' empty lower middle, not a line in .mid,
    which on a short landscape phone grew into the strip below and printed over it */
 .toast { position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); z-index: 2;
@@ -73,7 +74,7 @@ button:disabled { opacity: 0.45; }
 
 .pedals { grid-row: 1 / span 2; align-self: end; height: 62vh; display: flex; gap: 8px; }
 .pedals.left { grid-column: 1; }
-.pedals.right { grid-column: 3; }
+.pedals.right { grid-column: 4; }
 .pedals app-pedal { flex: 1; height: 100%; }
 
 .rotate { display: none; }

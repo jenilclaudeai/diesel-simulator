@@ -3,11 +3,15 @@
 
   <!-- pointerdown, not click: with a thumb already on the clutch, a tap here
        produces no click on a phone (measured by e2e:enjoy); click is kept for
-       the keyboard (a key activation has detail 0) -->
-  <button type="button" class="paddle minus" (pointerdown)="press(',', $event)" (click)="keyTap(',', $event)"
-          [disabled]="status() !== 'driving'" aria-label="Shift down">&minus;</button>
-  <button type="button" class="paddle plus" (pointerdown)="press('.', $event)" (click)="keyTap('.', $event)"
-          [disabled]="status() !== 'driving'" aria-label="Shift up">+</button>
+       the keyboard (a key activation has detail 0).
+       B-06: both paddles sit beside the brake and throttle, for the right thumb,
+       so the left thumb can hold the clutch through a shift either way -->
+  <div class="paddles">
+    <button type="button" class="paddle plus" (pointerdown)="press('.', $event)" (click)="keyTap('.', $event)"
+            [disabled]="status() !== 'driving'" aria-label="Shift up">+</button>
+    <button type="button" class="paddle minus" (pointerdown)="press(',', $event)" (click)="keyTap(',', $event)"
+            [disabled]="status() !== 'driving'" aria-label="Shift down">&minus;</button>
+  </div>
 
   <header class="top">
     <a routerLink="/" class="home">Diesel Sim</a>
@@ -38,7 +42,7 @@
       @if (importError()) { <p class="err import-err">{{ importError() }}</p> }
       @if (projectNote()) { <p class="project-note">{{ projectNote() }}</p> }
       <app-drive-env class="place" (changed)="stop()" />
-      <p class="hint">Throttle on the right, brake on the left: press harder by sliding up. Paddles shift.</p>
+      <p class="hint">Brake and throttle on the right, the clutch (in Manual) on the left: press harder by sliding up. The paddles beside the brake shift.</p>
     } @else if (v(); as s) {
       <ul class="lamps" aria-label="Warning lamps">
         @for (l of lamps(); track l.key) {
@@ -93,11 +97,12 @@
     }
   </main>
 
+  <!-- B-05: as in a car, the clutch alone on the left; the brake beside the throttle on the right -->
   <div class="pedals left">
-    <app-pedal class="brake" label="Brake" (changed)="pedal('brake', $event)" />
     @if (manual()) { <app-pedal class="clutch" label="Clutch" (changed)="pedal('clutch', $event)" /> }
   </div>
   <div class="pedals right">
+    <app-pedal class="brake" label="Brake" (changed)="pedal('brake', $event)" />
     <app-pedal class="throttle" label="Throttle" (changed)="pedal('throttle', $event)" />
   </div>
 </div>

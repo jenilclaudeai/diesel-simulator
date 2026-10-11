@@ -32,12 +32,16 @@ export function pedalValue(clientY: number, top: number, height: number, deadban
       position: relative; height: 100%; border-radius: 14px; overflow: hidden;
       background: rgba(223, 227, 220, 0.10); border: 2px solid rgba(223, 227, 220, 0.35);
       touch-action: none; user-select: none; -webkit-user-select: none; cursor: ns-resize;
+      container-type: inline-size;
     }
     .pedal.down { border-color: var(--amber); }
     .fill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--amber); opacity: 0.85; }
     .name {
       position: absolute; left: 0; right: 0; bottom: 10px; text-align: center;
       font-weight: 600; letter-spacing: 0.04em; color: var(--grey); mix-blend-mode: difference;
+      /* B-05 put three pedals at ~68 px; the name shrinks with a narrow pedal, so no font
+         or text size clips "Throttle" (a wide Linux font is ~5.3 em for it) */
+      font-size: min(1em, 16cqi);
     }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush,
