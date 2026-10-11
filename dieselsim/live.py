@@ -1185,6 +1185,15 @@ class LiveEngine:
         self.hint_t = 0.0
         self.tank_L = self.veh.fuel_tank_L
         self.out_of_fuel = False
+        # ---- Phase 7 step 6 (ADR-016 item 4): cold-flow ------------------
+        # The fuel's cold-filter plugging point [K] (None: no waxing), set by
+        # the page from the fuel picked; the fuel's own temperature starts at
+        # the ambient and warms with the engine (_cold_flow).
+        self.fuel_cfpp = None
+        self.T_fuel = self.spec.thermal.ambient_T
+        self.wax_frac = 1.0            # the share of full-load fuel the filter passes
+        self.fuel_waxed = False        # too little to keep the engine running
+        self.starve_t = 0.0            # s a part-waxed engine hasn't run (its message waits 3 s)
         self.perf = grid.blend_perf(self.rpm, 0.0)
         self.lock = threading.Lock()
         if self.veh.trans == "manual":
@@ -1214,6 +1223,13 @@ class LiveEngine:
     # of idle (the governor cannot hold it); an automatic cannot stall
     STALL_FRAC = 0.45
     FRICTION_EVERY = 6         # frames between live friction evaluations (10 Hz at 60 Hz)
+    # Phase 7 step 6, cold-flow ("very close, not perfect"): the filter passes all the fuel
+    # down to CFPP + 2 K and none at CFPP - 6 K, linear between; below WAX_STALL of full-load
+    # fuel the engine can't run. The fuel in the filter warms with the engine (return fuel
+    # off the pump and rail) toward the ambient + 60% of the coolant's rise, over ~7 min;
+    # stopped, it drifts back to the ambient over ~30 min. Approximations, stated as such.
+    WAX_ABOVE, WAX_BELOW, WAX_STALL = 2.0, 6.0, 0.12
+    FUEL_TAU_RUN, FUEL_TAU_OFF, FUEL_RETURN_SHARE = 420.0, 1800.0, 0.6
 
     def _update_friction(self):
         """
@@ -1494,7 +1510,7 @@ class LiveEngine:
             if self.hint_t == 0.0:
                 self.hint = ""
         self._cruise(dt)
-        if self.out_of_fuel or self.engine_stopped:
+        if self.out_of_fuel or self.engine_stopped or self.fuel_waxed:
             self.throttle = 0.0
             self.cruise_on = False
         if self.adr011:
@@ -1505,6 +1521,39 @@ class LiveEngine:
             self._sub(dt / n_sub)
         self._totals(dt)
         self._thermal(dt)
+        self._cold_flow(dt)
+
+    def _cold_flow(self, dt):
+        """Phase 7 step 6: the fuel's temperature, and the share of full-load
+        fuel a waxing filter passes (class constants above). Nothing without a
+        CFPP, so every drive that picks no fuel is as before."""
+        if self.fuel_cfpp is None:
+            return
+        s, T_amb = self.spec, self.spec.thermal.ambient_T
+        running = not (self.stalled or self.engine_stopped or self.fuel_waxed or self.out_of_fuel) \
+            and self.rpm > 0.5 * s.idle_rpm
+        target = T_amb + self.FUEL_RETURN_SHARE * (self.T_coolant - T_amb) if running else T_amb
+        self.T_fuel += (target - self.T_fuel) * min(1.0, dt / (self.FUEL_TAU_RUN if running else self.FUEL_TAU_OFF))
+        lo = self.fuel_cfpp - self.WAX_BELOW
+        self.wax_frac = float(np.clip((self.T_fuel - lo) / (self.WAX_ABOVE + self.WAX_BELOW), 0.0, 1.0))
+        waxed = self.wax_frac < self.WAX_STALL
+        # seconds a part-waxed engine hasn't run with the car standing: its message waits 3 s, so
+        # a cranking engine that then catches isn't told it can't start; and a coasting car
+        # (whose rpm can read low through a shift) isn't either
+        self.starve_t = self.starve_t + dt if (not waxed and not running and self.wax_frac < 1.0
+                                               and self.dl.v < 0.5) else 0.0
+        if waxed and not self.fuel_waxed:
+            self.hint = (f"fuel waxed: this diesel gels below {self.fuel_cfpp - 273.15:.0f} C "
+                         "-- it needs winter or arctic diesel here")
+            self.hint_t = 6.0
+        elif self.starve_t >= 3.0 and not self.hint:
+            # a cold start needs far more fuel than a warm idle: a part-waxed filter can starve
+            # it, and the fuel won't warm while the engine doesn't run -- so say why it's dead
+            # (floor, not round: Python and JavaScript round halves differently)
+            self.hint = (f"fuel partly waxed: the filter passes {int(self.wax_frac * 100.0)}% "
+                         "-- not enough to start cold; it needs winter or arctic diesel here")
+            self.hint_t = 6.0
+        self.fuel_waxed = waxed
 
     # ------------------------------------------------------------------
     def _sub(self, h):
@@ -1515,8 +1564,9 @@ class LiveEngine:
         if (manual and not self.stalled and rpm < self.STALL_FRAC * s.idle_rpm
                 and not self.dl.gb.neutral and self.dl.tc.cap > 0.0):
             self.stalled = True
-            self.hint = "stalled -- clutch down (z) and press i to restart"
-            self.hint_t = 4.0
+            if not self.fuel_waxed:        # the wax message says why; keep it
+                self.hint = "stalled -- clutch down (z) and press i to restart"
+                self.hint_t = 4.0
 
         # ---- governor: idle hold, droop above rated --------------------
         demand = 0.0 if self.stalled else self.throttle
@@ -1525,6 +1575,8 @@ class LiveEngine:
         if rpm > s.rated_rpm:
             x = (rpm - s.rated_rpm) / max(s.max_rpm - s.rated_rpm, 1.0)
             demand *= max(0.02, 1.0 - 0.98 * x ** 1.4)
+        if self.fuel_cfpp is not None:     # Phase 7 step 6: a waxing filter caps the fuel
+            demand = min(demand, self.wax_frac)
 
         # ---- turbo lag --------------------------------------------------
         target = self._perf(rpm, demand)
@@ -1545,7 +1597,7 @@ class LiveEngine:
         self.perf = p
         self.torque = p["torque"]
         self.fuel_kg_h = p["fuel_kg_h"]
-        if self.engine_stopped:
+        if self.engine_stopped or self.fuel_waxed:
             # no fuel at all: what is left is motoring friction
             self.torque = min(self.torque, self._perf(rpm, 0.0)["torque"])
             self.fuel_kg_h = 0.0
@@ -1656,7 +1708,9 @@ def handle_key(live: LiveEngine, c: str) -> None:
         else:
             _say(live, "auto-clutch is for the manual box")
     elif c == "i":
-        if not live.stalled:
+        if live.fuel_waxed:                # Phase 7 step 6
+            _say(live, "fuel waxed -- it won't start until the fuel is warmer, or with winter or arctic diesel")
+        elif not live.stalled:
             _say(live, "engine is running")
         elif live.dl.clutch_pedal >= 0.9 or live.dl.gb.neutral or live.dl.assist:
             live.stalled = False

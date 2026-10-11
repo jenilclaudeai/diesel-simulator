@@ -114,12 +114,12 @@ export class EnjoyPage implements OnDestroy {
     if (!this.soundOn()) await this.s.soundStart();
     const g = this.imported();
     const p = this.preset();
-    if (p === IMPORTED && g) await this.s.loadGrid(g, this.trans(), true, this.env.air());
+    if (p === IMPORTED && g) await this.s.loadGrid(g, this.trans(), true, this.env.air(), this.env.cfpp());
     else if (p.startsWith(MY)) {
       const saved = await engineLibrary().grid(p.slice(MY.length)).catch(() => undefined);
-      if (saved) await this.s.loadGrid(saved, this.trans(), true, this.env.air());
+      if (saved) await this.s.loadGrid(saved, this.trans(), true, this.env.air(), this.env.cfpp());
       else this.s.error.set('that engine is no longer saved in this browser');
-    } else await this.s.load(p, this.trans(), true, this.env.air());
+    } else await this.s.load(p, this.trans(), true, this.env.air(), this.env.cfpp());
   }
 
   /** "Import": a custom engine's grid file (tools/build_live_grids.py --engine). */

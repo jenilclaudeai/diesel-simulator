@@ -397,6 +397,14 @@ def live_inputs():
                        # Phase 7 step 4: Leh's air, through the weather table
                        {"name": "adr011_weather", "trans": "dct", "grid": "adr011", "air": [65764.1, 293.15],
                         "script": live_script(), "init": {"T_coolant": 361.0, "T_oil": 373.0}},
+                       # Phase 7 step 6: at -20 C a fuel whose filter passes 5% (CFPP -14.4 C) is waxed
+                       # out -- inside (0, WAX_STALL), so "waxed means no fuel" decides, not the cap
+                       # alone (at 0% the two agree, and a mutant there went unseen); a fuel at its own
+                       # CFPP (-8 C) starts capped and warms
+                       {"name": "adr011_waxed", "trans": "dct", "grid": "adr011", "air": [101325.0, 253.15],
+                        "cfpp": 258.75, "script": live_script(), "init": {}},
+                       {"name": "adr011_limp", "trans": "dct", "grid": "adr011", "air": [101325.0, 265.15],
+                        "cfpp": 265.15, "script": live_script(), "init": {}},
                        {"name": "tc_kickdown", "trans": "tc", "script": live_script_kickdown(),
                         "init": {"dl.v": 20.0, "dl.gb.gear": 5, "dl.gb.gear_from": 5,
                                  "dl.w_in": 20.0 / 0.315 * 0.67 * 4.30, "rpm": 20.0 / 0.315 * 0.67 * 4.30 * 60.0 / (2.0 * math.pi)}}],
@@ -416,6 +424,8 @@ def live_run(inp, drv):
         grid.spec = copy.deepcopy(grid.spec)
         grid.spec.thermal.ambient_p, grid.spec.thermal.ambient_T = drv["air"]
     live = LiveEngine(grid, inp["preset"], trans=drv["trans"])
+    if drv.get("cfpp") is not None:       # Phase 7 step 6: the fuel picked
+        live.fuel_cfpp = drv["cfpp"]
     for k, v in drv["init"].items():      # dotted paths: "dl.gb.gear"
         *path, last = k.split(".")
         obj = live

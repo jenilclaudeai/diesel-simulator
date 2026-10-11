@@ -1333,6 +1333,106 @@ def test_weather_table_in_the_live_loop():
           + f"(want {want['torque_ind']:+.3f}); states {states}")
 
 
+def test_cold_flow_in_the_live_loop():
+    """Phase 7 step 6 (ADR-016 item 4; the owner chose a fuel picker): below
+    the fuel's CFPP its filter waxes and caps the fuel, in the live loop. On
+    the toy grid (no files: runs under Pyodide). Parts:
+    - a fuel whose CFPP is far below the air changes nothing in a 10 s drive;
+    - the filter's share: 1 at CFPP + 2 K, 0 at CFPP - 6 K, 0.5 at CFPP - 2 K;
+    - summer diesel (CFPP 18 C) at -20 C: waxed out, no fuel, the reason
+      said, and a restart refused with it;
+    - part-waxed (share 0.5), warm and running: full throttle gives at most
+      half of full-load fuel;
+    - running, the fuel warms toward the ambient + 60% of the coolant's rise
+      (tau 420 s), as stated;
+    - a part-waxed engine that doesn't run is told why after 3 s, not before;
+    - but not a coasting car whose rpm reads low through a shift."""
+    import copy
+    import math
+    from dieselsim import live as L
+
+    def engine(T_amb=298.0, cfpp=None):
+        g = _toy_adr011_grid()
+        g.spec = copy.deepcopy(g.spec)
+        g.spec.thermal.ambient_T = T_amb
+        e = L.LiveEngine(g, "crdi15", trans="tc")
+        e.fuel_cfpp = cfpp
+        return e
+
+    def drive(e, n=600):
+        out = []
+        for k in range(n):
+            e.throttle = 0.7 if k < 400 else 0.1
+            e.step(1 / 60)
+            out.append((e.rpm, e.torque, e.fuel_kg_h, e.dl.v))
+        return out
+    none_vs_far = drive(engine()) == drive(engine(cfpp=200.0))
+    e = engine(cfpp=280.0)
+    share = []
+    for dT in (2.0, -6.0, -2.0):
+        e.T_fuel = 280.0 + dT
+        e._cold_flow(0.0)
+        share.append(e.wax_frac)
+    # summer diesel at -20 C
+    w = engine(T_amb=253.15, cfpp=291.15)
+    for _ in range(120):
+        w.throttle = 0.8
+        w.step(1 / 60)
+    hint_wax = w.hint
+    L.handle_key(w, "i")
+    waxed_ok = w.fuel_waxed and w.fuel_kg_h == 0.0 and "gels below 18 C" in hint_wax and "fuel waxed" in w.hint
+    # part-waxed, warm, running: the cap. Against the same engine without a CFPP, one step from
+    # the same state: the load (demand x the turbo-lag factor) is exactly the share times it
+    p, u = engine(cfpp=298.0 + 2.0), engine()   # T_fuel = 298 = CFPP - 2 K: share 0.5
+    for x in (p, u):
+        x.T_coolant, x.rpm = 361.0, 1500.0
+    p._cold_flow(0.0)
+    share_p = p.wax_frac
+    for x in (p, u):
+        x.throttle = 1.0
+        x.step(1 / 60)
+    capped = share_p == 0.5 and abs(p.load_eff - 0.5 * u.load_eff) < 1e-12 and u.load_eff > 0.0
+    # warming, running
+    r = engine(T_amb=270.0, cfpp=200.0)
+    r.T_coolant, r.rpm = 361.0, 1500.0
+    T0, target = r.T_fuel, 270.0 + 0.6 * (361.0 - 270.0)
+    for _ in range(600):
+        r.T_coolant, r.rpm = 361.0, 1500.0      # held, to test the fuel's own first-order lag
+        r._cold_flow(0.1)
+    want = target + (T0 - target) * (1.0 - 0.1 / 420.0) ** 600
+    warmed = abs(r.T_fuel - want) < 1e-9 and abs(want - (target + (T0 - target) * math.exp(-60.0 / 420.0))) < 0.01
+    # the message waits 3 s
+    q = engine(T_amb=265.15, cfpp=265.15)      # share 0.75; held at a crank, not running
+    hints = []
+    for k in range(4 * 60):
+        q.rpm = 50.0
+        q.stalled = True
+        q._cold_flow(1 / 60)
+        hints.append((k, q.hint))
+    before = all(h == "" for k, h in hints if (k + 1) / 60 < 3.0 - 1e-9)
+    after = any("not enough to start cold" in h for k, h in hints if (k + 1) / 60 >= 3.0)
+    # ... and a car coasting at 10 m/s whose rpm reads low (through a shift) isn't told it can't start
+    c = engine(T_amb=265.15, cfpp=265.15)
+    for _ in range(4 * 60):
+        c.rpm, c.dl.v = 50.0, 10.0
+        c._cold_flow(1 / 60)
+    coasting_quiet = c.hint == "" and c.starve_t == 0.0
+    parts = {
+        "a fuel far below its CFPP changes nothing": none_vs_far,
+        "the share: 1 at CFPP + 2 K, 0 at CFPP - 6 K, 0.5 at CFPP - 2 K": share == [1.0, 0.0, 0.5],
+        "summer diesel at -20 C: waxed out, no fuel, said, restart refused": waxed_ok,
+        "part-waxed: full throttle capped at the filter's share": capped,
+        "running, the fuel warms at the stated rate": warmed,
+        "not running: told why after 3 s, not before": before and after,
+        "coasting with a low rpm: not told it can't start": coasting_quiet,
+    }
+    bad = [k for k, ok in parts.items() if not ok]
+    check("cold-flow in the live loop (Phase 7 step 6)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ")
+          + f"shares {share}; waxed hint '{hint_wax[:40]}'; load {p.load_eff:.3f} vs {u.load_eff:.3f} uncapped; "
+          + f"fuel {T0 - 273.15:.1f} -> {r.T_fuel - 273.15:.2f} C in 60 s")
+
+
 def test_weather_pieces_match_the_grid():
     """Phase 7 step 4: a weather piece at the standard air is the grid's own
     cell (the table's standard node is taken from the grid, so the two must
@@ -2380,10 +2480,47 @@ def test_environments_json_is_current():
     spec_ = importlib.util.spec_from_file_location("environments_json", tool)
     mod = importlib.util.module_from_spec(spec_)
     spec_.loader.exec_module(mod)
-    with open(mod.OUT) as fh:
-        current = fh.read() == mod.content()
+    current = True
+    for path, make in mod.FILES:              # the places and (Phase 7 step 6) the fuel grades
+        with open(path) as fh:
+            current = current and fh.read() == make()
     check("the places file for Drive and Enjoy is current (Phase 7 step 4)", 1.0 if current else 0.0, 1.0, 0.0,
           "tools/environments_json.py; " + ("current" if current else "STALE: run python3 tools/environments_json.py"))
+
+
+def test_grid_benchmark_schedule():
+    """tools/bench_grid.py (the hardware benchmark): its estimate schedules a
+    build as build_live_grids.py runs one -- the rows, then the warm cells,
+    then the cold cells, a pool.map each, ceil(n / workers) waves -- and its
+    quick mode samples rows over the whole grid and every load. SKIPs where
+    tools/ is absent (the Pyodide harness). Parts:
+    - 8 rows of 100 s, 48 warm cells of 20 s, 48 cold of 22 s on 6 workers:
+      2 x 100 + 8 x 20 + 8 x 22 = 536 s; on 1 worker 800 + 960 + 1056;
+    - phases don't overlap (a worker idle at the end of the rows waits);
+    - row samples are spread evenly, ends included, never repeated;
+    - load samples visit all six loads before repeating one."""
+    import importlib.util
+    tool = os.path.join(os.path.dirname(__file__), "..", "tools", "bench_grid.py")
+    if not os.path.exists(tool):
+        RESULTS.append(("SKIP", "grid benchmark's schedule", None, None, "tools/ not present (Pyodide harness)"))
+        return
+    spec_ = importlib.util.spec_from_file_location("bench_grid", tool)
+    b = importlib.util.module_from_spec(spec_)
+    spec_.loader.exec_module(b)
+    parts = {
+        "6 workers: 536 s": b.estimate_build_seconds(100.0, 20.0, 22.0, 6) == 536.0,
+        "1 worker: 2816 s": b.estimate_build_seconds(100.0, 20.0, 22.0, 1) == 800.0 + 960.0 + 1056.0,
+        "7 workers: 2 + 7 + 7 waves (phases don't overlap)": b.estimate_build_seconds(100.0, 20.0, 22.0, 7)
+        == 2 * 100.0 + 7 * 20.0 + 7 * 22.0,
+        "rows spread, ends included": b.sample_rows(8, 6) == [0, 1, 3, 4, 6, 7] and b.sample_rows(8, 1) == [4]
+        and b.sample_rows(8, 12) == list(range(8)),
+        "loads: all six before a repeat": sorted(b.sample_loads(6, 6)) == list(range(6))
+        and b.sample_loads(6, 8)[6:] == b.sample_loads(6, 6)[:2],
+        "the native pool is the build tool's": b.native_workers() == min(6, os.cpu_count() or 1),
+    }
+    bad = [k for k, ok in parts.items() if not ok]
+    check("grid benchmark's schedule (tools/bench_grid.py)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}" if bad else f"{len(parts)} of {len(parts)} parts"))
 
 
 def test_live_grid_pieces_match_the_shipped_grid():
@@ -2554,8 +2691,8 @@ def main():
                test_custom_engine_json,
                test_describe_engine, test_solve_cycle, test_mfb50_counts_combustion_before_tdc, test_durability_steps,
                test_spec_editor_schema, test_spec_ambient_reaches_the_solve, test_environment_presets_reach_the_solve, test_modern_ecu_knows_absolute_pressure,
-                test_modern_cap_holds_with_egr_on, test_humidity_corrects_reported_nox, test_environments_json_is_current,
-                test_grid_benchmark_schedule, test_live_grid_pieces_match_the_shipped_grid,
+               test_modern_cap_holds_with_egr_on, test_humidity_corrects_reported_nox, test_environments_json_is_current,
+               test_grid_benchmark_schedule, test_live_grid_pieces_match_the_shipped_grid,
                test_na_engines_idle_on_a_converter,
                test_flat_tappet_wears_more_than_roller,
                test_closing_ramps_clear_the_lash,
@@ -2572,7 +2709,8 @@ def main():
                test_lockup_key_by_transmission,
                test_manual_gearbox,
                test_lockup_and_coast_downshifts,
-               test_adr011_live_friction, test_weather_table_in_the_live_loop, test_weather_pieces_match_the_grid,
+               test_adr011_live_friction, test_weather_table_in_the_live_loop, test_cold_flow_in_the_live_loop,
+               test_weather_pieces_match_the_grid,
                test_grid_hash_ignores_the_live_loop,
                test_livesound_firing_peaks_and_sources,
                test_livesound_carries_physics,

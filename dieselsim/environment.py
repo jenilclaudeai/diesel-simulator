@@ -121,3 +121,20 @@ ENVIRONMENTS = {
 def describe_environments() -> list:
     """Every preset, in picker order, with its derived numbers and spec overrides."""
     return [e.describe() for e in ENVIRONMENTS.values()]
+
+
+# Phase 7 step 6 (ADR-016 item 4; the owner chose a fuel picker, 2026-10-10): the grades a
+# driver can fill up with in Drive and Enjoy, whatever the place sells. Same sources as above.
+FUELS = {
+    "summer": {"key": "summer", "name": "Summer diesel", "cfpp_C": 18.0,
+               "sources": "IS 1460:2017 summer grade, CFPP <= 18 C (BPCL/CPCL data sheets)"},
+    "winter": {"key": "winter", "name": "Winter diesel", "cfpp_C": 6.0,
+               "sources": "IS 1460:2017 winter grade, CFPP <= 6 C (BPCL/CPCL data sheets)"},
+    "arctic": {"key": "arctic", "name": "Arctic diesel", "cfpp_C": -32.0,
+               "sources": "EN 590 arctic class 2, CFPP -32 C (Neste arctic diesel)"},
+}
+
+
+def describe_fuels() -> list:
+    """The fuel grades, in picker order (the place's own fuel comes first in the app)."""
+    return [dict(f) for f in FUELS.values()]
