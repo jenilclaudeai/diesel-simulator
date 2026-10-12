@@ -30,7 +30,10 @@ PR #119; all seven steps built)".)*
   the other wins). An AST scan of all 45 Python files on `main` finds no
   other duplicate; a grep of the TS/MJS finds none either. **#121**
   deletes the first copy: the module's AST equals the old one minus that
-  copy, and the kept test passes alone (6 of 6 parts).
+  copy, and the kept test passes alone (6 of 6 parts). **CI on #121
+  (`915d99b`): 9 of 9, every job read**, the same counts as `main`
+  (physics 87 / 0 / 3 on 3.10 and 3.12, Pyodide 71 / 0 / 2 / 16 in 32.4
+  min, units 130, e2e enjoy 25 and the rest unchanged).
 - **The Pyodide job's time is the runner, not the code:** over the last 30
   runs it is bimodal, 20–33 min or 38–49 min, with the same commit taking
   42.7 and 42.4 and a docs-only commit 26.8 then 47.5. The worst so far is
