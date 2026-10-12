@@ -42,7 +42,7 @@ interface Tick { x1: number; y1: number; x2: number; y2: number; label?: { x: nu
 @Component({
   selector: 'app-gauge',
   template: `
-    <svg viewBox="-110 -110 220 190" role="img" [attr.aria-label]="label() + ' ' + round(value()) + ' ' + unit()"
+    <svg viewBox="-110 -110 220 190" role="img" [attr.aria-label]="label() + ' ' + round(value()) + ' ' + spokenUnit()"
          [attr.data-max]="max()" [attr.data-label-scale]="labelScale()">
       <path class="track" [attr.d]="arc(0, max())" />
       @if (redFrom() !== null) { <path class="red" [attr.d]="arc(redFrom()!, max())" /> }
@@ -60,7 +60,7 @@ interface Tick { x1: number; y1: number; x2: number; y2: number; label?: { x: nu
     :host { display: block; }
     svg { width: 100%; height: 100%; overflow: visible; }
     .track { fill: none; stroke: rgba(223, 227, 220, 0.25); stroke-width: 6; }
-    .red { fill: none; stroke: #e0634f; stroke-width: 6; }
+    .red { fill: none; stroke: #e0634f; stroke-width: 10; }   /* wider than the track: told apart by shape, not colour alone (1.97:1) */
     .tick { stroke: var(--grey); stroke-width: 2; }
     .num { fill: var(--grey); font-size: 13px; text-anchor: middle; dominant-baseline: middle; }
     .needle line { stroke: var(--amber); stroke-width: 4; stroke-linecap: round; }
@@ -96,6 +96,9 @@ export class Gauge {
   });
 
   protected round(v: number): number { return Math.round(v); }
+
+  /** The unit a screen reader hears: the value is in rpm, so the dial's scale ("×1000 rpm") would read 781 as 781,000. */
+  protected readonly spokenUnit = computed(() => this.unit().replace(/^×\d+\s*/, ''));
 
   /** An arc path along the dial from value a to value b, at radius 92. */
   protected arc(a: number, b: number): string {
