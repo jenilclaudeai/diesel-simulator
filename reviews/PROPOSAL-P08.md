@@ -1,7 +1,9 @@
 # PROPOSAL — P08: an automatic that shifts on demand ("Practical torque converter")
 
 **Date:** 2026-10-12 (session 9)
-**Status:** for the owner's decision. Nothing in the app has changed. The
+**Status:** **decided 2026-10-12 (ADR-017): C4, on all automatic boxes,
+half pedal never later than today.** *(Was: "for the owner's decision.")*
+At the time of writing, nothing in the app had changed. The
 numbers come from a prototype patched onto `live.py` at run time:
 `tools/p08_proto.py <repo> <base|B|C|C2|C3|C4> <preset ...>` (launches,
 cruises, tip-in) and `tools/p08_gear_sweep.py <repo> <preset ...>` (today's

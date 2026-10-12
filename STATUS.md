@@ -31,9 +31,11 @@ PR #119; all seven steps built)".)*
   least-fuel gear** with no hunting, and full pedal is identical to today.
   Still open: half pedal is mixed, crdi15's tip-in is 17% softer, and the
   truck at 90 is as today.
-- **For the owner** (PR open, docs and tools only): C4, B or A? All
-  automatic boxes, or Enjoy's only? Half pedal: never later than today,
-  pure fuel map, or sportier? Building it means regenerating the live
+- **Decided by the owner (ADR-017):** C4, all automatic boxes, half pedal
+  never later than today. *(Was: "For the owner (PR open, docs and tools
+  only): C4, B or A? All automatic boxes, or Enjoy's only? Half pedal:
+  never later than today, pure fuel map, or sportier?")* The proposal and
+  ADR are in #122; the build follows on its own branch. Building it means regenerating the live
   fixtures and re-matching the TS port; **no grid rebuild** (`live.py`
   is outside the hash).
 - Measuring note: the Python loop runs at ~1.2–2 s per simulated second,
@@ -144,8 +146,10 @@ PR #119; all seven steps built)".)*
      2026-10-11. New: merge **#121** (the duplicate test, 33 lines
      deleted, the tracker and this file).
   2. **P07** (multi-parameter sweep, priority 1): v1 or v2?
-  2a. **P08** (`reviews/PROPOSAL-P08.md`): the approach (C4 recommended),
-      which boxes, and the half-pedal rule.
+  2a. ~~**P08** (`reviews/PROPOSAL-P08.md`): the approach (C4 recommended),
+      which boxes, and the half-pedal rule.~~ Decided 2026-10-12 (ADR-017):
+      C4, all automatic boxes, half pedal never later than today. Merge
+      #122 (the proposal and ADR) after #121.
   3. On the phone, **now possible (#120 is live)**: the new pedal layout, plus
      REVIEW-007 M-1 (B-01, B-02, sound, smoothness). That closes Phase 5.
   4. FINDING-027: A (state it) or B (model the cold-ignition region).

@@ -362,7 +362,9 @@ The owner asked to continue with it, so it comes before Phase 8. Measured
 and prototyped in `reviews/PROPOSAL-P08.md`: today's gear burns 3–43%
 more than the least-fuel gear below 110 km/h on the cars. The
 recommendation (C4) is a fuel-map choice among the gears that can supply
-the pedal's power with a reserve. **Not decided; nothing built.**
+the pedal's power with a reserve. **Decided 2026-10-12 (ADR-017):** C4, all
+automatic boxes, half pedal never later than today. *(Was: "Not decided;
+nothing built.")*
 
 ---
 

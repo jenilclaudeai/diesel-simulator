@@ -1174,3 +1174,51 @@ environment only, or capturing Drive's last settings unseen.
     ADR-007 foresaw;
   - Enjoy has no dual clutch, so a DCT project drives as Auto there, and
     the page says so.
+
+## ADR-017 — P08: the automatic shifts on demand, by the engine's fuel map
+
+**Status:** Accepted (2026-10-12). The owner answered three direct
+questions (session 9) on `reviews/PROPOSAL-P08.md`: "C4: fuel map" for the
+approach, "All automatics" for the boxes, and "Never later than today" for
+half pedal.
+
+### Decision
+
+1. **The schedule (option C4).**
+   - The pedal's demand is read as power: `P_dem = pedal^1.5 × peak power`.
+   - A gear qualifies if its full-load power at its rpm covers `P_dem` with
+     a reserve: 20% to move into it, 5% to stay in it. Its rpm must also be
+     between 1.25 × idle and a ceiling.
+   - Of the qualifying gears, the box takes the one the engine's own grid
+     says burns least for the power being delivered (smoothed over 2 s). An
+     upshift needs a 1% saving, a downshift for fuel alone 6%.
+   - **Full pedal** (no gear qualifies) and **kickdown** use today's
+     schedule unchanged.
+2. **All automatic boxes:** Enjoy's Auto and Drive's `tc` and `dct`, which
+   share `Gearbox`. The manual is untouched.
+3. **Half pedal: never later than today.** From 30% pedal up, today's
+   upshift line is the ceiling; below 15% the ceiling is 95% of rated rpm;
+   in between it blends.
+
+### Why
+
+Measured on four vehicles: at a held cruise, today's gear burns 3–43%
+more than the least-fuel gear below 110 km/h on the cars. Of the six
+variants prototyped:
+- the reserve-only rule (B) hunts;
+- a symmetric 6% bar (C3) traps the cars a gear low;
+- C4 put all 12 car cruises in the least-fuel gear with no hunting, and
+  matched today exactly at full pedal.
+
+The fuel map needs no tuning per engine, so custom engines (ADR-014) get it
+too.
+
+### Consequences
+
+- The live fixtures' automatic drives are regenerated and the TS port
+  re-matched (ADR-004). There is no grid rebuild: `live.py` is outside the
+  grid hash.
+- Cruise rpm drops to about 1,200–1,950 on the cars below 110 km/h, so the
+  sound changes too.
+- The truck at 90 km/h still shifts 5th ↔ 6th as today's box does. That is
+  recorded, not fixed.
