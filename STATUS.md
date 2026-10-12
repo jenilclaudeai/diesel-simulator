@@ -25,8 +25,10 @@ PR #119; all seven steps built)".)*
   spec 18, sweep 6, durability 5, grid 9, custom 7. As expected before
   the run.
 - **Live:** Pages deployed `f446ec2` (18:27 UTC); the site's worker bundle
-  carries the economy schedule. CI on `main` itself was still running
-  when this was written: read it next.
+  carries the economy schedule. **CI on `main` (`f446ec2`): 9 of 9,
+  every job read**, the same counts as #123 (physics 88 / 0 / 3 on both
+  Pythons, Pyodide 71 / 0 / 2 / 17, enjoy 25, drive 10). *(Was: "CI on
+  `main` itself was still running when this was written: read it next.")*
 - **On the phone:** Enjoy's Auto now cruises 1–3 gears higher at light
   pedal; worth a listen with the Phase 5 re-check.
 
@@ -212,8 +214,8 @@ PR #119; all seven steps built)".)*
   4. FINDING-027: A (state it) or B (model the cold-ignition region).
      Step 6 shipped without B, so A is my recommendation now.
   5. Still open: the `hd_i6` listening question; the Features tab copy.
-- **Next:** read `main`'s CI on `f446ec2`. Then Phase 8 (below), unless
-  the owner picks P07. *(Was: "merge #121, #122, then P08's build PR; read
+- **Next:** Phase 8 (below), unless the owner picks P07. *(Was: "read
+  `main`'s CI on `f446ec2`. Then Phase 8 …")* *(Was: "merge #121, #122, then P08's build PR; read
   its CI (expect 88 / 0 / 3 and Pyodide's skip count +1)".)* *(Was: "P08's build once those
   are answered (the owner asked to continue with it, so it goes before
   Phase 8).")* Then Phase 8 (polish:
