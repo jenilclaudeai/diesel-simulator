@@ -128,6 +128,11 @@ grep its readers and solve with it changed.
   there (or leave those parts out and say so), or CI's Pyodide job goes red
   while every local run passes: it did, on six PRs (REVIEW-008 M-1). Read
   every job in `gh pr checks`, not just the ones you expect.
+- The automatic's schedule (P08, ADR-017) reads the engine's map through
+  `Gearbox.econ`, which `LiveEngine` sets. A `Driveline` or `Gearbox` made
+  on its own keeps today's rpm schedule (`_power_schedule`), with no error.
+  Changing any `ECO_*` constant changes the live fixtures: regenerate
+  (`--only live`) and re-match the TS port.
 - WebCrypto needs a secure context: over plain http on a LAN address the
   grid cache switches itself off by design.
 - `npm start` downloads the numpy wheel once (`prepare-assets.mjs`). Behind a

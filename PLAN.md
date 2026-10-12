@@ -364,7 +364,8 @@ more than the least-fuel gear below 110 km/h on the cars. The
 recommendation (C4) is a fuel-map choice among the gears that can supply
 the pedal's power with a reserve. **Decided 2026-10-12 (ADR-017):** C4, all
 automatic boxes, half pedal never later than today. *(Was: "Not decided;
-nothing built.")*
+nothing built.")* **Built 2026-10-12** on `feat/p08-shift-schedule`: all
+12 car cruises in the least-fuel gear, full pedal identical to today.
 
 ---
 

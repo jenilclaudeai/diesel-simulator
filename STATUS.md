@@ -1,13 +1,50 @@
 # Status
 
-**Updated:** 2026-10-12, session 9 (P08 measured and prototyped:
-`reviews/PROPOSAL-P08.md`, three questions for the owner; #121 open).
+**Updated:** 2026-10-12, session 9 (P08 decided (ADR-017) and built on
+`feat/p08-shift-schedule`; #121 → #122 → the build, merge in that order).
+*(Was: "P08 measured and prototyped: `reviews/PROPOSAL-P08.md`, three
+questions for the owner; #121 open".)*
 Read this section first; the dated sections below it are history. *(Was:
 "2026-10-12, session 9 (#118, #119 and #120 merged and live; a merge-made
 duplicate test removed in #121)"; before that "2026-10-11, session 9 (B-05
 and B-06 fixed, PR open; #118 and #119 still waiting to merge)"; before
 that "2026-10-10, session 8 (Phase 7 step 7 built,
 PR #119; all seven steps built)".)*
+
+**Session 9, P08 built (2026-10-12), `feat/p08-shift-schedule`:**
+- `live.py`: `Gearbox.update_schedule` is ADR-017's economy schedule;
+  today's becomes `_power_schedule` (full pedal, kickdown, no map).
+  `LiveEngine` hands it `_econ_map` (the grid's cell plus the weather
+  table's change) and the warm full-load peak power. Ported line for line
+  to `driveline.ts`/`engine.ts`.
+- **Measured, as built** (`tools/p08_proto.py ... base`, all four
+  vehicles):
+  - **all 12 car cruises are in the least-fuel gear**, the same gears and
+    L/100 km as the prototype's C4, with 0 late shifts;
+  - full pedal is identical to today;
+  - 20% pedal shifts at 2,141–2,384 rpm on the cars (crdi22 1,595–1,856),
+    against today's 2,797–2,998;
+  - **half pedal never later than today:** hatch15 0–100 in 21.1 s
+    (today 21.2), crdi22 22.6 (22.6); crdi15 shifts earlier, 35.6 s against
+    32.1;
+  - tip-in at 60%: hatch15 29.5 / crdi15 19.4 / crdi22 26.5 / truck 8.0 km/h
+    (today 30.9 / 23.4 / 29.5 / 7.9);
+  - the truck at 90 km/h shifts twice in 50 s, as today.
+- **Fixtures:** live regenerated; 7 of 10 drives change gear sequence (the
+  manual, the waxed engine and the kickdown case don't).
+  `gen_fixtures --check`: 7 modules current. `web/physics npm test` 5 + 51
+  + 10 + 11, all pass.
+- **New test** `test_p08_automatic_shifts_on_demand` (7 parts, ~42 s
+  locally; SKIPs without grids or `engines/`). Mutants: 5 of 5 Python
+  caught (symmetric 6% bar, economy at full pedal, no half-pedal rule, map
+  not wired, highest gear instead of least fuel), each applied and
+  parsing. 4 of 4 TS-port mutants caught by the fixture parity, each
+  compiling.
+- **Local:** physics 83 / 0 / 3, 4 skipped (no scipy here; with scipy one
+  of those is two results, so CI should read 88 / 0 / 3); units 130;
+  build:pages clean; e2e enjoy 25, drive 10.
+- **Cost (`npm run perf`, 6×):** a loop step 0.14 → 0.17 ms mean on the
+  main thread, 0.02 → 0.03 in the worker (budget 16.7 ms); p99 unchanged.
 
 **Session 9, P08 (2026-10-12): the owner asked to continue with it.**
 - **P08**, the sheet's "Practical torque converter" (priority 1, "Into
@@ -155,8 +192,10 @@ PR #119; all seven steps built)".)*
   4. FINDING-027: A (state it) or B (model the cold-ignition region).
      Step 6 shipped without B, so A is my recommendation now.
   5. Still open: the `hd_i6` listening question; the Features tab copy.
-- **Next:** P08's build once those are answered (the owner asked to
-  continue with it, so it goes before Phase 8). Then Phase 8 (polish:
+- **Next:** merge #121, #122, then P08's build PR; read its CI (expect
+  88 / 0 / 3 and Pyodide's skip count +1). *(Was: "P08's build once those
+  are answered (the owner asked to continue with it, so it goes before
+  Phase 8).")* Then Phase 8 (polish:
   units toggle, accessibility, P01 vibration, P06 random roads' proposal).
   *(Was: "Next by PLAN after that: Phase 8 (…)".)*
 

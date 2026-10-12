@@ -108,6 +108,16 @@ export class LiveEngine {
       this.dl.gb.auto = false;
     }
     this.adr011 = g instanceof Adr011Grid;
+    // P08 (ADR-017): the automatic shifts by this engine's own map. Peak power is the grid's
+    // warm full-load line, idle to rated in 40 steps (live.py LiveEngine.__init__).
+    const gb = this.dl.gb;
+    gb.econ = (rpm, load) => this.econMap(rpm, load);
+    let p_peak = -Infinity;
+    for (let k = 0; k < 41; k++) {
+      const r = this.spec.idle_rpm + (k * (this.spec.rated_rpm - this.spec.idle_rpm)) / 40.0;
+      p_peak = Math.max(p_peak, (((g.blendPerf(r, 1.0)["torque"]! * r * 2) * Math.PI) / 60.0));
+    }
+    gb.p_peak = p_peak;
     this.T_oil = this.spec.thermal.ambient_T; // cold start, like the coolant
     if (this.adr011) {
       if (!view) throw new Error("an ADR-011 grid needs the engine view (spec, cams, oil, wear) for live friction");
@@ -168,6 +178,25 @@ export class LiveEngine {
       return p;
     }
     return this.g.blendPerf(rpm, load);
+  }
+
+  /** P08 (ADR-017, live.py _econ_map): [brake torque, fuel kg/h] at a candidate rpm and load for the
+   * automatic's schedule: the grid's own cell plus the weather table's change off the standard air. */
+  private econMap(rpm: number, load: number): [number, number] {
+    if (!this.adr011) {
+      const p = this.g.blendPerf(rpm, load);
+      return [p["torque"]!, p["fuel_kg_h"]!];
+    }
+    const g = this.g as Adr011Grid;
+    const p = g.blendPerfT(rpm, load, this.T_coolant);
+    let T = p["torque"]!, f = p["fuel_kg_h"]!;
+    const t = this.spec.thermal;
+    if (g.weather && (t.ambient_p !== 101325.0 || t.ambient_T !== 298.0)) {
+      const d = g.weather.delta(rpm, load, t.ambient_p, t.ambient_T);
+      T = T + d["torque_ind"]!;
+      f = f + d["fuel_kg_h"]!;
+    }
+    return [T, f];
   }
 
   /** What the loop does with the air (live.py weather_state): standard, table, or no table. */

@@ -2490,6 +2490,101 @@ def test_grid_benchmark_schedule():
           (f"failed: {', '.join(bad)}" if bad else f"{len(parts)} of {len(parts)} parts"))
 
 
+def _p08_live(key, trans="tc"):
+    """A warm LiveEngine on a shipped grid for P08's checks. Friction is
+    evaluated once per simulated second (the app: every 6 frames) to keep
+    the suite's time down; P08's prototype measured with the same cadence."""
+    import json
+    from dieselsim.live import Adr011Grid, LiveEngine
+    if key in ROSTER:
+        spec = _roster_engines()[key].spec
+        with open(os.path.join(GRID_DIR, f"{key}.json")) as fh:
+            grid = Adr011Grid.from_json(json.load(fh), spec)
+    else:
+        grid = _prebuilt_grid(key)
+    live = LiveEngine(grid, key, trans)
+    live.T_coolant, live.T_oil = 361.0, 373.0
+    live.FRICTION_EVERY = 60
+    return live
+
+
+def _p08_launch(live, pedal, secs):
+    """Constant pedal from rest; [(from, to, turbine rpm at the shift)] and the events."""
+    import math
+    dl, gb = live.dl, live.dl.gb
+    ups, events, last = [], [], gb.gear
+    for n in range(int(secs * 60)):
+        live.throttle = pedal if n >= 30 else 0.0
+        n_t = dl.w_in * 60 / (2 * math.pi)
+        live.step(1 / 60)
+        if gb.gear != last:
+            events.append((n, gb.gear))
+            if gb.gear > last:
+                ups.append((last, gb.gear, n_t))
+            last = gb.gear
+    return ups, events
+
+
+def _p08_cruise(live, kmh, secs=60.0, tail=20.0):
+    """A PI 'driver' holds kmh; the gear at the end and the shifts in the tail."""
+    dl, gb = live.dl, live.dl.gb
+    i, last, shifts = 0.0, gb.gear, 0
+    for n in range(int(secs * 60)):
+        e = (kmh - dl.speed_kmh()) / 10.0
+        i = min(1.0, max(-1.0, i + e / 60 * 0.8))
+        live.throttle = min(1.0, max(0.0, 0.25 + 1.5 * e + i))
+        live.step(1 / 60)
+        if gb.gear != last:
+            shifts += n >= (secs - tail) * 60
+            last = gb.gear
+    return gb.gear + 1, shifts, dl.speed_kmh()
+
+
+def test_p08_automatic_shifts_on_demand():
+    """P08 (ADR-017, reviews/PROPOSAL-P08.md): below full pedal the automatic
+    takes the least-fuel gear of those that can supply the pedal's power
+    with a reserve; full pedal is today's schedule. Parts:
+    - held cruises land in the least-fuel gear that tools/p08_gear_sweep.py
+      found by forcing every gear (crdi15 30 km/h 3rd, 50 km/h 5th; crdi22
+      30 km/h 4th, 50 km/h 6th; today's box held 2nd/3rd and 2nd/4th), with
+      no shift in the last 20 s;
+    - full pedal: the same shifts at the same frames as today's schedule
+      (the gearbox without its map);
+    - 20% pedal: every upshift at least 400 rpm (turbine) under today's;
+    - half pedal never later than today: every upshift's turbine rpm within
+      one evaluation (ECO_EVAL_S) of today's line, or under it.
+    SKIPs where the grids are absent (the Pyodide harness)."""
+    if _no_prebuilt_grids("P08: the automatic shifts on demand"):
+        return
+    if not _roster_engines():
+        RESULTS.append(("SKIP", "P08: the automatic shifts on demand", None, None, "engines/ not present"))
+        return
+    parts, notes = {}, []
+    for key, kmh, want in (("crdi15", 30, 3), ("crdi15", 50, 5), ("crdi22", 30, 4), ("crdi22", 50, 6)):
+        g, shifts, v = _p08_cruise(_p08_live(key), kmh)
+        parts[f"{key} {kmh} km/h in {want}"] = g == want and shifts == 0 and abs(v - kmh) < 1.5
+        notes.append(f"{key} {kmh}: gear {g}, {shifts} late shifts")
+    full = _p08_live("crdi15")
+    today = _p08_live("crdi15")
+    today.dl.gb.econ = None
+    ups_f, ev_f = _p08_launch(full, 1.0, 16)
+    ups_t, ev_t = _p08_launch(today, 1.0, 16)
+    parts["full pedal: today's shifts, frame for frame"] = ev_f == ev_t and len(ev_f) >= 4
+    light = _p08_launch(_p08_live("crdi15"), 0.2, 35)[0]
+    gb = full.dl.gb
+    parts["20% pedal: every upshift 400+ rpm under today's line"] = (
+        len(light) >= 2 and all(n_t < gb.up_line(0.2) - 400 for _, _, n_t in light))
+    half = _p08_launch(_p08_live("crdi22"), 0.5, 30)[0]
+    gb22 = _p08_live("crdi22").dl.gb
+    late = max((n_t - gb22.up_line(0.5) for _, _, n_t in half), default=float("inf"))
+    parts["half pedal: no upshift later than today's line"] = len(half) >= 3 and late < 150.0
+    bad = [k for k, ok in parts.items() if not ok]
+    check("P08: the automatic shifts on demand (ADR-017)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ")
+          + "; ".join(notes) + f"; 20% upshifts at {[round(x[2]) for x in light]} rpm (today's line "
+          f"{gb.up_line(0.2):.0f}); half pedal worst {late:+.0f} rpm against today's line")
+
+
 def test_live_grid_pieces_match_the_shipped_grid():
     """ADR-014 step 3: a browser worker builds a drivable grid from the
     bridge's pieces, and tools/build_live_grids.py now builds with the same
@@ -2659,7 +2754,8 @@ def main():
                test_describe_engine, test_solve_cycle, test_mfb50_counts_combustion_before_tdc, test_durability_steps,
                test_spec_editor_schema, test_spec_ambient_reaches_the_solve, test_environment_presets_reach_the_solve, test_modern_ecu_knows_absolute_pressure,
                test_modern_cap_holds_with_egr_on, test_humidity_corrects_reported_nox, test_environments_json_is_current,
-               test_grid_benchmark_schedule, test_live_grid_pieces_match_the_shipped_grid,
+               test_grid_benchmark_schedule, test_p08_automatic_shifts_on_demand,
+               test_live_grid_pieces_match_the_shipped_grid,
                test_na_engines_idle_on_a_converter,
                test_flat_tappet_wears_more_than_roller,
                test_closing_ramps_clear_the_lash,
