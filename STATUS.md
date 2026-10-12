@@ -72,7 +72,11 @@ PR #119; all seven steps built)".)*
   different. This CI note was pushed to the branch a minute after the
   merge, so it comes in this PR. Pages deployed `95bde19`. The site's
   `main-NMHILWVW.js` carries `spokenUnit`, `#ec7a66` and "Warning from".
-  `main`'s own CI on `95bde19` was still running when this was written.
+  **CI on `main` (`95bde19`): 9 of 9, every job read**, the same counts
+  as #125 (physics 88 / 0 / 3 on both Pythons, Pyodide 71 / 0 / 2 / 17,
+  enjoy 28 / 0). *(Was: "`main`'s own CI on `95bde19` was still running
+  when this was written.")* #124's merge run (`2bb36ef`) ended cancelled,
+  superseded by #125's.
 
 **Session 9, P08 merged and live (2026-10-12/13):**
 - The owner merged #121, #122 and #123 in order (2026-10-12). `main`
