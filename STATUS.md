@@ -60,6 +60,12 @@ PR #119; all seven steps built)".)*
   combined check, nothing else). Run by
   a scratch script that rebuilt and restored each file from git.
 - **PR #125** (into `main`; brings #124's two STATUS commits with it).
+  **CI on `6d3b774`: 9 of 9, every job read.** Physics 88 / 0 / 3 on 3.10
+  and 3.12; Pyodide 71 / 0 / 2 / 17; ports 5 + 51 + 10 + 11; solver 20 +
+  15 + 30; units 130; e2e **enjoy 28 / 0** (the three new checks pass on
+  Linux with the same readings: 4.87:1, redline 10 vs 6, marks 2 × 12 vs
+  4 × 16), dyno 15, drive 10, sound 6, cycle 11, spec 18, sweep 6,
+  durability 5, grid 9, custom 7. As expected before the run.
 
 **Session 9, P08 merged and live (2026-10-12/13):**
 - The owner merged #121, #122 and #123 in order (2026-10-12). `main`
