@@ -86,6 +86,11 @@ export class EnjoyPage implements OnDestroy {
     const top = this.info()?.T_shutdown ?? 393.15, lo = 293.15;
     return Math.min(1, Math.max(0, (K - lo) / (top - lo)));
   }
+  /** The coolant bar's marks in words: on screen they differ by shape and colour, which a screen reader can't see. */
+  protected readonly coolantMarks = computed(() => {
+    const i = this.info();
+    return i ? `Warning from ${fmt0.format(this.C(i.T_warn))} °C, derate from ${fmt0.format(this.C(i.T_derate))} °C` : null;
+  });
   protected readonly avg = computed(() => { const s = this.v(); return s ? avgL100(s.trip_L, s.trip_km) : null; });
   protected readonly now = computed(() => { const s = this.v(); return s ? nowL100(s.inst_kmpl, s.kmh) : null; });
   protected readonly range = computed(() => { const s = this.v(); return s ? rangeKm(s.tank_L, s.trip_L, s.trip_km) : null; });

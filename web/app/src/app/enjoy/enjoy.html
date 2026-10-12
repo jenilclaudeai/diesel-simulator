@@ -44,6 +44,9 @@
       <app-drive-env class="place" (changed)="stop()" />
       <p class="hint">Brake and throttle on the right, the clutch (in Manual) on the left: press harder by sliding up. The paddles beside the brake shift.</p>
     } @else if (v(); as s) {
+      <!-- Unlit lamps stay dim (2.16:1), as on a real dash: the owner's choice (2026-10-13). Lit differs from
+           unlit by a solid fill, not colour alone; screen readers skip unlit lamps. A lit warning lamp is
+           slate on salmon, 4.87:1 (white on #e0634f was 3.46:1). -->
       <ul class="lamps" aria-label="Warning lamps">
         @for (l of lamps(); track l.key) {
           <li [class]="'lamp ' + l.key" [class.on]="l.on" [class.warn]="l.warn" [attr.aria-hidden]="!l.on">{{ l.text }}</li>
@@ -73,7 +76,8 @@
       <div class="strip">
         <div class="thermal" aria-label="Temperatures">
           <div class="temp coolant"><span class="k">Coolant</span>
-            <span class="tbar"><span [style.width.%]="tempFrac(s.T_coolant) * 100"></span>
+            <!-- the red (derate) mark is wider and taller than the grey (warning) one: shape, not colour alone -->
+            <span class="tbar" role="img" [attr.aria-label]="coolantMarks()"><span [style.width.%]="tempFrac(s.T_coolant) * 100"></span>
               @if (info(); as i) { <i class="mark" [style.left.%]="tempFrac(i.T_warn) * 100"></i><i class="mark red" [style.left.%]="tempFrac(i.T_derate) * 100"></i> }
             </span><span class="val">{{ fmt0.format(C(s.T_coolant)) }} °C</span></div>
           <div class="temp oil"><span class="k">Oil</span>

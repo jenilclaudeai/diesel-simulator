@@ -41,8 +41,8 @@ button:disabled { opacity: 0.45; }
 
 .lamps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; }
 .lamp { font-size: 0.72rem; padding: 2px 7px; border-radius: 5px; border: 1px solid rgba(223, 227, 220, 0.2); color: rgba(223, 227, 220, 0.28); }
-.lamp.on { color: var(--slate); background: #8fc7a4; border-color: #8fc7a4; }
-.lamp.warn.on { background: #e0634f; border-color: #e0634f; color: #fff; }
+.lamp.on { color: var(--slate); background: #8fc7a4; border-color: #0000; }
+.lamp.warn.on { background: #ec7a66; }
 
 .gauges { flex: 1; min-height: min-content; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 6px; position: relative; }
 .gauges app-gauge { height: 100%; max-height: 42vh; min-height: 120px; }
@@ -65,7 +65,7 @@ button:disabled { opacity: 0.45; }
 .tbar { position: relative; height: 6px; border-radius: 3px; background: rgba(223, 227, 220, 0.18); }
 .tbar > span { position: absolute; left: 0; top: 0; bottom: 0; background: var(--amber); border-radius: 3px; }
 .tbar .mark { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--grey); }
-.tbar .mark.red { background: #e0634f; }
+.tbar .mark.red { background: #e0634f; width: 4px; inset-block: -5px; }
 .temp .val { text-align: right; }
 .kv { opacity: 0.9; }
 .trip .note { opacity: 0.6; font-size: 0.72rem; }

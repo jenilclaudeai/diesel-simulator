@@ -16,7 +16,12 @@
 //    - both needles point where the readings say;
 //    - the trip computer counts distance and labels its figures steady-state;
 //    - a stalled manual lights the Stalled lamp;
-//    - the heavy truck's speedometer has a slower scale than the hatchback's.
+//    - the heavy truck's speedometer has a slower scale than the hatchback's;
+//    - accessibility (PLAN Phase 8): each dial's text alternative reads the
+//      value in rpm or km/h (the tach's said "781 ×1000 rpm"), the coolant
+//      bar's marks are in words; a lit warning lamp's text meets 4.5:1 and its
+//      fill 3:1, and the redline and the derate mark differ by shape, not
+//      colour alone.
 // 7. In portrait, the page asks to be turned sideways.
 // 8. No Pyodide is fetched, and there are no page errors.
 import http from "node:http";
@@ -154,8 +159,14 @@ const dials = () => page.evaluate(() => {
   const num = sel => Number(document.querySelector(sel)?.textContent?.replace(/[^0-9.]/g, ""));
   return { rpm: num(".digits .rpm"), kmh: num(".digits .kmh"), tach: ang(".tach"), speedo: ang(".speedo"),
     tachTop: top(".tach") * scale(".tach"), speedTop: top(".speedo") * scale(".speedo"),
-    tachMax: max(".tach"), speedMax: max(".speedo") };
+    tachMax: max(".tach"), speedMax: max(".speedo"),
+    tachSays: document.querySelector(".tach svg")?.getAttribute("aria-label"), speedSays: document.querySelector(".speedo svg")?.getAttribute("aria-label") };
 });
+/** A dial's text alternative names the value the digits show, in the base unit (no "×1000"). */
+const says = (label, name, unit, v) => {
+  const m = new RegExp(`^${name} (\\d+) ${unit}$`).exec(label ?? "");
+  return !!m && Math.abs(Number(m[1]) - v) <= Math.max(2, 0.02 * v);
+};
 await touch("touchStart", [await at(".throttle .pedal", 0.7)]);
 await sleep(1500);
 const d = await dials();
@@ -169,6 +180,9 @@ check("the needles point where the readings say, and each scale's end is labelle
   d.rpm > 900 && eT < 0.5 && eS < 1 && d.speedTop === d.speedMax && d.tachTop === d.tachMax,
   `${Math.round(d.rpm)} rpm -> ${d.tach.toFixed(1)} deg (off ${eT.toFixed(2)}, tach labelled to ${d.tachTop} of ${d.tachMax}); ` +
   `${d.kmh.toFixed(1)} km/h -> ${d.speedo.toFixed(1)} deg (off ${eS.toFixed(2)}, speedo labels to ${d.speedTop})`);
+check("each dial's text alternative reads its value in rpm or km/h, not in the dial's ×1000 (Phase 8)",
+  says(d.tachSays, "Engine speed", "rpm", d.rpm) && says(d.speedSays, "Speed", "km/h", d.kmh),
+  `"${d.tachSays}" with the digits at ${d.rpm} rpm; "${d.speedSays}" at ${d.kmh} km/h`);
 const trip = await page.evaluate(() => ({ km: document.querySelector(".trip-km")?.textContent, note: document.querySelector(".trip .note")?.textContent,
   v: globalThis.__enjoy.view() }));
 check("the trip computer counts the drive, labelled steady-state (FINDING-009)",
@@ -205,6 +219,30 @@ const stall = await page.evaluate(() => ({ stalled: globalThis.__enjoy.view().st
 check("a stalled manual lights the Stalled lamp, and no lamp lights falsely",
   stall.stalled && stall.lit && stall.others.every(t => t === "Stalled"),
   `stalled ${stall.stalled} in gear ${stall.gear}; lit: ${stall.others.join(", ") || "none"}`);
+// with Stalled lit: colours measured as drawn (WCAG 2.1 contrast; axe misreads this dash's opacity, so it is computed here)
+const a11y = await page.evaluate(() => {
+  const rgb = c => (c.match(/[\d.]+/g) ?? []).map(Number);
+  const lum = ([r, g, b]) => [r, g, b].map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; })
+    .reduce((t, v, i) => t + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const cr = (x, y) => { const [h, l] = [lum(x), lum(y)].sort((p, q) => q - p); return (h + 0.05) / (l + 0.05); };
+  const over = (fg, bg) => { const a = fg[3] ?? 1; return fg.slice(0, 3).map((v, i) => a * v + (1 - a) * bg[i]); };
+  const lamp = document.querySelector(".lamp.warn.on"), cs = lamp && getComputedStyle(lamp);
+  const dash = rgb(getComputedStyle(document.querySelector(".enjoy")).backgroundColor);
+  const fill = cs ? over(rgb(cs.backgroundColor), dash) : dash;
+  const sw = sel => parseFloat(getComputedStyle(document.querySelector(sel)).strokeWidth);
+  const box = sel => document.querySelector(sel)?.getBoundingClientRect();
+  const warnMark = box(".coolant .mark:not(.red)"), redMark = box(".coolant .mark.red");
+  return { lamp: lamp?.textContent.trim(), text: cs ? cr(over(rgb(cs.color), fill), fill) : 0, fill: cr(fill, dash),
+    red: sw(".tach .red"), track: sw(".tach .track"),
+    marks: warnMark && redMark ? [warnMark.width, warnMark.height, redMark.width, redMark.height] : [],
+    bar: document.querySelector(".coolant .tbar")?.getAttribute("aria-label"), info: globalThis.__enjoy.info() };
+});
+const C = K => Math.round(K - 273.15), [ww, wh, rw, rh] = a11y.marks;
+check("a lit warning lamp meets 4.5:1 (fill 3:1); redline and derate mark differ by shape; the coolant marks in words (Phase 8)",
+  a11y.text >= 4.5 && a11y.fill >= 3 && a11y.red > a11y.track && rw > ww && rh > wh
+  && a11y.bar === `Warning from ${C(a11y.info.T_warn)} °C, derate from ${C(a11y.info.T_derate)} °C`,
+  `${a11y.lamp}: text ${a11y.text.toFixed(2)}:1, fill ${a11y.fill.toFixed(2)}:1; redline ${a11y.red} vs track ${a11y.track}; ` +
+  `marks ${ww}x${wh} (warn) vs ${rw}x${rh} (derate); bar "${a11y.bar}"`);
 
 // B-01: one finger on Restart is refused (the clutch is up) in touch words, not
 // keys; with a thumb holding the clutch it restarts. Restart acts on press: a
@@ -333,6 +371,8 @@ check("the truck's dials: a slower speedometer than the hatchback's, both scales
   truck.speedTop < hatchTop && truck.speedTop >= 80 && truck.speedTop <= 160
   && truck.speedTop === truck.speedMax && truck.tachTop === truck.tachMax,
   `speedometer to ${truck.speedTop} km/h (truck) vs ${hatchTop} (hatchback); tach labelled to ${truck.tachTop} of ${truck.tachMax} rpm`);
+check("the truck's tach (a ×100 scale) reads its value in rpm too (Phase 8)",
+  says(truck.tachSays, "Engine speed", "rpm", truck.rpm), `"${truck.tachSays}" with the digits at ${truck.rpm} rpm`);
 await page.screenshot({ path: path.join(here, "out", "enjoy-truck.png") });
 
 // the truck flat out from a standstill: the charge air heats and the model

@@ -1,7 +1,9 @@
 # Status
 
-**Updated:** 2026-10-13, session 9 (P08 merged and live: #121, #122,
-#123 merged 2026-10-12; `main` equals the build branch). *(Was:
+**Updated:** 2026-10-13, session 9 (Phase 8 started: accessibility,
+measured and built on `feat/phase8-a11y`; #124 still open). *(Was:
+"2026-10-13, session 9 (P08 merged and live: #121, #122,
+#123 merged 2026-10-12; `main` equals the build branch)".)* *(Was:
 "2026-10-12, session 9 (P08 decided (ADR-017) and built on
 `feat/p08-shift-schedule`; #121 → #122 → the build, merge in that
 order)".)* *(Was: "P08 measured and prototyped: `reviews/PROPOSAL-P08.md`, three
@@ -12,6 +14,52 @@ duplicate test removed in #121)"; before that "2026-10-11, session 9 (B-05
 and B-06 fixed, PR open; #118 and #119 still waiting to merge)"; before
 that "2026-10-10, session 8 (Phase 7 step 7 built,
 PR #119; all seven steps built)".)*
+
+**Session 9, Phase 8 step 1: accessibility (2026-10-13),
+`feat/phase8-a11y`:**
+- **#124 is still open** (checked 2026-10-13: `OPEN`, 9 of 9, mergeable).
+  The owner said "Merged!"; the merges were #121–#123. This branch starts
+  from #124's head and targets `main`, so merging it brings #124 too.
+- **Measured first.** axe-core 4.10.3 (WCAG 2.0/2.1 A and AA rules, run
+  from the scratchpad, not a dependency) on all eight pages of a
+  `build:pages` bundle, and on Enjoy again while driving:
+  - **7 pages: 0 violations.** Every chart (dyno, cycle, sweep,
+    durability, the four schematics) already has `role="img"` and a text
+    summary; errors are text.
+  - **Enjoy: 22 nodes flagged, 4 real.** axe misreads the dash's
+    opacity: computed as drawn, the 18 others are 4.80–8.76:1 (the
+    trip note, at 60%, is the lowest).
+  - **Found by hand, which axe can't see:**
+    - the tach's text alternative read "Engine speed 781 ×1000 rpm", i.e.
+      781,000 rpm;
+    - a lit warning lamp (white on `#e0634f`) is 3.46:1, below 4.5 (axe
+      never saw one lit);
+    - the tach's red band differs from the track by colour only, at 1.97:1;
+    - the coolant bar's warning and derate marks differ by colour only.
+  - **Unlit lamps are 2.16:1.** The owner chose to keep them dim, as on a
+    real dash (2026-10-13). Lit differs from unlit by a solid fill, and
+    screen readers skip unlit lamps.
+- **Built** (`d5540f7`):
+  - the dials' text alternatives speak in rpm and km/h (the truck's ×100
+    tach too);
+  - a lit warning lamp is slate on `#ec7a66`, 4.87:1 for text and fill;
+  - the redline is wider than the track (10 against 6), the owner's choice
+    over "band plus ticks" and "leave it";
+  - the derate mark is 4 × 16 px against the warning mark's 2 × 12, and the
+    bar says "Warning from 100 °C, derate from 107 °C";
+  - `enjoy.css` stays under its 4 kB budget (a lit lamp's border is now
+    transparent over its own fill, so it looks the same).
+- **Tests, read from finished runs on this Mac:** `e2e:enjoy` 28 / 0
+  (+3); units 130; `check:labels` clean; `build:pages` with no budget
+  warning. No Python or physics change.
+- **Mutants, 6 of 6 caught** (baseline 28 / 0 first; each one built):
+  the label back to the dial's unit (2 checks fail); stripping only
+  "×1000" (the truck's ×100 check fails); the lamp back to white on
+  `#e0634f`; the redline as wide as the track; the derate mark the same
+  shape; the bar's words removed (each of the last four fails the one
+  combined check, nothing else). Run by
+  a scratch script that rebuilt and restored each file from git.
+- **PR #125** (into `main`; brings #124's two STATUS commits with it).
 
 **Session 9, P08 merged and live (2026-10-12/13):**
 - The owner merged #121, #122 and #123 in order (2026-10-12). `main`
@@ -214,7 +262,9 @@ PR #119; all seven steps built)".)*
   4. FINDING-027: A (state it) or B (model the cold-ignition region).
      Step 6 shipped without B, so A is my recommendation now.
   5. Still open: the `hd_i6` listening question; the Features tab copy.
-- **Next:** Phase 8 (below), unless the owner picks P07. *(Was: "read
+- **Next:** the rest of Phase 8: the units toggle, P01 vibration and P06
+  random roads' proposal, in an order the owner picks; or P07. *(Was:
+  "Phase 8 (below), unless the owner picks P07.")* *(Was: "read
   `main`'s CI on `f446ec2`. Then Phase 8 …")* *(Was: "merge #121, #122, then P08's build PR; read
   its CI (expect 88 / 0 / 3 and Pyodide's skip count +1)".)* *(Was: "P08's build once those
   are answered (the owner asked to continue with it, so it goes before
