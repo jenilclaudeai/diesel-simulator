@@ -1,7 +1,8 @@
 # Status
 
-**Updated:** 2026-10-13, session 9 (Phase 8 started: accessibility,
-measured and built on `feat/phase8-a11y`; #124 still open). *(Was:
+**Updated:** 2026-10-13, session 9 (Phase 8 accessibility merged and
+live: #124 and #125 merged 2026-10-12 UTC). *(Was: "Phase 8 started: accessibility,
+measured and built on `feat/phase8-a11y`; #124 still open".)* *(Was:
 "2026-10-13, session 9 (P08 merged and live: #121, #122,
 #123 merged 2026-10-12; `main` equals the build branch)".)* *(Was:
 "2026-10-12, session 9 (P08 decided (ADR-017) and built on
@@ -66,6 +67,12 @@ PR #119; all seven steps built)".)*
   Linux with the same readings: 4.87:1, redline 10 vs 6, marks 2 × 12 vs
   4 × 16), dyno 15, drive 10, sound 6, cycle 11, spec 18, sweep 6,
   durability 5, grid 9, custom 7. As expected before the run.
+- **Merged and live.** The owner merged #124 then #125 (22:19 UTC);
+  `main` (`95bde19`) has the same tree as #125's head `6d3b774`, 0 lines
+  different. This CI note was pushed to the branch a minute after the
+  merge, so it comes in this PR. Pages deployed `95bde19`. The site's
+  `main-NMHILWVW.js` carries `spokenUnit`, `#ec7a66` and "Warning from".
+  `main`'s own CI on `95bde19` was still running when this was written.
 
 **Session 9, P08 merged and live (2026-10-12/13):**
 - The owner merged #121, #122 and #123 in order (2026-10-12). `main`
