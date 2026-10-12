@@ -174,6 +174,23 @@ export class Gearbox {
   blend = 0.0;
   err0 = 0.0;
   coast = false; // this shift is an off-throttle downshift (bug #11)
+  /** P08 (ADR-017): (rpm, load) -> [brake torque N.m, fuel kg/h], set by LiveEngine; null keeps today's schedule */
+  econ: ((rpm: number, load: number) => [number, number]) | null = null;
+  p_peak = 0.0; // W, the warm full-load line's peak
+  p_f = 0.0; // W, delivered power, low-passed (ECO_TAU)
+  eval_t = 0.0; // s to the next economy evaluation
+  /** P08 (ADR-017, live.py Gearbox): the economy schedule's constants */
+  static readonly ECO_EXP = 1.5;
+  static readonly ECO_R_UP = 0.2;
+  static readonly ECO_R_STAY = 0.05;
+  static readonly ECO_UP_GAIN = 0.01;
+  static readonly ECO_DN_GAIN = 0.06;
+  static readonly ECO_TAU = 2.0;
+  static readonly ECO_EVAL_S = 0.2;
+  static readonly ECO_FLOOR_K = 1.25;
+  static readonly ECO_CEIL_K = 0.95;
+  static readonly ECO_MID: readonly [number, number] = [0.15, 0.3];
+  static readonly ECO_OFF = 0.03;
   /** bug #11: coast downshifts stretch both phases (FINDING-020) */
   static readonly COAST_TORQUE_K = 2.0;
   static readonly COAST_INERTIA_K = 4.0;
@@ -222,19 +239,39 @@ export class Gearbox {
     return true;
   }
 
-  update_schedule(dt: number, n_turbine: number, throttle: number, d_throttle: number): void {
+  /** Today's upshift line, rpm at the turbine. */
+  up_line(throttle: number): number {
+    return this.up_rpm * (0.8 + 0.28 * throttle);
+  }
+
+  eco_ceiling(throttle: number): number {
+    const [a, b] = Gearbox.ECO_MID;
+    const x = Math.min(1.0, Math.max(0.0, (throttle - a) / (b - a)));
+    const hi = Gearbox.ECO_CEIL_K * this.spec.rated_rpm;
+    return hi + (this.up_line(throttle) - hi) * x;
+  }
+
+  /** kg/h to deliver brake power P at rpm: the load by bisection on the map's torque, then its fuel. */
+  eco_fuel(rpm: number, P: number): number {
+    const econ = this.econ!;
+    const T = Math.max(P, 0.0) / ((rpm * 2 * Math.PI) / 60.0);
+    let lo = 0.0, hi = 1.0;
+    for (let k = 0; k < 12; k++) {
+      const mid = 0.5 * (lo + hi);
+      if (econ(rpm, mid)[0] < T) lo = mid;
+      else hi = mid;
+    }
+    return econ(rpm, hi)[1];
+  }
+
+  /** P08 (ADR-017): below full pedal, the least-fuel gear of those that can supply the pedal's
+   * power with a reserve; full pedal and kickdown are today's schedule (live.py update_schedule). */
+  update_schedule(dt: number, n_turbine: number, throttle: number, d_throttle: number, P_eng = 0.0): void {
     if (this.shifting() || this.neutral || !this.auto) return;
+    if (this.econ !== null) this.p_f += (Math.max(P_eng, 0.0) - this.p_f) * Math.min(1.0, dt / Gearbox.ECO_TAU);
     this.hold_t = Math.max(0.0, this.hold_t - dt);
     if (this.hold_t > 0.0) return;
-    const up = this.up_rpm * (0.8 + 0.28 * throttle);
     const r = this.veh.gears;
-    let dn: number;
-    if (this.gear > 0) {
-      const step_dn = r[this.gear - 1]! / r[this.gear]!;
-      dn = Math.min(this.dn_rpm * (0.72 + 0.3 * throttle), (0.8 * up) / step_dn);
-    } else {
-      dn = 0.0;
-    }
     if (d_throttle > 1.2 && throttle > 0.55 && this.gear > 0) {
       for (const skip of [2, 1]) {
         const g = this.gear - skip;
@@ -245,6 +282,56 @@ export class Gearbox {
           return;
         }
       }
+    }
+    if (this.econ === null || throttle ** Gearbox.ECO_EXP >= 1.0 - Gearbox.ECO_R_UP) {
+      this.power_schedule(n_turbine, throttle);
+      return;
+    }
+    this.eval_t -= dt;
+    if (this.eval_t > 0.0) return;
+    this.eval_t = Gearbox.ECO_EVAL_S;
+    const P_dem = throttle ** Gearbox.ECO_EXP * this.p_peak;
+    const floor = Gearbox.ECO_FLOOR_K * this.spec.idle_rpm;
+    const ceil = this.eco_ceiling(throttle);
+    const cand: [number, number][] = [];
+    for (let g = 0; g < this.n; g++) {
+      const rpm_g = (n_turbine * r[g]!) / r[this.gear]!;
+      if (rpm_g < floor || rpm_g > ceil) continue;
+      const P_max = (((this.econ(rpm_g, 1.0)[0] * rpm_g * 2) * Math.PI) / 60.0);
+      const R = g === this.gear ? Gearbox.ECO_R_STAY : Gearbox.ECO_R_UP;
+      if (P_dem <= (1.0 - R) * P_max) cand.push([g, rpm_g]);
+    }
+    if (cand.length === 0) {
+      this.power_schedule(n_turbine, throttle);
+      return;
+    }
+    if (throttle < Gearbox.ECO_OFF) {
+      if (n_turbine > ceil && this.gear < this.n - 1) this.request(+1);
+      else if (n_turbine < floor && this.gear > 0) this.request(-1, false, true);
+      return;
+    }
+    const fuel = new Map<number, number>();
+    for (const [g, rpm_g] of cand) fuel.set(g, this.eco_fuel(rpm_g, this.p_f));
+    let best = cand[0]![0];
+    for (const [g] of cand) if (fuel.get(g)! < fuel.get(best)!) best = g; // the lowest gear on a tie
+    const cur = fuel.get(this.gear);
+    if (cur !== undefined) {
+      const gain = best > this.gear ? Gearbox.ECO_UP_GAIN : Gearbox.ECO_DN_GAIN;
+      if (fuel.get(best)! > (1.0 - gain) * cur) return;
+    }
+    if (best !== this.gear) this.request(best > this.gear ? 1 : -1);
+  }
+
+  /** Today's schedule (before P08): full pedal and every box without a map. */
+  private power_schedule(n_turbine: number, throttle: number): void {
+    const up = this.up_line(throttle);
+    const r = this.veh.gears;
+    let dn: number;
+    if (this.gear > 0) {
+      const step_dn = r[this.gear - 1]! / r[this.gear]!;
+      dn = Math.min(this.dn_rpm * (0.72 + 0.3 * throttle), (0.8 * up) / step_dn);
+    } else {
+      dn = 0.0;
     }
     if (n_turbine > up && this.gear < this.n - 1) this.request(+1);
     else if (n_turbine < dn && this.gear > 0) this.request(-1, false, throttle < 0.05);
@@ -452,7 +539,7 @@ export class Driveline {
     const veh = this.veh, gb = this.gb, tc = this.tc as LaunchClutch;
     const d_thr = (throttle - this._thr_prev) / Math.max(dt, 1e-6);
     this._thr_prev = throttle;
-    gb.update_schedule(dt, (w_e * 60.0) / (2 * Math.PI), throttle, d_thr);
+    gb.update_schedule(dt, (w_e * 60.0) / (2 * Math.PI), throttle, d_thr, T_eng * w_e);
 
     const i_new = gb.ratio();
     const i_old = gb.ratio(gb.gear_from);
@@ -536,7 +623,7 @@ export class Driveline {
     const d_thr = (throttle - this._thr_prev) / Math.max(dt, 1e-6);
     this._thr_prev = throttle;
 
-    gb.update_schedule(dt, (this.w_in * 60.0) / (2 * Math.PI), throttle, d_thr);
+    gb.update_schedule(dt, (this.w_in * 60.0) / (2 * Math.PI), throttle, d_thr, T_eng * w_e);
 
     const i_new = gb.ratio();
     const i_old = gb.ratio(gb.gear_from);

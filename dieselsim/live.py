@@ -597,6 +597,12 @@ class Gearbox:
         self.blend = 0.0
         self.err0 = 0.0               # slip to be removed, latched at entry
         self.coast = False            # this shift is an off-throttle downshift (bug #11)
+        # P08 (ADR-017): the economy schedule's inputs, set by LiveEngine.
+        # econ(rpm, load) -> (brake torque N.m, fuel kg/h); None keeps today's schedule.
+        self.econ = None
+        self.p_peak = 0.0             # W, the warm full-load line's peak
+        self.p_f = 0.0                # W, delivered power, low-passed (ECO_TAU)
+        self.eval_t = 0.0             # s to the next economy evaluation
 
     # Bug #11: coast downshifts used the power-on calibration. Off throttle a
     # TCU has no hurry and nothing to hide the shift behind, so it stretches
@@ -634,20 +640,61 @@ class Gearbox:
         return True
 
     # ------------------------------------------------------------------
-    def update_schedule(self, dt, n_turbine, throttle, d_throttle):
+    # P08 (ADR-017, reviews/PROPOSAL-P08.md): below full pedal the box shifts
+    # on demand. The pedal is a fuel fraction, so the reserve in the CURRENT
+    # gear is ~1 - pedal in every gear and a reserve rule there cascades; the
+    # demand is read as power instead, which carries across gears:
+    #     P_dem = pedal**ECO_EXP * peak power.
+    # A gear qualifies if its full-load power at its rpm covers P_dem with a
+    # reserve (ECO_R_UP to move in, ECO_R_STAY to stay) and its rpm is between
+    # the floor and the ceiling. Of those, the box takes the one the engine's
+    # own map burns least in for the power being delivered (low-passed): an
+    # upshift needs ECO_UP_GAIN, a downshift for fuel alone ECO_DN_GAIN (one
+    # symmetric bar trapped the cars a gear low, B and C3 in the proposal).
+    # Full pedal (no gear can qualify) and kickdown are today's schedule.
+    # Half pedal is never later than today: from ECO_MID[1] up the ceiling is
+    # today's upshift line, below ECO_MID[0] ECO_CEIL_K x rated, blended.
+    ECO_EXP = 1.5
+    ECO_R_UP, ECO_R_STAY = 0.20, 0.05
+    ECO_UP_GAIN, ECO_DN_GAIN = 0.01, 0.06
+    ECO_TAU = 2.0                   # s
+    ECO_EVAL_S = 0.2                # s between evaluations (a few lookups per gear each)
+    ECO_FLOOR_K, ECO_CEIL_K = 1.25, 0.95
+    ECO_MID = (0.15, 0.30)
+    ECO_OFF = 0.03                  # pedal below this is off throttle
+
+    def up_line(self, throttle):
+        """Today's upshift line, rpm at the turbine."""
+        return self.up_rpm * (0.80 + 0.28 * throttle)
+
+    def eco_ceiling(self, throttle):
+        a, b = self.ECO_MID
+        x = min(1.0, max(0.0, (throttle - a) / (b - a)))
+        hi = self.ECO_CEIL_K * self.spec.rated_rpm
+        return hi + (self.up_line(throttle) - hi) * x
+
+    def eco_fuel(self, rpm, P):
+        """kg/h to deliver brake power P at rpm: the load by bisection on the
+        map's torque (monotonic in load), then the map's fuel there."""
+        T = max(P, 0.0) / (rpm * 2 * math.pi / 60.0)
+        lo, hi = 0.0, 1.0
+        for _ in range(12):
+            mid = 0.5 * (lo + hi)
+            if self.econ(rpm, mid)[0] < T:
+                lo = mid
+            else:
+                hi = mid
+        return self.econ(rpm, hi)[1]
+
+    def update_schedule(self, dt, n_turbine, throttle, d_throttle, P_eng=0.0):
         if self.shifting() or self.neutral or not self.auto:
             return
+        if self.econ is not None:
+            self.p_f += (max(P_eng, 0.0) - self.p_f) * min(1.0, dt / self.ECO_TAU)
         self.hold_t = max(0.0, self.hold_t - dt)
         if self.hold_t > 0.0:
             return
-        up = self.up_rpm * (0.80 + 0.28 * throttle)
         r = self.veh.gears
-        if self.gear > 0:
-            step_dn = r[self.gear - 1] / r[self.gear]
-            dn = min(self.dn_rpm * (0.72 + 0.30 * throttle),
-                     0.80 * up / step_dn)
-        else:
-            dn = 0.0
         # kickdown: a fast stab of throttle asks for the biggest downshift
         # that will not overspeed the engine, skipping gears if it can
         if d_throttle > 1.2 and throttle > 0.55 and self.gear > 0:
@@ -659,6 +706,55 @@ class Gearbox:
                 if n_after < 0.95 * self.spec.rated_rpm:
                     self.request(-skip, kickdown=True)
                     return
+        if self.econ is None or throttle ** self.ECO_EXP >= 1.0 - self.ECO_R_UP:
+            self._power_schedule(n_turbine, throttle)
+            return
+        self.eval_t -= dt
+        if self.eval_t > 0.0:
+            return
+        self.eval_t = self.ECO_EVAL_S
+        P_dem = throttle ** self.ECO_EXP * self.p_peak
+        floor = self.ECO_FLOOR_K * self.spec.idle_rpm
+        ceil = self.eco_ceiling(throttle)
+        cand = []
+        for g in range(self.n):
+            rpm_g = n_turbine * r[g] / r[self.gear]
+            if rpm_g < floor or rpm_g > ceil:
+                continue
+            P_max = self.econ(rpm_g, 1.0)[0] * rpm_g * 2 * math.pi / 60.0
+            R = self.ECO_R_STAY if g == self.gear else self.ECO_R_UP
+            if P_dem <= (1.0 - R) * P_max:
+                cand.append((g, rpm_g))
+        if not cand:                      # nothing qualifies: today's schedule
+            self._power_schedule(n_turbine, throttle)
+            return
+        if throttle < self.ECO_OFF:       # off throttle: no upshift for fuel
+            if n_turbine > ceil and self.gear < self.n - 1:
+                self.request(+1)
+            elif n_turbine < floor and self.gear > 0:
+                self.request(-1, coast=True)
+            return
+        fuel = {g: self.eco_fuel(rpm_g, self.p_f) for g, rpm_g in cand}
+        best = min(fuel, key=fuel.get)    # the lowest gear on a tie (dict order)
+        if self.gear in fuel:
+            gain = self.ECO_UP_GAIN if best > self.gear else self.ECO_DN_GAIN
+            if fuel[best] > (1.0 - gain) * fuel[self.gear]:
+                return
+        if best != self.gear:
+            self.request(1 if best > self.gear else -1)
+
+    def _power_schedule(self, n_turbine, throttle):
+        """Today's schedule (before P08): upshift on a throttle-scaled rpm
+        line, downshift below a matching one. Full pedal and every box
+        without a map use it."""
+        up = self.up_line(throttle)
+        r = self.veh.gears
+        if self.gear > 0:
+            step_dn = r[self.gear - 1] / r[self.gear]
+            dn = min(self.dn_rpm * (0.72 + 0.30 * throttle),
+                     0.80 * up / step_dn)
+        else:
+            dn = 0.0
         if n_turbine > up and self.gear < self.n - 1:
             self.request(+1)
         elif n_turbine < dn and self.gear > 0:
@@ -903,7 +999,7 @@ class Driveline:
         veh, gb = self.veh, self.gb
         d_thr = (throttle - self._thr_prev) / max(dt, 1e-6)
         self._thr_prev = throttle
-        gb.update_schedule(dt, w_e * 60.0 / (2 * math.pi), throttle, d_thr)
+        gb.update_schedule(dt, w_e * 60.0 / (2 * math.pi), throttle, d_thr, T_eng * w_e)
 
         i_new = gb.ratio()
         i_old = gb.ratio(gb.gear_from)
@@ -993,7 +1089,7 @@ class Driveline:
         self._thr_prev = throttle
 
         gb.update_schedule(dt, self.w_in * 60.0 / (2 * math.pi),
-                           throttle, d_thr)
+                           throttle, d_thr, T_eng * w_e)
 
         i_new = gb.ratio()
         i_old = gb.ratio(gb.gear_from)
@@ -1200,6 +1296,13 @@ class LiveEngine:
             # a manual car is left in neutral; the driver picks a gear
             self.dl.gb.neutral = True
             self.dl.gb.auto = False
+        # P08 (ADR-017): the automatic shifts by this engine's own map. Peak
+        # power is the grid's warm full-load line, idle to rated in 40 steps.
+        gb = self.dl.gb
+        gb.econ = self._econ_map
+        gb.p_peak = max(grid.blend_perf(r, 1.0)["torque"] * r * 2 * math.pi / 60.0
+                        for r in (self.spec.idle_rpm + k * (self.spec.rated_rpm - self.spec.idle_rpm) / 40.0
+                                  for k in range(41)))
         # ---- ADR-011: friction live, from the cells' pressure traces -------
         self.adr011 = isinstance(grid, Adr011Grid)
         self.T_oil = self.spec.thermal.ambient_T     # cold start, like the coolant
@@ -1282,6 +1385,23 @@ class LiveEngine:
             p["torque"] = p["torque_ind"] - self.T_fric
             return p
         return g.blend_perf(rpm, load)
+
+    def _econ_map(self, rpm, load):
+        """P08 (ADR-017): (brake torque N.m, fuel kg/h) at a candidate rpm and
+        load, for the automatic's schedule: the grid's own cell (its friction,
+        warm/cold at the live coolant) plus the weather table's change off the
+        standard air. Not the live friction: that is held for the current rpm."""
+        g = self.g
+        if not self.adr011:
+            p = g.blend_perf(rpm, load)
+            return p["torque"], p["fuel_kg_h"]
+        p = g.blend_perf_T(rpm, load, self.T_coolant)
+        T, f = p["torque"], p["fuel_kg_h"]
+        t = self.spec.thermal
+        if g.weather is not None and (t.ambient_p != 101325.0 or t.ambient_T != 298.0):
+            d = g.weather.delta(rpm, load, t.ambient_p, t.ambient_T)
+            T, f = T + d["torque_ind"], f + d["fuel_kg_h"]
+        return T, f
 
     def weather_state(self):
         """What the loop does with the air (for the page): 'standard', 'table'
