@@ -1,11 +1,46 @@
 # Status
 
-**Updated:** 2026-10-12, session 9 (#118, #119 and #120 merged and live;
-a merge-made duplicate test removed in #121). Read this section first; the
-dated sections below it are history. *(Was: "2026-10-11, session 9 (B-05
+**Updated:** 2026-10-12, session 9 (P08 measured and prototyped:
+`reviews/PROPOSAL-P08.md`, three questions for the owner; #121 open).
+Read this section first; the dated sections below it are history. *(Was:
+"2026-10-12, session 9 (#118, #119 and #120 merged and live; a merge-made
+duplicate test removed in #121)"; before that "2026-10-11, session 9 (B-05
 and B-06 fixed, PR open; #118 and #119 still waiting to merge)"; before
 that "2026-10-10, session 8 (Phase 7 step 7 built,
 PR #119; all seven steps built)".)*
+
+**Session 9, P08 (2026-10-12): the owner asked to continue with it.**
+- **P08**, the sheet's "Practical torque converter" (priority 1, "Into
+  Consideration"): shift on demanded torque, upshift early when there is
+  torque to spare, and keep today's power schedule at full pedal. It is the
+  automatic's schedule: Enjoy's Auto (`tc`) and Drive's `tc`/`dct`.
+- **Measured today's box:** it upshifts at
+  `0.86 × rated × (0.80 + 0.28 × pedal)`, about 2,800–3,000 rpm on the
+  cars at 20% pedal, in every gear, though their torque peaks from ~1,750.
+  Held cruises with every gear forced: **today's gear burns 3–43% more
+  than the least-fuel gear below 110 km/h on the cars** (crdi22 at 30 km/h
+  7.56 against 4.32 L/100 km). The truck hunts 5th ↔ 6th at 90 km/h.
+- **The trap:** the pedal is a fuel fraction, so the reserve in the current
+  gear is ~1 − pedal in every gear, and a reserve rule cascades. Demand is
+  read as power instead (`pedal^k × peak power`), which carries across gears.
+- **Prototyped six variants** (`tools/p08_proto.py`, patched in at run time,
+  nothing in `dieselsim/` changed). B, the reserve alone, hunts: 27 shifts
+  in 50 s. C, C2 and C3 each fixed one thing and broke another; each is
+  recorded in the proposal. **C4** (the fuel map, an upshift at 1% saving
+  and a downshift for fuel at 6%) puts **all 12 car cruises in the
+  least-fuel gear** with no hunting, and full pedal is identical to today.
+  Still open: half pedal is mixed, crdi15's tip-in is 17% softer, and the
+  truck at 90 is as today.
+- **Decided by the owner (ADR-017):** C4, all automatic boxes, half pedal
+  never later than today. *(Was: "For the owner (PR open, docs and tools
+  only): C4, B or A? All automatic boxes, or Enjoy's only? Half pedal:
+  never later than today, pure fuel map, or sportier?")* The proposal and
+  ADR are in #122; the build follows on its own branch. Building it means regenerating the live
+  fixtures and re-matching the TS port; **no grid rebuild** (`live.py`
+  is outside the hash).
+- Measuring note: the Python loop runs at ~1.2–2 s per simulated second,
+  mostly live friction (0.2 s per update, every 6 frames). The prototype
+  updates friction once a simulated second, the same for every variant.
 
 **Session 9, continued (2026-10-12):**
 - **Merged by the owner** on 2026-10-11 (UTC): #116 21:58, #118 22:00,
@@ -111,13 +146,19 @@ PR #119; all seven steps built)".)*
      2026-10-11. New: merge **#121** (the duplicate test, 33 lines
      deleted, the tracker and this file).
   2. **P07** (multi-parameter sweep, priority 1): v1 or v2?
+  2a. ~~**P08** (`reviews/PROPOSAL-P08.md`): the approach (C4 recommended),
+      which boxes, and the half-pedal rule.~~ Decided 2026-10-12 (ADR-017):
+      C4, all automatic boxes, half pedal never later than today. Merge
+      #122 (the proposal and ADR) after #121.
   3. On the phone, **now possible (#120 is live)**: the new pedal layout, plus
      REVIEW-007 M-1 (B-01, B-02, sound, smoothness). That closes Phase 5.
   4. FINDING-027: A (state it) or B (model the cold-ignition region).
      Step 6 shipped without B, so A is my recommendation now.
   5. Still open: the `hd_i6` listening question; the Features tab copy.
-- **Next by PLAN after that:** Phase 8 (polish: units toggle,
-  accessibility, P01 vibration, P06 random roads' proposal).
+- **Next:** P08's build once those are answered (the owner asked to
+  continue with it, so it goes before Phase 8). Then Phase 8 (polish:
+  units toggle, accessibility, P01 vibration, P06 random roads' proposal).
+  *(Was: "Next by PLAN after that: Phase 8 (…)".)*
 
 **2026-10-10, the owner's priority request: a hardware benchmark. Merged
 as #117** (10:16 UTC, at `1589f5f`).

@@ -179,9 +179,9 @@ grep its readers and solve with it changed.
 
 ## Decisions
 
-`DECISIONS.md` holds ADR-001 to ADR-016 (ADR-013: the personas are review
+`DECISIONS.md` holds ADR-001 to ADR-017 (ADR-013: the personas are review
 lenses; ADR-014: custom engines, drivable; ADR-015: Phase 6's scope, staged;
-ADR-016: Phase 7's six decisions, and v2 as a separate list). Don't reopen one without a
+ADR-016: Phase 7's six decisions, and v2 as a separate list; ADR-017: P08, the automatic shifts by the fuel map). Don't reopen one without a
 measured reason. The ones most easily undone by accident: the Python solver
 runs **unmodified** under Pyodide (ADR-001); audio is a TypeScript
 AudioWorklet with no `SharedArrayBuffer`, so no COOP/COEP headers, so GitHub
