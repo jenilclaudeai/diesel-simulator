@@ -1,9 +1,44 @@
 # Status
 
-**Updated:** 2026-10-11, session 9 (B-05 and B-06 fixed, PR open; #118 and
-#119 still waiting to merge). Read this section first; the dated sections
-below it are history. *(Was: "2026-10-10, session 8 (Phase 7 step 7 built,
+**Updated:** 2026-10-12, session 9 (#118, #119 and #120 merged and live;
+a merge-made duplicate test removed in #121). Read this section first; the
+dated sections below it are history. *(Was: "2026-10-11, session 9 (B-05
+and B-06 fixed, PR open; #118 and #119 still waiting to merge)"; before
+that "2026-10-10, session 8 (Phase 7 step 7 built,
 PR #119; all seven steps built)".)*
+
+**Session 9, continued (2026-10-12):**
+- **Merged by the owner** on 2026-10-11 (UTC): #116 21:58, #118 22:00,
+  #119 22:02, #120 22:03. `main` checked by content: #118, #119 and #120
+  have 0 commits off it; the only lines on `main` beyond #120's tree are
+  #118's (`bench/README.md`, `tools/bench_grid.py` identical; its 2
+  CLAUDE.md lines the same) and #117's test.
+- **CI on `main` (`3047f95`): 9 of 9, every job read.** Physics 87 / 0 / 3
+  on 3.10 and 3.12; Pyodide 71 / 0 / 2, 16 skipped; units 130; e2e enjoy
+  25, dyno 15, drive 10, sound 6, cycle 11, spec 18, sweep 6, durability
+  5, grid 9, custom 7; fixtures 5 + 51 + 10 + 11; solver 20 + 15 + 30.
+  Pages deployed `3047f95` (22:09 UTC). **The live bundle carries the new
+  layout** (the `.paddles` column, the name's `16cqi` fit, the new start
+  hint), so B-05 and B-06 are "Fixed on live site" in the tracker, not
+  yet tried on the phone.
+- **Found on `main`: `test_grid_benchmark_schedule` defined twice**
+  (lines 2435 and 2491), since #116's merge. Git's auto-merge `f8f99e8`
+  ("Merge branch 'main' into feat/cold-flow") placed #117's test at two
+  places; every branch had one copy. The copies are byte-identical and
+  Python keeps the second, so nothing ran differently and the count was
+  never off. It is dead code a later edit could split (edit one copy and
+  the other wins). An AST scan of all 45 Python files on `main` finds no
+  other duplicate; a grep of the TS/MJS finds none either. **#121**
+  deletes the first copy: the module's AST equals the old one minus that
+  copy, and the kept test passes alone (6 of 6 parts). **CI on #121
+  (`915d99b`): 9 of 9, every job read**, the same counts as `main`
+  (physics 87 / 0 / 3 on 3.10 and 3.12, Pyodide 71 / 0 / 2 / 16 in 32.4
+  min, units 130, e2e enjoy 25 and the rest unchanged).
+- **The Pyodide job's time is the runner, not the code:** over the last 30
+  runs it is bimodal, 20–33 min or 38–49 min, with the same commit taking
+  42.7 and 42.4 and a docs-only commit 26.8 then 47.5. The worst so far is
+  49.3 min of its 60-min limit: ~11 min of headroom. Something to watch
+  as the suite grows, not to fix now.
 
 **Session 9 (2026-10-11):**
 - **This Mac:** the repo now lives at `~/Projects/diesel-simulator`, out of
@@ -72,9 +107,11 @@ PR #119; all seven steps built)".)*
       sweep 6, durability 5.
     - This STATUS commit reruns CI on docs only.
 - **Waiting on the owner (session 9):**
-  1. Merge #119 and #118 (both 9 of 9), then #120 after #119.
+  1. ~~Merge #119 and #118 (both 9 of 9), then #120 after #119.~~ Done
+     2026-10-11. New: merge **#121** (the duplicate test, 33 lines
+     deleted, the tracker and this file).
   2. **P07** (multi-parameter sweep, priority 1): v1 or v2?
-  3. On the phone, after #120 is live: the new pedal layout, plus
+  3. On the phone, **now possible (#120 is live)**: the new pedal layout, plus
      REVIEW-007 M-1 (B-01, B-02, sound, smoothness). That closes Phase 5.
   4. FINDING-027: A (state it) or B (model the cold-ignition region).
      Step 6 shipped without B, so A is my recommendation now.
@@ -864,14 +901,14 @@ from the CI-tested tree only in #104's four docs files, with 0 code paths;
 
 | suite | result |
 |---|---|
-| `python3 tests/test_physics.py` | 85 passed, 0 failed, 3 known (with scipy; #115's tree, 2026-10-09; CI 3.10 and 3.12 the same). *Was (humidity's tree):* 82 / 0 / 3; *(#110):* 81 / 0 / 3; *(#107):* 80 / 0 / 3; *(#105):* 79 / 0 / 3; *(#101's final tree):* 78 / 0 / 3; *(#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
-| Pyodide suite | 70 passed, 0 failed, 2 known, 15 skipped (CI on #115, 2026-10-09; 45.6 min of its 60). *Was (#114):* 69 / 0 / 2 / 13; *(#110):* 68 / 0 / 2 / 13; *(#107):* 67 / 0 / 2 / 13; *(#101's final tree, `b6ea065`):* 65 / 0 / 2 / 13; *(#99):* 64 / 0 / 2 / 13; *(#88):* 59 / 0 / 2 / 12 |
+| `python3 tests/test_physics.py` | 87 passed, 0 failed, 3 known (CI on `main` `3047f95`, 2026-10-11, 3.10 and 3.12). *Was (#115's tree, with scipy):* 85 / 0 / 3; *(humidity's tree):* 82 / 0 / 3; *(#110):* 81 / 0 / 3; *(#107):* 80 / 0 / 3; *(#105):* 79 / 0 / 3; *(#101's final tree):* 78 / 0 / 3; *(#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
+| Pyodide suite | 71 passed, 0 failed, 2 known, 16 skipped (CI on `main` `3047f95`; 47.6 min of its 60, runner-dependent: 20–49 min, session 9). *Was (#115):* 70 / 0 / 2 / 15, 45.6 min; *(#114):* 69 / 0 / 2 / 13; *(#110):* 68 / 0 / 2 / 13; *(#107):* 67 / 0 / 2 / 13; *(#101's final tree, `b6ea065`):* 65 / 0 / 2 / 13; *(#99):* 64 / 0 / 2 / 13; *(#88):* 59 / 0 / 2 / 12 |
 | `tools/fixtures/gen_fixtures.py --check` | 7 modules current |
 | `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |
-| `web/physics npm test` | 5 + 41 + 10 + 11 = 67 (#115: +5, the weather drive). *Was:* 5 + 36 + 10 + 11 = 62 |
+| `web/physics npm test` | 5 + 51 + 10 + 11 = 77 (CI on `main` `3047f95`). *Was (#115, +5 the weather drive):* 5 + 41 + 10 + 11 = 67; *before:* 5 + 36 + 10 + 11 = 62 |
 | `web/solver npm test` | cache 20, live-grid scheduler 15, round trip 30 (#115: +3 scheduler, the weather pieces). *Was:* scheduler 12 (#105); round trip 29 |
-| `web/app npm test` | 119 unit tests (pass without `physics-version.ts`; #115's tree, 2026-10-09). *Was:* 114 (humidity's tree), 112 (D's tree), 109 (#106), 104 (#103), 101. `check:labels` 6 of 10 templates |
-| e2e (`web/app`) | (CI on #115) dyno 15, grid 9, drive 9 (*was* 7; +Leh against native, +Leh slower), sound 6, enjoy 22 (*was* 21; +the place on the start screen), custom 7, cycle 11 (*was* 10, +the humidity note; 9, +FINDING-026's thin-air note; 8, +the environment check, #106), spec 14 (*was* 13, +the humidity field; 12, +the thin-air notes; 11, +the reload check, #103), sweep 6, durability 5 |
+| `web/app npm test` | 130 unit tests (CI on `main` `3047f95`, run before `physics-version.ts` exists). *Was:* 119 (#115's tree), 114 (humidity's tree), 112 (D's tree), 109 (#106), 104 (#103), 101. `check:labels` 6 of 10 templates |
+| e2e (`web/app`) | (CI on `main` `3047f95`) dyno 15, grid 9, drive 10, sound 6, enjoy 25 (+B-05/B-06's two checks), custom 7, cycle 11, spec 18, sweep 6, durability 5. *Was (CI on #115):* dyno 15, grid 9, drive 9 (*was* 7; +Leh against native, +Leh slower), sound 6, enjoy 22 (*was* 21; +the place on the start screen), custom 7, cycle 11 (*was* 10, +the humidity note; 9, +FINDING-026's thin-air note; 8, +the environment check, #106), spec 14 (*was* 13, +the humidity field; 12, +the thin-air notes; 11, +the reload check, #103), sweep 6, durability 5 |
 
 CI runs all of them except the manual `web/solver npm run test:live-real`.
 Its jobs: physics on Python 3.10 and 3.12, Pyodide, fixtures, solver, web
