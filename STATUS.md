@@ -1,8 +1,10 @@
 # Status
 
-**Updated:** 2026-10-12, session 9 (P08 decided (ADR-017) and built on
-`feat/p08-shift-schedule`; #121 → #122 → the build, merge in that order).
-*(Was: "P08 measured and prototyped: `reviews/PROPOSAL-P08.md`, three
+**Updated:** 2026-10-13, session 9 (P08 merged and live: #121, #122,
+#123 merged 2026-10-12; `main` equals the build branch). *(Was:
+"2026-10-12, session 9 (P08 decided (ADR-017) and built on
+`feat/p08-shift-schedule`; #121 → #122 → the build, merge in that
+order)".)* *(Was: "P08 measured and prototyped: `reviews/PROPOSAL-P08.md`, three
 questions for the owner; #121 open".)*
 Read this section first; the dated sections below it are history. *(Was:
 "2026-10-12, session 9 (#118, #119 and #120 merged and live; a merge-made
@@ -10,6 +12,25 @@ duplicate test removed in #121)"; before that "2026-10-11, session 9 (B-05
 and B-06 fixed, PR open; #118 and #119 still waiting to merge)"; before
 that "2026-10-10, session 8 (Phase 7 step 7 built,
 PR #119; all seven steps built)".)*
+
+**Session 9, P08 merged and live (2026-10-12/13):**
+- The owner merged #121, #122 and #123 in order (2026-10-12). `main`
+  (`f446ec2`) has 0 commits off any of the three branches, and its tree
+  equals #123's exactly. The duplicate benchmark test is gone (one
+  definition).
+- **CI on #123 (`cca698f`): 9 of 9, every job read.** Physics 88 / 0 / 3
+  on 3.10 and 3.12, the P08 test passing; Pyodide 71 / 0 / 2, 17 skipped
+  (+1: the P08 test, no grids there); ports 5 + 51 + 10 + 11; solver 20 +
+  15 + 30; units 130; e2e dyno 15, drive 10, sound 6, enjoy 25, cycle 11,
+  spec 18, sweep 6, durability 5, grid 9, custom 7. As expected before
+  the run.
+- **Live:** Pages deployed `f446ec2` (18:27 UTC); the site's worker bundle
+  carries the economy schedule. **CI on `main` (`f446ec2`): 9 of 9,
+  every job read**, the same counts as #123 (physics 88 / 0 / 3 on both
+  Pythons, Pyodide 71 / 0 / 2 / 17, enjoy 25, drive 10). *(Was: "CI on
+  `main` itself was still running when this was written: read it next.")*
+- **On the phone:** Enjoy's Auto now cruises 1–3 gears higher at light
+  pedal; worth a listen with the Phase 5 re-check.
 
 **Session 9, P08 built (2026-10-12), `feat/p08-shift-schedule`:**
 - `live.py`: `Gearbox.update_schedule` is ADR-017's economy schedule;
@@ -185,15 +206,17 @@ PR #119; all seven steps built)".)*
   2. **P07** (multi-parameter sweep, priority 1): v1 or v2?
   2a. ~~**P08** (`reviews/PROPOSAL-P08.md`): the approach (C4 recommended),
       which boxes, and the half-pedal rule.~~ Decided 2026-10-12 (ADR-017):
-      C4, all automatic boxes, half pedal never later than today. Merge
-      #122 (the proposal and ADR) after #121.
+      C4, all automatic boxes, half pedal never later than today. Merged
+      and live (#121, #122, #123).
   3. On the phone, **now possible (#120 is live)**: the new pedal layout, plus
      REVIEW-007 M-1 (B-01, B-02, sound, smoothness). That closes Phase 5.
+     New since: P08's lower cruise rpm in Auto (listen at 30–80 km/h).
   4. FINDING-027: A (state it) or B (model the cold-ignition region).
      Step 6 shipped without B, so A is my recommendation now.
   5. Still open: the `hd_i6` listening question; the Features tab copy.
-- **Next:** merge #121, #122, then P08's build PR; read its CI (expect
-  88 / 0 / 3 and Pyodide's skip count +1). *(Was: "P08's build once those
+- **Next:** Phase 8 (below), unless the owner picks P07. *(Was: "read
+  `main`'s CI on `f446ec2`. Then Phase 8 …")* *(Was: "merge #121, #122, then P08's build PR; read
+  its CI (expect 88 / 0 / 3 and Pyodide's skip count +1)".)* *(Was: "P08's build once those
   are answered (the owner asked to continue with it, so it goes before
   Phase 8).")* Then Phase 8 (polish:
   units toggle, accessibility, P01 vibration, P06 random roads' proposal).
