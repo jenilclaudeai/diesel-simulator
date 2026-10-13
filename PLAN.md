@@ -367,6 +367,13 @@ automatic boxes, half pedal never later than today. *(Was: "Not decided;
 nothing built.")* **Built 2026-10-12** on `feat/p08-shift-schedule`: all
 12 car cruises in the least-fuel gear, full pedal identical to today. **Merged and live** (#123, 2026-10-12).
 
+## P10 — a deeper, bassier diesel sound (the owner's request, 2026-10-13)
+
+Measured in `reviews/PROPOSAL-P10.md`: the exhaust (the low firing pulse)
+is 0.2–1.6% of the default mic's mix; clicks and combustion modes dominate.
+Feasible; recommended: rebalance the mix plus a muffler low-pass, judged by
+ear on A/B pairs first. **Not decided; nothing built.**
+
 ---
 
 ## Phase 8 — Polish and host
