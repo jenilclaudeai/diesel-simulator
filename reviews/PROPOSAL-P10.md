@@ -3,8 +3,11 @@
 **The owner's Feat Prop P10** (priority 1, "Into Consideration"): "Current
 sound is little high pitch. Actual diesel engines sound is more deeper and
 bassy. For example CRDi, DDIS, TDC."
-**Status:** measured, feasible; nothing built. Questions for the owner at
-the end. (2026-10-13, session 9)
+**Status:** measured, feasible; nothing built. ~~Questions for the owner at
+the end. (2026-10-13, session 9)~~ **The owner answered (2026-10-14):
+phone speaker; cabin and intake mics; yes to A/B files.** The listening
+files are made (`tools/p10_ab.py`). **The "muffler" piece below was wrong**:
+see "Correction and the listening round" at the end.
 **Reproduce:** `python3 tools/p10_sound_split.py . crdi15 800 0.05`,
 `python3 tools/p10_rebalance.py . crdi15` (each ~20 s; the second changes
 nothing in the repo).
@@ -111,3 +114,86 @@ answers it the same way.
 3. **Go ahead with A/B WAV pairs** (today against B, idle / 2000 rpm /
    full pedal, crdi15, hatch15, crdi22) for you to judge before anything is
    built?
+
+---
+
+## Correction and the listening round (2026-10-14, session 9)
+
+**The owner's answers:**
+1. Listened on: **the phone's speaker**.
+2. Mics: **cabin and intake**.
+3. A/B files: **yes**.
+
+**At those mics, today's sound is measured the same way** (crdi15,
+`tools/p10_sound_split.py . crdi15 800 0.05 cabin`). Each source's share of
+the mix:
+
+| | exhaust | combustion | mechanical | rumble | turbo | strongest bin |
+|---|---|---|---|---|---|---|
+| cabin, idle | 0.1% | 14.8% | 65.4% | 17.6% | 0.0% | 907 Hz |
+| cabin, 2000 / 0.3 | 0.4% | 44.2% | 46.6% | 7.4% | 0.6% | 666 Hz |
+| intake, idle | 0.0% | 11.3% | 80.5% | 4.6% | 0.0% | 907 Hz |
+| intake, 2000 / 0.3 | 0.1% | 26.8% | 45.8% | 1.5% | 14.6% | 666 Hz |
+
+- **At the cabin mic**, the mic's own 1.9 kHz low-pass already removes the
+  3–7 kHz clicks. What is left is the 650–900 Hz band: the combustion
+  knock's lowest mode (680 Hz) and the piston slap (900 Hz). The centroid
+  is 700–850 Hz. A phone speaker plays exactly that band well, and not the
+  bass under it.
+- **At the intake mic under load**, 85–91% of the sound is above 2 kHz,
+  and its level is 3–5× the cabin's. That is the turbo's whine plus the
+  intake hiss.
+
+**Correction: the muffler.** The table above says the idle exhaust "itself
+is bright" on crdi15 and hatch15, and blames the muffler model. Measured
+now:
+- **99.6% of crdi15's idle d(flow)/dt sits in 2–4 kHz**, at exactly 180
+  orders per revolution: the solver's 1° step's Nyquist (FINDING-028).
+- **A 2° moving average** of the flow takes the idle exhaust's centroid
+  from 2,159 to 208 Hz. At 2000 rpm it changes nothing (271 against 272 Hz).
+- **With the zig-zag gone, a 300 Hz muffler low-pass** moves the cabin
+  centroid only 492 → 481 Hz at idle, and 461 → 432 Hz at 2000 rpm.
+
+So option B's second piece is **the zig-zag's removal, not a muffler
+filter**. "Rebalancing alone fixes the sound off idle, but not at idle"
+was true only because the zig-zag was being amplified with the exhaust.
+
+**The listening files** (`python3 tools/p10_ab.py . OUTDIR`):
+- One WAV per engine (crdi15, hatch15, crdi22) and mic (cabin, intake),
+  34 s each.
+- Each file plays idle, 2000 rpm at 30%, and 2500 rpm at full pedal. Each
+  of those plays A, B and C for 3 s each, every segment at the same RMS so
+  the ear compares tone, not loudness.
+- **A:** today.
+- **B:** the zig-zag averaged out (FINDING-028 option A); the exhaust ×8;
+  the mechanical clicks ÷3; combustion ×0.6; the intake hiss ×0.4; the
+  turbo ×0.4.
+- **C:** B plus a +9 dB peak at 200 Hz (Q 0.8) on the output. That is a
+  small-speaker bass boost, not physics.
+
+The numbers (centroid, and the share below 250 Hz), crdi15:
+
+| | cabin A | cabin B | cabin C | intake A | intake B | intake C |
+|---|---|---|---|---|---|---|
+| idle | 852 Hz, 11.5% | 474, 34.6% | 340, 48.3% | 1943, 2.2% | 1221, 19.2% | 760, 36.6% |
+| 2000 / 0.3 | 707, 7.0% | 424, 35.5% | 301, 57.4% | 2533, 7.2% | 1248, 25.3% | 842, 33.2% |
+| 2500 / full | 746, 17.9% | 216, 83.4% | 185, 89.5% | 3370, 10.3% | 1670, 50.1% | 761, 70.6% |
+
+hatch15 and crdi22 move the same way at the cabin mic (B: 339–539 Hz,
+183–195 Hz at full pedal). **At the intake mic under load they stay
+bright even in B** (2,892–3,829 Hz, 66–79% above 2 kHz): their turbo
+whine is that strong. Turning it down further is a taste question,
+because a turbo diesel's intake does whistle.
+
+**What B costs in level** (the synth's own RMS, before the files matched
+it):
+- Idle gets quieter: cabin 0.021 → 0.015, because the clicks went.
+- Full pedal gets louder: 0.076 → 0.14–0.16, because the exhaust went up.
+- So idle-to-full becomes about 20 dB instead of 11. C at full pedal reaches
+  the output's soft clip (0.37 RMS). A build would recalibrate the levels.
+
+**Questions for the owner, after listening:**
+1. A, B or C, per mic?
+2. At the intake mic, keep the turbo's whistle or turn it down further?
+3. FINDING-028: hide the zig-zag in the synth now and fix the solver at
+   the next rebuild (C, recommended)?
