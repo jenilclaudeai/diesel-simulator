@@ -1,5 +1,9 @@
 """P10 (reviews/PROPOSAL-P10.md): A/B/C listening files, in memory only (nothing in dieselsim/ changes).
 
+HISTORICAL since ADR-018 (2026-10-14): B is now the code's own sound, so on today's tree "A" is B and
+B/C apply it twice. To hear the listening round as the owner did, run it on the tree before it:
+    git worktree add /tmp/p10 509e0fd && python3 tools/p10_ab.py /tmp/p10 OUTDIR
+
 Usage: python3 tools/p10_ab.py . OUTDIR [preset ...]      (default: crdi15 hatch15 crdi22)
 
 One WAV per engine and mic (cabin, intake). For each of idle, 2000 rpm at 30% and 2500 rpm at full

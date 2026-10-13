@@ -172,6 +172,14 @@ grep its readers and solve with it changed.
   Pyodide against CPython): about 1e-13 for a converged cell, about 1e-6
   through the limiter's calibration chain. Never compare against a shipped
   grid exactly; use `GOLDEN_TOL`.
+- At idle the solver's port mass flows (`mdot_exh`, `mdot_int`) zig-zag at
+  its 1° step's Nyquist (FINDING-028), in the shipped grids' idle rows too.
+  The sound averages them over 2° (`acoustics.smooth_port_flow`, in
+  `render` and `LiveSynth.set_sources`) before differentiating; anything new
+  that differentiates a port flow must too. The source balance and each
+  mic's loudness are `SOURCE_BALANCE` and `MIC_TRIM` (ADR-018) in hashed
+  `acoustics.py`: mirror them in `web/physics/src/audio/synth.ts`,
+  regenerate `--only sound`, and re-stamp the grids.
 - e2e touch via CDP: a `touchMove` that leaves a finger out does **not**
   lift it, and `touchEnd` lifts every finger. `at(sel, h)` is the fraction
   *up* the pedal, so 0.95 is full throttle. The stall test leaves `/enjoy`
@@ -184,9 +192,10 @@ grep its readers and solve with it changed.
 
 ## Decisions
 
-`DECISIONS.md` holds ADR-001 to ADR-017 (ADR-013: the personas are review
+`DECISIONS.md` holds ADR-001 to ADR-018 (ADR-013: the personas are review
 lenses; ADR-014: custom engines, drivable; ADR-015: Phase 6's scope, staged;
-ADR-016: Phase 7's six decisions, and v2 as a separate list; ADR-017: P08, the automatic shifts by the fuel map). Don't reopen one without a
+ADR-016: Phase 7's six decisions, and v2 as a separate list; ADR-017: P08, the automatic shifts by the fuel map; ADR-018: P10, the sound's
+balance and loudness, and FINDING-028 hidden in the synth). Don't reopen one without a
 measured reason. The ones most easily undone by accident: the Python solver
 runs **unmodified** under Pyodide (ADR-001); audio is a TypeScript
 AudioWorklet with no `SharedArrayBuffer`, so no COOP/COEP headers, so GitHub

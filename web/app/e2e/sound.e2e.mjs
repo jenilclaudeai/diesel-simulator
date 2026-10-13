@@ -12,7 +12,7 @@
 // 3. revved in neutral they move with the rpm -- the pitch follows the engine;
 // 4. keys go to the engine, not to the last-clicked button (space would
 //    otherwise turn the sound off);
-// 5. changing the microphone changes what is heard;
+// 5. changing the microphone changes what is heard (at idle);
 // 6. no page errors, console errors or failed requests.
 import http from "node:http";
 import fs from "node:fs";
@@ -138,6 +138,20 @@ check("at idle, the firing harmonics stand out at the loop's rpm",
   idle.samples.length > 0 && Math.abs(idle.r1 - idle.r0) < 0.03 * idle.r0 && Math.min(...hIdle.slice(1)) > 6,
   `${idle.r0}-${idle.r1} rpm, firing ${fIdle.toFixed(1)} Hz: harmonics 1-4 at ${hIdle.map(d => d.toFixed(1)).join(", ")} dB over the floor`);
 
+// ---- microphone, at idle ----
+// Since P10 (ADR-018) the exhaust dominates the tip, cabin and outside mics
+// alike when revved (crdi15 at 4376 rpm: tip and cabin within 0.5 dB, as
+// bright as each other); at idle they differ by ~8 dB. Checked here, then
+// back to the tip for the revved checks.
+const before = await page.evaluate(() => globalThis.__drive.sound.level());
+await page.keyboard.press("4");                                   // cabin
+await sleep(1500);
+const cabin = await page.evaluate(() => globalThis.__drive.sound.level());
+check("changing the microphone changes what is heard", Math.abs(cabin - before) > 1,
+  `at idle, exhaust tip ${before.toFixed(1)} dBFS -> cabin ${cabin.toFixed(1)} dBFS (key 4)`);
+await page.keyboard.press("1");                                   // back to the exhaust tip
+await sleep(1500);
+
 // ---- revved in neutral ----
 await page.keyboard.press("n");
 await page.keyboard.press(" ");
@@ -154,14 +168,6 @@ check("revved, the harmonics move with the rpm", rev.samples.length > 0 && rev.r
   && Math.min(...hRev) > 6 && Math.max(...hWrong) < Math.min(...hRev),
   `${rev.r0}-${rev.r1} rpm, firing ${fRev.toFixed(1)} Hz: ${hRev.map(d => d.toFixed(1)).join(", ")} dB; ` +
   `at the idle pitch ${hWrong.map(d => d.toFixed(1)).join(", ")} dB`);
-
-// ---- microphone ----
-const before = await page.evaluate(() => globalThis.__drive.sound.level());
-await page.keyboard.press("4");                                   // cabin
-await sleep(1500);
-const cabin = await page.evaluate(() => globalThis.__drive.sound.level());
-check("changing the microphone changes what is heard", Math.abs(cabin - before) > 1,
-  `exhaust tip ${before.toFixed(1)} dBFS -> cabin ${cabin.toFixed(1)} dBFS (key 4)`);
 
 check("no page errors, console errors or failed requests", problems.length === 0, problems.slice(0, 3).join(" | "));
 

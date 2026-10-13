@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { Adr011Grid, SOURCE_KEYS, type Adr011GridData } from "../src/live/adr011.js";
 import type { LiveSpec } from "../src/live/common.js";
 import { butterSos, noiseTable } from "../src/audio/dsp.js";
-import { LiveSynth, MICS, SPL_CAL, type SoundSpec } from "../src/audio/synth.js";
+import { HISS_WEIGHT, LiveSynth, MICS, PORT_SMOOTH_DEG, SOURCE_BALANCE, SPL_CAL, type SoundSpec } from "../src/audio/synth.js";
 
 /** fixtures.test.ts's definition (importing it would run that suite). */
 function worstRel(got: readonly number[], want: readonly number[]): { rel: number; at: number } {
@@ -30,6 +30,7 @@ const fx = JSON.parse(readFileSync(path.resolve(here, "..", "..", "fixtures", "s
   inputs: {
     spec: LiveSpec & SoundSpec; grid: Adr011GridData; blend: [number, number, number][];
     mics: Record<string, unknown>; spl_cal: number;
+    balance: Record<string, number>; hiss_weight: number; port_smooth_deg: number;
     butter: [number, number | [number, number], "low" | "high" | "band"][];
     synth: { mic: string; segments: Segment[]; tolerance_rel: number };
   };
@@ -82,6 +83,9 @@ check("a grid without sources refuses to blend them", threw);
 // ---- the synth's parts, then the synth ----
 check("microphone table and calibration match acoustics.MICS",
   JSON.stringify(MICS) === JSON.stringify(fx.inputs.mics) && SPL_CAL === fx.inputs.spl_cal);
+check("the sources' balance, hiss weight and port smoothing match acoustics (P10, FINDING-028)",
+  JSON.stringify(SOURCE_BALANCE) === JSON.stringify(fx.inputs.balance) && HISS_WEIGHT === fx.inputs.hiss_weight
+  && PORT_SMOOTH_DEG === fx.inputs.port_smooth_deg);
 
 let wb = 0;
 fx.inputs.butter.forEach(([order, wn, kind], n) => {

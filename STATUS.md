@@ -1,8 +1,10 @@
 # Status
 
-**Updated:** 2026-10-14, session 9 (P10: the owner's answers in, A/B/C
+**Updated:** 2026-10-14, session 9 (P10 decided and built: ADR-018, B with
+loudness matched at a cruise, FINDING-028 hidden in the synth; on
+`feat/p10-sound`, PR to come; #127 merged). *(Was: "2026-10-14, session 9 (P10: the owner's answers in, A/B/C
 listening files sent; FINDING-028 opened, the solver's idle port flows
-zig-zag at its step; all on #127, still open). *(Was: "2026-10-13, session 9 (P10, a bassier sound: measured,
+zig-zag at its step; all on #127, still open).")* *(Was: "2026-10-13, session 9 (P10, a bassier sound: measured,
 feasible, `reviews/PROPOSAL-P10.md`; three questions for the owner. #126
 merged).")* *(Was: "Phase 8 accessibility merged and
 live: #124 and #125 merged 2026-10-12 UTC".)* *(Was: "Phase 8 started: accessibility,
@@ -20,7 +22,52 @@ and B-06 fixed, PR open; #118 and #119 still waiting to merge)"; before
 that "2026-10-10, session 8 (Phase 7 step 7 built,
 PR #119; all seven steps built)".)*
 
-**Session 9, P10 listening round (2026-10-14), `docs/p10-feasibility` (#127):**
+**Session 9, P10 built (2026-10-14), `feat/p10-sound`:**
+- **The owner's decisions:**
+  - "B sounds better, go with C for findings": B for the sound, and
+    FINDING-028's option C.
+  - Loudness, asked separately: "Match at cruise".
+  - All recorded as ADR-018.
+- **Built:**
+  - `acoustics.SOURCE_BALANCE`: exhaust ×8, clicks ÷3, combustion ×0.6,
+    turbo ×0.4.
+  - `HISS_WEIGHT` 0.18.
+  - `MIC_TRIM`: exhaust tip 0.24, intake 1.73, engine bay 1.83, cabin 0.89,
+    outside 0.79, the median over the roster from `tools/p10_trim.py`.
+  - `smooth_port_flow` (2°), in `render` and `LiveSynth.set_sources`.
+  - All mirrored in `synth.ts`; the sound fixture regenerated.
+- **Measured** (crdi15, cabin):
+  - centroid 852 → 483 Hz at idle, 707 → 426 at 2000 / 0.3, 746 → 216
+    at full pedal;
+  - level: idle −4 dB, cruise about the same, full pedal at rated rpm
+    about +10 dB;
+  - the exhaust-tip mic no longer saturates.
+- **New, and to tell the owner:** revved, the exhaust dominates the tip,
+  cabin and outside mics alike. At 4,376 rpm the tip and cabin are within
+  0.5 dB of each other, and as bright. The intake and engine bay stay
+  distinct. The sound e2e's mic check was therefore moved to idle, where
+  they differ by 8–9 dB.
+- **Grids re-stamped**, not rebuilt: `restamp_grids.py` changed only each
+  file's 64-byte stamp, 70fdc89ed12d → b45ef76512c5, for the 10 grids and
+  the accuracy table. No cell reads `render` or the mix; the cells come
+  from `build_sources`, which is unchanged.
+- **Tests:**
+  - New: `test_port_flow_zigzag_is_not_heard` and `test_p10_deeper_sound`.
+  - `test_livesound_matches_render` now compares the mix in steady state,
+    over bands within 50 dB. Before, render's cold start showed between the
+    exhaust's harmonics (6.88 dB at 31–40 Hz). Main, compared the same way,
+    is 1.52 dB there and this branch 1.41: a thin margin under the 1.5 dB
+    bar, from the rumble's two noise generators.
+  - Mutants: Python 9 of 10 caught. The survivor, M5 (hiss 0.18 → 0.45),
+    moves the intake centroid only 7–9%. TypeScript: 5 of 5 caught. Both
+    against passing baselines.
+  - Local results: TS physics 51 / 11 / 11 passed; app units 130 / 130;
+    e2e:sound 6 / 6; e2e:enjoy 28 / 28.
+  - The full Python suite: see below once read.
+- **Left for later:** FINDING-028's solver fix (option B), at the next
+  rebuild.
+
+**Session 9, P10 listening round (2026-10-14), `docs/p10-feasibility` (#127, merged 2026-10-13 22:56 UTC):**
 - **The owner's answers:** they listened on a phone speaker, at the cabin
   and intake mics; yes to A/B files.
 - **Measured at those mics** (crdi15): the clicks are 65–80% of the idle mix
@@ -352,10 +399,12 @@ PR #119; all seven steps built)".)*
      Step 6 shipped without B, so A is my recommendation now.
   5. Still open: the `hd_i6` listening question; the Features tab copy.
   6. **P10** (`reviews/PROPOSAL-P10.md`): ~~what you listened on, which mic,
-     and go ahead with A/B WAV pairs?~~ Answered 2026-10-14. Now: listen to
+     and go ahead with A/B WAV pairs?~~ Answered 2026-10-14. ~~Now: listen to
      the six files, then pick A, B or C per mic; decide the intake whistle;
-     choose FINDING-028's option. (P09, knocking at altitude, is new in
-     the sheet too; not looked at yet.)
+     choose FINDING-028's option.~~ Decided (ADR-018) and built. Now: merge
+     the build PR, then listen on the phone (full pedal is louder; revved,
+     the tip/cabin/outside mics sound alike). (P09, knocking at altitude, is
+     new in the sheet too; not looked at yet.)
 - **Next:** the rest of Phase 8: the units toggle, P01 vibration and P06
   random roads' proposal, in an order the owner picks; or P07. *(Was:
   "Phase 8 (below), unless the owner picks P07.")* *(Was: "read

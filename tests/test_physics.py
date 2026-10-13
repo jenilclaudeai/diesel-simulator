@@ -1626,7 +1626,9 @@ def test_livesound_matches_render():
     reference (ADR-004: spectral): its Butterworth design matches scipy's
     response, its pure and scipy paths agree, and at a steady operating
     point every source's level is within 3% of render's, and the
-    third-octave spectrum within 1.5 dB -- the mix's, and each source's
+    third-octave spectrum within 1.5 dB -- the mix's (bands within 50 dB of
+    its strongest, both in steady state: render's first second dropped as
+    the stream's is), and each source's
     shape over its bands within 30 dB of its strongest (the mix alone hid a
     stale combustion sharpness; below -30 dB lie inter-harmonic floors and
     the trackers' block-step sidebands). Needs scipy; SKIP without."""
@@ -1654,14 +1656,22 @@ def test_livesound_matches_render():
     paths = float(np.max(np.abs(y_pure - y_fast)))
     y_s, parts = _stream(d["eng"].spec, d["src"], 4.0, parts=True)
     y_s = y_s[44100:]
-    y_r, parts_r = d["es"].render(d["op"], duration=3.0, mic="exterior_7m", sources=d["src"], seed=5)
+    # render() starts its filters cold: drop its first second, as the stream's
+    # is. Since P10 the exhaust's clean harmonics dominate the mix, and the
+    # start-up transient (31-40 Hz, 6.9 dB) showed between them (FINDING-028's PR)
+    y_r, parts_r = d["es"].render(d["op"], duration=4.0, mic="exterior_7m", sources=d["src"], seed=5)
+    y_r, parts_r = y_r[44100:], {k: v[44100:] for k, v in parts_r.items()}
     lvl = {k: float(np.sqrt(np.mean(parts[k] ** 2)) / (np.sqrt(np.mean(parts_r[k] ** 2)) + 1e-30)) for k in parts_r}
     def bands(y):
         f, P = signal.welch(y, 44100, nperseg=8192)
         e = 25.0 * 2 ** (np.arange(0, 30) / 3.0)
         return np.array([P[(f >= lo) & (f < hi)].sum() for lo, hi in zip(e[:-1], e[1:])])
     bs, br = bands(y_s), bands(y_r)
-    m = br > 1e-6 * br.max()
+    # the mix over bands within 50 dB of its strongest (was 60): further down,
+    # between the I6's harmonics, the rumble's two noise generators differ by
+    # ~1.5 dB on its band-pass skirt (31-40 Hz: 1.52 dB on main in steady
+    # state, 1.56 after P10, at -55 dB)
+    m = br > 1e-5 * br.max()
     db = np.abs(10 * np.log10(bs[m] / br[m]))
     shape = {}
     for k in parts_r:
@@ -1677,6 +1687,104 @@ def test_livesound_matches_render():
           f"filter response {worst:.1e}; pure vs scipy {paths:.1e}; worst source level {100 * worst_lvl:.1f}% off; "
           f"worst third-octave {float(db.max()):.2f} dB over {int(m.sum())} bands; "
           f"worst source shape {shape[worst_shape]:.2f} dB ({worst_shape})")
+
+
+_CRDI15_SRC = {}
+
+
+def _crdi15_sources(rpm, load):
+    """crdi15's acoustic sources at (rpm, load), solved once each (n_cycles 9)."""
+    if (rpm, load) not in _CRDI15_SRC:
+        from dieselsim.acoustics import EngineSound
+        eng = DieselEngine(preset="crdi15")
+        op = eng.operating_point(rpm, load=load, n_cycles=9)
+        es = EngineSound(eng.spec)
+        _CRDI15_SRC[(rpm, load)] = dict(spec=eng.spec, op=op, es=es, src=es.build_sources(op))
+    return _CRDI15_SRC[(rpm, load)]
+
+
+def _centroid_and_bass(y):
+    """A signal's spectral centroid [Hz] and its power share below 250 Hz [%]."""
+    import numpy as np
+    seg = 1 << 14
+    P = np.zeros(seg // 2 + 1)
+    for k in range(0, len(y) - seg + 1, seg // 2):
+        P += np.abs(np.fft.rfft(y[k:k + seg] * np.hanning(seg))) ** 2
+    f = np.fft.rfftfreq(seg, 1 / 44100)
+    return float((f * P).sum() / P.sum()), float(P[f < 250].sum() / P.sum() * 100)
+
+
+def test_port_flow_zigzag_is_not_heard():
+    """FINDING-028 option A: at idle the solver's port mass flows zig-zag at
+    its 1-degree step's Nyquist (order 180 per revolution) -- a numerical
+    chatter, gone at a 0.5-degree step. The cells keep it (option B, the
+    solver fix, waits for the next rebuild), so the sound must average it
+    out before differentiating the flow: crdi15's idle exhaust had a 2,159 Hz
+    centroid with it and 208 Hz without. Checked in the streaming synth and,
+    where scipy is present, in acoustics.render. The first line also guards
+    the defect itself: when the solver is fixed it fails, and this test
+    should then drop its "raw" half."""
+    import numpy as np
+    from dieselsim import acoustics as A
+    d = _crdi15_sources(800.0, 0.05)
+
+    def ripple(x):
+        X = np.fft.rfft(np.asarray(x, float))
+        orders = np.arange(len(X)) / 2.0          # 0.5-degree grid: 1440 points per 720 degrees
+        return float(np.fft.irfft(np.where(orders >= 90, X, 0), len(x)).std() / np.std(x))
+    raw = ripple(d["src"]["exh_flow"])
+    smooth = ripple(A.smooth_port_flow(d["src"]["exh_flow"], d["es"].dtheta))
+    parts = _stream(d["spec"], d["src"], 2.5, rpm=800.0, mic="cabin", parts=True)[1]
+    c_live = _centroid_and_bass(parts["exhaust"])[0]
+    import importlib.util
+    if importlib.util.find_spec("scipy") is not None:
+        c_ref = _centroid_and_bass(d["es"].render(d["op"], duration=1.5, mic="cabin", sources=d["src"], seed=5)[1]["exhaust"])[0]
+        ref = f", render {c_ref:.0f} Hz"
+    else:
+        c_ref, ref = 0.0, ", render not checked (no scipy)"
+    check("FINDING-028: the idle port flows' zig-zag is averaged out before the sound hears it",
+          1.0 if raw > 0.3 and smooth < raw / 10 and c_live < 500.0 and c_ref < 500.0 else 0.0, 1.0, 0.0,
+          f"crdi15 idle exhaust flow ripple {raw:.2f} raw -> {smooth:.3f} averaged (at least 10x less; raw must stay "
+          f"> 0.3 until the solver is fixed); the exhaust part's centroid: synth {c_live:.0f} Hz{ref} "
+          f"(each < 500; 2,159 with the zig-zag)")
+
+
+# today's (pre-P10) synth RMS for crdi15 at 2000 rpm / 0.3, per mic (tools/p10_trim.py on main at 509e0fd)
+_PRE_P10_CRUISE_RMS = dict(exhaust_tip=0.0431, intake=0.0534, engine_bay=0.3052, cabin=0.0518, exterior_7m=0.0482)
+
+
+def test_p10_deeper_sound():
+    """P10 (ADR-018), chosen by the owner by ear on a phone speaker: the
+    exhaust (the firing pulse) weighed up, the valve and injector clicks,
+    the combustion clatter, the intake hiss and the turbo down. Before it,
+    at the cabin mic crdi15's centroid was 852 Hz at idle and 707 Hz at
+    2000 rpm / 0.3, with 7-12% of the power below 250 Hz; at the intake mic
+    at full pedal, 3,370 Hz (the turbo's whine). Each mic is then
+    trimmed so a cruise is about as loud as before (the owner's choice): on
+    crdi15 every mic within 3 dB of its pre-P10 level."""
+    import numpy as np
+    out, ok = [], True
+    for rpm, load, c_max, bass_min in ((800.0, 0.05, 600.0, 25.0), (2000.0, 0.3, 550.0, 25.0)):
+        d = _crdi15_sources(rpm, load)
+        y = _stream(d["spec"], d["src"], 2.5, rpm=rpm, mic="cabin")[0][44100:]
+        c, bass = _centroid_and_bass(y)
+        ok &= c < c_max and bass > bass_min
+        out.append(f"cabin at {rpm:.0f}/{load}: centroid {c:.0f} Hz (< {c_max:.0f}), {bass:.1f}% below 250 Hz (> {bass_min:.0f})")
+    # the intake mic at full pedal, where the turbo's whine dominated (3,370 Hz before;
+    # the turbo at its old weight gives 3,150)
+    d = _crdi15_sources(2500.0, 1.0)
+    c, bass = _centroid_and_bass(_stream(d["spec"], d["src"], 2.5, rpm=2500.0, mic="intake")[0][44100:])
+    ok &= c < 2200.0 and bass > 35.0
+    out.append(f"intake at 2500/1.0: centroid {c:.0f} Hz (< 2200), {bass:.1f}% below 250 Hz (> 35)")
+    d = _crdi15_sources(2000.0, 0.3)
+    db = {}
+    for mic, before in _PRE_P10_CRUISE_RMS.items():
+        y = _stream(d["spec"], d["src"], 2.5, rpm=2000.0, mic=mic)[0][44100:]
+        db[mic] = 20 * np.log10(float(np.sqrt(np.mean(y ** 2))) / before)
+    ok &= max(abs(v) for v in db.values()) < 3.0
+    out.append("cruise level vs before: " + ", ".join(f"{k} {v:+.1f} dB" for k, v in db.items()))
+    check("P10: a deeper sound at the cabin mic, each mic as loud as before at a cruise (ADR-018)",
+          1.0 if ok else 0.0, 1.0, 0.0, "; ".join(out))
 
 
 def test_intake_and_boost_levels_carry_physics():
@@ -2778,6 +2886,8 @@ def main():
                test_livesound_firing_peaks_and_sources,
                test_livesound_carries_physics,
                test_livesound_matches_render,
+               test_port_flow_zigzag_is_not_heard,
+               test_p10_deeper_sound,
                test_intake_and_boost_levels_carry_physics,
                test_grid_sources_warm_and_cold,
                test_live_sound_follows_the_engine,

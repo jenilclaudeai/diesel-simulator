@@ -516,9 +516,9 @@ def sound_inputs():
     import dataclasses
     live_spec = json.loads(json.dumps(dataclasses.asdict(spec), default=float))
     live_spec["geom"]["displacement"] = spec.geom.displacement
-    from dieselsim.acoustics import MICS, SPL_CAL
+    from dieselsim.acoustics import HISS_WEIGHT, MIC_TRIM, MICS, PORT_SMOOTH_DEG, SOURCE_BALANCE, SPL_CAL
     mics = {k: {"gains": dict(m.gains), "lp_hz": m.lp_hz, "hp_hz": m.hp_hz, "distance_m": m.distance_m,
-                "reverb": m.reverb} for k, m in MICS.items()}
+                "reverb": m.reverb, "trim": MIC_TRIM[k]} for k, m in MICS.items()}
     live = {"boost": 1.3, "turbo_rpm": 6.0e4, "load": 0.3, "Pb": 400.0, "skirt_clr": 2.0e-5, "v_seating": 0.05}
     # the streaming synth, driven block by block: a run-up, a glide to a
     # new point with a microphone change (reverb), a stall, and a restart
@@ -534,6 +534,8 @@ def sound_inputs():
     return {"spec": live_spec, "grid": grid,
             "blend": [[1234.0, 0.55, 320.0], [900.0, 0.9, 361.0], [2500.0, 0.1, 250.0]],
             "mics": mics, "spl_cal": SPL_CAL,
+            # P10 (ADR-018) and FINDING-028
+            "balance": dict(SOURCE_BALANCE), "hiss_weight": HISS_WEIGHT, "port_smooth_deg": PORT_SMOOTH_DEG,
             "butter": [[1, 0.06, "low"], [3, 0.3, "low"], [2, 0.0027, "high"], [1, 0.0016, "high"],
                        [2, [0.0317, 0.295], "band"], [2, [0.0018, 0.0218], "band"]],
             # the synth's outputs are held at their own bound: libm differs by

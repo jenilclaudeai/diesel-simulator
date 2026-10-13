@@ -200,6 +200,39 @@ MICS = {
 }
 
 
+# P10 (ADR-018; the owner chose it by ear, on a phone speaker, 2026-10-14):
+# the balance between the sources, the same at every mic, applied in the mix.
+# Each source's level law (FINDINGs 004, 017, 022) is unchanged: this only
+# weighs the sources against each other, which the laws' fixed references
+# never measured. Before it, at idle the exhaust (the firing pulse) was
+# 0.1-0.2% of the mix and the valve and injector clicks 65-82%.
+SOURCE_BALANCE = dict(exhaust=8.0, mech=1.0 / 3.0, combustion=0.6, turbo=0.4)
+# and each mic's level trim, so that at a cruise (half rated rpm, 30% load)
+# each mic is as loud as before the balance changed (the owner's choice,
+# 2026-10-14): idle a little quieter, full pedal louder, as in a car.
+# Measured by tools/p10_trim.py over the Enjoy roster.
+MIC_TRIM = dict(exhaust_tip=0.24, intake=1.73, engine_bay=1.83, cabin=0.89, exterior_7m=0.79)
+# the intake's broadband hiss against its pulse (was 0.45; P10: x0.4)
+HISS_WEIGHT = 0.18
+# FINDING-028 option A: at idle the solver's port mass flows zig-zag at its
+# crank step's Nyquist (a 1-degree step: order 180 per revolution, 2.4 kHz at
+# 800 rpm). Averaging the flow over 2 degrees nulls it and its harmonics
+# before it is differentiated. The cells keep the raw flow; only the sound
+# reads it smoothed.
+PORT_SMOOTH_DEG = 2.0
+
+
+def smooth_port_flow(x, dtheta):
+    """A circular moving average over PORT_SMOOTH_DEG of a 720-degree
+    source on a dtheta grid, summed in this order (the TypeScript port's)."""
+    x = np.asarray(x, dtype=float)
+    n = max(1, int(round(PORT_SMOOTH_DEG / dtheta)))
+    acc = x.copy()
+    for k in range(1, n):
+        acc = acc + np.roll(x, k)
+    return acc / n
+
+
 # ==========================================================================
 class EngineSound:
     """
@@ -416,6 +449,9 @@ class EngineSound:
         n = int(duration * fs)
         t = np.arange(n) / fs
         src = sources or self.build_sources(op)
+        # FINDING-028: the sound reads the port flows without the step's zig-zag
+        src = dict(src, exh_flow=smooth_port_flow(src["exh_flow"], self.dtheta),
+                   int_flow=smooth_port_flow(src["int_flow"], self.dtheta))
         meta = src["_meta"]
         if seed is not None:
             self._rng = np.random.default_rng(seed)
@@ -475,7 +511,7 @@ class EngineSound:
         hiss = self._rng.standard_normal(n)
         hiss = _bandpass(hiss, 700.0, 6500.0, fs, order=2)
         hiss *= (meta["mdot_air"] * spd ** 1.5) ** 1.5 * 4.0
-        y = y / (np.std(y) + 1e-12) + 0.45 * hiss / (np.std(hiss) + 1e-12)
+        y = y / (np.std(y) + 1e-12) + HISS_WEIGHT * hiss / (np.std(hiss) + 1e-12)
         # FINDING-022: the intake's level, the exhaust's law (FINDING-004),
         # applied after the normalisation so that it survives it
         out["intake"] = y * (meta["mdot_air"] / self._ref_mdot) ** 1.5
@@ -587,10 +623,11 @@ class EngineSound:
         m = MICS[mic]
         y = np.zeros(n)
         for k, gn in m.gains.items():
-            y += gn * out[k]
+            y += gn * SOURCE_BALANCE.get(k, 1.0) * out[k]
         y = _lowpass(y, m.lp_hz, fs, order=3)
         y = _highpass(y, m.hp_hz, fs, order=2)
         y /= max(1.0, m.distance_m) ** 0.55
+        y *= MIC_TRIM.get(mic, 1.0)
         if m.reverb > 0.0:
             y = y + m.reverb * self._cheap_reverb(y)
         # FINDING-004: previously this renormalised the whole mix and set the

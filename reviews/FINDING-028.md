@@ -4,8 +4,16 @@
 crdi15's idle exhaust, alone, had a 2.2 kHz centroid. A low-flow pulse
 should be mostly bass.
 **Lens:** PHY1 (lead), PHY2, the sound lens
-**Status:** **open, for the owner.** Nothing in `dieselsim/` is changed.
-The P10 listening files hide it in the synth, in memory only (below).
+**Status:** ~~**open, for the owner.** Nothing in `dieselsim/` is changed.
+The P10 listening files hide it in the synth, in memory only (below).~~
+**Option C chosen by the owner (2026-10-14, ADR-018).** Option A is built
+on `feat/p10-sound`: `acoustics.smooth_port_flow` runs in `render` and
+`LiveSynth.set_sources`, and `test_port_flow_zigzag_is_not_heard` guards
+it. **Option B (the solver fix) is still open**, for the next rebuild.
+Measured once built: the averaging cuts the zig-zag 0.78 → 0.051 of the
+flow's RMS (15×, not to zero: the burst's edges sit off the exact null),
+and the idle exhaust's centroid 2,159 → 208 Hz in both the synth and
+render.
 **Reproduce:** the session-9 scratch scripts `ripple_dt.py`,
 `grid_ripple.py` and `dt_physics.py` (not kept; the numbers are below).
 
