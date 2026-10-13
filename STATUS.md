@@ -2,7 +2,7 @@
 
 **Updated:** 2026-10-14, session 9 (P10 decided and built: ADR-018, B with
 loudness matched at a cruise, FINDING-028 hidden in the synth; on
-`feat/p10-sound`, PR to come; #127 merged). *(Was: "2026-10-14, session 9 (P10: the owner's answers in, A/B/C
+`feat/p10-sound`, #128 open; #127 merged). *(Was: "2026-10-14, session 9 (P10: the owner's answers in, A/B/C
 listening files sent; FINDING-028 opened, the solver's idle port flows
 zig-zag at its step; all on #127, still open).")* *(Was: "2026-10-13, session 9 (P10, a bassier sound: measured,
 feasible, `reviews/PROPOSAL-P10.md`; three questions for the owner. #126
@@ -63,7 +63,11 @@ PR #119; all seven steps built)".)*
     against passing baselines.
   - Local results: TS physics 51 / 11 / 11 passed; app units 130 / 130;
     e2e:sound 6 / 6; e2e:enjoy 28 / 28.
-  - The full Python suite: see below once read.
+  - The full Python suite, local with scipy: **90 passed, 0 failed, 3
+    known defects** (main's 88 plus the two new tests). It started before
+    the intake full-pedal check was added to `test_p10_deeper_sound`; that
+    final version passed in the mutants' baseline run.
+  - #128 opened; its CI is not read yet.
 - **Left for later:** FINDING-028's solver fix (option B), at the next
   rebuild.
 
