@@ -1,7 +1,8 @@
 # Status
 
-**Updated:** 2026-10-13, session 9 (Phase 8 started: accessibility,
-measured and built on `feat/phase8-a11y`; #124 still open). *(Was:
+**Updated:** 2026-10-13, session 9 (Phase 8 accessibility merged and
+live: #124 and #125 merged 2026-10-12 UTC). *(Was: "Phase 8 started: accessibility,
+measured and built on `feat/phase8-a11y`; #124 still open".)* *(Was:
 "2026-10-13, session 9 (P08 merged and live: #121, #122,
 #123 merged 2026-10-12; `main` equals the build branch)".)* *(Was:
 "2026-10-12, session 9 (P08 decided (ADR-017) and built on
@@ -60,6 +61,22 @@ PR #119; all seven steps built)".)*
   combined check, nothing else). Run by
   a scratch script that rebuilt and restored each file from git.
 - **PR #125** (into `main`; brings #124's two STATUS commits with it).
+  **CI on `6d3b774`: 9 of 9, every job read.** Physics 88 / 0 / 3 on 3.10
+  and 3.12; Pyodide 71 / 0 / 2 / 17; ports 5 + 51 + 10 + 11; solver 20 +
+  15 + 30; units 130; e2e **enjoy 28 / 0** (the three new checks pass on
+  Linux with the same readings: 4.87:1, redline 10 vs 6, marks 2 × 12 vs
+  4 × 16), dyno 15, drive 10, sound 6, cycle 11, spec 18, sweep 6,
+  durability 5, grid 9, custom 7. As expected before the run.
+- **Merged and live.** The owner merged #124 then #125 (22:19 UTC);
+  `main` (`95bde19`) has the same tree as #125's head `6d3b774`, 0 lines
+  different. This CI note was pushed to the branch a minute after the
+  merge, so it comes in this PR. Pages deployed `95bde19`. The site's
+  `main-NMHILWVW.js` carries `spokenUnit`, `#ec7a66` and "Warning from".
+  **CI on `main` (`95bde19`): 9 of 9, every job read**, the same counts
+  as #125 (physics 88 / 0 / 3 on both Pythons, Pyodide 71 / 0 / 2 / 17,
+  enjoy 28 / 0). *(Was: "`main`'s own CI on `95bde19` was still running
+  when this was written.")* #124's merge run (`2bb36ef`) ended cancelled,
+  superseded by #125's.
 
 **Session 9, P08 merged and live (2026-10-12/13):**
 - The owner merged #121, #122 and #123 in order (2026-10-12). `main`

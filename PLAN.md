@@ -379,6 +379,7 @@ alternatives, and warnings must not be encoded in colour alone.
 axe-core on every page (7 clean) and by hand on Enjoy's dash; the dials
 speak in rpm and km/h, a lit warning lamp is 4.87:1, the redline and the
 derate mark differ by shape. Unlit lamps stay dim (the owner's choice).
+**Merged and live** (#125, 2026-10-12 UTC).
 Vibration on phones in `/enjoy` (the owner's Feat Prop P01, ADR-016),
 patterned on firing frequency and load; Android Chrome only.
 
