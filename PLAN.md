@@ -367,6 +367,18 @@ automatic boxes, half pedal never later than today. *(Was: "Not decided;
 nothing built.")* **Built 2026-10-12** on `feat/p08-shift-schedule`: all
 12 car cruises in the least-fuel gear, full pedal identical to today. **Merged and live** (#123, 2026-10-12).
 
+## P10 — a deeper, bassier diesel sound (the owner's request, 2026-10-13)
+
+Measured in `reviews/PROPOSAL-P10.md`: the exhaust (the low firing pulse)
+is 0.2–1.6% of the default mic's mix; clicks and combustion modes dominate.
+Feasible; recommended: rebalance the mix plus a muffler low-pass, judged by
+ear on A/B pairs first. **Not decided; nothing built.**
+**2026-10-14:** the owner listens on a phone speaker, at the cabin and intake
+mics. The "muffler" piece was wrong: the bright idle exhaust is a numerical
+zig-zag in the solver's idle port flows (FINDING-028), so B is now the
+zig-zag averaged out in the synth plus the rebalance. A/B/C listening files
+sent (`tools/p10_ab.py`). **Waiting on the owner's ear.**
+
 ---
 
 ## Phase 8 — Polish and host

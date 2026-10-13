@@ -1,7 +1,11 @@
 # Status
 
-**Updated:** 2026-10-13, session 9 (Phase 8 accessibility merged and
-live: #124 and #125 merged 2026-10-12 UTC). *(Was: "Phase 8 started: accessibility,
+**Updated:** 2026-10-14, session 9 (P10: the owner's answers in, A/B/C
+listening files sent; FINDING-028 opened, the solver's idle port flows
+zig-zag at its step; all on #127, still open). *(Was: "2026-10-13, session 9 (P10, a bassier sound: measured,
+feasible, `reviews/PROPOSAL-P10.md`; three questions for the owner. #126
+merged).")* *(Was: "Phase 8 accessibility merged and
+live: #124 and #125 merged 2026-10-12 UTC".)* *(Was: "Phase 8 started: accessibility,
 measured and built on `feat/phase8-a11y`; #124 still open".)* *(Was:
 "2026-10-13, session 9 (P08 merged and live: #121, #122,
 #123 merged 2026-10-12; `main` equals the build branch)".)* *(Was:
@@ -15,6 +19,74 @@ duplicate test removed in #121)"; before that "2026-10-11, session 9 (B-05
 and B-06 fixed, PR open; #118 and #119 still waiting to merge)"; before
 that "2026-10-10, session 8 (Phase 7 step 7 built,
 PR #119; all seven steps built)".)*
+
+**Session 9, P10 listening round (2026-10-14), `docs/p10-feasibility` (#127):**
+- **The owner's answers:** they listened on a phone speaker, at the cabin
+  and intake mics; yes to A/B files.
+- **Measured at those mics** (crdi15): the clicks are 65–80% of the idle mix
+  and the exhaust 0.0–0.1%. The cabin mic's 1.9 kHz low-pass leaves a
+  650–900 Hz centroid (the knock's 680 Hz mode, the 900 Hz slap), the band
+  a phone plays well. Under load the intake mic is 85–91% above 2 kHz: the
+  turbo's whine and the hiss.
+- **FINDING-028 (new):** at idle, the solver's port mass flows zig-zag point
+  to point at the 1° step's Nyquist (`reviews/FINDING-028.md`).
+  - It is numerical: at 0.5° it vanishes on the cars, and on single10 it
+    moves to the new Nyquist.
+  - It is in the shipped grids: the idle row of crdi15, hatch15, crdi22 and
+    ld_i4 (0.6–0.86 of the flow's RMS), and single10 up to about 1400 rpm.
+  - Sound: it made the idle exhaust's centroid 2,159 Hz; averaged out, it
+    is 208 Hz.
+  - Physics at idle: PMEP is off by 30% (a small number), VE by 1.8%,
+    torque and fuel by 1.4% or less.
+  - **I first told the owner it was "a large part of why idle sounds
+    high-pitched"; wrong, corrected in the same reply.** Today the exhaust
+    is 0.1–0.2% of the idle mix, so it only matters once P10 raises the
+    exhaust.
+- **The proposal is corrected in place.** The "muffler low-pass" piece was
+  really this zig-zag; a 300 Hz muffler low-pass adds little once it is
+  gone. B is now: the zig-zag averaged out (2° moving average), exhaust
+  ×8, clicks ÷3, combustion ×0.6, hiss ×0.4, turbo ×0.4. C is B plus a
+  +9 dB peak at 200 Hz, a phone effect.
+- **The files:** `tools/p10_ab.py` made six WAVs (three cars × cabin and
+  intake), sent to the owner. crdi15 cabin, centroid A → B: 852 → 474 Hz
+  at idle, 707 → 424 at 2000 / 0.3, 746 → 216 at full pedal. At the
+  intake mic under load, hatch15 and crdi22 stay bright even in B (the
+  turbo).
+- **Waiting on the owner:**
+  - A, B or C, per mic;
+  - the intake mic's turbo whistle: keep it, or turn it down further;
+  - FINDING-028: A, B or C (C recommended: hide it in the synth now, fix
+    the solver at the next rebuild).
+- #127's CI on its first commit: 9 of 9 passed, every job read.
+
+**Session 9, P10 feasibility (2026-10-13), `docs/p10-feasibility`:**
+- The owner asked for P10's feasibility. P10 is new in the sheet: "a
+  little high pitch; real diesels are deeper and bassier (CRDi, DDiS, TDC)",
+  priority 1. Also new there, not asked about: **P09**, "increased knocking
+  at high altitude" (priority 2).
+- **Measured** (`tools/p10_sound_split.py`, `tools/p10_rebalance.py`;
+  `reviews/PROPOSAL-P10.md`):
+  - crdi15 at the default mic: centroid 1,901 Hz at idle and 2,370 Hz at
+    2000 / 0.3; 2.1–2.4% of the power below 250 Hz; the firing frequency
+    is 24–37 dB under the strongest bin (907 / 666 Hz).
+  - The cause, on all three car diesels: the exhaust (the low firing pulse)
+    is 0.2% of the mix at idle and 1.0–1.6% at 2000 rpm. The mechanical
+    clicks (valve tick, injector) are 78–82% at idle; combustion (~700 Hz)
+    is 37–43% at 2000 rpm. The balance between sources is a set of
+    constants (`MICS` gains, each law's reference), not a measurement.
+  - A what-if in memory (exhaust ×10, mechanical ÷3) moves 2000 rpm's
+    centroid 2,370 → 501 Hz (39.6% below 250 Hz), but idle only 1,901 →
+    1,627: on crdi15 and hatch15 the exhaust is itself bright at idle (its
+    muffler path is two −14 dB notches and a ~900 Hz low-pass).
+- **Feasible.** Recommended option B: rebalance, plus a broadband muffler
+  low-pass. Judge it by ear on A/B WAV pairs first. It touches the synth, its
+  TS port and `acoustics.py` (in the grid hash, but no cell reads the mix:
+  a proved re-stamp, not a rebuild). About one session plus listening.
+- **Questions for the owner:** what they listened on (phone speaker or
+  headphones: a phone speaker can't play the 25–67 Hz fundamental); which
+  mic; go ahead with the A/B pairs?
+- **#126 merged** (2026-10-13); `main` (`c3ec2ae`) equals its head, 0
+  lines different.
 
 **Session 9, Phase 8 step 1: accessibility (2026-10-13),
 `feat/phase8-a11y`:**
@@ -279,6 +351,11 @@ PR #119; all seven steps built)".)*
   4. FINDING-027: A (state it) or B (model the cold-ignition region).
      Step 6 shipped without B, so A is my recommendation now.
   5. Still open: the `hd_i6` listening question; the Features tab copy.
+  6. **P10** (`reviews/PROPOSAL-P10.md`): ~~what you listened on, which mic,
+     and go ahead with A/B WAV pairs?~~ Answered 2026-10-14. Now: listen to
+     the six files, then pick A, B or C per mic; decide the intake whistle;
+     choose FINDING-028's option. (P09, knocking at altitude, is new in
+     the sheet too; not looked at yet.)
 - **Next:** the rest of Phase 8: the units toggle, P01 vibration and P06
   random roads' proposal, in an order the owner picks; or P07. *(Was:
   "Phase 8 (below), unless the owner picks P07.")* *(Was: "read
