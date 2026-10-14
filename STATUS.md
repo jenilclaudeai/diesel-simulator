@@ -29,6 +29,49 @@ and B-06 fixed, PR open; #118 and #119 still waiting to merge)"; before
 that "2026-10-10, session 8 (Phase 7 step 7 built,
 PR #119; all seven steps built)".)*
 
+**Session 9, stage 2 built (2026-10-14), `feat/p09-knock` `40e0699`; the
+listening round is with the owner:**
+- **The burn law** (`cycle.PREMIX_DELAY_EXP` 0.5, `D_PRE_FLOOR` 2°): no
+  φ term, and faster by (delay / injection)^0.5 once the delay outlasts
+  the injection. crdi15 at idle: Leh +17%, a cold start +17%, both +40%;
+  1500 / 30%: +4%, +15%, +13%. Sea level, roster: full-load torque
+  ≤ 0.53%, BSFC ≤ 1.2%, p_max −0.8% to +5%; the idle knock ×1.79. The
+  exponent is chosen, not calibrated (b = 1 runs into the floor and goes
+  flat).
+- **The cold start:** the grid's cold cells have every wall at 273 K
+  (`engine.cold_start_walls`). The live loop's `T_chamber` warms with a
+  60 s time constant (cools with 600 s) toward the WALL_FOLLOW steady value
+  (`chamber_follow`, crdi15 0.35), and every warm/cold blend uses it. The
+  worker sends it to the worklet.
+- **Hearing it:**
+  - the weather table gains `dpdt_max`;
+  - the live loop's `_knock()` sets `knock_live` (the blend at T_chamber
+    plus the weather's change) and `knock_ref` (warm, standard air) each
+    step;
+  - the synth multiplies the knock by `(dpdt_max/dpdt_ref)^KNOCK_GAIN_EXP`;
+    the exponent is 0 until the owner picks it;
+  - `acoustics.KNOCK_REF` 7.5e9 (×1.5).
+  - Python, TS and the fixtures all mirror it. The live fixture's grid
+    carries synthetic knock tables, so the path is checked in both
+    languages.
+- **Tests:** 2 new Python tests, both passing; TS 5 + 51 + 12 + 11. ~~**TS
+  mutants: T1–T5 caught so far** (running).~~ **TS mutants: 8 of 9 caught**
+  (baseline passing). T7, the synth's gain switched off, survives, because
+  `KNOCK_GAIN_EXP` is 0 (see the gap below). **Python mutants: 8 of 8
+  caught** (baseline 2 / 0): the delay term off, the φ term back, cold
+  walls following the coolant, the loop blending at the coolant, the
+  chamber 10× slower, the synth's gain ignored, the weather dropping the
+  knock, the chamber's target = the coolant.
+- **Listening files sent** (`tools/p09_listen.py`, crdi15 and hatch15,
+  cabin and intake, k = 0 / 3 / 5 / 8). At k = 3, a cold start or Leh is
+  +1.5 to +3.3 dB and both +6.0 to +7.7 dB; at k = 5, +3.4 to +5.5 and
+  +11.4 to +12.9 dB.
+- **Gap, for after the owner picks k:** while `KNOCK_GAIN_EXP` is 0 the
+  TS synth's gain path can't be checked by the sound fixture. Add a fixture
+  segment with `dpdt_ref` once k is non-zero.
+- **Then:** set k, rerun the suite, the rebuild (10 grids with weather
+  tables, ~8 h+), CI, the PR.
+
 **Session 9, stage 1 written into `dieselsim/` (2026-10-14), branch
 `feat/p09-knock` (from #129's head; one branch for stage 1, stage 2 and
 the rebuild; NOT mergeable before the rebuild, the shipped grids are stale):**
@@ -51,9 +94,32 @@ the rebuild; NOT mergeable before the rebuild, the shipped grids are stale):**
     0.9%; the old trace value 15.9%);
   - `test_port_flow_zigzag_is_not_heard` now requires the raw ripple
     < 0.1 (it is 0.037).
-  - All three pass. **Running:** 7 mutants against a baseline, and the
-    full suite (expect the golden points and the grid-match tests to fail
-    until the re-baseline and the rebuild).
+  - All three pass. ~~**Running:** 7 mutants against a baseline, and the
+    full suite …~~ **Mutants: 7 of 7 caught** (baseline 3 / 0). M7 (the
+    sound's averaging off) survived at first, because the solver no longer
+    zig-zags; the test now also makes the averaging null a synthetic 1°
+    zig-zag.
+  - **Full suite on stage 1** (run before the test updates): 76 passed,
+    14 failed, 3 known. Of the 14:
+    - 9 golden points, re-baselined (`15a19a6`): p_max −1.5% to −2.0%,
+      torque −0.04% to +0.004%;
+    - FINDING-025's fuel `==`, which passed by luck (the limiter path's
+      `cmd × 1e-6 × 1e6` round trip lands one ulp away for some commands);
+      now relative 1e-12, with the reason;
+    - the old zig-zag test (already updated);
+    - 3 that compare against the shipped grids (the accuracy table's hash,
+      cell from pieces, weather pieces): **stale until the rebuild**.
+  - Audit: 0 dead, 2 frozen (known), 0 tiny. Fixtures: all current.
+- **Found for stage 2:** the grid's "cold" cells are not a cold start.
+  With the coolant at 273 K the walls follow it only partly (`WALL_FOLLOW`):
+  crdi15's piston is at 510 K and its head at 395 K. Every wall at the
+  air's temperature lengthens crdi15's idle delay +24% (sea level), +34%
+  (−20 °C) and +30% (Leh), against +9% for the cold cell. With stage 1's
+  burn law that is still only +8–11% knock. Also seen: at −20 °C with the
+  oil at −20 °C, crdi15's idle torque reads −1561 N·m (oil friction; not
+  looked into).
+- **Running:** the owner's cases (warm and a true cold start, sea level
+  and Leh) under stage 1, V1, and V4 with b = 0.5 and 1.0.
 
 **Session 9, stage 1 (the numerics) started (2026-10-14), scratch only:**
 - **Why brute sub-stepping is costly:** with 4+ cylinders some valve is
