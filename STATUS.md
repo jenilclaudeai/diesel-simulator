@@ -1,9 +1,12 @@
 # Status
 
-**Updated:** 2026-10-14, session 9 (P09: the owner chose C; building it
+**Updated:** 2026-10-15, session 9 (P09: the owner chose k = 4; ADR-019
+written; the ten grids' rebuild running since 2026-10-14 22:01 UTC, about
+8 h or more; then the full suite, CI and the PR, all on `feat/p09-knock`).
+*(Was: "2026-10-14, session 9 (P09: the owner chose C; building it
 found numerical limits at the 1° step and a ~~22%~~ 18% torque error on single10
 (FINDING-028); two questions for the owner, round 2; all on #129, docs
-only). *(Corrected later the same day: about 18%; the 0.25° solve it was measured against still zig-zags. See FINDING-028.)* *(Was: "P09 measured: FINDING-029 and `reviews/PROPOSAL-P09.md`,
+only).")* *(Corrected later the same day: about 18%; the 0.25° solve it was measured against still zig-zags. See FINDING-028.)* *(Was: "P09 measured: FINDING-029 and `reviews/PROPOSAL-P09.md`,
 three questions for the owner; on #129 with P10's merge record".)* *(Was: "P10 merged and live: #128 merged
 2026-10-14 08:10 UTC, CI 9 of 9 read; Pages deployed `196f8d3`; the owner
 listened and accepted it; #129, docs only, open".)* *(Was: "… next, the
@@ -29,8 +32,35 @@ and B-06 fixed, PR open; #118 and #119 still waiting to merge)"; before
 that "2026-10-10, session 8 (Phase 7 step 7 built,
 PR #119; all seven steps built)".)*
 
-**Session 9, stage 2 built (2026-10-14), `feat/p09-knock` `40e0699`; the
-listening round is with the owner:**
+**Session 9, k chosen (2026-10-15), `feat/p09-knock`:**
+- **The owner chose k = 4** (`KNOCK_GAIN_EXP`, `livesound.py` and
+  `synth.ts`). Measured at idle (`tools/p09_listen.py` with k = 0 and 4;
+  crdi15 and hatch15, cabin and intake): a cold start or Leh is +2.4 to
+  +4.4 dB, both +8.7 to +10.2 dB. **Not answered:** whether the warm
+  sea-level sound differs from P10's.
+- **The sound fixture** gains a fifth segment with `dpdt_max` / `dpdt_ref`
+  (×1.4), so the TS gain path is checked. `gen_fixtures --check`: all ok.
+  TS: 5 + 51 + 12 + 11, 0 failed. **The gain-path mutants: 3 of 3
+  caught** (baseline passing): T7, the gain off (it survived at k = 0), the
+  ratio inverted, and k = 3. Each fails "the synth matches livesound's pure
+  mode", and k = 3 also fails the constants check. The gap is closed.
+- **ADR-019** written. CLAUDE.md gains the P09 traps (`dpdtheta_knock`, the
+  true cold cells, `T_chamber`, the knock the synth hears); the
+  FINDING-028 trap is struck through. PLAN's P09 entry is updated.
+- **The cold-start model is narrower than round 2's wording.** The earlier
+  chat said "Cranking speed won't be modelled", but the docs didn't record
+  it. ADR-019 now does: cold walls plus a chamber warm-up, no cranking
+  speed, and cold intake air via the manifold walls and the weather table.
+- **The rebuild is running** (`out/p09_rebuild.sh`, log
+  `out/p09_rebuild.log`): `build_live_grids.py`, then `--weather`. Started
+  2026-10-14 22:01 UTC. `livesound.py` is unhashed, so k didn't wait for it.
+- **Next:** when it finishes, run the full Python suite (the three grid
+  tests should pass again), the accuracy table, audit_dead_signals,
+  Pyodide, and the web suites; then push, open the PR, and read every CI
+  job.
+
+**Session 9, stage 2 built (2026-10-14), `feat/p09-knock` `40e0699`; ~~the
+listening round is with the owner~~ (the owner chose k = 4 on 2026-10-15):**
 - **The burn law** (`cycle.PREMIX_DELAY_EXP` 0.5, `D_PRE_FLOOR` 2°): no
   φ term, and faster by (delay / injection)^0.5 once the delay outlasts
   the injection. crdi15 at idle: Leh +17%, a cold start +17%, both +40%;
@@ -66,7 +96,8 @@ listening round is with the owner:**
   cabin and intake, k = 0 / 3 / 5 / 8). At k = 3, a cold start or Leh is
   +1.5 to +3.3 dB and both +6.0 to +7.7 dB; at k = 5, +3.4 to +5.5 and
   +11.4 to +12.9 dB.
-- **Gap, for after the owner picks k:** while `KNOCK_GAIN_EXP` is 0 the
+- ~~**Gap, for after the owner picks k:**~~ *(Closed 2026-10-15: the
+  fixture's fifth segment; T7 caught.)* While `KNOCK_GAIN_EXP` is 0 the
   TS synth's gain path can't be checked by the sound fixture. Add a fixture
   segment with `dpdt_ref` once k is non-zero.
 - **Then:** set k, rerun the suite, the rebuild (10 grids with weather

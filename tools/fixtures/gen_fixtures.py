@@ -550,6 +550,10 @@ def sound_inputs():
         {"blocks": 16, "rpm": [1600.0, 600.0], "running": False},
         {"blocks": 50, "rpm": [600.0, 900.0], "blend": [800.0, 0.1, 280.0], "mic": "engine_bay",
          "live": dict(live, turbo_rpm=500.0, boost=1.0, load=0.1), "running": True},
+        # P09: the live loop's knock above the warm standard air's (a cold start at altitude):
+        # the synth plays the combustion part up by (dpdt_max / dpdt_ref) ** KNOCK_GAIN_EXP
+        {"blocks": 30, "rpm": [900.0, 900.0], "mic": "cabin",
+         "live": dict(live, turbo_rpm=500.0, boost=1.0, load=0.1, dpdt_max=5.6e9, dpdt_ref=4.0e9), "running": True},
     ]
     return {"spec": live_spec, "grid": grid,
             "blend": [[1234.0, 0.55, 320.0], [900.0, 0.9, 361.0], [2500.0, 0.1, 250.0]],

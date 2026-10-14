@@ -45,7 +45,7 @@ export const PORT_SMOOTH_DEG = 2.0;
 /** P09: acoustics.KNOCK_REF, the knock's reference (x1.5 the old 5.0e9, for the burn-law knock), and
  *  livesound.KNOCK_GAIN_EXP, the playback gain on the live knock's ratio to the warm standard air's. */
 export const KNOCK_REF = 7.5e9;
-export const KNOCK_GAIN_EXP = 0.0;
+export const KNOCK_GAIN_EXP = 4.0;
 
 /** A circular moving average over PORT_SMOOTH_DEG of a 720-degree source on a
  *  dtheta grid, summed in smooth_port_flow's order: it nulls the solver

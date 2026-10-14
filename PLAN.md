@@ -376,7 +376,17 @@ plays the sea-level sound at every place. A scratch fix (V1) turns the
 trend the right way, with torque and fuel within 0.6%. Even so, after P10
 the change is 0.0–0.4 dB at the mics: not audible. Recommended: record it
 now, and fix the physics at the next rebuild, with FINDING-028's solver
-fix. **Not decided; nothing built.**
+fix. ~~**Not decided; nothing built.**~~
+**Decided (ADR-019).** The owner chose C, for a modern CRDi at Leh and a
+cold start, staged, with a cold-start model (2026-10-14), and the synth's
+gain k = 4 by ear (2026-10-15). **Built** on `feat/p09-knock`:
+- stage 1, the numerics: FINDING-028 option B, the burn integrated over
+  each step, the knock from the burn law (FINDING-029);
+- stage 2: the burn law, a true cold start with a chamber warm-up in the
+  live loop, the knock in the weather table, and the synth's gain.
+
+**Waiting on** the rebuild of the ten grids with their weather tables
+(started 2026-10-14 22:01 UTC, about 8 h or more), then CI, then the PR.
 
 ## P10 — a deeper, bassier diesel sound (the owner's request, 2026-10-13)
 

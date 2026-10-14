@@ -39,8 +39,10 @@ from .acoustics import (C_AIR_STP, HISS_WEIGHT, KNOCK_REF, MIC_TRIM, MICS, SLAP_
 
 # P09 (the owner: "Hear in enjoy also"): the live knock's ratio to the warm standard air's is played
 # up by this power, a playback gain, not physics; the physics gives the ratio (crdi15 at idle: a cold
-# start x1.17, Leh x1.17, both x1.40). Chosen by ear in the listening round; 0 until then.
-KNOCK_GAIN_EXP = 0.0
+# start x1.17, Leh x1.17, both x1.40). The owner chose 4 by ear (2026-10-15, tools/p09_listen.py's
+# files offered 0, 3, 5 and 8). Measured at idle, crdi15 and hatch15, cabin and intake: a cold start
+# or Leh +2.4 to +4.4 dB, both +8.7 to +10.2 dB.
+KNOCK_GAIN_EXP = 4.0
 
 FS = 44100
 BLOCK = 128                 # the AudioWorklet render quantum
