@@ -115,11 +115,20 @@ def known(name, cond, note):
 # limiter's warm-started calibration chain amplifies a ~1e-10 platform
 # difference to ~1e-6 (Pyodide/numpy 2.4.6 vs native/numpy 2.1.0: 4.9e-8 at
 # crdi15 1800/0.6).
+#
+# Re-baselined 2026-10-14 for P09 stage 1 (FINDING-028 option B, FINDING-029):
+# the port flow is solved semi-implicitly where a step would overshoot, and
+# the pilot and main burns are integrated exactly over each step. p_max falls
+# 1.5-2.0% (the burn's peak is no longer sampled at a step's end); torque
+# moves -0.04% to +0.004%:
+#   crdi15 1800/0.6  torque 122.580341 -> 122.542628, bsfc 238.524968 -> 237.571137, p_max 130.046491 -> 128.152693
+#   crdi15 3000/1.0  torque 216.888323 -> 216.836794, bsfc 214.552248 -> 214.636031, p_max 152.273735 -> 149.270383
+#   hd_i6  1700/1.0  torque 2313.603180 -> 2313.695766, bsfc 214.080003 -> 214.071436, p_max 178.839201 -> 176.244574
 GOLDEN_TOL = 1e-5
 GOLDEN = {
-    ("crdi15", 1800, 0.6): dict(torque=122.580341, bsfc=238.524968, pmax=130.046491),
-    ("crdi15", 3000, 1.0): dict(torque=216.888323, bsfc=214.552248, pmax=152.273735),
-    ("hd_i6", 1700, 1.0): dict(torque=2313.603180, bsfc=214.080003, pmax=178.839201),
+    ("crdi15", 1800, 0.6): dict(torque=122.542628, bsfc=237.571137, pmax=128.152693),
+    ("crdi15", 3000, 1.0): dict(torque=216.836794, bsfc=214.636031, pmax=149.270383),
+    ("hd_i6", 1700, 1.0): dict(torque=2313.695766, bsfc=214.071436, pmax=176.244574),
 }
 
 
@@ -2368,8 +2377,11 @@ def test_spec_ambient_reaches_the_solve():
         and thin["nox_g_kwh"] > base["nox_g_kwh"] and thin["soot_g_kwh"] > base["soot_g_kwh"],
         "318 K: exhaust hotter": hot["T_exh"] > base["T_exh"] + 5.0,
         "spec 70 kPa equals explicit p_amb 70 kPa": thin["torque"] == explicit.torque and thin["afr"] == explicit.cycle.afr,
-        "half load at 79.5 kPa: standard's fuel, less torque": half_2k.fuel_mg == half_sl.fuel_mg
-        and half_2k.torque < half_sl.torque,
+        # relative 1e-12, not ==: off the rating's air the limiter path reports the cycle's own fuel,
+        # cmd * 1e-6 * 1e6, which lands one ulp away for some commands (3.6e-15 mg after
+        # FINDING-028's fix moved the calibrated limit; before it the value round-tripped exactly)
+        "half load at 79.5 kPa: standard's fuel, less torque":
+        abs(half_2k.fuel_mg / half_sl.fuel_mg - 1.0) < 1e-12 and half_2k.torque < half_sl.torque,
         "compressor point at the spec's inlet T": c318 is not None and c298 is not None
         and abs(c318["T_in"] - 318.0) < 1e-9 and abs(c298["T_in"] - 298.0) < 1e-9,
     }
