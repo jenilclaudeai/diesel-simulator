@@ -367,6 +367,17 @@ automatic boxes, half pedal never later than today. *(Was: "Not decided;
 nothing built.")* **Built 2026-10-12** on `feat/p08-shift-schedule`: all
 12 car cruises in the least-fuel gear, full pedal identical to today. **Merged and live** (#123, 2026-10-12).
 
+## P09 — more knocking at high altitude (the owner's request, priority 2)
+
+Measured 2026-10-14 in `reviews/PROPOSAL-P09.md` (FINDING-029). The
+solver lengthens the delay at altitude, but its knock mostly falls (the
+0.72 premix cap, and a premixed burn that slows with φ). The live loop
+plays the sea-level sound at every place. A scratch fix (V1) turns the
+trend the right way, with torque and fuel within 0.6%. Even so, after P10
+the change is 0.0–0.4 dB at the mics: not audible. Recommended: record it
+now, and fix the physics at the next rebuild, with FINDING-028's solver
+fix. **Not decided; nothing built.**
+
 ## P10 — a deeper, bassier diesel sound (the owner's request, 2026-10-13)
 
 Measured in `reviews/PROPOSAL-P10.md`: the exhaust (the low firing pulse)

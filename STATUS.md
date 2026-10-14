@@ -1,8 +1,10 @@
 # Status
 
-**Updated:** 2026-10-14, session 9 (P10 merged and live: #128 merged
+**Updated:** 2026-10-14, session 9 (P09 measured: FINDING-029 and
+`reviews/PROPOSAL-P09.md`, three questions for the owner; on #129 with
+P10's merge record). *(Was: "P10 merged and live: #128 merged
 2026-10-14 08:10 UTC, CI 9 of 9 read; Pages deployed `196f8d3`; the owner
-listened and accepted it; #129, docs only, open). *(Was: "… next, the
+listened and accepted it; #129, docs only, open".)* *(Was: "… next, the
 owner listens on the phone".)* *(Was: "2026-10-14, session 9 (P10 decided and built: ADR-018, B with
 loudness matched at a cruise, FINDING-028 hidden in the synth; on
 `feat/p10-sound`, #128 open; #127 merged).")* *(Was: "2026-10-14, session 9 (P10: the owner's answers in, A/B/C
@@ -24,6 +26,55 @@ duplicate test removed in #121)"; before that "2026-10-11, session 9 (B-05
 and B-06 fixed, PR open; #118 and #119 still waiting to merge)"; before
 that "2026-10-10, session 8 (Phase 7 step 7 built,
 PR #119; all seven steps built)".)*
+
+**Session 9, P09 being measured (2026-10-14), scratch only so far:**
+- The sheet's **P09**: "Knocking: Increased knocking on high altitude"
+  (priority 2). Also new in the sheet: **P11**, "Number or gear selector:
+  give an option to choose number of gears to user" (priority 1, "Into
+  Consideration"); not looked at yet.
+- **Measured (scratch `p09_measure.py`)**, at sea level, Leh (3500 m,
+  20 °C) and 5000 m:
+  - The ignition delay lengthens as it should (crdi15 idle 1.88 → 2.66 →
+    3.60°; single10 1100/0.3 6.26 → 9.13 → 12.41°).
+  - But **the knock the sound reads (`dpdt_max`) mostly falls**: crdi15
+    −13% idle, −7% cruise and −12% full pedal at Leh; 6 of 9 points fall.
+    ~~Only single10 at a cruise (+7%) and truck127 at full load (+6%, its
+    smoke limiter cuts the fuel) rise.~~ Three rise, by 3–7%: single10 at
+    idle (+3%; I left this one out at first), single10 at a cruise (+7%)
+    and truck127 at full load (+6%, its smoke limiter cuts the fuel).
+  - Two causes in `cycle.py`:
+    - The premixed fraction is pinned at its 0.72 cap at every idle point.
+    - The premixed burn's duration is `0.30 × burn_dur`, and `burn_dur`
+      grows with φ, so the leaner air of altitude makes the premixed
+      spike burn **slower**. The literature says the opposite (a longer
+      delay makes the premixed burn more abrupt).
+  - **And the live loop can't hear any of it:** the weather table's keys
+    are `torque_ind, fuel_kg_h, boost, turbo_rpm, afr, T_exh`. The sound
+    in Drive and Enjoy stays the grid's, at sea level.
+- ~~**Running:** a prototype in a scratch copy of `dieselsim/` (V1: the
+  premixed burn no longer slows with φ; V2: V1 plus the cap 0.72 → 0.95),
+  with a switches-off run that must equal the baseline first.~~ **Done:**
+  - The switches-off run equals the baseline at 27 of 27 points.
+  - **V1 turns the trend:** crdi15 idle at Leh −13% → **+21%**, single10
+    at a cruise +18%, truck127 at full load +14%. The turbo engines under
+    load stay flat or slightly down.
+  - **V1 at sea level, six roster engines:** full-load torque ≤ 0.6%, BSFC
+    ≤ 0.5%, p_max up to +5.1%, but the knock moves −11% to +31%. That would
+    change the ADR-018 sound unless the synth's knock reference is
+    re-scaled.
+  - V2's cap only makes idle louder at sea level.
+  - **Not audible:** V1's ×1.14–1.21 knock is 0.0–0.4 dB at the cabin,
+    intake and engine-bay mics, and ×2 is 0.1–2.0 dB. After P10 the
+    exhaust carries the sound.
+  - Literature: SAE 2013-01-1516 (idle, 550–4500 m), read from its
+    abstract page: the delay is longer, the combustion **shorter**, and
+    peak heat release rises up to 3300 m. The two MDPI papers returned 403
+    and are unverified.
+- **Written:** `reviews/FINDING-029.md` and `reviews/PROPOSAL-P09.md` (A
+  record only, B physics at the next rebuild, C B + audible in Enjoy, D
+  fake it in the synth; recommended A now, B at the next rebuild), plus
+  `tools/p09_altitude_knock.py`. **Three questions for the owner** are at
+  the end of the proposal.
 
 **Session 9, P10 built (2026-10-14), `feat/p10-sound`:**
 - **The owner's decisions:**
