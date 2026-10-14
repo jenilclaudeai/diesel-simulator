@@ -1,8 +1,10 @@
 # Status
 
-**Updated:** 2026-10-14, session 9 (P10 decided and built: ADR-018, B with
+**Updated:** 2026-10-14, session 9 (P10 merged and live: #128 merged
+2026-10-14 08:10 UTC, CI 9 of 9 read; Pages deployed `196f8d3`; next, the
+owner listens on the phone). *(Was: "2026-10-14, session 9 (P10 decided and built: ADR-018, B with
 loudness matched at a cruise, FINDING-028 hidden in the synth; on
-`feat/p10-sound`, #128 open; #127 merged). *(Was: "2026-10-14, session 9 (P10: the owner's answers in, A/B/C
+`feat/p10-sound`, #128 open; #127 merged).")* *(Was: "2026-10-14, session 9 (P10: the owner's answers in, A/B/C
 listening files sent; FINDING-028 opened, the solver's idle port flows
 zig-zag at its step; all on #127, still open).")* *(Was: "2026-10-13, session 9 (P10, a bassier sound: measured,
 feasible, `reviews/PROPOSAL-P10.md`; three questions for the owner. #126
@@ -67,7 +69,22 @@ PR #119; all seven steps built)".)*
     known defects** (main's 88 plus the two new tests). It started before
     the intake full-pedal check was added to `test_p10_deeper_sound`; that
     final version passed in the mutants' baseline run.
-  - #128 opened; its CI is not read yet.
+  - ~~#128 opened; its CI is not read yet.~~ **CI on #128 (`d075312`):
+    9 of 9 green, every job read:**
+    - physics 90 / 0 / 3 on 3.10 (36.3 min) and 3.12 (33.6 min);
+    - Pyodide 73 / 0 / 2 / 17 skipped, 48.5 min of its 60 (both new
+      tests run there);
+    - ports 5 + 51 + 11 + 11; solver 20 + 15 + 30; app units 130;
+    - e2e: dyno 15, drive 10, sound 6, enjoy 28, cycle 11, spec 18,
+      sweep 6, durability 5, grid 9, custom 7.
+- **Merged** by the owner, 2026-10-14 08:10 UTC, as `196f8d3`. `main`
+  checked by content: its tree equals `d075312`'s (an empty diff), with
+  `SOURCE_BALANCE`, `MIC_TRIM`, `HISS_WEIGHT`, `smooth_port_flow` and their
+  TS mirrors present. Pages deployed `196f8d3` (success).
+- **Next, the owner:** listen on the phone, at the cabin and intake mics.
+  Two things to judge: whether full pedal (about +10 dB) is too loud, and
+  whether the tip, cabin and outside mics sounding alike when revved is a
+  problem.
 - **Left for later:** FINDING-028's solver fix (option B), at the next
   rebuild.
 
@@ -1201,14 +1218,14 @@ from the CI-tested tree only in #104's four docs files, with 0 code paths;
 
 | suite | result |
 |---|---|
-| `python3 tests/test_physics.py` | 87 passed, 0 failed, 3 known (CI on `main` `3047f95`, 2026-10-11, 3.10 and 3.12). *Was (#115's tree, with scipy):* 85 / 0 / 3; *(humidity's tree):* 82 / 0 / 3; *(#110):* 81 / 0 / 3; *(#107):* 80 / 0 / 3; *(#105):* 79 / 0 / 3; *(#101's final tree):* 78 / 0 / 3; *(#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
-| Pyodide suite | 71 passed, 0 failed, 2 known, 16 skipped (CI on `main` `3047f95`; 47.6 min of its 60, runner-dependent: 20–49 min, session 9). *Was (#115):* 70 / 0 / 2 / 15, 45.6 min; *(#114):* 69 / 0 / 2 / 13; *(#110):* 68 / 0 / 2 / 13; *(#107):* 67 / 0 / 2 / 13; *(#101's final tree, `b6ea065`):* 65 / 0 / 2 / 13; *(#99):* 64 / 0 / 2 / 13; *(#88):* 59 / 0 / 2 / 12 |
+| `python3 tests/test_physics.py` | 90 passed, 0 failed, 3 known (CI on #128 `d075312`, = `main` `196f8d3`, 2026-10-14, 3.10 and 3.12). *Was (`3047f95`):* 87 / 0 / 3; *(#115's tree, with scipy):* 85 / 0 / 3; *(humidity's tree):* 82 / 0 / 3; *(#110):* 81 / 0 / 3; *(#107):* 80 / 0 / 3; *(#105):* 79 / 0 / 3; *(#101's final tree):* 78 / 0 / 3; *(#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
+| Pyodide suite | 73 passed, 0 failed, 2 known, 17 skipped (CI on #128 `d075312`; 48.5 min of its 60). *Was (`3047f95`):* 71 / 0 / 2 / 16, 47.6 min (runner-dependent: 20–49 min, session 9); *(#115):* 70 / 0 / 2 / 15, 45.6 min; *(#114):* 69 / 0 / 2 / 13; *(#110):* 68 / 0 / 2 / 13; *(#107):* 67 / 0 / 2 / 13; *(#101's final tree, `b6ea065`):* 65 / 0 / 2 / 13; *(#99):* 64 / 0 / 2 / 13; *(#88):* 59 / 0 / 2 / 12 |
 | `tools/fixtures/gen_fixtures.py --check` | 7 modules current |
 | `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |
-| `web/physics npm test` | 5 + 51 + 10 + 11 = 77 (CI on `main` `3047f95`). *Was (#115, +5 the weather drive):* 5 + 41 + 10 + 11 = 67; *before:* 5 + 36 + 10 + 11 = 62 |
+| `web/physics npm test` | 5 + 51 + 11 + 11 = 78 (CI on #128; +1, the sound's balance check). *Was (`3047f95`):* 5 + 51 + 10 + 11 = 77. *Was (#115, +5 the weather drive):* 5 + 41 + 10 + 11 = 67; *before:* 5 + 36 + 10 + 11 = 62 |
 | `web/solver npm test` | cache 20, live-grid scheduler 15, round trip 30 (#115: +3 scheduler, the weather pieces). *Was:* scheduler 12 (#105); round trip 29 |
 | `web/app npm test` | 130 unit tests (CI on `main` `3047f95`, run before `physics-version.ts` exists). *Was:* 119 (#115's tree), 114 (humidity's tree), 112 (D's tree), 109 (#106), 104 (#103), 101. `check:labels` 6 of 10 templates |
-| e2e (`web/app`) | (CI on `main` `3047f95`) dyno 15, grid 9, drive 10, sound 6, enjoy 25 (+B-05/B-06's two checks), custom 7, cycle 11, spec 18, sweep 6, durability 5. *Was (CI on #115):* dyno 15, grid 9, drive 9 (*was* 7; +Leh against native, +Leh slower), sound 6, enjoy 22 (*was* 21; +the place on the start screen), custom 7, cycle 11 (*was* 10, +the humidity note; 9, +FINDING-026's thin-air note; 8, +the environment check, #106), spec 14 (*was* 13, +the humidity field; 12, +the thin-air notes; 11, +the reload check, #103), sweep 6, durability 5 |
+| e2e (`web/app`) | (CI on #128) dyno 15, grid 9, drive 10, sound 6, enjoy 28, custom 7, cycle 11, spec 18, sweep 6, durability 5. *Was (CI on `main` `3047f95`):* dyno 15, grid 9, drive 10, sound 6, enjoy 25 (+B-05/B-06's two checks), custom 7, cycle 11, spec 18, sweep 6, durability 5. *Was (CI on #115):* dyno 15, grid 9, drive 9 (*was* 7; +Leh against native, +Leh slower), sound 6, enjoy 22 (*was* 21; +the place on the start screen), custom 7, cycle 11 (*was* 10, +the humidity note; 9, +FINDING-026's thin-air note; 8, +the environment check, #106), spec 14 (*was* 13, +the humidity field; 12, +the thin-air notes; 11, +the reload check, #103), sweep 6, durability 5 |
 
 CI runs all of them except the manual `web/solver npm run test:live-real`.
 Its jobs: physics on Python 3.10 and 3.12, Pyodide, fixtures, solver, web
