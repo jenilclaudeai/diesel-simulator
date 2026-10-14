@@ -47,11 +47,10 @@ documented; the scratch copy itself is gone with the session.
   1.147 / 1.265, torque 7.98 / 10.14 / 10.23 N·m. At 1100 rpm and 30% it
   is −3%.
 - **At 1° the Leh-cold idle point is an outlier in every variant.**
-- **Asked:**
-  1. the order: a staged (numerics first, then P09, one rebuild;
-     recommended), b P09 now, or c grids at 0.5°;
-  2. the cold start: a take the model's +6% (recommended first), or b
-     add a cold-start model.
+- ~~**Asked:**~~ **Answered:** "Staged (Recommended)" and "Add a
+  cold-start model". Stage 1 (the numerics, own PR) → stage 2 (P09, with a
+  cold-start model) → one rebuild. *(Was: "Asked: 1. the order …; 2. the
+  cold start …".)*
 
 **Session 9, P09 decided: option C (2026-10-14), being designed:**
 - **The owner's answers:** "1. C", "2. Hear in enjoy also", "3. modern

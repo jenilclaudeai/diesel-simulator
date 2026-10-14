@@ -196,3 +196,14 @@ more than a cold start); `k`, chosen by ear, sets how loud.
      work, with a size I can only reason about, not calibrate.
 
    Recommended: **a** first; listen; then decide on b.
+
+**The owner's answers (round 2, 2026-10-14):** "Staged (Recommended)" and
+"Add a cold-start model". So, in order:
+1. **Stage 1, the numerics** (their own PR): sub-step the gas exchange
+   (FINDING-028 option B); integrate the burn exactly over each step; take
+   the knock from the burn law. Each is checked against 0.25° solves.
+2. **Stage 2, P09:** the burn law (V1 plus a delay term); **a cold-start
+   model** (cranking speed and cold intake air, so a cold start's delay is
+   long, as on a real engine); the knock in the weather table; the synth's
+   gain `k`, chosen by ear.
+3. **One rebuild** of all ten grids, with their weather tables.
