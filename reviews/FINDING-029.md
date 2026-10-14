@@ -107,3 +107,55 @@ With the P10 balance, even V1's change is inaudible. Multiplying the knock
 in the synth by V1's ×1.14–1.21 moves the cabin, intake and engine-bay
 mics by 0.0–0.4 dB, and by ×2 only 0.1–2.0 dB. The exhaust now carries
 the sound. Details and the options are in `reviews/PROPOSAL-P09.md`.
+
+## Added 2026-10-14, later: the sound's knock value depends on the crank step
+
+**Measured** (crdi15 idle, the same solve at 1.0°, 0.5° and 0.25° steps):
+
+| | the sound's `dpdt_max`, ×1e9 | the solver's `dpdtheta_comb`, bar/° |
+|---|---|---|
+| today, sea warm | 1.24 / 1.29 / 1.30 | 2.59 / 2.69 / 2.71 |
+| today, Leh warm | 1.08 / 1.17 / 1.21 | 2.36 / 2.54 / 2.53 |
+| a sharper premixed burn (V3, a = 1), Leh warm | **0.41 / 1.69 / 2.40** | 5.19 / 5.16 / 5.06 |
+
+- **The cause:** `build_sources` takes `np.gradient` (a central difference)
+  of the combustion pressure and its peak. A rise that happens within one
+  solver step is spread over two steps, so it reads about half. The
+  sharper the burn, the worse it gets: V3's sharper burn *lowered* the
+  sound's value at the 1° step. The solver's `dpdtheta_comb` takes a
+  forward difference, and moves 5–15% at most.
+- **A correction to the table above:** part of today's fall at Leh is the
+  same step artefact. At the 0.25° step, crdi15's idle knock at Leh is −7%
+  (1.21 against 1.30), not −13%. The direction stands.
+- **The fix:** read the knock with the forward difference, as
+  `dpdtheta_comb` does. `acoustics.py` is hashed, and the value is stored
+  in every cell's sources, so it goes in the same rebuild.
+
+## Added 2026-10-14, later: a knock value that doesn't depend on the step
+
+Read off the trace, the knock of a sharp premixed burn can't be resolved
+at a 1° step, whichever difference is used. So the prototype computes it
+from the burn law instead: the peak of the combustion term of the first
+law, `(γ − 1) / V × dQ/dθ`, evaluated on 8 sub-steps inside each step
+(`P09_KN` in `tools/p09_prototype.diff`). A sharper burn variant (V4,
+b = 1) then reads 3.64 / 3.63 / 3.61 at 1.0 / 0.5 / 0.25°, where the
+trace read 3.07 / 5.32 / 6.53.
+
+**The owner's cases on that value, at 0.25° (crdi15, 800 rpm, 5%),
+against warm sea level:**
+
+| | today | V1 | V4, b = 0.5 | V4, b = 1 |
+|---|---|---|---|---|
+| a cold start (walls at 273 K) | +1% | +1% | **+6%** | +4% |
+| Leh, warm | −18% | −15% | **+12%** | −1% |
+| Leh, cold | −17% | −14% | **+11%** | −4% |
+
+All four variants use the burn integrated exactly over each step
+(`P09_CUM`). Two limits remain:
+- **At the 1° step the "Leh, cold" point is an outlier in every variant**
+  (today 1.43 at 1° against 1.09–1.11 finer). The gas exchange's step
+  error (FINDING-028) is the first suspect.
+- **A cold engine barely knocks more in this model.** With the walls at
+  273 K the delay grows only 9%, because the compressed gas barely cools.
+  A real cold start (cranking speed, cold intake air, cold walls together)
+  has a much longer delay.

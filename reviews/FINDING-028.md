@@ -78,3 +78,55 @@ zero.
 | **C** both | A now, with P10; B when the next solver change forces a rebuild anyway | P10 isn't blocked by an 8-hour rebuild | two changes to review |
 
 Recommended: **C**.
+
+---
+
+## Added 2026-10-14, later: option B, first attempt, measured, and it does not work
+
+Building option B with P09 (ADR-018 put it in the next rebuild), I first
+tried the simplest cure on a scratch copy: `thermo.orifice_mdot` made
+linear in the pressure drop below `1 − p_dn/p_up = ε`, matched to the
+isentropic law there, so the flow's slope at Δp = 0 is finite.
+**It changes nothing that matters** (scratch `f28_eps.py`; "ripple" is the
+power at orders ≥ 45/rev relative to the whole trace, on a different scale
+from the table above):
+
+| crdi15, 800 rpm, 5% | ripple exh / int | PMEP, Pa | VE |
+|---|---|---|---|
+| 1° step, today | 0.80 / 0.81 | 2515 | 1.2395 |
+| 1°, ε = 0.005 | 0.83 / 0.84 | 2188 | 1.2400 |
+| 1°, ε = 0.02 | 0.83 / 0.82 | 1763 | 1.2455 |
+| 0.5° step, today | 0.001 / 0.001 | 3621 | 1.2627 |
+
+So the chatter is not the √Δp singularity. It is the explicit step: a
+near-equal-pressure exchange between the cylinder and a manifold settles
+faster than one 1° step, and any explicit law overshoots. **The cure is
+numerical:** sub-step the gas exchange while a valve is open, or integrate
+the port flow implicitly. That is a solver project of its own, with its
+own measurements.
+
+**And single10 is worse than this finding said.** At 600 rpm the 1° step
+costs far more than the idle PMEP:
+
+| single10, 600 rpm | VE, 1° / 0.5° | torque, 1° / 0.5° |
+|---|---|---|
+| 5% load | 1.0123 / 1.1473 (−12%) | −19.66 / −18.32 N·m |
+| 40% load | 1.0123 / 1.1463 (−12%) | **7.98 / 10.14 N·m (−21%)** |
+
+At 1100 rpm and 30% load its torque is 9.17 against 9.59 N·m (−4%). The
+cars at 2000 rpm agree to 0.4%. The 0.5° solve is not proven right either
+(single10's ripple moves to the new Nyquist there, 0.96), so the truth
+needs a 0.25° point before anything is claimed.
+
+**The 0.25° point, measured the same day:**
+
+| single10 | VE, 1° / 0.5° / 0.25° | torque, N·m, 1° / 0.5° / 0.25° |
+|---|---|---|
+| 600 rpm, 5% | 1.012 / 1.147 / **1.265** | −19.66 / −18.32 / −17.60 |
+| 600 rpm, 40% | 1.012 / 1.146 / **1.262** | 7.98 / 10.14 / **10.23** |
+| 1100 rpm, 30% | 1.200 / 1.266 / 1.274 | 9.17 / 9.59 / 9.44 |
+
+The torque settles by 0.5°, and the VE nearly settles by 0.25°.
+**single10's shipped grid, built at 1°, is about 22% low on torque at 600
+rpm and 40% load, and 3% low at 1100 rpm and 30%.** Its idle ripple at
+0.25° is still 0.80 / 0.68, so the zig-zag isn't gone there either.

@@ -128,3 +128,71 @@ the P10 balance.
    an old mechanical-pump engine, or a cold start. A modern turbo engine
    under load compensates (realistically), so the effect is mostly at idle
    and on single10.
+
+---
+
+## Building C: what the first day found (2026-10-14, later)
+
+Measured on a scratch copy (`tools/p09_prototype.diff`). The numbers are
+in FINDING-029 and FINDING-028.
+
+1. **The sound's knock value was a measuring artefact for sharp burns.**
+   It took a central difference of the 1° trace. **Fixed in the
+   prototype:** the knock now comes from the burn law (the peak of
+   `(γ − 1)/V × dQ/dθ` inside each step), which is the same at 1°, 0.5°
+   and 0.25° (3.64 / 3.63 / 3.61).
+2. **The burn itself was stepped coarsely.** It added the rate sampled at
+   the step's end. **Fixed in the prototype:** it is integrated exactly
+   over each step.
+3. **The burn law needs both V1 and a delay term.** The best variant, V4
+   with b = 0.5, speeds up the premixed burn by the delay that outlasts
+   the injection. On crdi15 at idle it gives: **Leh +12%, a cold start
+   +6%, Leh cold +11%** (today −18%, +1% and −17%). Other strengths were
+   worse: V3 broke single10's sea-level calibration, and V4 with b = 1 is
+   flat at Leh.
+4. **The 1° step is not trustworthy at idle** (FINDING-028). The "Leh
+   cold" point is an outlier at 1° in every variant. On single10 the 1°
+   grid is about 22% low on torque at 600 rpm and 40% load, against a
+   0.25° solve. The first fix tried for FINDING-028 (a linear orifice law)
+   does nothing. The real fix is to sub-step the gas exchange.
+5. **A cold start barely knocks more in this model.** Walls at 273 K
+   lengthen the delay by only 9%. A real cold start combines cranking
+   speed, cold intake air and cold walls.
+
+**About hearing it:** +12% is under 0.3 dB in the P10 mix (a ×1.21 knock
+measured 0.27–0.36 dB, above). Enjoy will
+hear it only through the playback gain in the synth (`(dpdt_max /
+dpdt_ref)^k`). The physics sets the direction and the relative sizes (Leh
+more than a cold start); `k`, chosen by ear, sets how loud.
+
+### Questions for the owner (round 2)
+
+1. **In what order?**
+   - **a. Staged (recommended).**
+     - First the numerics, as their own PR, measured against 0.25° solves:
+       sub-step the gas exchange (FINDING-028 B), integrate the burn
+       exactly, and compute the knock from the burn law. This also fixes
+       single10's 22%.
+     - Then P09: the burn law, the knock in the weather table, and the
+       synth's gain, with a listening round.
+     - **One rebuild at the end.**
+     - Positives: every number the rebuild bakes in has been checked
+       against a fine step; one rebuild covers everything.
+     - Cost: the longest route before you hear anything. Sub-stepping may
+       also slow each solve, so the rebuild could take longer than 8 h.
+       I'll measure that first.
+   - **b. P09 now, on today's numerics,** with FINDING-028 later.
+     - Positives: you hear P09 soonest.
+     - Costs: the Leh-cold point is unreliable at 1°; two rebuilds (about
+       8 h each); single10 stays 22% off until the second one.
+   - **c. Build the grids at 0.5° instead of sub-stepping.**
+     - Positives: the simplest code change; the cars' zig-zag is gone at
+       0.5°.
+     - Costs: grid builds take about twice as long, including custom
+       engines in the browser; single10's VE is still 9% off at 0.5°.
+2. **The cold start:**
+   - **a. Take what the model gives** (+6%, made audible by the gain).
+   - **b. Add a cold-start model** (cranking speed, cold intake air): more
+     work, with a size I can only reason about, not calibrate.
+
+   Recommended: **a** first; listen; then decide on b.

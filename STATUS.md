@@ -1,8 +1,10 @@
 # Status
 
-**Updated:** 2026-10-14, session 9 (P09 measured: FINDING-029 and
-`reviews/PROPOSAL-P09.md`, three questions for the owner; on #129 with
-P10's merge record). *(Was: "P10 merged and live: #128 merged
+**Updated:** 2026-10-14, session 9 (P09: the owner chose C; building it
+found numerical limits at the 1° step and a 22% torque error on single10
+(FINDING-028); two questions for the owner, round 2; all on #129, docs
+only). *(Was: "P09 measured: FINDING-029 and `reviews/PROPOSAL-P09.md`,
+three questions for the owner; on #129 with P10's merge record".)* *(Was: "P10 merged and live: #128 merged
 2026-10-14 08:10 UTC, CI 9 of 9 read; Pages deployed `196f8d3`; the owner
 listened and accepted it; #129, docs only, open".)* *(Was: "… next, the
 owner listens on the phone".)* *(Was: "2026-10-14, session 9 (P10 decided and built: ADR-018, B with
@@ -27,6 +29,30 @@ and B-06 fixed, PR open; #118 and #119 still waiting to merge)"; before
 that "2026-10-10, session 8 (Phase 7 step 7 built,
 PR #119; all seven steps built)".)*
 
+**Session 9, P09 round 2 (2026-10-14, later): two questions for the owner**
+(the end of `reviews/PROPOSAL-P09.md`). Nothing in `dieselsim/` is changed.
+The prototype is saved as `tools/p09_prototype.diff`, with its switches
+documented; the scratch copy itself is gone with the session.
+- **Fixed in the prototype:**
+  - the knock now comes from the burn law (`(γ−1)/V × dQ/dθ`, 8
+    sub-steps a step): 3.64 / 3.63 / 3.61 at 1.0 / 0.5 / 0.25°;
+  - the burn is integrated exactly over each step.
+- **Best law, V4 b = 0.5** (crdi15 idle, at 0.25°): Leh +12%, cold start
+  +6%, Leh cold +11% (today −18%, +1%, −17%). Under 0.3 dB in the mix, so
+  Enjoy hears it only through the synth's gain `k`.
+- **FINDING-028 option B, first try (linear orifice): does nothing.** The
+  cure is to sub-step the gas exchange.
+- **New and serious, in FINDING-028:** single10's 1° grid is about 22% low
+  on torque at 600 rpm and 40% load. Against 0.5° / 0.25°: VE 1.012 /
+  1.147 / 1.265, torque 7.98 / 10.14 / 10.23 N·m. At 1100 rpm and 30% it
+  is −3%.
+- **At 1° the Leh-cold idle point is an outlier in every variant.**
+- **Asked:**
+  1. the order: a staged (numerics first, then P09, one rebuild;
+     recommended), b P09 now, or c grids at 0.5°;
+  2. the cold start: a take the model's +6% (recommended first), or b
+     add a cold-start model.
+
 **Session 9, P09 decided: option C (2026-10-14), being designed:**
 - **The owner's answers:** "1. C", "2. Hear in enjoy also", "3. modern
   CRDi at Leh and a cold start". The solver fix shares a rebuild with
@@ -37,9 +63,33 @@ PR #119; all seven steps built)".)*
   against 1.39). At idle the premixed burn takes about 5°, near its 4°
   floor, and nothing lets the delay speed it up.
 - **V3** (V1, plus `d_pre × (0.3 ms / τ)^a`) **behaves erratically**: at
-  a = 1, crdi15's Leh idle knock falls to 0.41. Suspected: a premixed spike
-  2–5° wide is barely resolved by the solver's 1° step. **Running:** the
-  same points at 1.0 / 0.5 / 0.25° steps, for today, V1 and V3.
+  a = 1, crdi15's Leh idle knock falls to 0.41. ~~Suspected: a premixed
+  spike 2–5° wide is barely resolved by the solver's 1° step. **Running:**
+  the same points at 1.0 / 0.5 / 0.25° steps, for today, V1 and V3.~~
+  **Found, two numerical causes:**
+  1. **The sound's knock value depends on the step** (now in FINDING-029):
+     `np.gradient`, a central difference, halves a one-step rise. V3 at
+     Leh idle reads 0.41 / 1.69 / 2.40 at 1.0 / 0.5 / 0.25°, while the
+     solver's forward-difference `dpdtheta_comb` reads 5.19 / 5.16 / 5.06.
+     The fix: the forward difference. Part of today's −13% at Leh is this
+     artefact; at 0.25° it is −7%.
+  2. **The burn adds `rate × step`, with the rate sampled at the step's
+     end.** For a premixed spike only a few steps wide, that depends on
+     where the start of combustion falls inside the step. V4
+     (`d_pre / max(1, τ/inj_dur)^b`, which acts only where the delay
+     outlasts the injection) was still erratic with the forward difference
+     (at b = 1 a cold engine reads below a warm one). **Prototyped:** the
+     burn integrated exactly over each step (the cumulative Wiebe's
+     difference). **Running:** its step test with V1 and V4 (b = 0.5, 1).
+  - On the solver's stable number, V3 already does what the owner asked:
+    crdi15 idle, cold +15%, Leh +37%, Leh cold +40%. But its fixed 0.3 ms
+    reference made single10's burn 3× faster at sea level (knock ×3,
+    p_max +24%), so it was dropped for V4.
+- **FINDING-028 option B, prototyped** (scratch `thermo.py`, switch
+  `F28_EPS`): `orifice_mdot` linear in Δp below `1 − pr = ε`, matched to
+  the isentropic law there, so the flow's slope at Δp = 0 is finite.
+  Test script ready (`f28_eps.py`: ripple, PMEP, VE, torque against a
+  0.5° solve).
 - **The sound side, designed (not built):**
   - the live loop carries a reference knock, `dpdt_ref` (warm, standard
     air, same cell);
