@@ -382,7 +382,14 @@ class EngineSound:
             turbo_rpm=op.turbo_rpm,
             mdot_air=op.air_kg_s,
             boost=op.boost_pr,
-            dpdt_max=float(np.max(np.abs(dpdth))) * op.rpm * 6.0,
+            # FINDING-029: from the burn law, not this trace. The trace's
+            # central difference halved a rise made within one step, so a
+            # sharper burn read lower, and the value moved with the crank step
+            # (0.41 / 1.69 / 2.40 at 1 / 0.5 / 0.25 deg on one sharp point).
+            # The burn law's is the same at every step; at full load it reads
+            # ~1.47x the old value (idle and cruise ~1.03-1.06x), so the
+            # reference below is unchanged.
+            dpdt_max=float(op.cycle.dpdtheta_knock) * 1e5 * op.rpm * 6.0,
             p_max=op.p_max,
             T_exh=op.T_exh,
             load=op.bmep / 2.3e6,

@@ -1715,15 +1715,15 @@ def _centroid_and_bass(y):
 
 
 def test_port_flow_zigzag_is_not_heard():
-    """FINDING-028 option A: at idle the solver's port mass flows zig-zag at
-    its 1-degree step's Nyquist (order 180 per revolution) -- a numerical
-    chatter, gone at a 0.5-degree step. The cells keep it (option B, the
-    solver fix, waits for the next rebuild), so the sound must average it
-    out before differentiating the flow: crdi15's idle exhaust had a 2,159 Hz
-    centroid with it and 208 Hz without. Checked in the streaming synth and,
-    where scipy is present, in acoustics.render. The first line also guards
-    the defect itself: when the solver is fixed it fails, and this test
-    should then drop its "raw" half."""
+    """FINDING-028 option A: at idle the solver's port mass flows zig-zagged at
+    its 1-degree step's Nyquist (order 180 per revolution), and the sound
+    averages the flows over 2 degrees before differentiating them: crdi15's
+    idle exhaust had a 2,159 Hz centroid with the zig-zag and 208 Hz without.
+    Since option B (cycle.implicit_flow) the solver's own flow is clean
+    (test_port_flow_does_not_overshoot), so the raw ripple must now be small;
+    the averaging stays (ADR-018), for any engine the fix misses. Checked in
+    the streaming synth and, where scipy is present, in acoustics.render.
+    (Was: the raw ripple had to stay > 0.3 until the solver was fixed.)"""
     import numpy as np
     from dieselsim import acoustics as A
     d = _crdi15_sources(800.0, 0.05)
@@ -1734,6 +1734,10 @@ def test_port_flow_zigzag_is_not_heard():
         return float(np.fft.irfft(np.where(orders >= 90, X, 0), len(x)).std() / np.std(x))
     raw = ripple(d["src"]["exh_flow"])
     smooth = ripple(A.smooth_port_flow(d["src"]["exh_flow"], d["es"].dtheta))
+    # the averaging itself, on a flow that still zig-zags as a 1-degree solve's did
+    # (the source grid is 0.5 degree, so the zig-zag repeats every 2 samples there)
+    zz = d["src"]["exh_flow"] + 0.5 * np.std(d["src"]["exh_flow"]) * np.repeat([1.0, -1.0], 2)[np.arange(len(d["src"]["exh_flow"])) % 4]
+    zz_raw, zz_smooth = ripple(zz), ripple(A.smooth_port_flow(zz, d["es"].dtheta))
     parts = _stream(d["spec"], d["src"], 2.5, rpm=800.0, mic="cabin", parts=True)[1]
     c_live = _centroid_and_bass(parts["exhaust"])[0]
     import importlib.util
@@ -1743,11 +1747,80 @@ def test_port_flow_zigzag_is_not_heard():
     else:
         c_ref, ref = 0.0, ", render not checked (no scipy)"
     check("FINDING-028: the idle port flows' zig-zag is averaged out before the sound hears it",
-          1.0 if raw > 0.3 and smooth < raw / 10 and c_live < 500.0 and c_ref < 500.0 else 0.0, 1.0, 0.0,
-          f"crdi15 idle exhaust flow ripple {raw:.2f} raw -> {smooth:.3f} averaged (at least 10x less; raw must stay "
-          f"> 0.3 until the solver is fixed); the exhaust part's centroid: synth {c_live:.0f} Hz{ref} "
-          f"(each < 500; 2,159 with the zig-zag)")
+          1.0 if raw < 0.1 and smooth <= raw and zz_smooth < zz_raw / 10 and c_live < 500.0 and c_ref < 500.0
+          else 0.0, 1.0, 0.0,
+          f"crdi15 idle exhaust flow ripple {raw:.3f} raw (< 0.1 since the solver fix; was 0.78) -> {smooth:.3f} "
+          f"averaged; a synthetic 1-degree zig-zag {zz_raw:.2f} -> {zz_smooth:.3f} averaged (at least 10x less); "
+          f"the exhaust part's centroid: synth {c_live:.0f} Hz{ref} (each < 500; 2,159 with the zig-zag)")
 
+
+
+def _flow_ripple(x):
+    """A port flow's power at orders >= 45 per revolution, as an RMS over the
+    flow's own (a 720-degree trace: bin k is order k/2)."""
+    import numpy as np
+    X = np.abs(np.fft.rfft(np.asarray(x, float) - np.mean(x)))
+    orders = np.arange(len(X)) / 2.0
+    return float(np.sqrt(np.sum(X[orders >= 45] ** 2) / max(np.sum(X ** 2), 1e-30)))
+
+
+def test_port_flow_does_not_overshoot():
+    """FINDING-028 option B (cycle.implicit_flow): where an explicit 1-degree
+    step would carry the pressure difference across a valve past zero, the
+    flow is solved against the end-of-step pressures. Without it the idle
+    flows zig-zagged at the step's Nyquist, and a 1-degree solve disagreed
+    with a 0.5-degree one: crdi15's idle VE by 1.8%, and the NA single's
+    (preset "single", like roster single10) VE by 10.3% and torque by 10.8%
+    at 600 rpm / 0.4 (single10's shipped grid ~18% low there). With it:
+    0.09%, 0.21% and 0.82%. Built-in presets only, so it runs under Pyodide."""
+    pts = []
+    ok = True
+    for key, rpm, load in (("crdi15", 800.0, 0.05), ("single", 600.0, 0.4)):
+        a = DieselEngine(preset=key).operating_point(rpm, load=load, n_cycles=9)
+        b = DieselEngine(preset=key, dtheta=0.5).operating_point(rpm, load=load, n_cycles=9)
+        q = _flow_ripple(a.cycle.traces.mdot_exh[0])
+        dve = abs(a.cycle.ve / b.cycle.ve - 1.0) * 100
+        dtq = abs(a.torque / b.torque - 1.0) * 100
+        ok = ok and q < 0.1 and dve < 0.5 and (key != "single" or dtq < 2.0)
+        pts.append(f"{key} {rpm:.0f}/{load}: ripple {q:.3f} (< 0.1; was 0.80-0.99), 1 vs 0.5 deg VE {dve:.2f}% "
+                   f"(< 0.5)" + (f", torque {dtq:.2f}% (< 2)" if key == "single" else ""))
+    check("FINDING-028: a 1-degree step's port flow doesn't overshoot (agrees with 0.5 degrees at idle)",
+          1.0 if ok else 0.0, 1.0, 0.0, "; ".join(pts))
+
+
+def test_knock_from_the_burn_law():
+    """FINDING-029: the sound's knock (meta dpdt_max) was the peak of a central
+    difference of the 1-degree combustion-pressure trace. A rise made within
+    one step read about half, so it moved with where combustion started
+    inside the step: over four injection timings 0.25 degree apart, crdi15's
+    idle trace value spread 15.9%. It now comes from the burn law,
+    cycle.dpdtheta_knock (peak (gamma - 1)/V dQ/dtheta, sampled inside each
+    step), whose spread is 0.9%. Also: the sound reads it, and wiebe_step
+    releases exactly the whole burn whatever the start's phase."""
+    import math
+    import numpy as np
+    from dieselsim.acoustics import EngineSound
+    from dieselsim.config import PRESETS
+    from dieselsim.cycle import wiebe_step
+    vals = []
+    for sh in (0.0, 0.25, 0.5, 0.75):
+        spec = PRESETS["crdi15"]()
+        spec.inj.soi_deg_btdc += sh
+        eng = DieselEngine(spec=spec)
+        op = eng.operating_point(800.0, load=0.05, n_cycles=9)
+        vals.append(op.cycle.dpdtheta_knock)
+    spread = (max(vals) - min(vals)) / np.mean(vals) * 100
+    meta = EngineSound(eng.spec).build_sources(op)["_meta"]["dpdt_max"]
+    reads = abs(meta / (op.cycle.dpdtheta_knock * 1e5 * 800.0 * 6.0) - 1.0) < 1e-12
+    worst = 0.0
+    for phase in (0.0, 0.3, 0.7):
+        tot = sum(wiebe_step(k + phase, 1.0, 6.9, 2.4, 4.6) for k in range(0, 12))
+        worst = max(worst, abs(tot - (1.0 - math.exp(-6.9))))
+    check("FINDING-029: the knock comes from the burn law, the same wherever combustion starts in the step",
+          1.0 if spread < 3.0 and reads and worst < 1e-12 else 0.0, 1.0, 0.0,
+          f"crdi15 idle dpdtheta_knock {' '.join(f'{v:.3f}' for v in vals)} bar/deg over SOI +0/0.25/0.5/0.75 deg: "
+          f"spread {spread:.1f}% (< 3; the old trace value 15.9%); the sound reads it: {reads}; "
+          f"wiebe_step's total off by {worst:.1e} (< 1e-12)")
 
 # today's (pre-P10) synth RMS for crdi15 at 2000 rpm / 0.3, per mic (tools/p10_trim.py on main at 509e0fd)
 _PRE_P10_CRUISE_RMS = dict(exhaust_tip=0.0431, intake=0.0534, engine_bay=0.3052, cabin=0.0518, exterior_7m=0.0482)
@@ -2887,6 +2960,8 @@ def main():
                test_livesound_carries_physics,
                test_livesound_matches_render,
                test_port_flow_zigzag_is_not_heard,
+               test_port_flow_does_not_overshoot,
+               test_knock_from_the_burn_law,
                test_p10_deeper_sound,
                test_intake_and_boost_levels_carry_physics,
                test_grid_sources_warm_and_cold,

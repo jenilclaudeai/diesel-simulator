@@ -29,6 +29,32 @@ and B-06 fixed, PR open; #118 and #119 still waiting to merge)"; before
 that "2026-10-10, session 8 (Phase 7 step 7 built,
 PR #119; all seven steps built)".)*
 
+**Session 9, stage 1 written into `dieselsim/` (2026-10-14), branch
+`feat/p09-knock` (from #129's head; one branch for stage 1, stage 2 and
+the rebuild; NOT mergeable before the rebuild, the shipped grids are stale):**
+- `cycle.implicit_flow`: closed-form semi-implicit port flow, at the
+  valves and at an NA engine's air-side orifices. It returns the explicit
+  flow unchanged unless the step would overshoot.
+- `cycle.wiebe_step`: the pilot and main burns integrated exactly over each
+  step.
+- `CycleResult.dpdtheta_knock`: the burn law's peak `(γ−1)/V × dQ/dθ`,
+  8 samples a step, cylinder 1, last cycle; `acoustics` meta `dpdt_max`
+  reads it. The references are unchanged: at full load it reads ~1.47× the
+  old trace value, and ~1.03–1.06× at idle and cruise.
+- **Measured:** 8 points take 29.0 s against 28.7 s today. single10 is
+  identical to the prototype; crdi15 differs slightly because the pilot is
+  now integrated exactly too.
+- **Tests:**
+  - new `test_port_flow_does_not_overshoot` (crdi15 and the built-in
+    `single`, 1° against 0.5° at idle);
+  - new `test_knock_from_the_burn_law` (spread over sub-degree SOI shifts
+    0.9%; the old trace value 15.9%);
+  - `test_port_flow_zigzag_is_not_heard` now requires the raw ripple
+    < 0.1 (it is 0.037).
+  - All three pass. **Running:** 7 mutants against a baseline, and the
+    full suite (expect the golden points and the grid-match tests to fail
+    until the re-baseline and the rebuild).
+
 **Session 9, stage 1 (the numerics) started (2026-10-14), scratch only:**
 - **Why brute sub-stepping is costly:** with 4+ cylinders some valve is
   always open, and single10's exhaust manifold (0.43 L) is smaller than
