@@ -2,8 +2,11 @@
 
 **The owner's Feat Prop P09** (priority 2, "Proposed"): "Knocking:
 Increased knocking on high altitude".
-**Status:** **measured; nothing built; questions for the owner at the end.**
-(2026-10-14, session 9)
+**Status:** **decided 2026-10-14: option C.** The owner's answers: "1. C",
+"2. Hear in enjoy also", "3. modern CRDi at Leh and a cold start". The
+solver fix goes into the same rebuild as FINDING-028's option B (ADR-018).
+Being built; the plan is at the end. *(Was: "measured; nothing built;
+questions for the owner at the end. (2026-10-14, session 9)".)*
 **Reproduce:** `python3 tools/p09_altitude_knock.py .` for the solver's
 numbers; the prototype and listening numbers come from scratch scripts
 described below.

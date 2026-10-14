@@ -27,6 +27,31 @@ and B-06 fixed, PR open; #118 and #119 still waiting to merge)"; before
 that "2026-10-10, session 8 (Phase 7 step 7 built,
 PR #119; all seven steps built)".)*
 
+**Session 9, P09 decided: option C (2026-10-14), being designed:**
+- **The owner's answers:** "1. C", "2. Hear in enjoy also", "3. modern
+  CRDi at Leh and a cold start". The solver fix shares a rebuild with
+  FINDING-028's option B (ADR-018).
+- **Cold start, measured** (crdi15 idle, walls at 273 K as the grid's
+  cold cells): the delay +9%, the knock +10% today (+17% with V1). But with
+  V1 a cold engine at Leh knocks *less* than a warm one there (1.31
+  against 1.39). At idle the premixed burn takes about 5°, near its 4°
+  floor, and nothing lets the delay speed it up.
+- **V3** (V1, plus `d_pre × (0.3 ms / τ)^a`) **behaves erratically**: at
+  a = 1, crdi15's Leh idle knock falls to 0.41. Suspected: a premixed spike
+  2–5° wide is barely resolved by the solver's 1° step. **Running:** the
+  same points at 1.0 / 0.5 / 0.25° steps, for today, V1 and V3.
+- **The sound side, designed (not built):**
+  - the live loop carries a reference knock, `dpdt_ref` (warm, standard
+    air, same cell);
+  - the weather table gains a `dpdt_max` key (one more key from
+    `solve_cell`'s `_meta`);
+  - the synth applies `(dpdt_max / dpdt_ref)^k` to the knock, so warm
+    standard air is unchanged bit for bit;
+  - `k` is chosen by ear before the rebuild. It is a playback gain, not
+    physics, and will be documented as such.
+- Watson's (1980) premixed shape factors could not be verified (the paper
+  is paywalled, and a thesis link was dead), so they aren't used.
+
 **Session 9, P09 being measured (2026-10-14), scratch only so far:**
 - The sheet's **P09**: "Knocking: Increased knocking on high altitude"
   (priority 2). Also new in the sheet: **P11**, "Number or gear selector:
