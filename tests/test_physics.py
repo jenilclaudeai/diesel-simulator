@@ -1831,6 +1831,107 @@ def test_knock_from_the_burn_law():
           f"spread {spread:.1f}% (< 3; the old trace value 15.9%); the sound reads it: {reads}; "
           f"wiebe_step's total off by {worst:.1e} (< 1e-12)")
 
+
+def _p09_knock(p, T, cold):
+    """crdi15 at idle (800 rpm, 5%): the burn law's knock [bar/deg], warm or a
+    cold start (every wall, the coolant and the oil at the air's temperature)."""
+    from dieselsim.config import PRESETS
+    spec = PRESETS["crdi15"]()
+    spec.thermal.ambient_p, spec.thermal.ambient_T = p, T
+    eng = DieselEngine(spec=spec)
+    if cold:
+        eng.cold_start_walls(T)
+        eng.oil.cond.T_oil = T
+    return eng.operating_point(800.0, load=0.05, n_cycles=9).cycle.dpdtheta_knock
+
+
+def test_p09_knock_at_altitude_and_a_cold_start():
+    """P09 (the owner: "modern CRDi at Leh and a cold start"): the solver's
+    knock must rise in both, and most for both. Before, the premixed burn
+    slowed as the air thinned (its duration carried 30 * phi), and at idle a
+    longer delay changed nothing (the whole injection was over before
+    ignition; the premix fraction sat on its 0.72 cap): crdi15 at idle read
+    Leh -7%, a cold start +8%, both +1%. The burn now uses the mixture the
+    delay prepared (cycle.PREMIX_DELAY_EXP): +17%, +17%, +40%. Also: a cold
+    start's walls are all at the air's temperature (engine.cold_start_walls,
+    the grid's cold cells), not partly following the coolant."""
+    from dieselsim.environment import pressure_at
+    from dieselsim.config import PRESETS
+    leh = (pressure_at(3500.0), 293.15)
+    sea = _p09_knock(101325.0, 298.0, False)
+    cold = _p09_knock(101325.0, 298.0, True) / sea - 1.0
+    alt = _p09_knock(*leh, False) / sea - 1.0
+    both = _p09_knock(*leh, True) / sea - 1.0
+    eng = DieselEngine(spec=PRESETS["crdi15"]())
+    eng.cold_start_walls(273.0)
+    t = eng.spec.thermal
+    walls = (t.piston_T, t.head_T, t.liner_T_top, t.liner_T_bot, t.port_T_exh, eng.T_coolant)
+    # the weather table carries the knock, from each cell's sound meta (or Enjoy can't hear altitude)
+    from dieselsim import bridge
+    probe = bridge._weather_values(eng.spec, dict(torque=1.0, fmep=0.0, fuel_kg_h=1.0, boost=1.0, turbo_rpm=1.0,
+                                                  afr=20.0, T_exh=700.0), {"dpdt_max": 1.234e9})
+    wx = "dpdt_max" in bridge.WEATHER_KEYS and probe[bridge.WEATHER_KEYS.index("dpdt_max")] == 1.234e9
+    ok = cold > 0.10 and alt > 0.10 and both > max(cold, alt) and all(w == 273.0 for w in walls) and wx
+    check("P09: crdi15's idle knocks harder at Leh and on a cold start, most for both",
+          1.0 if ok else 0.0, 1.0, 0.0,
+          f"against warm sea level ({sea:.2f} bar/deg): cold start {100 * cold:+.0f}%, Leh {100 * alt:+.0f}%, both "
+          f"{100 * both:+.0f}% (each > +10%, both the most; before: +8%, -7%, +1%); a cold start's walls "
+          f"{', '.join(f'{w:.0f}' for w in walls)} K (all 273); the weather table carries the knock: {wx}")
+
+
+def test_p09_chamber_walls_warm_and_the_synth_hears_the_knock():
+    """P09: the live loop's chamber-wall temperature (live.LiveEngine._chamber)
+    starts at the air's, warms within about a minute running (CHAMBER_TAU_RUN,
+    faster than the coolant), and the grid's warm/cold blend follows it: the
+    torque the loop uses is the blend at T_chamber. The synth plays the live
+    knock's ratio to the warm standard air's up by KNOCK_GAIN_EXP: exactly
+    nothing at a ratio of 1, and ratio^k on the combustion part otherwise."""
+    if _no_prebuilt_grids("P09: chamber walls warm, the synth hears the knock"):
+        return
+    import numpy as np
+    from dieselsim import livesound as LS
+    from dieselsim.live import LiveEngine
+    g = _prebuilt_grid("crdi15")
+    live = LiveEngine(g, "crdi15", trans="dct")
+    T0, Tc0 = live.T_chamber, live.T_coolant
+    for _ in range(60 * 60):                      # a minute at idle, 60 Hz
+        live.step(1 / 60)
+    target = g.T_warm - live.chamber_follow * (g.T_warm - live.T_coolant)
+    share = (live.T_chamber - T0) / max(target - T0, 1e-9)
+    uses = abs(live._perf(live.rpm, live.load_eff)["torque_ind"]
+               - g.blend_perf_T(live.rpm, live.load_eff, live.T_chamber)["torque_ind"]) < 1e-9
+    differs = abs(g.blend_perf_T(live.rpm, live.load_eff, live.T_chamber)["torque_ind"]
+                  - g.blend_perf_T(live.rpm, live.load_eff, live.T_coolant)["torque_ind"]) > 1e-6
+    # the synth's gain, at a fixed exponent
+    d = _crdi15_sources(800.0, 0.05)
+    k_was = LS.KNOCK_GAIN_EXP
+
+    def comb(live_in, k):
+        LS.KNOCK_GAIN_EXP = k
+        try:
+            syn = LS.LiveSynth(d["spec"], "cabin")
+            syn.set_sources(d["src"])
+            parts = []
+            for b in range(int(0.6 * LS.FS / LS.BLOCK)):
+                syn.block(800.0, live_in)
+                parts.append(syn.last_parts["combustion"])
+            return np.concatenate(parts)
+        finally:
+            LS.KNOCK_GAIN_EXP = k_was
+    ref = d["src"]["_meta"]["dpdt_max"]
+    plain = comb({}, 3.0)
+    unity = comb({"dpdt_max": ref, "dpdt_ref": ref}, 3.0)
+    up = comb({"dpdt_max": ref, "dpdt_ref": ref / 1.25}, 3.0)
+    gain = float(np.sqrt(np.mean(up ** 2)) / np.sqrt(np.mean(unity ** 2)))
+    ok = (share > 0.6 and live.T_chamber - T0 > live.T_coolant - Tc0 and uses and differs
+          and np.array_equal(plain, unity) and abs(gain / 1.25 ** 3 - 1.0) < 1e-6)
+    check("P09: the chamber walls warm within a minute, the blend follows them, the synth plays the knock up",
+          1.0 if ok else 0.0, 1.0, 0.0,
+          f"after 60 s at idle T_chamber {T0:.0f} -> {live.T_chamber:.1f} K ({100 * share:.0f}% of the way to "
+          f"{target:.1f}; > 60%), coolant {Tc0:.0f} -> {live.T_coolant:.1f} K; the loop's torque is the blend at "
+          f"T_chamber: {uses} (and differs from the coolant's: {differs}); synth: a ratio of 1 changes nothing: "
+          f"{bool(np.array_equal(plain, unity))}, a ratio of 1.25 at k = 3 gives x{gain:.4f} (want {1.25 ** 3:.4f})")
+
 # today's (pre-P10) synth RMS for crdi15 at 2000 rpm / 0.3, per mic (tools/p10_trim.py on main at 509e0fd)
 _PRE_P10_CRUISE_RMS = dict(exhaust_tip=0.0431, intake=0.0534, engine_bay=0.3052, cabin=0.0518, exterior_7m=0.0482)
 
@@ -1996,11 +2097,12 @@ def test_live_sound_follows_the_engine():
 
     def run(T_oil):
         live = LiveEngine(g, "crdi15")
-        live.T_coolant, live.T_oil = 361.0, T_oil
+        # warm walls (P09: the grid blends by the chamber walls, not the coolant)
+        live.T_coolant, live.T_chamber, live.T_oil = 361.0, 361.0, T_oil
         live._update_friction()
         inp = live.sound_inputs()
         syn = LS.LiveSynth(g.spec)
-        syn.set_sources(g.blend_sources(live.rpm, live.load_eff, live.T_coolant))
+        syn.set_sources(g.blend_sources(live.rpm, live.load_eff, live.T_chamber))
         acc = {}
         for b in range(int(1.2 * LS.FS / LS.BLOCK)):
             syn.block(live.rpm, inp)
@@ -2974,6 +3076,8 @@ def main():
                test_port_flow_zigzag_is_not_heard,
                test_port_flow_does_not_overshoot,
                test_knock_from_the_burn_law,
+               test_p09_knock_at_altitude_and_a_cold_start,
+               test_p09_chamber_walls_warm_and_the_synth_hears_the_knock,
                test_p10_deeper_sound,
                test_intake_and_boost_levels_carry_physics,
                test_grid_sources_warm_and_cold,

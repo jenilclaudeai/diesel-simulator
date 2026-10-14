@@ -621,6 +621,16 @@ class DieselEngine:
         t.liner_T_bot = lb0 + WALL_FOLLOW["liner_T_bot"] * f
         t.port_T_exh = pe0 + WALL_FOLLOW["port_T_exh"] * f
 
+    def cold_start_walls(self, T: float):
+        """P09 (FINDING-029): a cold start, every chamber wall at T. The coolant
+        is set to T too, but the walls do not follow it by WALL_FOLLOW, as a
+        running engine's do: just started, the metal is at the air's
+        temperature. The grid's cold cells (grid.solve_cell) are solved so."""
+        self.T_coolant = float(T)
+        self._apply_thermal_state()
+        t = self.spec.thermal
+        t.piston_T = t.head_T = t.liner_T_top = t.liner_T_bot = t.port_T_exh = float(T)
+
     def _update_thermal(self, op: OperatingPoint, dt_s: float):
         """
         Two-node warm-up: coolant + metal in one lump, oil in another.

@@ -127,7 +127,7 @@ class Adr011Grid(PerfGrid):
     """
 
     def __init__(self, spec, rpms, loads, perf, p_cyl, grid_deg, perf_cold, p_cyl_cold,
-                 T_warm, T_cold, src=None, src_cold=None, weather=None):
+                 T_warm, T_cold, src=None, src_cold=None, weather=None, meta=None, meta_cold=None):
         super().__init__(spec, rpms, loads, perf)
         # Phase 7 step 4: the grid file's weather table, if it has one
         self.weather = WeatherTable(rpms, loads, weather) if weather else None
@@ -145,6 +145,11 @@ class Adr011Grid(PerfGrid):
             return [[dict({k: np.asarray(v, dtype=float) for k, v in c.items() if k != "_meta"},
                           _meta={k: float(v) for k, v in c["_meta"].items()}) for c in row] for row in cells]
         self.src, self.src_cold = srcs(src), srcs(src_cold)
+        # P09: the sources' scalars on their own (blend_meta), from the file's src_meta even
+        # where it carries no waveforms, else from the sources
+        tab = lambda m, c: ([[{k: float(v) for k, v in x.items()} for x in row] for row in m] if m is not None  # noqa: E731
+                            else [[x["_meta"] for x in row] for row in c] if c is not None else None)
+        self.meta, self.meta_cold = tab(meta, self.src), tab(meta_cold, self.src_cold)
 
     @classmethod
     def from_json(cls, gj, spec=None):
@@ -175,7 +180,7 @@ class Adr011Grid(PerfGrid):
                    gj["perf_cold"], cells(gj["p_cyl_cold_f32"]), gj["T_warm"], gj["T_cold"],
                    srcs(gj["src_f32"], gj["src_meta"]) if has else None,
                    srcs(gj["src_cold_f32"], gj["src_meta_cold"]) if has else None,
-                   weather=gj.get("weather"))
+                   weather=gj.get("weather"), meta=gj.get("src_meta"), meta_cold=gj.get("src_meta_cold"))
 
     def cold_weight(self, T_coolant):
         return float(np.clip((self.T_warm - T_coolant) / (self.T_warm - self.T_cold), 0.0, 1.0))
@@ -222,6 +227,19 @@ class Adr011Grid(PerfGrid):
         out = {k: mix(lambda q, k=k: q[k]) for k in W[0] if k != "_meta"}
         out["_meta"] = {k: mix(lambda q, k=k: q["_meta"][k]) for k in W[0]["_meta"]}
         return out
+
+    def blend_meta(self, rpm, load, T_coolant, key):
+        """P09: one of the sources' scalars (_meta[key]) at the live point, as
+        blend_sources mixes it, without the waveforms."""
+        i, j, fr, fl = self.weights(rpm, load)
+        w = ((1 - fr) * (1 - fl), (1 - fr) * fl, fr * (1 - fl), fr * fl)
+        c = self.cold_weight(T_coolant)
+        W = (self.meta[i][j], self.meta[i][j + 1], self.meta[i + 1][j], self.meta[i + 1][j + 1])
+        C = (self.meta_cold[i][j], self.meta_cold[i][j + 1], self.meta_cold[i + 1][j],
+             self.meta_cold[i + 1][j + 1])
+        warm = w[0] * W[0][key] + w[1] * W[1][key] + w[2] * W[2][key] + w[3] * W[3][key]
+        cold = w[0] * C[0][key] + w[1] * C[1][key] + w[2] * C[2][key] + w[3] * C[3][key]
+        return (1.0 - c) * warm + c * cold
 
 
 # ==========================================================================
@@ -1315,11 +1333,28 @@ class LiveEngine:
         self.skirt_live = 0.0
         self.vseat_live = 0.0
         self._frame = 0
+        # P09: the chamber walls' temperature, which the grid's warm/cold blend
+        # follows (its cold cells are a cold start, every wall at T_cold). A cold
+        # start, like the coolant; see _chamber.
+        self.T_chamber = self.spec.thermal.ambient_T
+        self.chamber_follow = 1.0
+        self.knock_live = 0.0      # P09: Pa/s, see _knock
+        self.knock_ref = 0.0
         if self.adr011:
             # a private engine for the friction model: walls follow the live
             # coolant through _apply_thermal_state, oil state is ours
             from .engine import DieselEngine
+            from .config import WALL_FOLLOW
             self._eng = DieselEngine(spec=copy.deepcopy(self.spec))
+            # a running engine's walls by WALL_FOLLOW, as a share of the grid's
+            # warm-to-cold blend: the mean over the piston, head and liner top
+            # of follow * (T_warm - T_cold) / (that wall's warm temperature - T_cold)
+            # (crdi15: 0.21, 0.38, 0.46 -> 0.35)
+            g = self.g
+            span = g.T_warm - g.T_cold
+            walls = (("piston_T", self._eng._th0[0]), ("head_T", self._eng._th0[1]),
+                     ("liner_T_top", self._eng._th0[2]))
+            self.chamber_follow = sum(WALL_FOLLOW[k] * span / max(w0 - g.T_cold, 1.0) for k, w0 in walls) / 3.0
             self._update_friction()
 
     # a manual engine stalls when the clutch drags it below this fraction
@@ -1333,6 +1368,10 @@ class LiveEngine:
     # stopped, it drifts back to the ambient over ~30 min. Approximations, stated as such.
     WAX_ABOVE, WAX_BELOW, WAX_STALL = 2.0, 6.0, 0.12
     FUEL_TAU_RUN, FUEL_TAU_OFF, FUEL_RETURN_SHARE = 420.0, 1800.0, 0.6
+    # P09: the chamber walls warm within about a minute of starting (the
+    # piston crown and the head's fire deck are thin, and see the flame), and
+    # cool back to the coolant over ~10 min stopped. Approximations, stated as such.
+    CHAMBER_TAU_RUN, CHAMBER_TAU_OFF = 60.0, 600.0
 
     def _update_friction(self):
         """
@@ -1348,8 +1387,8 @@ class LiveEngine:
         e._apply_thermal_state()
         e.oil.cond.T_oil = self.T_oil
         rpm = max(self.rpm, 0.25 * self.spec.idle_rpm)
-        p = g.blend_perf_T(rpm, self.load_eff, self.T_coolant)
-        fr = cell_friction(e, rpm, g.blend_p_cyl(rpm, self.load_eff, self.T_coolant), g.grid_deg,
+        p = g.blend_perf_T(rpm, self.load_eff, self.T_chamber)
+        fr = cell_friction(e, rpm, g.blend_p_cyl(rpm, self.load_eff, self.T_chamber), g.grid_deg,
                            p["fuel_mg"], p["p_rail"])
         self.fmep_live = float(fr["fmep"])
         self.P_mech = float(fr["P_mech"])
@@ -1368,20 +1407,41 @@ class LiveEngine:
         out = {"boost": self.boost, "turbo_rpm": self.turbo_rpm, "load": self.load_eff}
         if self.adr011:
             out.update(Pb=self.Pb_live, skirt_clr=self.skirt_live, v_seating=self.vseat_live)
+            if self.knock_ref > 0.0:
+                # P09: the synth plays their ratio up (livesound.KNOCK_GAIN_EXP)
+                out.update(dpdt_max=self.knock_live, dpdt_ref=self.knock_ref)
         return out
+
+    def _knock(self):
+        """P09: the knock at the live chamber temperature and air (the warm/cold
+        blend, plus the weather table's change off the standard air), and the warm
+        standard air's at the same point, for sound_inputs. Nothing without the
+        grid's source scalars."""
+        g = self.g
+        if not self.adr011 or g.meta is None or g.meta_cold is None:
+            return
+        rpm = max(self.rpm, 0.25 * self.spec.idle_rpm)
+        knock = g.blend_meta(rpm, self.load_eff, self.T_chamber, "dpdt_max")
+        t = self.spec.thermal
+        if (g.weather is not None and "dpdt_max" in g.weather.keys
+                and (t.ambient_p != 101325.0 or t.ambient_T != 298.0)):
+            knock += g.weather.delta(rpm, self.load_eff, t.ambient_p, t.ambient_T)["dpdt_max"]
+        self.knock_live = max(knock, 1.0e6)
+        self.knock_ref = g.blend_meta(rpm, self.load_eff, g.T_warm, "dpdt_max")
 
     def _perf(self, rpm, load):
         """Grid performance at the live state; torque is BRAKE torque either way."""
         g = self.g
         if self.adr011:
-            p = g.blend_perf_T(rpm, load, self.T_coolant)
+            p = g.blend_perf_T(rpm, load, self.T_chamber)
             t = self.spec.thermal
             # Phase 7 step 4: off the standard air, the weather table's difference
             # (indicated torque, fuel, boost, turbo, AFR, exhaust); friction and
             # sound stay the grid's. At the standard air this is skipped outright.
             if g.weather is not None and (t.ambient_p != 101325.0 or t.ambient_T != 298.0):
                 for k, d in g.weather.delta(rpm, load, t.ambient_p, t.ambient_T).items():
-                    p[k] = p[k] + d
+                    if k in p:          # P09: dpdt_max is the sound's (sound_inputs)
+                        p[k] = p[k] + d
             p["torque"] = p["torque_ind"] - self.T_fric
             return p
         return g.blend_perf(rpm, load)
@@ -1395,7 +1455,7 @@ class LiveEngine:
         if not self.adr011:
             p = g.blend_perf(rpm, load)
             return p["torque"], p["fuel_kg_h"]
-        p = g.blend_perf_T(rpm, load, self.T_coolant)
+        p = g.blend_perf_T(rpm, load, self.T_chamber)
         T, f = p["torque"], p["fuel_kg_h"]
         t = self.spec.thermal
         if g.weather is not None and (t.ambient_p != 101325.0 or t.ambient_T != 298.0):
@@ -1539,7 +1599,25 @@ class LiveEngine:
             self.T_oil = min(max(self.T_oil, 240.0), 430.0)
         self.T_coolant += (Q_in - Q_out) * dt / C
         self.T_coolant = min(max(self.T_coolant, 240.0), 420.0)
+        self._chamber(dt)
         self._protect()
+
+    def _chamber(self, dt):
+        """P09: the chamber walls' temperature. Running, it heads for where a
+        running engine's walls sit at the live coolant (chamber_follow of the way
+        from the grid's warm cells toward its cold ones); stopped, for the
+        coolant. The grid blends warm/cold by it, so a cold start knocks harder
+        for its first minute, and an engine held cold by its thermostat knocks a
+        little more than a warm one."""
+        g = self.g
+        running = not (self.stalled or self.engine_stopped or self.fuel_waxed or self.out_of_fuel) \
+            and self.rpm > 0.5 * self.spec.idle_rpm
+        if running and self.adr011:
+            target = g.T_warm - self.chamber_follow * (g.T_warm - self.T_coolant)
+        else:
+            target = self.T_coolant
+        self.T_chamber += (target - self.T_chamber) * min(1.0, dt / (self.CHAMBER_TAU_RUN if running
+                                                                      else self.CHAMBER_TAU_OFF))
 
     # ------------------------------------------------------------------
     def _protect(self):
@@ -1641,6 +1719,7 @@ class LiveEngine:
             self._sub(dt / n_sub)
         self._totals(dt)
         self._thermal(dt)
+        self._knock()
         self._cold_flow(dt)
 
     def _cold_flow(self, dt):

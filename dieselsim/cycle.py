@@ -47,6 +47,18 @@ NOX_CAL = 0.030       # calibration of the lumped Zeldovich source
 SOOT_CAL = 0.28
 GAMMA_FLOW = 1.35     # FINDING-028: the pressure response to a port flow, in implicit_flow
 KNOCK_SUBSTEPS = 8    # FINDING-029: samples of the burn rate inside each step
+# P09 (FINDING-029): the premixed burn's duration. It used to be 0.30 x the
+# whole burn's, which grows with the overall equivalence ratio, so thinner air
+# (altitude) made the premixed spike burn SLOWER; and at idle, where the whole
+# injection is over before ignition, a longer delay changed nothing. Real
+# engines go the other way (SAE 2013-01-1516, idle, 550-4500 m: a longer delay,
+# a shorter combustion). Now the premixed part burns the mixture the delay
+# prepared: no phi term, and faster by (delay / injection)^PREMIX_DELAY_EXP once
+# the delay outlasts the injection. The exponent is chosen, not calibrated:
+# 0.5 gives crdi15 at idle +17% knock at Leh, +17% on a cold start and +40% for
+# both (1.0 runs into the floor and flattens). Floor: D_PRE_FLOOR degrees.
+PREMIX_DELAY_EXP = 0.5
+D_PRE_FLOOR = 2.0
 
 
 def implicit_flow(md, dt, pa, Ta, Ra, Va, dVa, pb, Tb, Rb, Vb, dVb, A):
@@ -427,6 +439,7 @@ class CycleSolver:
         soc_p = np.full(nc, -1.0); soc_m = np.full(nc, -1.0)
         m_inj = np.zeros(nc); xb_p = np.zeros(nc); xb_m = np.zeros(nc)
         premix = np.zeros(nc); burn_dur = np.full(nc, 50.0)
+        phi_main = np.zeros(nc); delay_ratio = np.zeros(nc)   # P09: the premixed burn's inputs
         p_prev = np.full(nc, 1e5)
         mbz = np.zeros(nc); Tbz = np.full(nc, 1200.0)
         NOx = np.zeros(nc); soot = np.zeros(nc)
@@ -650,6 +663,8 @@ class CycleSolver:
                                 else:
                                     b = 0.02
                                 premix[c] = min(0.72, max(0.02, b))
+                                phi_main[c] = phi
+                                delay_ratio[c] = b
                                 burn_dur[c] = self.burn_duration(
                                     dur_main, phi, rpm)
 
@@ -671,7 +686,9 @@ class CycleSolver:
                     if soc_m[c] >= 0.0 and xb_m[c] < 1.0:
                         bd = burn_dur[c]
                         rel = (tl - soc_m[c]) % 720.0
-                        d_pre = max(4.0, 0.30 * bd)
+                        # P09: the burn of the mixture the delay prepared (see PREMIX_DELAY_EXP)
+                        d_pre = max(4.0, 0.30 * (bd - 30.0 * min(phi_main[c], 1.3)))
+                        d_pre = max(D_PRE_FLOOR, d_pre / max(1.0, delay_ratio[c]) ** PREMIX_DELAY_EXP)
                         dx = (premix[c] * wiebe_step(rel, dth, 6.9, 2.4, d_pre)
                               + (1.0 - premix[c]) * wiebe_step(rel, dth, 6.9, 0.80, bd))
                         dx = min(dx, 1.0 - xb_m[c])

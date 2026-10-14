@@ -21,7 +21,8 @@ export interface FrictionSpec {
   };
   trib: Record<string, number>;
   valves: Record<string, number>;
-  thermal: { liner_T_top: number; liner_T_bot: number };
+  // piston_T, head_T: the live loop's chamber-wall state reads them (P09); a grid's engine view has them
+  thermal: { liner_T_top: number; liner_T_bot: number; piston_T?: number; head_T?: number };
   oil: Lubricant;
 }
 

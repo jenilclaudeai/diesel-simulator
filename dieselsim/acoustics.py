@@ -220,6 +220,11 @@ HISS_WEIGHT = 0.18
 # before it is differentiated. The cells keep the raw flow; only the sound
 # reads it smoothed.
 PORT_SMOOTH_DEG = 2.0
+# P09 (FINDING-029): the knock's reference, Pa/s, for both its level (dpdt_max / KNOCK_REF) and how
+# hard it rings the high modes (sharp). It was 5.0e9 for the old trace value. The burn law's reads
+# about x1.8 at idle, x1.25 at a cruise and x1.6 at full load against that, so the reference is x1.5:
+# the combustion part within about +-2 dB of what the owner approved in ADR-018.
+KNOCK_REF = 7.5e9
 
 
 def smooth_port_flow(x, dtheta):
@@ -270,7 +275,7 @@ class EngineSound:
         # rated brake power (FMEP ~1.1 bar of which roughly half is boundary)
         self._ref_Pb = max(0.5 * 1.1e5 * g.displacement * (rated / 120.0),
                            1.0)
-        self._ref_dpdt = 5.0e9        # measured band across shipped presets
+        self._ref_dpdt = KNOCK_REF    # P09: x1.5 the old 5.0e9, for the burn-law knock
         self._ref_vseat = 0.10        # m/s, typical seating velocity
         self._ref_turbo = 1.2e5       # rpm
         # boost term (boost - 1) * spd^2 at rated: the assumed pr, at spd 1
@@ -539,7 +544,7 @@ class EngineSound:
         # 5.0e9 puts the presets in a 1.0-2.5 band with headroom. Note this
         # makes most engines duller than before, because before they were
         # all pinned at maximum high-mode excitation.
-        sharp = min(3.0, meta["dpdt_max"] / 5.0e9)
+        sharp = min(3.0, meta["dpdt_max"] / KNOCK_REF)   # P09: was / 5.0e9 (see KNOCK_REF)
         for f0, Q, gn in ((680.0, 11.0, 1.00), (1450.0, 14.0, 0.72),
                           (2350.0, 16.0, 0.55), (3600.0, 18.0, 0.42),
                           (5200.0, 20.0, 0.26)):

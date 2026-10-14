@@ -34,8 +34,13 @@ import math
 
 import numpy as np
 
-from .acoustics import (C_AIR_STP, HISS_WEIGHT, MIC_TRIM, MICS, SLAP_CLR_REF, SOURCE_BALANCE, SPL_CAL,
+from .acoustics import (C_AIR_STP, HISS_WEIGHT, KNOCK_REF, MIC_TRIM, MICS, SLAP_CLR_REF, SOURCE_BALANCE, SPL_CAL,
                         smooth_port_flow)
+
+# P09 (the owner: "Hear in enjoy also"): the live knock's ratio to the warm standard air's is played
+# up by this power, a playback gain, not physics; the physics gives the ratio (crdi15 at idle: a cold
+# start x1.17, Leh x1.17, both x1.40). Chosen by ear in the listening round; 0 until then.
+KNOCK_GAIN_EXP = 0.0
 
 FS = 44100
 BLOCK = 128                 # the AudioWorklet render quantum
@@ -308,7 +313,7 @@ class LiveSynth:
         # acoustics.EngineSound's physical reference levels (FINDING-004)
         self.ref_mdot = max(g.displacement * (rated / 120.0) * 1.19 * 1.15 * pr, 1e-6)
         self.ref_Pb = max(0.5 * 1.1e5 * g.displacement * (rated / 120.0), 1.0)
-        self.ref_dpdt, self.ref_vseat, self.ref_turbo = 5.0e9, 0.10, 1.2e5
+        self.ref_dpdt, self.ref_vseat, self.ref_turbo = KNOCK_REF, 0.10, 1.2e5
         self.ref_boost = max(pr - 1.0, 1e-6)       # FINDING-022
         table = noise_table(noise_seed)
         self.n_hiss = NoiseCursor(table, 0)
@@ -442,11 +447,15 @@ class LiveSynth:
 
         # ---- combustion ----
         exc = self.norm["exc"](self._sample("dpdth", theta) * (rpm_s / 60.0 * 360.0))
-        sharp = min(3.0, meta["dpdt_max"] / 5.0e9)
+        sharp = min(3.0, meta["dpdt_max"] / KNOCK_REF)
         knock = np.zeros(n)
         for bq, f0, gn in self.knock:
             knock = knock + bq.process(exc) * (gn * (1.0 + sharp * (f0 / 2000.0) ** 1.1))
         out["combustion"] = self.norm["knock"](knock) * (meta["dpdt_max"] / self.ref_dpdt)
+        if "dpdt_ref" in meta:
+            # P09: the live loop's knock against the warm standard air's at this point (a cold
+            # start, altitude), played up by KNOCK_GAIN_EXP; 1 at the warm standard air
+            out["combustion"] = out["combustion"] * (meta["dpdt_max"] / max(meta["dpdt_ref"], 1.0e6)) ** KNOCK_GAIN_EXP
 
         # ---- mechanical impulses ----
         tk = self._sample("valve", theta)

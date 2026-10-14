@@ -248,7 +248,13 @@ def live_grid_adr011(key="crdi15"):
     from dieselsim.acoustics import EngineSound
     if os.path.exists(LIVE_GRID) and "--regrid" not in sys.argv:
         with open(LIVE_GRID) as fh:
-            return json.load(fh)
+            grid = json.load(fh)
+        if "src_meta" not in grid:
+            _synthetic_knock(grid)
+            with open(LIVE_GRID, "w") as fh:
+                json.dump(grid, fh, separators=(",", ":"))
+                fh.write("\n")
+        return grid
     spec = DieselEngine(preset=key).spec
     rpms = [float(x) for x in np.linspace(spec.idle_rpm, spec.max_rpm, 8)]
     loads = [float(x) for x in np.linspace(0.0, 1.0, 6)]
@@ -267,10 +273,21 @@ def live_grid_adr011(key="crdi15"):
             "perf": shape(out["warm"], 0), "perf_cold": shape(out["cold"], 0),
             "p_cyl_f32": b64(out["warm"]), "p_cyl_cold_f32": b64(out["cold"]),
             "physics_hash": source_hash()}
+    _synthetic_knock(grid)
     with open(LIVE_GRID, "w") as fh:
         json.dump(grid, fh, separators=(",", ":"))
         fh.write("\n")
     return grid
+
+
+def _synthetic_knock(grid):
+    """P09: the live fixture's grid carries no acoustic sources, only these scalar tables
+    (src_meta, src_meta_cold, as grids store them), so the live loop's knock inputs and the
+    weather table's knock are exercised in both languages. Deterministic and different per
+    cell; the cold cells knock 20% more. The fixture tests the port, not physics."""
+    n_r, n_l = len(grid["rpms"]), len(grid["loads"])
+    grid["src_meta"] = [[{"dpdt_max": 4.0e9 * (1.0 + 0.1 * i + 0.05 * j)} for j in range(n_l)] for i in range(n_r)]
+    grid["src_meta_cold"] = [[{"dpdt_max": 4.8e9 * (1.0 + 0.1 * i + 0.05 * j)} for j in range(n_l)] for i in range(n_r)]
 
 
 def live_weather_table(gj, key="crdi15"):
@@ -286,12 +303,14 @@ def live_weather_table(gj, key="crdi15"):
         c = gj["perf"][q["i"]][q["j"]]
         x, y = (q["p"] - 101325.0) / 43325.0, (q["T"] - 298.0) / 45.0      # about -1..0 and -1..0.45
         s = 1.0 + 0.1 * q["i"] + 0.05 * q["j"]
-        std = [c["torque"] + c["fmep"] * k_t, c["fuel_kg_h"], c["boost"], c["turbo_rpm"], c["afr"], c["T_exh"]]
+        std = [c["torque"] + c["fmep"] * k_t, c["fuel_kg_h"], c["boost"], c["turbo_rpm"], c["afr"], c["T_exh"],
+               gj["src_meta"][q["i"]][q["j"]]["dpdt_max"]]
         off = [s * (40.0 * x + 6.0 * x * x - 9.0 * y), -0.4 * s * x * x, s * (-0.9 * x + 0.1 * y),
-               s * (-6.0e4 * x + 4.0e3 * y), s * (12.0 * x - 3.0 * y * x), s * (-60.0 * x + 25.0 * y)]
+               s * (-6.0e4 * x + 4.0e3 * y), s * (12.0 * x - 3.0 * y * x), s * (-60.0 * x + 25.0 * y),
+               s * (-0.8e9 * x - 0.3e9 * y)]          # P09: the knock, up in thin and cold air
         pieces.append({"values": [a + b for a, b in zip(std, off)], "settled": 1.0})
     return json.loads(bridge.live_weather_assemble(json.dumps({
-        "engine": {"preset": key}, "grid": {k: gj[k] for k in ("rpms", "loads", "perf")}, "pieces": pieces})))
+        "engine": {"preset": key}, "grid": {k: gj[k] for k in ("rpms", "loads", "perf", "src_meta")}, "pieces": pieces})))
 
 
 def adr011_grid_object(gj):
@@ -393,10 +412,10 @@ def live_inputs():
                        {"name": "manual", "trans": "manual", "script": live_script_manual(), "init": {}},
                        {"name": "adr011_cold", "trans": "tc", "grid": "adr011", "script": live_script(), "init": {}},
                        {"name": "adr011_warm", "trans": "dct", "grid": "adr011", "script": live_script(),
-                        "init": {"T_coolant": 361.0, "T_oil": 373.0}},
+                        "init": {"T_coolant": 361.0, "T_oil": 373.0, "T_chamber": 361.0}},   # P09: warm walls too
                        # Phase 7 step 4: Leh's air, through the weather table
                        {"name": "adr011_weather", "trans": "dct", "grid": "adr011", "air": [65764.1, 293.15],
-                        "script": live_script(), "init": {"T_coolant": 361.0, "T_oil": 373.0}},
+                        "script": live_script(), "init": {"T_coolant": 361.0, "T_oil": 373.0, "T_chamber": 361.0}},
                        # Phase 7 step 6: at -20 C a fuel whose filter passes 5% (CFPP -14.4 C) is waxed
                        # out -- inside (0, WAX_STALL), so "waxed means no fuel" decides, not the cap
                        # alone (at 0% the two agree, and a mutant there went unseen); a fuel at its own
@@ -516,7 +535,8 @@ def sound_inputs():
     import dataclasses
     live_spec = json.loads(json.dumps(dataclasses.asdict(spec), default=float))
     live_spec["geom"]["displacement"] = spec.geom.displacement
-    from dieselsim.acoustics import HISS_WEIGHT, MIC_TRIM, MICS, PORT_SMOOTH_DEG, SOURCE_BALANCE, SPL_CAL
+    from dieselsim.acoustics import HISS_WEIGHT, KNOCK_REF, MIC_TRIM, MICS, PORT_SMOOTH_DEG, SOURCE_BALANCE, SPL_CAL
+    from dieselsim import livesound as LS
     mics = {k: {"gains": dict(m.gains), "lp_hz": m.lp_hz, "hp_hz": m.hp_hz, "distance_m": m.distance_m,
                 "reverb": m.reverb, "trim": MIC_TRIM[k]} for k, m in MICS.items()}
     live = {"boost": 1.3, "turbo_rpm": 6.0e4, "load": 0.3, "Pb": 400.0, "skirt_clr": 2.0e-5, "v_seating": 0.05}
@@ -536,6 +556,7 @@ def sound_inputs():
             "mics": mics, "spl_cal": SPL_CAL,
             # P10 (ADR-018) and FINDING-028
             "balance": dict(SOURCE_BALANCE), "hiss_weight": HISS_WEIGHT, "port_smooth_deg": PORT_SMOOTH_DEG,
+            "knock_ref": KNOCK_REF, "knock_gain_exp": LS.KNOCK_GAIN_EXP,
             "butter": [[1, 0.06, "low"], [3, 0.3, "low"], [2, 0.0027, "high"], [1, 0.0016, "high"],
                        [2, [0.0317, 0.295], "band"], [2, [0.0018, 0.0218], "band"]],
             # the synth's outputs are held at their own bound: libm differs by

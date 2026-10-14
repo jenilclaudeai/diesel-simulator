@@ -131,7 +131,7 @@ def add_weather(path, pool, ghash):
     got = pool.map(weather_piece, tasks)
     n = len(plan["pieces"])
     table = json.loads(bridge.live_weather_assemble(json.dumps({
-        "engine": ref, "grid": {k: data[k] for k in ("rpms", "loads", "perf")},
+        "engine": ref, "grid": {k: data[k] for k in ("rpms", "loads", "perf", "src_meta")},
         "pieces": got[:n], "checks": got[n:]})))
     # no build_s inside the table: the browser's build writes the same keys (test:live-real)
     build_s = round(time.time() - t0)

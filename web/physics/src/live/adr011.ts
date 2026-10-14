@@ -110,6 +110,9 @@ export class Adr011Grid extends PerfGrid {
   readonly k_torque: number; // fmep [Pa] -> mean torque [N.m]
   readonly src: Sources[][] | null;
   readonly src_cold: Sources[][] | null;
+  /** P09 (live.py): the sources' scalars on their own, from src_meta even without waveforms */
+  readonly meta: Record<string, number>[][] | null;
+  readonly meta_cold: Record<string, number>[][] | null;
   /** Phase 7 step 4: the grid file's weather table, if it has one (settable, as in Python) */
   weather: WeatherTable | null;
 
@@ -131,6 +134,9 @@ export class Adr011Grid extends PerfGrid {
       })) : null;
     this.src = srcs(d.src_f32, d.src_meta);
     this.src_cold = srcs(d.src_cold_f32, d.src_meta_cold);
+    const tab = (m?: Record<string, number>[][]) => m ? m.map(row => row.map(x => ({ ...x }))) : null;
+    this.meta = tab(d.src_meta);
+    this.meta_cold = tab(d.src_meta_cold);
   }
 
   cold_weight(T_coolant: number): number {
@@ -199,5 +205,19 @@ export class Adr011Grid extends PerfGrid {
       out._meta[k] = mix(m(W[0]!), m(W[1]!), m(W[2]!), m(W[3]!), m(C[0]!), m(C[1]!), m(C[2]!), m(C[3]!));
     }
     return out;
+  }
+
+  /** P09 (live.py blend_meta): one of the sources' scalars at the live point, as blendSources mixes it. */
+  blendMeta(rpm: number, load: number, T_coolant: number, key: string): number {
+    if (!this.meta || !this.meta_cold) throw new Error("this grid carries no source scalars");
+    const [i, j, fr, fl] = this.weights(rpm, load);
+    const w0 = (1 - fr) * (1 - fl), w1 = (1 - fr) * fl, w2 = fr * (1 - fl), w3 = fr * fl;
+    const c = this.cold_weight(T_coolant);
+    const W = [this.meta[i]![j]!, this.meta[i]![j + 1]!, this.meta[i + 1]![j]!, this.meta[i + 1]![j + 1]!];
+    const C = [this.meta_cold[i]![j]!, this.meta_cold[i]![j + 1]!, this.meta_cold[i + 1]![j]!, this.meta_cold[i + 1]![j + 1]!];
+    const m = (q: Record<string, number>) => q[key]!;
+    const warm = w0 * m(W[0]!) + w1 * m(W[1]!) + w2 * m(W[2]!) + w3 * m(W[3]!);
+    const cold = w0 * m(C[0]!) + w1 * m(C[1]!) + w2 * m(C[2]!) + w3 * m(C[3]!);
+    return (1.0 - c) * warm + c * cold;
   }
 }
