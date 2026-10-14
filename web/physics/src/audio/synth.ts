@@ -19,21 +19,41 @@ export type Part = "exhaust" | "intake" | "combustion" | "mech" | "turbo" | "gea
 export interface Mic {
   gains: Record<Part, number>;   // in acoustics.MICS order: the mix sums in this order
   lp_hz: number; hp_hz: number; distance_m: number; reverb: number;
+  trim: number;                  // acoustics.MIC_TRIM (P10, ADR-018)
 }
 
 /** acoustics.MICS (the fixture carries the table; the tests compare). */
 export const MICS: Record<string, Mic> = {
   exhaust_tip: { gains: { exhaust: 1.00, intake: 0.05, combustion: 0.16, mech: 0.10, turbo: 0.10, gear: 0.03, rumble: 0.20 },
-    lp_hz: 5200, hp_hz: 28, distance_m: 0.5, reverb: 0.0 },
+    lp_hz: 5200, hp_hz: 28, distance_m: 0.5, reverb: 0.0, trim: 0.24 },
   intake: { gains: { exhaust: 0.10, intake: 1.00, combustion: 0.18, mech: 0.12, turbo: 0.55, gear: 0.05, rumble: 0.15 },
-    lp_hz: 7500, hp_hz: 45, distance_m: 0.4, reverb: 0.0 },
+    lp_hz: 7500, hp_hz: 45, distance_m: 0.4, reverb: 0.0, trim: 1.73 },
   engine_bay: { gains: { exhaust: 0.30, intake: 0.35, combustion: 1.00, mech: 0.95, turbo: 0.45, gear: 0.55, rumble: 0.55 },
-    lp_hz: 11000, hp_hz: 55, distance_m: 0.8, reverb: 0.0 },
+    lp_hz: 11000, hp_hz: 55, distance_m: 0.8, reverb: 0.0, trim: 1.83 },
   cabin: { gains: { exhaust: 0.38, intake: 0.20, combustion: 0.42, mech: 0.22, turbo: 0.20, gear: 0.14, rumble: 0.60 },
-    lp_hz: 1900, hp_hz: 32, distance_m: 2.0, reverb: 0.25 },
+    lp_hz: 1900, hp_hz: 32, distance_m: 2.0, reverb: 0.25, trim: 0.89 },
   exterior_7m: { gains: { exhaust: 0.85, intake: 0.30, combustion: 0.55, mech: 0.35, turbo: 0.30, gear: 0.22, rumble: 0.35 },
-    lp_hz: 6500, hp_hz: 60, distance_m: 7.0, reverb: 0.35 },
+    lp_hz: 6500, hp_hz: 60, distance_m: 7.0, reverb: 0.35, trim: 0.79 },
 };
+
+/** P10 (ADR-018): acoustics.SOURCE_BALANCE, the sources weighed against each
+ *  other at every mic, and HISS_WEIGHT, the intake hiss against its pulse. */
+export const SOURCE_BALANCE: Partial<Record<Part, number>> = { exhaust: 8.0, mech: 1.0 / 3.0, combustion: 0.6, turbo: 0.4 };
+export const HISS_WEIGHT = 0.18;
+/** FINDING-028: acoustics.PORT_SMOOTH_DEG and smooth_port_flow. */
+export const PORT_SMOOTH_DEG = 2.0;
+
+/** A circular moving average over PORT_SMOOTH_DEG of a 720-degree source on a
+ *  dtheta grid, summed in smooth_port_flow's order: it nulls the solver
+ *  step's zig-zag in the port flows (FINDING-028). */
+export function smoothPortFlow(x: ArrayLike<number>, dtheta: number, out: Float64Array): void {
+  const N = x.length, n = Math.max(1, Math.round(PORT_SMOOTH_DEG / dtheta));
+  for (let i = 0; i < N; i++) {
+    let acc = x[i]!;
+    for (let k = 1; k < n; k++) acc = acc + x[(i - k + N) % N]!;
+    out[i] = acc / n;
+  }
+}
 
 /** What the synth reads from an EngineSpec (the grids' "spec" carries all of it). */
 export interface SoundSpec {
@@ -173,7 +193,11 @@ export class LiveSynth {
     const copy = (into: Sources | null): Sources => {
       const t = into ?? ({ _meta: {} } as Sources);
       for (const k of SOURCE_KEYS) {
-        if (into && t[k].length === src[k].length) t[k].set(src[k]);
+        if (k === "exh_flow" || k === "int_flow") {
+          // FINDING-028: the port flows without the solver step's zig-zag
+          if (!into || t[k].length !== src[k].length) t[k] = new Float64Array(src[k].length);
+          smoothPortFlow(src[k], this.dtheta, t[k]);
+        } else if (into && t[k].length === src[k].length) t[k].set(src[k]);
         else t[k] = Float64Array.from(src[k]);
       }
       for (const k in src._meta) t._meta[k] = src._meta[k]!;
@@ -274,7 +298,7 @@ export class LiveSynth {
     N["hiss"]!.applyInto(hiss, nh);
     const kInt = (mdot / this.ref_mdot) ** 1.5;          // FINDING-022
     const intake = P.intake;
-    for (let i = 0; i < n; i++) intake[i] = (ni[i]! + 0.45 * nh[i]!) * kInt;
+    for (let i = 0; i < n; i++) intake[i] = (ni[i]! + HISS_WEIGHT * nh[i]!) * kInt;
 
     // ---- combustion ----
     const dp = sc.get("dp"), exc = sc.get("exc"), knock = sc.get("knock"), kr = sc.get("kr");
@@ -383,13 +407,13 @@ export class LiveSynth {
     const m = this.mic, mix = sc.get("mix");
     mix.fill(0);
     for (const key in m.gains) {
-      const gn = m.gains[key as Part], p = P[key as Part];
+      const gn = m.gains[key as Part] * (SOURCE_BALANCE[key as Part] ?? 1.0), p = P[key as Part];
       for (let i = 0; i < n; i++) mix[i] = mix[i]! + gn * p[i]!;
     }
     this.out_lp.processInto(mix, mix);
     this.out_hp.processInto(mix, mix);
     const dist = Math.max(1.0, m.distance_m) ** 0.55;
-    for (let i = 0; i < n; i++) mix[i] = mix[i]! / dist;
+    for (let i = 0; i < n; i++) mix[i] = mix[i]! / dist * m.trim;
     this.rev.tapsInto(mix, this.rev_taps, this.taps);
     if (m.reverb > 0.0) {
       const r = sc.get("r");

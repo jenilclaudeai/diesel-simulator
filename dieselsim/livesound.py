@@ -34,7 +34,8 @@ import math
 
 import numpy as np
 
-from .acoustics import C_AIR_STP, MICS, SLAP_CLR_REF, SPL_CAL
+from .acoustics import (C_AIR_STP, HISS_WEIGHT, MIC_TRIM, MICS, SLAP_CLR_REF, SOURCE_BALANCE, SPL_CAL,
+                        smooth_port_flow)
 
 FS = 44100
 BLOCK = 128                 # the AudioWorklet render quantum
@@ -360,6 +361,9 @@ class LiveSynth:
 
     def set_sources(self, src):
         t = {k: np.asarray(src[k], dtype=float) for k in SOURCE_KEYS}
+        # FINDING-028: the port flows without the solver step's zig-zag
+        for k in ("exh_flow", "int_flow"):
+            t[k] = smooth_port_flow(t[k], self.dtheta)
         t["_meta"] = dict(src["_meta"])
         self.target = t
         if self.src is None:
@@ -433,7 +437,7 @@ class LiveSynth:
         hiss = self.hiss_bp.process(self.n_hiss.take(n))
         hiss = hiss * (meta["mdot_air"] * spd ** 1.5) ** 1.5 * 4.0
         # FINDING-022: the exhaust's law, after the normalisation
-        out["intake"] = (self.norm["int"](y) + 0.45 * self.norm["hiss"](hiss)) * \
+        out["intake"] = (self.norm["int"](y) + HISS_WEIGHT * self.norm["hiss"](hiss)) * \
             (meta["mdot_air"] / self.ref_mdot) ** 1.5
 
         # ---- combustion ----
@@ -500,10 +504,11 @@ class LiveSynth:
         m = self.mic
         y = np.zeros(n)
         for key, gn in m.gains.items():
-            y = y + gn * out[key]
+            y = y + gn * SOURCE_BALANCE.get(key, 1.0) * out[key]
         y = self.out_lp.process(y)
         y = self.out_hp.process(y)
         y = y / max(1.0, m.distance_m) ** 0.55
+        y = y * MIC_TRIM.get(m.name, 1.0)
         taps = self.rev.taps(y, self.rev_taps)
         if m.reverb > 0.0:
             r = np.zeros(n)

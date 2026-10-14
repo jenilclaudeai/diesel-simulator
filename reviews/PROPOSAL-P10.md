@@ -3,7 +3,8 @@
 **The owner's Feat Prop P10** (priority 1, "Into Consideration"): "Current
 sound is little high pitch. Actual diesel engines sound is more deeper and
 bassy. For example CRDi, DDIS, TDC."
-**Status:** measured, feasible; nothing built. ~~Questions for the owner at
+**Status:** **decided 2026-10-14 (ADR-018): B, loudness matched at a cruise;
+built on `feat/p10-sound`.** *(Was: "measured, feasible; nothing built.")* ~~Questions for the owner at
 the end. (2026-10-13, session 9)~~ **The owner answered (2026-10-14):
 phone speaker; cabin and intake mics; yes to A/B files.** The listening
 files are made (`tools/p10_ab.py`). **The "muffler" piece below was wrong**:
@@ -197,3 +198,9 @@ it):
 2. At the intake mic, keep the turbo's whistle or turn it down further?
 3. FINDING-028: hide the zig-zag in the synth now and fix the solver at
    the next rebuild (C, recommended)?
+
+## The owner's decision (2026-10-14)
+
+"B sounds better, go with C for findings": B, and FINDING-028's option C.
+For loudness, which the files had hidden by matching levels, the owner chose
+"Match at cruise". It is recorded as ADR-018, with the numbers.

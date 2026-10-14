@@ -1222,3 +1222,67 @@ too.
   sound changes too.
 - The truck at 90 km/h still shifts 5th ↔ 6th as today's box does. That is
   recorded, not fixed.
+
+## ADR-018 — P10: a deeper sound (the balance between sources), and FINDING-028's zig-zag hidden in the synth
+
+**Status:** Accepted (2026-10-14). The owner listened to the A/B/C files
+(`tools/p10_ab.py`) on a phone speaker, at the cabin and intake mics, and
+answered: "B sounds better, go with C for findings". Asked about loudness,
+they chose "Match at cruise".
+
+### Decision
+
+1. **The balance (option B).** `acoustics.SOURCE_BALANCE` weighs the
+   sources against each other at every mic:
+   - exhaust ×8;
+   - mechanical clicks (valve tick, injector, slap) ÷3;
+   - combustion ×0.6;
+   - turbo ×0.4;
+   - and `HISS_WEIGHT` sets the intake hiss against its pulse at 0.18 (was
+     0.45).
+
+   Each source's own level law (FINDINGs 004, 017, 022) is unchanged.
+2. **The loudness: matched at a cruise.** `acoustics.MIC_TRIM` trims each
+   mic so that at half rated rpm and 30% load it is as loud as before. The
+   trim is the median over the Enjoy roster (`tools/p10_trim.py`):
+   exhaust tip 0.24, intake 1.73, engine bay 1.83, cabin 0.89, outside 0.79.
+3. **FINDING-028, option C.**
+   - Now: the sound averages the port flows over 2° (`smooth_port_flow`,
+     in `render` and `LiveSynth.set_sources`) before differentiating them.
+   - Later: the solver's chatter is fixed at the next rebuild. The cells
+     keep the raw flow until then.
+4. **No C (the phone bass peak).** The owner preferred B.
+
+### Why
+
+Measured (`reviews/PROPOSAL-P10.md`): at idle the exhaust was 0.1–0.2% of
+the mix and the clicks 65–82%.
+- At the cabin mic, crdi15's centroid goes 852 → 483 Hz at idle, 707 →
+  426 Hz at 2000 rpm / 0.3, and 746 → 216 Hz at full pedal.
+- The share of the sound below 250 Hz goes from 7–18% to 32–83%.
+- Without the zig-zag's removal, the louder exhaust would have made idle
+  whine at 2.4 kHz (the idle exhaust's centroid is 2,159 Hz with it, 208 Hz
+  without).
+
+### Consequences
+
+- **Loudness:** idle is about 4 dB quieter than before (cabin), a cruise is
+  the same, and full pedal at rated rpm is about 10 dB louder, as in a car.
+  The exhaust-tip mic no longer saturates. At full pedal the engine bay is
+  no louder than before.
+- **single10's** exhaust outweighs everything on it: at a cruise its cabin
+  is about 11 dB louder than before.
+- **No grid rebuild.** `acoustics.py` is hashed, but no cell reads
+  `render` or the mix, so the ten grids and the accuracy table were
+  re-stamped (`tools/restamp_grids.py`). `livesound.py` is outside the
+  hash.
+- **Tests and fixtures.** The sound fixture is regenerated and the TS
+  synth re-matched (ADR-004). The parity test now compares the mix in
+  steady state, over bands within 50 dB of its strongest.
+- **Superseded measurements.** It answers REVIEW-006's `hd_i6`
+  tick-dominance question the same way (the clicks are ÷3). The owner's
+  2026-09-30 sign-off by ear on the old balance is superseded by this one.
+
+**Revisit if** the owner hears full pedal as too loud, or idle as too
+quiet, on the phone; or once FINDING-028's solver fix lands (then drop the
+smoothing, with a measurement showing it changes nothing).
