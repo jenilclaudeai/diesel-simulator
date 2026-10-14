@@ -4,7 +4,10 @@
 sound is little high pitch. Actual diesel engines sound is more deeper and
 bassy. For example CRDi, DDIS, TDC."
 **Status:** **decided 2026-10-14 (ADR-018): B, loudness matched at a cruise;
-built on `feat/p10-sound`.** *(Was: "measured, feasible; nothing built.")* ~~Questions for the owner at
+merged and live (#128). The owner's listen on the live site, 2026-10-14:
+accepted.** Full pedal "is little louder. But fine I guess"; the revved mics
+sounding alike: "Nope" (not a problem). *(Was: "decided 2026-10-14 (ADR-018): B, loudness matched at a cruise;
+built on `feat/p10-sound`.")* *(Was: "measured, feasible; nothing built.")* ~~Questions for the owner at
 the end. (2026-10-13, session 9)~~ **The owner answered (2026-10-14):
 phone speaker; cabin and intake mics; yes to A/B files.** The listening
 files are made (`tools/p10_ab.py`). **The "muffler" piece below was wrong**:

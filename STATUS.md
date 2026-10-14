@@ -1,8 +1,9 @@
 # Status
 
 **Updated:** 2026-10-14, session 9 (P10 merged and live: #128 merged
-2026-10-14 08:10 UTC, CI 9 of 9 read; Pages deployed `196f8d3`; next, the
-owner listens on the phone). *(Was: "2026-10-14, session 9 (P10 decided and built: ADR-018, B with
+2026-10-14 08:10 UTC, CI 9 of 9 read; Pages deployed `196f8d3`; the owner
+listened and accepted it; #129, docs only, open). *(Was: "… next, the
+owner listens on the phone".)* *(Was: "2026-10-14, session 9 (P10 decided and built: ADR-018, B with
 loudness matched at a cruise, FINDING-028 hidden in the synth; on
 `feat/p10-sound`, #128 open; #127 merged).")* *(Was: "2026-10-14, session 9 (P10: the owner's answers in, A/B/C
 listening files sent; FINDING-028 opened, the solver's idle port flows
@@ -81,10 +82,13 @@ PR #119; all seven steps built)".)*
   checked by content: its tree equals `d075312`'s (an empty diff), with
   `SOURCE_BALANCE`, `MIC_TRIM`, `HISS_WEIGHT`, `smooth_port_flow` and their
   TS mirrors present. Pages deployed `196f8d3` (success).
-- **Next, the owner:** listen on the phone, at the cabin and intake mics.
+- ~~**Next, the owner:** listen on the phone, at the cabin and intake mics.
   Two things to judge: whether full pedal (about +10 dB) is too loud, and
   whether the tip, cabin and outside mics sounding alike when revved is a
-  problem.
+  problem.~~ **The owner listened (2026-10-14): accepted.** Full pedal "is
+  little louder. But fine I guess"; the mics sounding alike: "Nope". Nothing
+  to change; recorded in ADR-018 and the proposal. **P10 is done**, apart
+  from FINDING-028's solver fix at the next rebuild.
 - **Left for later:** FINDING-028's solver fix (option B), at the next
   rebuild.
 

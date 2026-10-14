@@ -381,8 +381,9 @@ sent (`tools/p10_ab.py`). ~~**Waiting on the owner's ear.**~~
 **Decided 2026-10-14 (ADR-018):** B, loudness matched at a cruise, FINDING-028
 option C. **Built** on `feat/p10-sound`: the balance and trims in
 `acoustics.py`/`livesound.py`/`synth.ts`, the grids re-stamped, two new
-tests. **Merged and live** (#128, 2026-10-14 08:10 UTC; CI 9 of 9). Waiting
-on the owner's ear on the phone. Left for later: FINDING-028's solver fix
+tests. **Merged and live** (#128, 2026-10-14 08:10 UTC; CI 9 of 9).
+~~Waiting on the owner's ear on the phone.~~ **The owner listened and
+accepted it** (full pedal "is little louder. But fine I guess"). Left for later: FINDING-028's solver fix
 (option B), at the next rebuild.
 
 ---
