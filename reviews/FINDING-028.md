@@ -126,7 +126,65 @@ needs a 0.25° point before anything is claimed.
 | 600 rpm, 40% | 1.012 / 1.146 / **1.262** | 7.98 / 10.14 / **10.23** |
 | 1100 rpm, 30% | 1.200 / 1.266 / 1.274 | 9.17 / 9.59 / 9.44 |
 
-The torque settles by 0.5°, and the VE nearly settles by 0.25°.
+~~The torque settles by 0.5°, and the VE nearly settles by 0.25°.
 **single10's shipped grid, built at 1°, is about 22% low on torque at 600
-rpm and 40% load, and 3% low at 1100 rpm and 30%.** Its idle ripple at
+rpm and 40% load, and 3% low at 1100 rpm and 30%.**~~ Its idle ripple at
 0.25° is still 0.80 / 0.68, so the zig-zag isn't gone there either.
+**Corrected the same day:** because of that ripple, the explicit 0.25°
+solve is not a reference for single10 at 600 rpm, and "22% low" overstated
+it. The semi-implicit flow (below) agrees with itself between 1° and 0.5°
+(torque 9.74 / 9.83 N·m, VE 1.263 / 1.268). Against that, today's 1°
+grid is about **18% low** on torque at 600 rpm and 40% (7.98 N·m). At
+1100 rpm and 30% the explicit 0.25° solve is clean (ripple 0.001), and
+today's grid is 3% low there.
+
+**The semi-implicit flow, measured** (scratch switches `F28_IMP`,
+`F28_AMB`): where the explicit flow would carry the pressure difference
+past zero within the step, the flow is solved against the end-of-step
+pressures (implicit Euler, bisection). That covers the valves and, on an
+engine without a turbo, the plenum-to-air and manifold-to-air orifices.
+Everywhere else it is left as it was.
+
+| | today, 1° | semi-implicit, 1° | semi-implicit, 0.5° | explicit, 0.25° |
+|---|---|---|---|---|
+| crdi15 800/5% ripple | 0.80 | 0.022 | 0.073 | 0.001 |
+| crdi15 800/5% VE | 1.2395 | 1.2613 | 1.2624 | 1.2626 |
+| crdi15 800/5% torque | −10.583 | −10.718 | −10.708 | −10.752 |
+| crdi15 2000/30% torque | 57.502 | 57.512 | 57.303 | 57.206 |
+| single10 600/40% ripple | 0.99 | 0.044 | 0.041 | (0.83) |
+| single10 600/40% VE | 1.012 | 1.263 | 1.268 | (1.262) |
+| single10 600/40% torque | 7.98 | 9.74 | 9.83 | (10.23) |
+| single10 1100/30% torque | 9.17 | 9.30 | 9.43 | 9.44 |
+
+The values in brackets come from a solve that still zig-zags.
+- **Still not right: PMEP.** It converges only first-order, because the
+  pumping work takes the pressure at the start of each step. crdi15's idle
+  PMEP is 1788 / 3179 / 3562 Pa at 1° / 0.5° / 0.25° with the
+  semi-implicit flow; today's 1° value is 2515. Torque is unaffected (it
+  matches to 0.3%). The Cycle page shows PMEP, so this stays open: a
+  midpoint pressure in `p dV` would fix it, but it changes the calibrated
+  gross work at every point.
+- **Cost:** the first version, with 40 bisection steps, took 34.7 s
+  against 20.8 s for the same six solves (shared CPU; to be re-measured).
+
+**Two cures tried and rejected, and where single10's zig-zag lives** (same
+day, scratch):
+- **A flow limiter** (no step carries more than the mass that equalises
+  the two pressures): crdi15's ripple 0.80 → 0.008, and VE 1.2395 →
+  1.2570 (0.25°: 1.2626). But idle PMEP goes 2515 → −1654 Pa (0.25°: 3562),
+  and it shifts 2000 rpm too, where nothing zig-zagged (−16773 → −18218,
+  0.25°: −17060). It holds back flow that isn't overshooting. single10: no
+  change (0.99).
+- **single10 at 600 rpm, 40%**: the zig-zag fills the whole exhaust
+  stroke (186–322°) and the whole intake stroke (393–523°), at the step's
+  Nyquist at 1°, 0.5° and 0.25° alike (orders 180, 360, 720 per rev). With
+  the valve wide open the cylinder and manifold sit at nearly equal
+  pressure, where the √Δp law's conductance is unbounded. So some band of
+  small Δp overshoots at any step size, and a finer step only narrows it.
+  The cars' zig-zag is the same thing near TDC, where the cylinder is small
+  (crdi15: TDC filling time 0.088 ms against 0.21 ms per 1° step at 800
+  rpm; 0.083 ms per step at 2000 rpm, where it is stable).
+- **Next:** a semi-implicit flow, only where a step would overshoot (the
+  predicted end-of-step Δp flips sign). There the flow is solved
+  consistent with the end-of-step pressures; everywhere else it is left
+  bit for bit.

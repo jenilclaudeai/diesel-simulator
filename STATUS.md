@@ -1,9 +1,9 @@
 # Status
 
 **Updated:** 2026-10-14, session 9 (P09: the owner chose C; building it
-found numerical limits at the 1° step and a 22% torque error on single10
+found numerical limits at the 1° step and a ~~22%~~ 18% torque error on single10
 (FINDING-028); two questions for the owner, round 2; all on #129, docs
-only). *(Was: "P09 measured: FINDING-029 and `reviews/PROPOSAL-P09.md`,
+only). *(Corrected later the same day: about 18%; the 0.25° solve it was measured against still zig-zags. See FINDING-028.)* *(Was: "P09 measured: FINDING-029 and `reviews/PROPOSAL-P09.md`,
 three questions for the owner; on #129 with P10's merge record".)* *(Was: "P10 merged and live: #128 merged
 2026-10-14 08:10 UTC, CI 9 of 9 read; Pages deployed `196f8d3`; the owner
 listened and accepted it; #129, docs only, open".)* *(Was: "… next, the
@@ -29,6 +29,30 @@ and B-06 fixed, PR open; #118 and #119 still waiting to merge)"; before
 that "2026-10-10, session 8 (Phase 7 step 7 built,
 PR #119; all seven steps built)".)*
 
+**Session 9, stage 1 (the numerics) started (2026-10-14), scratch only:**
+- **Why brute sub-stepping is costly:** with 4+ cylinders some valve is
+  always open, and single10's exhaust manifold (0.43 L) is smaller than
+  its cylinder (1.0 L). So both the cylinder side and the manifold side are
+  fast, and sub-stepping both is about ×2–4 solve time.
+- ~~**Trying first, a flow limiter:** … **Running:** …~~ **The limiter
+  failed:** it biased PMEP even at 2000 rpm, and it didn't touch single10.
+- **What works, a semi-implicit flow** (`F28_IMP`, `F28_AMB`): where the
+  explicit flow would carry Δp past zero within a step, it is solved
+  against the end-of-step pressures. That covers the valves and the NA
+  engine's plenum-to-air and manifold-to-air orifices. crdi15 idle ripple
+  0.80 → 0.022, VE 1.2613 (0.25°: 1.2626). single10 ripple 0.98 → 0.04, VE
+  1.012 → 1.263, consistent between 1° and 0.5°. Details in FINDING-028,
+  where "22%" is corrected to **about 18%**: the explicit 0.25° solve still
+  zig-zags on single10.
+- **Stage 1 across the roster** (semi-implicit flow + exact burn integral
+  + knock from the burn law; 6 engines, 24 points): full-load torque within
+  0.27%, BSFC within 1% (single10 up to −4.8%), p_max 1–2% lower, knock +1%
+  (single10 idle −20%). **Solve time +50%** (118.8 → 178.1 s).
+- **Open:** PMEP converges only first-order (crdi15 idle 1788 / 3179 /
+  3562 Pa at 1 / 0.5 / 0.25°; the Cycle page shows it). **Running:** each
+  piece timed alone, with an Illinois root-finder in place of 40 bisection
+  steps.
+
 **Session 9, P09 round 2 (2026-10-14, later): two questions for the owner**
 (the end of `reviews/PROPOSAL-P09.md`). Nothing in `dieselsim/` is changed.
 The prototype is saved as `tools/p09_prototype.diff`, with its switches
@@ -42,7 +66,7 @@ documented; the scratch copy itself is gone with the session.
   Enjoy hears it only through the synth's gain `k`.
 - **FINDING-028 option B, first try (linear orifice): does nothing.** The
   cure is to sub-step the gas exchange.
-- **New and serious, in FINDING-028:** single10's 1° grid is about 22% low
+- **New and serious, in FINDING-028:** single10's 1° grid is about ~~22%~~ 18% low
   on torque at 600 rpm and 40% load. Against 0.5° / 0.25°: VE 1.012 /
   1.147 / 1.265, torque 7.98 / 10.14 / 10.23 N·m. At 1100 rpm and 30% it
   is −3%.

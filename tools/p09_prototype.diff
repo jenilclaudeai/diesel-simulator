@@ -11,16 +11,24 @@ the later switches were added (each is guarded, but unchecked). Environment swit
   P09_FWD=1      the sound's dpdt_max by a forward difference (as dpdtheta_comb)
   P09_KN=1       the sound's dpdt_max from the burn law: peak (gamma-1)/V * dQ/dtheta on 8 sub-steps per step
   F28_EPS=e      FINDING-028 option B, first attempt: orifice flow linear in dp below 1-pr = e (does not work)
+  F28_IMP=1      FINDING-028 option B: the port flow solved against end-of-step pressures where a step would overshoot
+  F28_AMB=1      ... and the NA engine's plenum-to-air and manifold-to-air orifices too
+  F28_ILL=1      ... by Illinois regula falsi instead of 40 bisection steps
+  F28_LIM=f      a flow limiter (rejected: biases PMEP)
 Numbers: reviews/FINDING-028.md, reviews/FINDING-029.md, reviews/PROPOSAL-P09.md.
 
 --- dieselsim/cycle.py	2026-10-12 21:38:27
-+++ dieselsim/cycle.py	2026-10-14 21:36:20
-@@ -29,6 +29,14 @@
++++ dieselsim/cycle.py	2026-10-14 21:56:27
+@@ -29,6 +29,18 @@
  from __future__ import annotations
  
  import math
 +import os as _os
 +_P09_V = _os.environ.get('P09', '0') != '0'
++_F28_IMP = _os.environ.get('F28_IMP', '0') != '0'
++_F28_ILL = _os.environ.get('F28_ILL', '0') != '0'
++_F28_AMB = _os.environ.get('F28_AMB', '0') != '0'
++_F28_LIM = float(_os.environ.get('F28_LIM', '0'))
 +_P09_CUM = _os.environ.get('P09_CUM', '0') != '0'
 +_P09_B = float(_os.environ.get('P09_B', '0'))
 +_P09_A = float(_os.environ.get('P09_A', '0'))
@@ -30,7 +38,7 @@ Numbers: reviews/FINDING-028.md, reviews/FINDING-029.md, reviews/PROPOSAL-P09.md
  from dataclasses import dataclass, field
  
  import numpy as np
-@@ -366,7 +374,7 @@
+@@ -366,7 +378,7 @@
          di_p = np.zeros(nc); di_m = np.zeros(nc)
          soc_p = np.full(nc, -1.0); soc_m = np.full(nc, -1.0)
          m_inj = np.zeros(nc); xb_p = np.zeros(nc); xb_m = np.zeros(nc)
@@ -39,7 +47,92 @@ Numbers: reviews/FINDING-028.md, reviews/FINDING-029.md, reviews/PROPOSAL-P09.md
          p_prev = np.full(nc, 1e5)
          mbz = np.zeros(nc); Tbz = np.full(nc, 1200.0)
          NOx = np.zeros(nc); soot = np.zeros(nc)
-@@ -548,6 +556,7 @@
+@@ -386,6 +398,50 @@
+         h_int_wall = 12.0 * V_int ** 0.66
+         h_exh_wall = 165.0 * V_exh ** 0.66
+ 
++        def _imp(md, pa, Ta, yba, Va, dVa, pb, Tb, ybb, Vb, dVb, A):
++            if A <= 0.0:
++                return md
++            def ends(q):
++                Tu, Ru = (Ta, thermo.gas_R(yba)) if q > 0 else (Tb, thermo.gas_R(ybb))
++                k_ = 1.35 * Ru * Tu * q * dt
++                return (pa - k_ / Va - 1.35 * pa * dVa / Va,
++                        pb + k_ / Vb - 1.35 * pb * dVb / Vb)
++            ea, eb = ends(md)
++            if (pa - pb) * (ea - eb) >= 0.0:
++                return md
++            def F(q):
++                xa, xb = ends(q)
++                return thermo.signed_orifice(max(xa, 1e3), Ta, yba, max(xb, 1e3), Tb, ybb, A)[0]
++            F0 = F(0.0)
++            lo, hi = -abs(md) - abs(F0), abs(md) + abs(F0)
++            if _F28_ILL:
++                # Illinois regula falsi on h(q) = q - F(q), increasing in q
++                hl, hh = lo - F(lo), hi - F(hi)
++                tol = 1e-7 * (abs(md) + abs(F0) + 1e-12)
++                side = 0
++                for _ in range(30):
++                    q = (lo * hh - hi * hl) / (hh - hl)
++                    hq = q - F(q)
++                    if abs(hq) <= tol:
++                        return q
++                    if hq > 0.0:
++                        hi, hh = q, hq
++                        if side == -1:
++                            hl *= 0.5
++                        side = -1
++                    else:
++                        lo, hl = q, hq
++                        if side == 1:
++                            hh *= 0.5
++                        side = 1
++                return q
++            for _ in range(40):
++                mid = 0.5 * (lo + hi)
++                if mid - F(mid) > 0.0:
++                    hi = mid
++                else:
++                    lo = mid
++            return 0.5 * (lo + hi)
+         cycle_means = []
+         m_fuel_cmd = m_fuel
+         for cyc in range(n_cycles):
+@@ -438,6 +494,9 @@
+                     mdot_t, _ = thermo.signed_orifice(p_exh, T_exh, yb_exh,
+                                                       p_back, T_amb, 1.0,
+                                                       self.A_ex_out)
++                    if _F28_IMP and _F28_AMB:
++                        mdot_c = _imp(mdot_c, p_in, T_amb, 0.0, 1e9, 0.0, p_int, T_int, yb_int, V_int, 0.0, self.A_in_rest)
++                        mdot_t = _imp(mdot_t, p_exh, T_exh, yb_exh, V_exh, 0.0, p_back, T_amb, 1.0, 1e9, 0.0, self.A_ex_out)
+ 
+                 # EGR: closed-loop on the burnt fraction in the plenum.
+                 # A high-pressure EGR loop needs exhaust-to-intake dP, so the
+@@ -499,6 +558,23 @@
+                                                   p, T, yb, Ai[kk])
+                     me, _ = thermo.signed_orifice(p, T, yb, p_exh, T_exh,
+                                                   yb_exh, Ae[kk])
++                    if _F28_IMP:
++                        # FINDING-028 option B (prototype): where the explicit flow would carry the
++                        # pressure difference past zero within the step, solve the flow against the
++                        # end-of-step pressures instead (implicit Euler, bisection). Elsewhere untouched.
++                        _dVc = dV_arr[kk] * dth_rad
++                        mi = _imp(mi, p_int, T_int, yb_int, V_int, 0.0, p, T, yb, V, _dVc, Ai[kk])
++                        me = _imp(me, p, T, yb, V, _dVc, p_exh, T_exh, yb_exh, V_exh, 0.0, Ae[kk])
++                    if _F28_LIM > 0.0:
++                        # FINDING-028 option B (prototype): no step may carry more than the mass that
++                        # equalises the two pressures (adiabatic, gamma 1.35), times _F28_LIM
++                        def _cap(md, pa, Ta, Va, pb, Tb, Vb, yb_up):
++                            T_up = Ta if md > 0 else Tb
++                            dm_eq = abs(pa - pb) * (Va * Vb / (Va + Vb)) / (1.35 * thermo.gas_R(yb_up) * max(T_up, 200.0))
++                            c_ = _F28_LIM * dm_eq / dt
++                            return max(-c_, min(c_, md))
++                        mi = _cap(mi, p_int, T_int, V_int, p, T, V, yb_int if mi > 0 else yb)
++                        me = _cap(me, p, T, V, p_exh, T_exh, V_exh, yb if me > 0 else yb_exh)
+                     ml = 0.0
+                     if A_leak > 0.0:
+                         ml, _ = thermo.signed_orifice(p, T, yb, p_exh, T_exh,
+@@ -548,6 +624,7 @@
                              if di_m[c] >= 1.0:
                                  frac = (1.0 - prev) / max(di_m[c] - prev, 1e-12)
                                  soc_m[c] = (tl - (1.0 - frac) * w) % 720.0
@@ -47,7 +140,7 @@ Numbers: reviews/FINDING-028.md, reviews/FINDING-029.md, reviews/PROPOSAL-P09.md
                                  tau = (soc_m[c] - soi_main) % 720.0
                                  m_air = max(m * (1.0 - yb), 1e-9)
                                  phi = m_fuel * Fuel.AFR_stoich / m_air
-@@ -572,9 +581,12 @@
+@@ -572,9 +649,12 @@
                                  # spike could not respond to anything.
                                  if dur_main > 1e-9:
                                      b = tau / dur_main
@@ -61,7 +154,7 @@ Numbers: reviews/FINDING-028.md, reviews/FINDING-029.md, reviews/PROPOSAL-P09.md
                                  burn_dur[c] = self.burn_duration(
                                      dur_main, phi, rpm)
  
-@@ -591,13 +603,36 @@
+@@ -591,13 +671,36 @@
                          bd = burn_dur[c]
                          rel = (tl - soc_m[c]) % 720.0
                          xr = rel / bd
@@ -102,7 +195,7 @@ Numbers: reviews/FINDING-028.md, reviews/FINDING-029.md, reviews/PROPOSAL-P09.md
  
                      # ---------- wall heat transfer (Woschni) ----------
                      if kk == ivc_i:
-@@ -811,6 +846,7 @@
+@@ -811,6 +914,7 @@
          _pc = p_tr[0] - pm_tr[0]
          _dpc = np.diff(np.concatenate([_pc, _pc[:1]])) / dth
          r.dpdtheta_comb = float(_dpc.max()) / 1e5

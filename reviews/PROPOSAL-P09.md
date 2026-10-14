@@ -152,8 +152,8 @@ in FINDING-029 and FINDING-028.
    flat at Leh.
 4. **The 1° step is not trustworthy at idle** (FINDING-028). The "Leh
    cold" point is an outlier at 1° in every variant. On single10 the 1°
-   grid is about 22% low on torque at 600 rpm and 40% load, against a
-   0.25° solve. The first fix tried for FINDING-028 (a linear orifice law)
+   grid is about ~~22%~~ 18% low on torque at 600 rpm and 40% load, against a
+   0.25° solve. *(Corrected later the same day: about 18%; the 0.25° solve it was measured against still zig-zags. See FINDING-028.)* The first fix tried for FINDING-028 (a linear orifice law)
    does nothing. The real fix is to sub-step the gas exchange.
 5. **A cold start barely knocks more in this model.** Walls at 273 K
    lengthen the delay by only 9%. A real cold start combines cranking
@@ -172,7 +172,7 @@ more than a cold start); `k`, chosen by ear, sets how loud.
      - First the numerics, as their own PR, measured against 0.25° solves:
        sub-step the gas exchange (FINDING-028 B), integrate the burn
        exactly, and compute the knock from the burn law. This also fixes
-       single10's 22%.
+       single10's ~~22%~~ 18%.
      - Then P09: the burn law, the knock in the weather table, and the
        synth's gain, with a listening round.
      - **One rebuild at the end.**
@@ -184,7 +184,7 @@ more than a cold start); `k`, chosen by ear, sets how loud.
    - **b. P09 now, on today's numerics,** with FINDING-028 later.
      - Positives: you hear P09 soonest.
      - Costs: the Leh-cold point is unreliable at 1°; two rebuilds (about
-       8 h each); single10 stays 22% off until the second one.
+       8 h each); single10 stays ~~22%~~ 18% off until the second one.
    - **c. Build the grids at 0.5° instead of sub-stepping.**
      - Positives: the simplest code change; the cars' zig-zag is gone at
        0.5°.
