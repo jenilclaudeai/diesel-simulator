@@ -31,6 +31,13 @@
 - **The progress callback changes nothing:** the same engine (2x2, weather
   included) built by `build_live_grids.py` and by the script: **0 of 26 keys
   differ** (build time removed).
+- **Python suite 86 passed, 0 failed, 3 known, 4 skipped. PR #132 opened;
+  CI 10 of 10 at `78dcdd0`** (every job read; Pyodide 35.3 min). `build.bat`
+  is not run (no Windows machine here).
+- **Next:** the owner merges #131 (P09, draft: its open questions) and #132
+  (whichever is second fixes the STATUS conflict in its first push); then P13
+  B + C as one solver change with one rebuild (~5 h with B); mark
+  `reviews/PROPOSAL-P13.md` decided once #131 is in.
 
 **Updated:** 2026-10-14, session 9 (P09: the owner chose C; building it
 found numerical limits at the 1° step and a ~~22%~~ 18% torque error on single10
