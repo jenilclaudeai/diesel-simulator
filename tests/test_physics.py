@@ -1704,14 +1704,21 @@ def test_livesound_matches_render():
         a, b = a / a.sum(), b / b.sum()
         mk = b > 1e-3 * b.max()
         shape[k] = float(np.abs(10 * np.log10(a[mk] / b[mk])).max())
-    worst_shape = max(shape, key=shape.get)
+    # the rumble is noise (boundary friction), and its two generators are
+    # independent: on its 25-63 Hz bands, one or two Welch bins each, the
+    # shape scatters with the seeds. Over 12 seed pairs (3 synth x 4 render)
+    # it read 1.02-2.58 dB on main (median 1.68) and 0.98-2.54 on P09; every
+    # other source within 0.68. 1.5 dB passed on main by the seeds' luck
+    # (1.40) and failed after P09 (1.63) with nothing wrong (PR #131's CI).
+    limit = {k: 3.0 if k == "rumble" else 1.5 for k in shape}
+    worst_shape = max(shape, key=lambda k: shape[k] / limit[k])
     worst_lvl = max(abs(v - 1.0) for v in lvl.values())
     ok = (worst < 1e-9 and paths < 1e-9 and worst_lvl < 0.03 and float(db.max()) < 1.5
-          and shape[worst_shape] < 1.5)
+          and all(shape[k] < limit[k] for k in shape))
     check("streaming sound matches the offline render (filters, paths, levels, spectrum)", 1.0 if ok else 0.0, 1.0, 0.0,
           f"filter response {worst:.1e}; pure vs scipy {paths:.1e}; worst source level {100 * worst_lvl:.1f}% off; "
           f"worst third-octave {float(db.max()):.2f} dB over {int(m.sum())} bands; "
-          f"worst source shape {shape[worst_shape]:.2f} dB ({worst_shape})")
+          f"worst source shape {shape[worst_shape]:.2f} dB ({worst_shape}, limit {limit[worst_shape]:.1f})")
 
 
 _CRDI15_SRC = {}

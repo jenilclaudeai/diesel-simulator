@@ -11,6 +11,17 @@ re-baselined: they need native CPython values, not CI's Pyodide ones.
 3.10 and 3.12 (source level 1.2% off, tolerance 0.03 is met; third-octave
 1.24 dB is met; the shape check fails: rumble 1.63 dB vs the 1.5 limit).
 NOT yet fixed; the 1.5 dB limit's comment says 1.52-1.56 was seen before.
+*Resolved (the FINDING-030 session, same day):* (2) re-baselined from
+native CPython (`main`'s tree still gives the old values to every digit);
+full `web/solver` `npm test` 20 + 15 + 30, 0 failed. (3) is the noise:
+over 12 seed pairs (3 synth x 4 render) the rumble's shape reads
+1.02-2.58 dB on `main` (median 1.68) and 0.98-2.54 on P09; every other
+source <= 0.68. `main` passed 1.5 dB by the seeds' luck (1.40). The rumble
+now has a 3.0 dB limit, the rest stay at 1.5. Mutants 4 of 4 caught
+(baseline passing): low edge 40 -> 60 Hz (by the mix's third-octave check,
+2.54 dB; its rumble shape 2.34 is under 3.0), high edge 480 -> 320 Hz,
+first order, firing modulation off. Run locally with scipy in a scratch
+venv (this Mac's Python has none, so the suite SKIPs it).
 
 **Updated:** 2026-10-15, session 9 (FINDING-030 fixed by option A, the owner's
 choice: cold-cell friction at the running walls; the ten grids' COLD cells
