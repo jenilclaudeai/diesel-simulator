@@ -407,6 +407,17 @@ tests. **Merged and live** (#128, 2026-10-14 08:10 UTC; CI 9 of 9).
 accepted it** (full pedal "is little louder. But fine I guess"). Left for later: FINDING-028's solver fix
 (option B), at the next rebuild.
 
+## P13 — build a drivable grid faster, front end unchanged (the owner's request, 2026-10-15)
+
+Measured in `reviews/PROPOSAL-P13.md` on P09's code. A drivable grid is now
+~73% weather table (the browser build includes it by default): crdi15 58 min
+natively, ~1.4–1.8 h in a browser. Options: **N** a one-command native script
+for a custom engine, then Import grid (no solver change); **B** stop converged
+solves once settled, rule R2 (×1.9, torque ≤ 0.02% of full load, one rebuild);
+**C** hoist two constants in `thermo.py` (×1.08, bit-identical). Recommended N
+now, B + C after #131. **Not decided; nothing built.** Two questions for the
+owner.
+
 ---
 
 ## Phase 8 — Polish and host

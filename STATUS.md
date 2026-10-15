@@ -68,6 +68,26 @@ and B-06 fixed, PR open; #118 and #119 still waiting to merge)"; before
 that "2026-10-10, session 8 (Phase 7 step 7 built,
 PR #119; all seven steps built)".)*
 
+**Session 9, P13 feasibility (2026-10-15), docs only, on #131's branch:**
+- The owner asked for P13's feasibility (the sheet: "Make the building
+  drivable grid faster ... with script. Let the front end stay same for
+  now"). Measured on today's code: `reviews/PROPOSAL-P13.md`.
+- **The weather table is ~73% of a drivable grid** (the browser builds it by
+  default): crdi15 958 s of cells + 2,532 s of weather = 58 min natively.
+- **B (stop once settled):** the naive rule is unsafe (10.8% of full-load
+  torque at margin 10, via flipped settled flags; EGR/NOx up to 22%). Rule
+  R2 (work, boost, intake EGR, turbo speed held 10 cycles): ×1.91, 0 flips,
+  torque ≤ 0.019% of full load, EGR ≤ 0.04 pts, NOx ≤ 0.52% over 108 solves.
+  One slap pulse moved one 1° step in 1 of 90 cells (discreteness).
+- **C:** ×1.083, byte-identical. **Chaining weather solves:** ×1.26 more,
+  path dependence 0.15%; not worth it. **N:** the native pieces exist; a
+  one-command script is missing.
+- **Questions for the owner:** which reading of "with a script" (N, B + C,
+  or both, recommended), and whether R2 is acceptable.
+
+**CI on #131 at `8d22068`: 10 of 10 jobs passed** (every job read; physics
+3.10 43.5 min, 3.12 41.3, Pyodide **57.5 of its 60 min**, close to the limit).
+
 **Session 9, FINDING-030 fixed (2026-10-15), `feat/p09-cold-friction`** (a
 second session; branched from `feat/p09-knock` `50746bc`, to be pushed onto it
 as a fast-forward):
