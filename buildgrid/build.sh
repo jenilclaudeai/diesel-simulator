@@ -4,7 +4,7 @@
 # tools/build_my_grid.py. Then load the file in the app: /drive or /enjoy ->
 # Import grid.
 #
-#   sh buildgrid/build.sh my-engine.json              # the full grid (~1 h on a laptop)
+#   sh buildgrid/build.sh my-engine.json              # the full grid (1-1.5 h on a laptop)
 #   sh buildgrid/build.sh my-engine.json --no-weather # cells only (~1/4 of the time)
 #   sh buildgrid/build.sh my-engine.json --workers 10
 #

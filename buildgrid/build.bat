@@ -4,7 +4,7 @@ rem sets up its own Python environment (numpy, certifi) and runs
 rem tools\build_my_grid.py. Then load the file in the app: /drive or /enjoy ->
 rem Import grid.
 rem
-rem   buildgrid\build.bat my-engine.json              the full grid (~1 h on a laptop)
+rem   buildgrid\build.bat my-engine.json              the full grid (1-1.5 h on a laptop)
 rem   buildgrid\build.bat my-engine.json --no-weather cells only (~1/4 of the time)
 rem   buildgrid\build.bat my-engine.json --workers 10
 rem

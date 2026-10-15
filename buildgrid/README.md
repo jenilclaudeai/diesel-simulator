@@ -2,7 +2,7 @@
 
 A custom engine you design on the Dyno page needs a **drivable grid** before
 you can drive it. The app can build one in the browser, but that takes a
-long time (about 1.5–2 hours on a laptop). This script builds **the same
+long time (1.5 to 2.5 hours on a laptop). This script builds **the same
 file** on your computer, which is 1.5–1.9× faster than a browser tab on the
 same machine. It can also use more cores. Then you load the file in the app.
 The app itself doesn't change.
@@ -28,7 +28,9 @@ It needs Python 3.10 or newer. It puts numpy into its own
 - Windows: `buildgrid\build.bat path\to\my-engine.json`
 
 It prints its progress and an estimate of the time left. On an M2 MacBook
-(6 workers) a full grid takes about an hour. When it finishes, it prints
+(6 workers) a full grid took 84 minutes (23 of cells, 61 of the weather
+table); expect 1 to 1.5 hours on a laptop, less on a desktop that keeps its
+speed under load. When it finishes, it prints
 where the file is, by default `out/grids/<name>.grid.json`.
 
 | option | what |

@@ -20,8 +20,17 @@
 - **Verified:** a 2x2 grid through `build.sh` from a fresh venv, imported on
   the **live site's /enjoy** and driven (711 rpm, 1st, Auto). New test
   `test_build_my_grid_tool` 7 of 7; mutants 7 of 7 caught (baseline
-  passing). **Running:** a full-size build (494 solves) to time it; then the
-  old-vs-new file identity check, the full suite, PR.
+  passing). ~~**Running:** a full-size build …~~
+- **Full size:** 494 solves in **84.4 min** on this M2 (23 min of cells, 61 of
+  weather; my tests shared the CPU for the first ~20 min, and laptops throttle
+  under long load). The 5.1 MB file **imported on the live site's /drive and
+  ran** (746 rpm); at High plateau the page said the torque "follow[s] this air
+  through the engine's weather table (measured within 2.7% ...)", the file's
+  own check. The README now says 1-1.5 h on a laptop. (Your Drive place was
+  put back to Standard air afterwards.)
+- **The progress callback changes nothing:** the same engine (2x2, weather
+  included) built by `build_live_grids.py` and by the script: **0 of 26 keys
+  differ** (build time removed).
 
 **Updated:** 2026-10-14, session 9 (P09: the owner chose C; building it
 found numerical limits at the 1° step and a ~~22%~~ 18% torque error on single10
