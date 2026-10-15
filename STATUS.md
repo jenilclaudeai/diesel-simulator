@@ -99,7 +99,18 @@ as a fast-forward):
   36% (FINDING-027, below), and FINDING-031 (A/B/C). The main checkout
   still holds the rebuild's uncommitted pre-fix grids: discard them there
   (checkout of `web/app/public/grids`) before pulling.
-- **Next:** read every CI job on the PR; the owner's two answers.
+- **PR #131** (draft, `feat/p09-knock` -> `main`). First CI run: 6 jobs
+  passed (both grid e2e, golden fixtures + TS ports, web app, web e2e,
+  custom engine e2e); **SolverPort failed 5 of 30**: `web/solver`'s
+  round-trip test pins native references (crdi15 1800 rpm / 60%) that
+  P09's solver moved. Neither this session nor the last ran the full
+  `web/solver` `npm test` (only `test:fast`): *a miss.* Re-baselined
+  with the old values kept in the comments; `main`'s solver tree still
+  gives the old ones to every digit. Local full run 20 + 15 + **30**, 0
+  failed. **claude-review failed** on the workflow's bot rule ("initiated
+  by non-human actor: claude ... Add bot to allowed_bots"), not on the
+  code: the owner's call.
+- **Next:** read every CI job of the new run; the owner's two answers.
 
 **Session 9, the rebuild done (2026-10-15), `feat/p09-knock`:**
 - **The rebuild** ran from 2026-10-14 22:01 to 2026-10-15 07:40 UTC (9 h
