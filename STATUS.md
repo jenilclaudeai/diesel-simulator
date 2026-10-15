@@ -1,10 +1,15 @@
 # Status
 
-**Updated:** 2026-10-15, session 9 (P09: the rebuild finished, but its
+**Updated:** 2026-10-15, session 9 (FINDING-030 fixed by option A, the owner's
+choice: cold-cell friction at the running walls; the ten grids' COLD cells
+re-solved by `tools/rebuild_cold_cells.py`, ~80 min, not a full rebuild; the
+cold creep measured for the owner. On `feat/p09-cold-friction`, from
+`feat/p09-knock`).
+*(Was: "2026-10-15, session 9 (P09: the rebuild finished, but its
 cold cells carry about 10× a real cold start's friction (FINDING-030),
 which makes the automatic hunt on a cold start; and single10's Leh check is
 36% (FINDING-027). Two questions for the owner; the rebuilt grids are NOT
-committed. On `feat/p09-knock`).
+committed. On `feat/p09-knock`).")*
 *(Was: "2026-10-15, session 9 (P09: the rebuild finished; single10's
 Leh check rose to 36% (FINDING-027's misfire edge moved one node), a
 question for the owner; the suites and the PR next, on `feat/p09-knock`).")*
@@ -39,6 +44,38 @@ duplicate test removed in #121)"; before that "2026-10-11, session 9 (B-05
 and B-06 fixed, PR open; #118 and #119 still waiting to merge)"; before
 that "2026-10-10, session 8 (Phase 7 step 7 built,
 PR #119; all seven steps built)".)*
+
+**Session 9, FINDING-030 fixed (2026-10-15), `feat/p09-cold-friction`** (a
+second session; branched from `feat/p09-knock` `50746bc`, to be pushed onto it
+as a fast-forward):
+- **The owner chose option A** (asked by this session, which had found the
+  same problem in crdi15's rebuilt file before reading FINDING-030).
+  FINDING-030's "about 10×" is corrected there: over every cell of the ten
+  P09 grids the cold/warm FMEP is **5.8–139×** (`main`: 1.08–2.84×).
+- **The fix** (`engine.py`, hashed): `cold_start_walls` keeps the
+  `WALL_FOLLOW` liner for friction (`_friction_liner`), `operating_point`
+  uses it, and `_apply_thermal_state` drops it. Six converged crdi15 cells:
+  warm 0 differences; cold gas side within 6.7e-16; cold FMEP = `main`'s
+  (1343/0.2: 1.25 bar; P09 13.72).
+- **Tests:** `test_cold_start_friction_sees_the_running_walls`,
+  `test_shipped_grids_cold_friction` (≤ 4×). Mutants 5 of 5 caught, baseline
+  passing. Committed `9429e9c`.
+- **Cold cells only, not a 9.7 h rebuild:** `tools/rebuild_cold_cells.py`
+  (new). It refuses unless the pre-change tree hashes to the stamp
+  (`6ab9760d77b9`, checked) and each cold cell changes only in perf
+  torque/power/bsfc/fmep/nox and meta Pb/load (measured: nothing else moves;
+  traces and waveforms byte-identical). New hash `8a6fbfc806dd`.
+  **Running** (log `$CLAUDE_JOB_DIR/tmp/cold_rebuild.log`).
+- **The cold creep, measured for the owner** (P09 physics, untouched by the
+  fix): crdi15 automatic at 20% pedal from a 25 °C start sits at 779 rpm /
+  5.8 km/h for 74 s (old grid: 11 s). The cause is heat transfer, mostly
+  the piston: at 800 rpm / 20% the indicated torque is 24.7 warm, 23.6
+  walls-following, 19.7 true cold; wall heat 48% → 55% → 68% of the fuel;
+  the piston alone at 273 K gives 75% of the loss, the head 33%, the liner
+  and port ~0. The delay is not the cause at idle (premix on its 0.72 cap).
+  The live loop warms every wall as one 60 s lump; a real piston crown
+  heats in seconds. Sweep over engines and boxes: below.
+- **Next:** the rebuild's end, the full suite, the web suites, push, PR.
 
 **Session 9, the rebuild done (2026-10-15), `feat/p09-knock`:**
 - **The rebuild** ran from 2026-10-14 22:01 to 2026-10-15 07:40 UTC (9 h

@@ -1,10 +1,12 @@
-# FINDING-030 — P09's cold cells carry about 10× the friction of a real cold start
+# FINDING-030 — P09's cold cells carry ~~about 10×~~ 6–140× the friction of a real cold start
 
 **Opened by:** session 9 (2026-10-15), reading the full suite after P09's
 rebuild. P08's automatic test failed, and the cause was in the grids'
 cold cells.
 **Lens:** PHY1 (lead), PHY2, the driver's view
-**Status:** **open, for the owner.** The rebuilt grids are not committed.
+**Status:** ~~**open, for the owner.** The rebuilt grids are not committed.~~
+**Fixed (option A, the owner's choice, 2026-10-15)** on `feat/p09-cold-friction`;
+the grids' cold cells re-solved (`tools/rebuild_cold_cells.py`). See "Decided and fixed" below.
 **Reproduce:** `out/cold_fric.py` and `out/p08_cold.py` (scratch, not kept;
 the numbers are below).
 
@@ -69,3 +71,51 @@ makes 39 N·m cold, against 199 warm.
 
 **Recommendation: A now, C as its own finding later.** A restores what the
 cold cells had before P09 for friction, and keeps P09's cold combustion.
+
+## Decided and fixed (2026-10-15, session 9, a second session)
+
+**The owner chose A**, asked in parallel by a second session that had found
+the same thing in the P09 grid's crdi15 file before reading this finding.
+
+**Correction to the size, kept visibly above:** "about 10×" is crdi15 at
+one cell. Over every cell of the ten P09 grids the cold/warm FMEP ratio is
+**5.8–139×** (crdi22 the worst; crdi15 5.8–50.7×). `main`'s grids, before
+P09: 1.08–2.84×.
+
+**The fix** (`engine.py`): `cold_start_walls` records the liner that
+`WALL_FOLLOW` gives at the coolant (`_friction_liner`), and
+`operating_point` hands that liner to `friction.evaluate`, restoring the
+cold one after. `_apply_thermal_state` drops it, so an engine warmed back
+is the warm engine again. Measured on six crdi15 cells, converged,
+against the P09 rebuild:
+
+- warm cells: **0 differences** in every perf field;
+- cold cells, gas side (p_max, T_exh, boost, fuel, AFR, indicated torque,
+  the knock): identical to 6.7e-16;
+- cold FMEP back to `main`'s: 1343 rpm / 20% 1.25 bar (P09 13.72, `main`
+  1.25); 4057 / 80% 2.02 (P09 39.74, `main` 2.02).
+
+On six more cold cells (one unsettled), only the fields friction reaches
+moved: perf `torque`, `power`, `bsfc`, `fmep`, `nox` (g per brake kWh), and
+meta `Pb`, `load`. The pressure traces and all six source waveforms are
+byte-identical.
+
+**Tests:** `test_cold_start_friction_sees_the_running_walls` (solver, runs
+under Pyodide) and `test_shipped_grids_cold_friction` (every grid's cold
+FMEP ≤ 4× warm; SKIPs without the grids). Mutants **5 of 5 caught**,
+baseline passing: the fix off; friction fed the 273 K liner; the liner not
+restored; `_apply_thermal_state` keeping the friction liner; the P09
+rebuild's grids.
+
+**No full rebuild.** Only the cold cells can change: the warm cells
+(measured, 0 differences) and the weather table (warm solves:
+`bridge.live_weather_cell` calls `solve_cell` without `T_coolant`) cannot.
+`tools/rebuild_cold_cells.py` re-solves the 48 cold cells per grid and
+refuses unless: the pre-change tree hashes to the grids' stamp; each cold
+cell changes only in the fields above; every other key is untouched. It
+re-stamps the hash and the Dyno's accuracy table (warm). About 80 min
+against 9.7 h.
+
+**Still open:** C, the film temperatures themselves (a film colder than
+the liner, the oil and the air is outside the model's range), with the
+−1561 N·m cold-oil note. Its own finding, later.

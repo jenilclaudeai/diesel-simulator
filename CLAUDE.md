@@ -57,6 +57,8 @@ python3 tools/fixtures/gen_fixtures.py --only live   # after changing dieselsim/
 python3 tools/build_live_grids.py               # after a SOLVER change: prebuilt converged grids (~2 h, 10 grids)
 python3 tools/build_live_grids.py --engine my.json   # a custom engine's grid -> out/grids/ (ADR-014)
 python3 tools/build_live_grids.py --weather [key]    # add the weather table to grid files (~45-85 min each)
+python3 tools/rebuild_cold_cells.py <pre-change dir>  # only the grids' cold cells, after a change that
+                                                # reaches only cold friction (asserts it; ~80 min for ten)
 python3 tools/environments_json.py --check           # the places file Drive and Enjoy read is current
 cd tools/pyodide && npm ci && npm run suite     # the same suite under Pyodide
 cd web/solver  && npm ci && npm run test:fast   # cache tests, seconds
@@ -107,7 +109,12 @@ grep its readers and solve with it changed.
 - **The grid's cold cells are a true cold start** (P09, ADR-019): every
   wall, plus the coolant, at 273 K (`engine.cold_start_walls`). Before P09
   the walls followed the coolant by `WALL_FOLLOW`. For a cold test call
-  `cold_start_walls(T)` and set cold oil too.
+  `cold_start_walls(T)` and set cold oil too. **Friction keeps the
+  `WALL_FOLLOW` liner** (FINDING-030, `_friction_liner`): `friction.py`'s
+  film offsets (skirt at liner − 20 K) assume a hot running liner, and fed
+  a 273 K one they gave 6–140× warm FMEP. Setting the liner by hand after
+  `cold_start_walls` reaches the combustion only; `_apply_thermal_state`
+  drops the friction liner.
 - **The live loop blends warm and cold at `LiveEngine.T_chamber`**, not at
   `T_coolant`. The chamber walls warm with a 60 s time constant and cool
   with a 600 s one. A test that warms the coolant to get a warm engine
