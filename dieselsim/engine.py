@@ -161,6 +161,9 @@ class DieselEngine:
                      self.spec.thermal.liner_T_top,
                      self.spec.thermal.liner_T_bot,
                      self.spec.thermal.port_T_exh)
+        # FINDING-030: the liner (top, bottom) the friction model sees, where
+        # it differs from the chamber's (cold_start_walls); None: the chamber's
+        self._friction_liner = None
         self.rpm = self.spec.idle_rpm
         self.omega = 2.0 * math.pi * self.rpm / 60.0
 
@@ -502,9 +505,16 @@ class DieselEngine:
             fuel_mg = cyc.m_fuel * 1e6       # what the limiter let the injectors deliver
         self._state = cyc.state
 
-        fr = self.friction.evaluate(cyc.traces.theta, cyc.traces.p[0], rpm,
-                                    self.oil, self.wear,
-                                    fuel_mg=fuel_mg, p_rail=cyc.rail_pressure)
+        t = self.spec.thermal
+        liner = (t.liner_T_top, t.liner_T_bot)
+        if self._friction_liner is not None:
+            t.liner_T_top, t.liner_T_bot = self._friction_liner
+        try:
+            fr = self.friction.evaluate(cyc.traces.theta, cyc.traces.p[0], rpm,
+                                        self.oil, self.wear,
+                                        fuel_mg=fuel_mg, p_rail=cyc.rail_pressure)
+        finally:
+            t.liner_T_top, t.liner_T_bot = liner
 
         # ---- brake performance -------------------------------------------
         n_fire = rpm / 120.0                     # firing cycles per second
@@ -620,15 +630,24 @@ class DieselEngine:
         t.liner_T_top = lt0 + WALL_FOLLOW["liner_T_top"] * f
         t.liner_T_bot = lb0 + WALL_FOLLOW["liner_T_bot"] * f
         t.port_T_exh = pe0 + WALL_FOLLOW["port_T_exh"] * f
+        self._friction_liner = None
 
     def cold_start_walls(self, T: float):
         """P09 (FINDING-029): a cold start, every chamber wall at T. The coolant
         is set to T too, but the walls do not follow it by WALL_FOLLOW, as a
         running engine's do: just started, the metal is at the air's
-        temperature. The grid's cold cells (grid.solve_cell) are solved so."""
+        temperature. The grid's cold cells (grid.solve_cell) are solved so.
+
+        FINDING-030: friction keeps the liner WALL_FOLLOW gives at this coolant,
+        as the live loop's own friction does. friction.py takes the skirt's film
+        at liner - 20 K and the rings' at liner + 25 K, offsets set for a hot
+        running liner. Fed a 273 K liner with warm oil, the skirt's film sat at
+        -20 C and crdi15's FMEP read 13.7 bar against 1.26 (warm 0.98). The cold
+        walls still set the combustion and the heat transfer."""
         self.T_coolant = float(T)
         self._apply_thermal_state()
         t = self.spec.thermal
+        self._friction_liner = (t.liner_T_top, t.liner_T_bot)
         t.piston_T = t.head_T = t.liner_T_top = t.liner_T_bot = t.port_T_exh = float(T)
 
     def _update_thermal(self, op: OperatingPoint, dt_s: float):

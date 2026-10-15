@@ -1895,6 +1895,46 @@ def test_p09_knock_at_altitude_and_a_cold_start():
           f"{', '.join(f'{w:.0f}' for w in walls)} K (all 273); the weather table carries the knock: {wx}")
 
 
+def test_cold_start_friction_sees_the_running_walls():
+    """FINDING-030: a cold start (engine.cold_start_walls, the grid's cold
+    cells) puts every chamber wall at 273 K for the combustion and the heat
+    transfer, but friction keeps the liner WALL_FOLLOW gives, as the live
+    loop's friction does. friction.py takes the skirt's film at liner - 20 K:
+    fed the 273 K liner with warm oil it sat at -20 C, and crdi15 at 1343 rpm
+    / 20% read 13.7 bar FMEP (warm 0.98). The grid's oil is warm, so here too.
+    Parts: the cold start's FMEP within 3% of the walls-follow engine's (the
+    traces differ a little); under 2x warm; the cold walls still reach the
+    knock (> 3% from the walls-follow engine's); the liner restored after; and
+    a cold start warmed back through _apply_thermal_state is the warm engine
+    again (the friction's own liner is dropped)."""
+    from dieselsim.config import PRESETS
+
+    def solve(mode):
+        eng = DieselEngine(spec=PRESETS["crdi15"]())
+        if mode == "follow":
+            eng.T_coolant = 273.0
+            eng._apply_thermal_state()
+        elif mode in ("start", "rewarmed"):
+            eng.cold_start_walls(273.0)
+        if mode == "rewarmed":
+            eng.T_coolant = eng.spec.thermal.coolant_T
+            eng._apply_thermal_state()
+        op = eng.operating_point(1342.857142857143, load=0.2, n_cycles=9)
+        t = eng.spec.thermal
+        return op.fmep, op.cycle.dpdtheta_knock, (t.liner_T_top, t.liner_T_bot)
+    warm, follow, start, rewarmed = solve("warm"), solve("follow"), solve("start"), solve("rewarmed")
+    near = abs(start[0] / follow[0] - 1.0)
+    knock = abs(start[1] / follow[1] - 1.0)
+    ok = (near < 0.03 and start[0] < 2.0 * warm[0] and knock > 0.03 and start[2] == (273.0, 273.0)
+          and rewarmed == warm)
+    check("FINDING-030: a cold start's friction sees the running walls, its combustion the cold ones",
+          1.0 if ok else 0.0, 1.0, 0.0,
+          f"crdi15 1343 rpm / 20%, FMEP bar: cold start {start[0] / 1e5:.2f}, walls following "
+          f"{follow[0] / 1e5:.2f} ({100 * near:.1f}%, < 3%), warm {warm[0] / 1e5:.2f} (cold < 2x; P09 "
+          f"before the fix: 13.7); knock vs walls following {100 * knock:+.1f}% (> 3%); liner after "
+          f"{start[2][0]:.0f}/{start[2][1]:.0f} K (273/273); re-warmed == warm: {rewarmed == warm}")
+
+
 def test_p09_chamber_walls_warm_and_the_synth_hears_the_knock():
     """P09: the live loop's chamber-wall temperature (live.LiveEngine._chamber)
     starts at the air's, warms within about a minute running (CHAMBER_TAU_RUN,
@@ -2034,6 +2074,28 @@ def _prebuilt_grid(key):
         with open(os.path.join(GRID_DIR, f"{key}.json")) as fh:
             _GRIDS[key] = Adr011Grid.from_json(json.load(fh))
     return _GRIDS[key]
+
+
+def test_shipped_grids_cold_friction():
+    """FINDING-030: in every prebuilt grid, each cold cell's FMEP is at most
+    4x its warm cell's. Before P09 the ten grids ran 1.08-2.84x; P09's
+    rebuild, with friction fed the 273 K liner, 5.8-139x. P08's automatic
+    reads the cells' brake torque (live._econ_map), so this is not cosmetic."""
+    if _no_prebuilt_grids("FINDING-030: the shipped grids' cold friction"):
+        return
+    import json
+    worst, bad = (0.0, ""), []
+    for f in sorted(os.listdir(GRID_DIR)):
+        if not f.endswith(".json"):
+            continue
+        with open(os.path.join(GRID_DIR, f)) as fh:
+            g = json.load(fh)
+        r = max(c["fmep"] / w["fmep"] for rc, rw in zip(g["perf_cold"], g["perf"]) for c, w in zip(rc, rw))
+        worst = max(worst, (r, f))
+        if r > 4.0:
+            bad.append(f"{f} {r:.1f}x")
+    check("FINDING-030: every shipped grid's cold FMEP is at most 4x warm", float(len(bad)), 0.0, 0.0,
+          (f"over: {', '.join(bad)}; " if bad else "") + f"worst {worst[0]:.2f}x ({worst[1]})")
 
 
 def test_grid_sources_warm_and_cold():
@@ -3096,9 +3158,11 @@ def main():
                test_port_flow_does_not_overshoot,
                test_knock_from_the_burn_law,
                test_p09_knock_at_altitude_and_a_cold_start,
+               test_cold_start_friction_sees_the_running_walls,
                test_p09_chamber_walls_warm_and_the_synth_hears_the_knock,
                test_p10_deeper_sound,
                test_intake_and_boost_levels_carry_physics,
+               test_shipped_grids_cold_friction,
                test_grid_sources_warm_and_cold,
                test_live_sound_follows_the_engine,
                test_roster_engines_make_their_numbers,
