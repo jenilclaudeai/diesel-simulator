@@ -1,8 +1,15 @@
 # Status
 
-**Updated:** 2026-10-14, session 9 (P10 decided and built: ADR-018, B with
+**Updated:** 2026-10-14, session 9 (P09: the owner chose C; building it
+found numerical limits at the 1° step and a ~~22%~~ 18% torque error on single10
+(FINDING-028); two questions for the owner, round 2; all on #129, docs
+only). *(Corrected later the same day: about 18%; the 0.25° solve it was measured against still zig-zags. See FINDING-028.)* *(Was: "P09 measured: FINDING-029 and `reviews/PROPOSAL-P09.md`,
+three questions for the owner; on #129 with P10's merge record".)* *(Was: "P10 merged and live: #128 merged
+2026-10-14 08:10 UTC, CI 9 of 9 read; Pages deployed `196f8d3`; the owner
+listened and accepted it; #129, docs only, open".)* *(Was: "… next, the
+owner listens on the phone".)* *(Was: "2026-10-14, session 9 (P10 decided and built: ADR-018, B with
 loudness matched at a cruise, FINDING-028 hidden in the synth; on
-`feat/p10-sound`, #128 open; #127 merged). *(Was: "2026-10-14, session 9 (P10: the owner's answers in, A/B/C
+`feat/p10-sound`, #128 open; #127 merged).")* *(Was: "2026-10-14, session 9 (P10: the owner's answers in, A/B/C
 listening files sent; FINDING-028 opened, the solver's idle port flows
 zig-zag at its step; all on #127, still open).")* *(Was: "2026-10-13, session 9 (P10, a bassier sound: measured,
 feasible, `reviews/PROPOSAL-P10.md`; three questions for the owner. #126
@@ -21,6 +28,151 @@ duplicate test removed in #121)"; before that "2026-10-11, session 9 (B-05
 and B-06 fixed, PR open; #118 and #119 still waiting to merge)"; before
 that "2026-10-10, session 8 (Phase 7 step 7 built,
 PR #119; all seven steps built)".)*
+
+**Session 9, stage 1 (the numerics) started (2026-10-14), scratch only:**
+- **Why brute sub-stepping is costly:** with 4+ cylinders some valve is
+  always open, and single10's exhaust manifold (0.43 L) is smaller than
+  its cylinder (1.0 L). So both the cylinder side and the manifold side are
+  fast, and sub-stepping both is about ×2–4 solve time.
+- ~~**Trying first, a flow limiter:** … **Running:** …~~ **The limiter
+  failed:** it biased PMEP even at 2000 rpm, and it didn't touch single10.
+- **What works, a semi-implicit flow** (`F28_IMP`, `F28_AMB`): where the
+  explicit flow would carry Δp past zero within a step, it is solved
+  against the end-of-step pressures. That covers the valves and the NA
+  engine's plenum-to-air and manifold-to-air orifices. crdi15 idle ripple
+  0.80 → 0.022, VE 1.2613 (0.25°: 1.2626). single10 ripple 0.98 → 0.04, VE
+  1.012 → 1.263, consistent between 1° and 0.5°. Details in FINDING-028,
+  where "22%" is corrected to **about 18%**: the explicit 0.25° solve still
+  zig-zags on single10.
+- **Stage 1 across the roster** (semi-implicit flow + exact burn integral
+  + knock from the burn law; 6 engines, 24 points): full-load torque within
+  0.27%, BSFC within 1% (single10 up to −4.8%), p_max 1–2% lower, knock +1%
+  (single10 idle −20%). **Solve time +50%** (118.8 → 178.1 s).
+- **Open:** PMEP converges only first-order (crdi15 idle 1788 / 3179 /
+  3562 Pa at 1 / 0.5 / 0.25°; the Cycle page shows it). **Running:** each
+  piece timed alone, with an Illinois root-finder in place of 40 bisection
+  steps.
+
+**Session 9, P09 round 2 (2026-10-14, later): two questions for the owner**
+(the end of `reviews/PROPOSAL-P09.md`). Nothing in `dieselsim/` is changed.
+The prototype is saved as `tools/p09_prototype.diff`, with its switches
+documented; the scratch copy itself is gone with the session.
+- **Fixed in the prototype:**
+  - the knock now comes from the burn law (`(γ−1)/V × dQ/dθ`, 8
+    sub-steps a step): 3.64 / 3.63 / 3.61 at 1.0 / 0.5 / 0.25°;
+  - the burn is integrated exactly over each step.
+- **Best law, V4 b = 0.5** (crdi15 idle, at 0.25°): Leh +12%, cold start
+  +6%, Leh cold +11% (today −18%, +1%, −17%). Under 0.3 dB in the mix, so
+  Enjoy hears it only through the synth's gain `k`.
+- **FINDING-028 option B, first try (linear orifice): does nothing.** The
+  cure is to sub-step the gas exchange.
+- **New and serious, in FINDING-028:** single10's 1° grid is about ~~22%~~ 18% low
+  on torque at 600 rpm and 40% load. Against 0.5° / 0.25°: VE 1.012 /
+  1.147 / 1.265, torque 7.98 / 10.14 / 10.23 N·m. At 1100 rpm and 30% it
+  is −3%.
+- **At 1° the Leh-cold idle point is an outlier in every variant.**
+- ~~**Asked:**~~ **Answered:** "Staged (Recommended)" and "Add a
+  cold-start model". Stage 1 (the numerics, own PR) → stage 2 (P09, with a
+  cold-start model) → one rebuild. *(Was: "Asked: 1. the order …; 2. the
+  cold start …".)*
+
+**Session 9, P09 decided: option C (2026-10-14), being designed:**
+- **The owner's answers:** "1. C", "2. Hear in enjoy also", "3. modern
+  CRDi at Leh and a cold start". The solver fix shares a rebuild with
+  FINDING-028's option B (ADR-018).
+- **Cold start, measured** (crdi15 idle, walls at 273 K as the grid's
+  cold cells): the delay +9%, the knock +10% today (+17% with V1). But with
+  V1 a cold engine at Leh knocks *less* than a warm one there (1.31
+  against 1.39). At idle the premixed burn takes about 5°, near its 4°
+  floor, and nothing lets the delay speed it up.
+- **V3** (V1, plus `d_pre × (0.3 ms / τ)^a`) **behaves erratically**: at
+  a = 1, crdi15's Leh idle knock falls to 0.41. ~~Suspected: a premixed
+  spike 2–5° wide is barely resolved by the solver's 1° step. **Running:**
+  the same points at 1.0 / 0.5 / 0.25° steps, for today, V1 and V3.~~
+  **Found, two numerical causes:**
+  1. **The sound's knock value depends on the step** (now in FINDING-029):
+     `np.gradient`, a central difference, halves a one-step rise. V3 at
+     Leh idle reads 0.41 / 1.69 / 2.40 at 1.0 / 0.5 / 0.25°, while the
+     solver's forward-difference `dpdtheta_comb` reads 5.19 / 5.16 / 5.06.
+     The fix: the forward difference. Part of today's −13% at Leh is this
+     artefact; at 0.25° it is −7%.
+  2. **The burn adds `rate × step`, with the rate sampled at the step's
+     end.** For a premixed spike only a few steps wide, that depends on
+     where the start of combustion falls inside the step. V4
+     (`d_pre / max(1, τ/inj_dur)^b`, which acts only where the delay
+     outlasts the injection) was still erratic with the forward difference
+     (at b = 1 a cold engine reads below a warm one). **Prototyped:** the
+     burn integrated exactly over each step (the cumulative Wiebe's
+     difference). **Running:** its step test with V1 and V4 (b = 0.5, 1).
+  - On the solver's stable number, V3 already does what the owner asked:
+    crdi15 idle, cold +15%, Leh +37%, Leh cold +40%. But its fixed 0.3 ms
+    reference made single10's burn 3× faster at sea level (knock ×3,
+    p_max +24%), so it was dropped for V4.
+- **FINDING-028 option B, prototyped** (scratch `thermo.py`, switch
+  `F28_EPS`): `orifice_mdot` linear in Δp below `1 − pr = ε`, matched to
+  the isentropic law there, so the flow's slope at Δp = 0 is finite.
+  Test script ready (`f28_eps.py`: ripple, PMEP, VE, torque against a
+  0.5° solve).
+- **The sound side, designed (not built):**
+  - the live loop carries a reference knock, `dpdt_ref` (warm, standard
+    air, same cell);
+  - the weather table gains a `dpdt_max` key (one more key from
+    `solve_cell`'s `_meta`);
+  - the synth applies `(dpdt_max / dpdt_ref)^k` to the knock, so warm
+    standard air is unchanged bit for bit;
+  - `k` is chosen by ear before the rebuild. It is a playback gain, not
+    physics, and will be documented as such.
+- Watson's (1980) premixed shape factors could not be verified (the paper
+  is paywalled, and a thesis link was dead), so they aren't used.
+
+**Session 9, P09 being measured (2026-10-14), scratch only so far:**
+- The sheet's **P09**: "Knocking: Increased knocking on high altitude"
+  (priority 2). Also new in the sheet: **P11**, "Number or gear selector:
+  give an option to choose number of gears to user" (priority 1, "Into
+  Consideration"); not looked at yet.
+- **Measured (scratch `p09_measure.py`)**, at sea level, Leh (3500 m,
+  20 °C) and 5000 m:
+  - The ignition delay lengthens as it should (crdi15 idle 1.88 → 2.66 →
+    3.60°; single10 1100/0.3 6.26 → 9.13 → 12.41°).
+  - But **the knock the sound reads (`dpdt_max`) mostly falls**: crdi15
+    −13% idle, −7% cruise and −12% full pedal at Leh; 6 of 9 points fall.
+    ~~Only single10 at a cruise (+7%) and truck127 at full load (+6%, its
+    smoke limiter cuts the fuel) rise.~~ Three rise, by 3–7%: single10 at
+    idle (+3%; I left this one out at first), single10 at a cruise (+7%)
+    and truck127 at full load (+6%, its smoke limiter cuts the fuel).
+  - Two causes in `cycle.py`:
+    - The premixed fraction is pinned at its 0.72 cap at every idle point.
+    - The premixed burn's duration is `0.30 × burn_dur`, and `burn_dur`
+      grows with φ, so the leaner air of altitude makes the premixed
+      spike burn **slower**. The literature says the opposite (a longer
+      delay makes the premixed burn more abrupt).
+  - **And the live loop can't hear any of it:** the weather table's keys
+    are `torque_ind, fuel_kg_h, boost, turbo_rpm, afr, T_exh`. The sound
+    in Drive and Enjoy stays the grid's, at sea level.
+- ~~**Running:** a prototype in a scratch copy of `dieselsim/` (V1: the
+  premixed burn no longer slows with φ; V2: V1 plus the cap 0.72 → 0.95),
+  with a switches-off run that must equal the baseline first.~~ **Done:**
+  - The switches-off run equals the baseline at 27 of 27 points.
+  - **V1 turns the trend:** crdi15 idle at Leh −13% → **+21%**, single10
+    at a cruise +18%, truck127 at full load +14%. The turbo engines under
+    load stay flat or slightly down.
+  - **V1 at sea level, six roster engines:** full-load torque ≤ 0.6%, BSFC
+    ≤ 0.5%, p_max up to +5.1%, but the knock moves −11% to +31%. That would
+    change the ADR-018 sound unless the synth's knock reference is
+    re-scaled.
+  - V2's cap only makes idle louder at sea level.
+  - **Not audible:** V1's ×1.14–1.21 knock is 0.0–0.4 dB at the cabin,
+    intake and engine-bay mics, and ×2 is 0.1–2.0 dB. After P10 the
+    exhaust carries the sound.
+  - Literature: SAE 2013-01-1516 (idle, 550–4500 m), read from its
+    abstract page: the delay is longer, the combustion **shorter**, and
+    peak heat release rises up to 3300 m. The two MDPI papers returned 403
+    and are unverified.
+- **Written:** `reviews/FINDING-029.md` and `reviews/PROPOSAL-P09.md` (A
+  record only, B physics at the next rebuild, C B + audible in Enjoy, D
+  fake it in the synth; recommended A now, B at the next rebuild), plus
+  `tools/p09_altitude_knock.py`. **Three questions for the owner** are at
+  the end of the proposal.
 
 **Session 9, P10 built (2026-10-14), `feat/p10-sound`:**
 - **The owner's decisions:**
@@ -67,7 +219,25 @@ PR #119; all seven steps built)".)*
     known defects** (main's 88 plus the two new tests). It started before
     the intake full-pedal check was added to `test_p10_deeper_sound`; that
     final version passed in the mutants' baseline run.
-  - #128 opened; its CI is not read yet.
+  - ~~#128 opened; its CI is not read yet.~~ **CI on #128 (`d075312`):
+    9 of 9 green, every job read:**
+    - physics 90 / 0 / 3 on 3.10 (36.3 min) and 3.12 (33.6 min);
+    - Pyodide 73 / 0 / 2 / 17 skipped, 48.5 min of its 60 (both new
+      tests run there);
+    - ports 5 + 51 + 11 + 11; solver 20 + 15 + 30; app units 130;
+    - e2e: dyno 15, drive 10, sound 6, enjoy 28, cycle 11, spec 18,
+      sweep 6, durability 5, grid 9, custom 7.
+- **Merged** by the owner, 2026-10-14 08:10 UTC, as `196f8d3`. `main`
+  checked by content: its tree equals `d075312`'s (an empty diff), with
+  `SOURCE_BALANCE`, `MIC_TRIM`, `HISS_WEIGHT`, `smooth_port_flow` and their
+  TS mirrors present. Pages deployed `196f8d3` (success).
+- ~~**Next, the owner:** listen on the phone, at the cabin and intake mics.
+  Two things to judge: whether full pedal (about +10 dB) is too loud, and
+  whether the tip, cabin and outside mics sounding alike when revved is a
+  problem.~~ **The owner listened (2026-10-14): accepted.** Full pedal "is
+  little louder. But fine I guess"; the mics sounding alike: "Nope". Nothing
+  to change; recorded in ADR-018 and the proposal. **P10 is done**, apart
+  from FINDING-028's solver fix at the next rebuild.
 - **Left for later:** FINDING-028's solver fix (option B), at the next
   rebuild.
 
@@ -1201,14 +1371,14 @@ from the CI-tested tree only in #104's four docs files, with 0 code paths;
 
 | suite | result |
 |---|---|
-| `python3 tests/test_physics.py` | 87 passed, 0 failed, 3 known (CI on `main` `3047f95`, 2026-10-11, 3.10 and 3.12). *Was (#115's tree, with scipy):* 85 / 0 / 3; *(humidity's tree):* 82 / 0 / 3; *(#110):* 81 / 0 / 3; *(#107):* 80 / 0 / 3; *(#105):* 79 / 0 / 3; *(#101's final tree):* 78 / 0 / 3; *(#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
-| Pyodide suite | 71 passed, 0 failed, 2 known, 16 skipped (CI on `main` `3047f95`; 47.6 min of its 60, runner-dependent: 20–49 min, session 9). *Was (#115):* 70 / 0 / 2 / 15, 45.6 min; *(#114):* 69 / 0 / 2 / 13; *(#110):* 68 / 0 / 2 / 13; *(#107):* 67 / 0 / 2 / 13; *(#101's final tree, `b6ea065`):* 65 / 0 / 2 / 13; *(#99):* 64 / 0 / 2 / 13; *(#88):* 59 / 0 / 2 / 12 |
+| `python3 tests/test_physics.py` | 90 passed, 0 failed, 3 known (CI on #128 `d075312`, = `main` `196f8d3`, 2026-10-14, 3.10 and 3.12). *Was (`3047f95`):* 87 / 0 / 3; *(#115's tree, with scipy):* 85 / 0 / 3; *(humidity's tree):* 82 / 0 / 3; *(#110):* 81 / 0 / 3; *(#107):* 80 / 0 / 3; *(#105):* 79 / 0 / 3; *(#101's final tree):* 78 / 0 / 3; *(#101's first commit):* 78 / 0 / 3; *(#99):* 77 / 0 / 3; *(#88):* 71 / 0 / 3 |
+| Pyodide suite | 73 passed, 0 failed, 2 known, 17 skipped (CI on #128 `d075312`; 48.5 min of its 60). *Was (`3047f95`):* 71 / 0 / 2 / 16, 47.6 min (runner-dependent: 20–49 min, session 9); *(#115):* 70 / 0 / 2 / 15, 45.6 min; *(#114):* 69 / 0 / 2 / 13; *(#110):* 68 / 0 / 2 / 13; *(#107):* 67 / 0 / 2 / 13; *(#101's final tree, `b6ea065`):* 65 / 0 / 2 / 13; *(#99):* 64 / 0 / 2 / 13; *(#88):* 59 / 0 / 2 / 12 |
 | `tools/fixtures/gen_fixtures.py --check` | 7 modules current |
 | `tools/audit_dead_signals.py` | 0 dead, 2 frozen (known), 0 tiny |
-| `web/physics npm test` | 5 + 51 + 10 + 11 = 77 (CI on `main` `3047f95`). *Was (#115, +5 the weather drive):* 5 + 41 + 10 + 11 = 67; *before:* 5 + 36 + 10 + 11 = 62 |
+| `web/physics npm test` | 5 + 51 + 11 + 11 = 78 (CI on #128; +1, the sound's balance check). *Was (`3047f95`):* 5 + 51 + 10 + 11 = 77. *Was (#115, +5 the weather drive):* 5 + 41 + 10 + 11 = 67; *before:* 5 + 36 + 10 + 11 = 62 |
 | `web/solver npm test` | cache 20, live-grid scheduler 15, round trip 30 (#115: +3 scheduler, the weather pieces). *Was:* scheduler 12 (#105); round trip 29 |
 | `web/app npm test` | 130 unit tests (CI on `main` `3047f95`, run before `physics-version.ts` exists). *Was:* 119 (#115's tree), 114 (humidity's tree), 112 (D's tree), 109 (#106), 104 (#103), 101. `check:labels` 6 of 10 templates |
-| e2e (`web/app`) | (CI on `main` `3047f95`) dyno 15, grid 9, drive 10, sound 6, enjoy 25 (+B-05/B-06's two checks), custom 7, cycle 11, spec 18, sweep 6, durability 5. *Was (CI on #115):* dyno 15, grid 9, drive 9 (*was* 7; +Leh against native, +Leh slower), sound 6, enjoy 22 (*was* 21; +the place on the start screen), custom 7, cycle 11 (*was* 10, +the humidity note; 9, +FINDING-026's thin-air note; 8, +the environment check, #106), spec 14 (*was* 13, +the humidity field; 12, +the thin-air notes; 11, +the reload check, #103), sweep 6, durability 5 |
+| e2e (`web/app`) | (CI on #128) dyno 15, grid 9, drive 10, sound 6, enjoy 28, custom 7, cycle 11, spec 18, sweep 6, durability 5. *Was (CI on `main` `3047f95`):* dyno 15, grid 9, drive 10, sound 6, enjoy 25 (+B-05/B-06's two checks), custom 7, cycle 11, spec 18, sweep 6, durability 5. *Was (CI on #115):* dyno 15, grid 9, drive 9 (*was* 7; +Leh against native, +Leh slower), sound 6, enjoy 22 (*was* 21; +the place on the start screen), custom 7, cycle 11 (*was* 10, +the humidity note; 9, +FINDING-026's thin-air note; 8, +the environment check, #106), spec 14 (*was* 13, +the humidity field; 12, +the thin-air notes; 11, +the reload check, #103), sweep 6, durability 5 |
 
 CI runs all of them except the manual `web/solver npm run test:live-real`.
 Its jobs: physics on Python 3.10 and 3.12, Pyodide, fixtures, solver, web

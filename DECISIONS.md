@@ -1282,6 +1282,10 @@ the mix and the clicks 65–82%.
 - **Superseded measurements.** It answers REVIEW-006's `hd_i6`
   tick-dominance question the same way (the clicks are ÷3). The owner's
   2026-09-30 sign-off by ear on the old balance is superseded by this one.
+- **The owner's listen on the live site** (2026-10-14, after #128): full
+  pedal "is little louder. But fine I guess", so the +10 dB stays; the
+  exhaust tip, cabin and outside mics sounding alike when revved is not a
+  problem ("Nope"). A full-pedal trim is the lever if that changes.
 
 **Revisit if** the owner hears full pedal as too loud, or idle as too
 quiet, on the phone; or once FINDING-028's solver fix lands (then drop the
