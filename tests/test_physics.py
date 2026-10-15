@@ -2598,6 +2598,71 @@ def test_grid_benchmark_schedule():
           (f"failed: {', '.join(bad)}" if bad else f"{len(parts)} of {len(parts)} parts"))
 
 
+def test_build_my_grid_tool():
+    """P13 option N (reviews/PROPOSAL-P13.md): tools/build_my_grid.py builds a
+    custom engine's grid natively for Import grid. Its own logic, without a
+    build (the build is build_live_grids', measured end to end by hand: a 2x2
+    grid imported and driven on the live site). SKIPs where tools/ is absent.
+    Parts:
+    - the live-site check reads the stamp from a grid's first bytes (the
+      shipped crdi15 grid's own head), and nothing from bytes that aren't one;
+    - the default output is out/grids/<key>.grid.json, the browser's name;
+    - progress is weighted (a row calibration counts as four cells) and its
+      estimate is elapsed / done x left: rows 2 x 4 + cells 4 = 12 units, 8
+      done at 80 s -> 67%, 40 s left; then 100%; and in parallel it counts
+      waves, not pieces (8 rows + 96 cells on 6 workers: 14 min, not 83);
+    - importing the tool registers no presets (build_live_grids does, on
+      import, which would change other tests' loops over PRESETS)."""
+    import importlib.util
+    import json
+    from dieselsim.config import PRESETS
+    tool = os.path.join(os.path.dirname(__file__), "..", "tools", "build_my_grid.py")
+    if not os.path.exists(tool):
+        RESULTS.append(("SKIP", "P13: the native grid build's script", None, None, "tools/ not present (Pyodide harness)"))
+        return
+    before = set(PRESETS)
+    spec_ = importlib.util.spec_from_file_location("build_my_grid", tool)
+    m = importlib.util.module_from_spec(spec_)
+    spec_.loader.exec_module(m)
+    with open(os.path.join(GRID_DIR, "crdi15.json"), "rb") as fh:
+        head = fh.read(4096)
+    with open(os.path.join(GRID_DIR, "crdi15.json")) as fh:
+        stamp = json.load(fh)["grid_hash"]
+    lines, now = [], [0.0]
+    prog = m.Progress({"rows": (2, 4.0), "warm cells": (4, 1.0)}, every=0.0, clock=lambda: now[0],
+                      out=lambda s, flush=False: lines.append(s))
+    for t, phase, done, total in ((40.0, "rows", 1, 2), (80.0, "rows", 2, 2), (120.0, "warm cells", 4, 4)):
+        now[0] = t
+        prog(phase, done, total)
+    # in parallel: 8 rows and 96 cells on 6 workers, the first row done at 160 s:
+    # a unit is 40 s on one worker, 7 x 4 + 96 = 124 units left over 6 -> 827 s
+    # (elapsed / done x left, the app's first ETA, said 4960 s)
+    par = []
+    now[0] = 0.0
+    pp = m.Progress({"rows": (8, 4.0), "warm cells": (96, 1.0)}, workers=6, every=0.0, clock=lambda: now[0],
+                    out=lambda s, flush=False: par.append(s))
+    now[0] = 160.0
+    pp("rows", 1, 8)
+    # 7 of 8 rows at 320 s is two waves: 40 s a unit still, 4 + 96 units left -> 667 s
+    # (counting pieces, not waves: 320 / 7 / 4 = 11.4 s a unit -> 190 s)
+    now[0] = 320.0
+    pp("rows", 7, 8)
+    parts = {
+        "the stamp from a grid's head": m.stamp_in(head) == stamp and len(stamp) == 64,
+        "no stamp from other bytes": m.stamp_in(b'{"hello": 1}') is None,
+        "default out/grids/<key>.grid.json": m.default_out("abc").endswith(os.path.join("out", "grids", "abc.grid.json")),
+        "rows weighted x4: 67% and 40 s left at 80 s": lines[1].startswith("[ 67%] rows 2/2")
+        and "about 1 min left" in lines[1] and prog.done_before == 12.0,
+        "the end reads 100%": lines[2].startswith("[100%] warm cells 4/4"),
+        "in parallel, waves not pieces: 14 min left after the first row, 11 after seven": len(par) == 2
+        and "about 14 min left" in par[0] and "about 11 min left" in par[1],
+        "importing it registers no presets": set(PRESETS) == before,
+    }
+    bad = [k for k, ok in parts.items() if not ok]
+    check("P13: the native grid build's script (tools/build_my_grid.py)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}; lines {lines}" if bad else f"{len(parts)} of {len(parts)} parts"))
+
+
 def _p08_live(key, trans="tc"):
     """A warm LiveEngine on a shipped grid for P08's checks. Friction is
     evaluated once per simulated second (the app: every 6 frames) to keep
@@ -2862,7 +2927,7 @@ def main():
                test_describe_engine, test_solve_cycle, test_mfb50_counts_combustion_before_tdc, test_durability_steps,
                test_spec_editor_schema, test_spec_ambient_reaches_the_solve, test_environment_presets_reach_the_solve, test_modern_ecu_knows_absolute_pressure,
                test_modern_cap_holds_with_egr_on, test_humidity_corrects_reported_nox, test_environments_json_is_current,
-               test_grid_benchmark_schedule, test_p08_automatic_shifts_on_demand,
+               test_grid_benchmark_schedule, test_build_my_grid_tool, test_p08_automatic_shifts_on_demand,
                test_live_grid_pieces_match_the_shipped_grid,
                test_na_engines_idle_on_a_converter,
                test_flat_tappet_wears_more_than_roller,
