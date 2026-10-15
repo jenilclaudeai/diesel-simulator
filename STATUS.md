@@ -1,5 +1,17 @@
 # Status
 
+**CI on PR #131 (2026-10-15, run 38721543892): three red jobs, one fixed.**
+(1) `sweep.e2e.mjs` expected "5.8%"; `accuracy.ts` now says crdi15 -5.9, so
+the page says 5.9%. Test changed to 5.9% (not yet re-run). (2) `web/solver`
+`roundtrip.test.ts`: its native goldens (`NATIVE_TORQUE` 122.5803,
+`NATIVE_CYCLE`, `NATIVE_DUR`) predate P09. Pyodide gave torque 122.4582
+(rel diff 9.97e-4), p_max 129.2 bar (6.4e-3), durability 8.4e-4. NOT yet
+re-baselined: they need native CPython values, not CI's Pyodide ones.
+(3) `test_physics.py` "streaming sound matches the offline render" fails on
+3.10 and 3.12 (source level 1.2% off, tolerance 0.03 is met; third-octave
+1.24 dB is met; the shape check fails: rumble 1.63 dB vs the 1.5 limit).
+NOT yet fixed; the 1.5 dB limit's comment says 1.52-1.56 was seen before.
+
 **Updated:** 2026-10-15, session 9 (FINDING-030 fixed by option A, the owner's
 choice: cold-cell friction at the running walls; the ten grids' COLD cells
 re-solved by `tools/rebuild_cold_cells.py`, ~80 min, not a full rebuild; the
