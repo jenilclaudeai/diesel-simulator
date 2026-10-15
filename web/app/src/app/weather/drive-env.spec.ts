@@ -24,7 +24,7 @@ describe('the place Drive and Enjoy drive in (Phase 7 step 4)', () => {
     const table = weatherLine('plateau', 'table', 2.04);
     expect(table).toContain('65.8 kPa');
     expect(table).toContain("weather table (measured within 2.0% of full-load torque at Leh)");
-    expect(table).toContain("Friction and sound stay sea level's");
+    expect(table).toContain("The sound's knock follows this air too; friction and the rest of the sound stay sea level's.");
     const none = weatherLine('plateau', 'no table', null);
     expect(none).toContain('no weather table');
     expect(none).toContain("stay standard air's");

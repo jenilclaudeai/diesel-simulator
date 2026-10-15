@@ -124,11 +124,18 @@ def known(name, cond, note):
 #   crdi15 1800/0.6  torque 122.580341 -> 122.542628, bsfc 238.524968 -> 237.571137, p_max 130.046491 -> 128.152693
 #   crdi15 3000/1.0  torque 216.888323 -> 216.836794, bsfc 214.552248 -> 214.636031, p_max 152.273735 -> 149.270383
 #   hd_i6  1700/1.0  torque 2313.603180 -> 2313.695766, bsfc 214.080003 -> 214.071436, p_max 178.839201 -> 176.244574
+# Re-baselined 2026-10-15 for P09 stage 2 (ADR-019; commit 40e0699 left them at stage 1's, and the
+# full suite was not run until the rebuild): the premixed burn has no phi term and is faster by
+# (delay / injection)^0.5. p_max rises 0.8-2.4%, torque falls 0.015-0.09%, BSFC rises 0.05-0.34%.
+# The stage-1 tree (15a19a6) still gives stage 1's values to 6 decimals (out/golden_at.py, not kept):
+#   crdi15 1800/0.6  torque 122.542628 -> 122.458183, bsfc 237.571137 -> 238.377425, p_max 128.152693 -> 129.212958
+#   crdi15 3000/1.0  torque 216.836794 -> 216.803723, bsfc 214.636031 -> 214.752423, p_max 149.270383 -> 152.904679
+#   hd_i6  1700/1.0  torque 2313.695766 -> 2311.634363, bsfc 214.071436 -> 214.262334, p_max 176.244574 -> 180.332689
 GOLDEN_TOL = 1e-5
 GOLDEN = {
-    ("crdi15", 1800, 0.6): dict(torque=122.542628, bsfc=237.571137, pmax=128.152693),
-    ("crdi15", 3000, 1.0): dict(torque=216.836794, bsfc=214.636031, pmax=149.270383),
-    ("hd_i6", 1700, 1.0): dict(torque=2313.695766, bsfc=214.071436, pmax=176.244574),
+    ("crdi15", 1800, 0.6): dict(torque=122.458183, bsfc=238.377425, pmax=129.212958),
+    ("crdi15", 3000, 1.0): dict(torque=216.803723, bsfc=214.752423, pmax=152.904679),
+    ("hd_i6", 1700, 1.0): dict(torque=2311.634363, bsfc=214.262334, pmax=180.332689),
 }
 
 
@@ -1216,6 +1223,9 @@ def test_adr011_live_friction():
     g = _toy_adr011_grid()
     live = LiveEngine(g, "crdi15", trans="tc")
     live.T_coolant, live.T_oil, live.rpm, live.load_eff = 361.0, 373.0, g.rpms[1], g.loads[1]
+    # P09: the trace blends at the chamber walls, which start at the air's: warm them too.
+    # Held warm below, so "cold coolant only" moves the friction model's walls alone
+    live.T_chamber = 361.0
     live._update_friction()
     own = abs(live.fmep_live / g.perf[1][1]["fmep"] - 1.0)
     warm = live.T_fric
@@ -1255,6 +1265,8 @@ def _toy_weather(g, slope):
         row = []
         for j in range(len(g.loads)):
             c = dict(g.perf[i][j], torque_ind=g.perf[i][j]["torque"] + g.perf[i][j]["fmep"] * k_t)
+            # P09: the knock is the sources' scalar, not perf's (bridge._weather_values)
+            c["dpdt_max"] = g.meta[i][j]["dpdt_max"] if g.meta is not None else 0.0
             row.append([[[c[k] + (1 + i + 2 * j) * slope[k][0] * (p - 101325.0) / 1000.0
                           + slope[k][1] * (T - 298.0) for k in keys]
                          for T in bridge.WEATHER_T_NODES] for p in bridge.WEATHER_P_NODES])
@@ -1279,7 +1291,9 @@ def test_weather_table_in_the_live_loop():
     import copy
     from dieselsim import live as L
     slope = {"torque_ind": (0.9, -0.2), "fuel_kg_h": (0.01, 0.002), "boost": (-0.012, 0.001),
-             "turbo_rpm": (-300.0, 50.0), "afr": (0.3, -0.05), "T_exh": (-2.0, 1.1)}
+             "turbo_rpm": (-300.0, 50.0), "afr": (0.3, -0.05), "T_exh": (-2.0, 1.1),
+             "dpdt_max": (-2.0e7, -4.0e6)}    # P09: the knock; _knock() adds it, not _perf
+    perf_keys = [k for k in slope if k != "dpdt_max"]
     g = _toy_adr011_grid()
     wt = L.WeatherTable(g.rpms, g.loads, _toy_weather(g, slope))
     zero = all(v == 0.0 for r in g.rpms for ld in g.loads for v in wt.delta(r, ld, 101325.0, 298.0).values())
@@ -1295,7 +1309,8 @@ def test_weather_table_in_the_live_loop():
     for (p, T) in ((65764.1, 293.15), (90000.0, 263.0), (52000.0, 278.15), (101325.0, 318.15), (58000.0, 253.15)):
         d = wt.delta(rpm, load, p, T)
         for k in slope:
-            worst = max(worst, abs(d[k] - want_d(k, p, T)))
+            # relative past 1 (the knock is ~1e9 Pa/s), absolute below
+            worst = max(worst, abs(d[k] - want_d(k, p, T)) / max(1.0, abs(want_d(k, p, T))))
     lo = wt.delta(rpm, load, 40000.0, 230.0)
     clamped = abs(lo["torque_ind"] - want_d("torque_ind", 50000.0, 243.15)) < 1e-9
 
@@ -1324,7 +1339,7 @@ def test_weather_table_in_the_live_loop():
     a, b = e_hi._perf(1500.0, 0.6), e_no._perf(1500.0, 0.6)
     cf6 = 1.0 + (1500.0 - g.rpms[0]) / (g.rpms[1] - g.rpms[0]) + 2.0 * 0.6
     want = {k: cf6 * sp * (72000.0 - 101325.0) / 1000.0 for k, (sp, _) in slope.items()}
-    moved = all(abs((a[k] - b[k]) - want[k]) < 1e-9 for k in slope) \
+    moved = all(abs((a[k] - b[k]) - want[k]) < 1e-9 for k in perf_keys) \
         and abs((a["torque"] - b["torque"]) - want["torque_ind"]) < 1e-9
     states = (e_std.weather_state(), e_hi.weather_state(), e_no.weather_state())
     parts = {
@@ -1459,7 +1474,7 @@ def test_weather_pieces_match_the_grid():
                                                           "load": g["loads"][j], "fuel_limit": g["fuel_limits"][i],
                                                           "p": 101325.0, "T": 298.0})))["values"]
     k_t = bridge._resolve_spec({"preset": "crdi15"}).geom.displacement / (4.0 * 3.141592653589793)
-    c = g["perf"][i][j]
+    c = dict(g["perf"][i][j], dpdt_max=g["src_meta"][i][j]["dpdt_max"])   # P09: the knock is the sources' scalar
     want = [c["torque"] + c["fmep"] * k_t if k == "torque_ind" else c[k] for k in bridge.WEATHER_KEYS]
     worst = max(abs(a - b) / max(abs(b), 1e-12) for a, b in zip(got, want))
     tables, std_bad = 0, []
@@ -1476,6 +1491,7 @@ def test_weather_pieces_match_the_grid():
         for ii, row in enumerate(d["perf"]):
             for jj, cell in enumerate(row):
                 std = d["weather"]["values"][ii][jj][sp][sT]
+                cell = dict(cell, dpdt_max=d["src_meta"][ii][jj]["dpdt_max"])
                 ref = [cell["torque"] + cell["fmep"] * kt if k == "torque_ind" else cell[k] for k in bridge.WEATHER_KEYS]
                 if std != ref:
                     std_bad.append(f"{f} [{ii}][{jj}]")
@@ -2112,7 +2128,9 @@ def test_live_sound_follows_the_engine():
         return inp, {k: float(np.sqrt(np.mean(np.concatenate(v) ** 2))) for k, v in acc.items()}
     ic, rc = run(273.0)
     iw, rw = run(361.0)
-    moved = {k: rc[k] / rw[k] - 1.0 for k in ("mech", "rumble", "combustion")}
+    # unstepped, the loop sits on the grid's no-fuel row, where the burn-law knock is 0
+    # (P09, FINDING-029): combustion is silent in both runs, so it has no ratio
+    moved = {k: (rc[k] / rw[k] - 1.0 if rw[k] > 0.0 else 0.0) for k in ("mech", "rumble", "combustion")}
     ok = abs(moved["rumble"]) > 0.01
     check("the live synth follows the live friction: cold oil (Phase 4)", 1.0 if ok else 0.0, 1.0, 0.0,
           "oil 273 vs 361 K, coolant 361 K, idle: " + ", ".join(f"{k} {100 * v:+.1f}%" for k, v in moved.items())
@@ -2799,6 +2817,7 @@ def _p08_live(key, trans="tc"):
         grid = _prebuilt_grid(key)
     live = LiveEngine(grid, key, trans)
     live.T_coolant, live.T_oil = 361.0, 373.0
+    live.T_chamber = 361.0      # P09: the grid blends at the chamber walls, which start at the air's
     live.FRICTION_EVERY = 60
     return live
 

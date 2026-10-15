@@ -51,3 +51,34 @@ below a quarter of it.
 
 **Recommendation:** A now, and B as part of step 6, which deals with
 cold-flow and cold starts. C is not recommended: it hides physics.
+
+---
+
+## Update, P09's rebuild (2026-10-15): the cliff moved by one node, and the Leh check is now 36.08%
+
+After P09's rebuild (ADR-019), single10's Leh check reads **36.08%** of
+full-load torque, up from 7.20%. The other nine grids moved by 0.11 points
+or less. Measured cell by cell (`out/p09_leh_check.py`, `out/p09_node.py`,
+not kept):
+- **Five of the six check cells** are within 2.3 N·m of a converged solve
+  at Leh.
+- **The sixth, 2254 rpm at full load,** reads 29.60 N·m from the table
+  against 49.35 solved. Its 58 kPa / 25 °C node now **misfires on some
+  cycles**: it reads 3.36 N·m, with the knock at 1.2e9 against 3.3e9 and
+  the cycle unsettled. Before P09 it burned normally (gross IMEP 5.21 bar,
+  above). Leh blends that node in.
+- **Fresh solves reproduce the table's values exactly**, so the table is
+  faithful to the solver. The solver's ignition edge has moved.
+- **Torque along the pressure axis at 298 K:** 58 kPa 3.36 (unsettled),
+  61 kPa 47.01, 65.8 kPa 49.08, 69 kPa 50.13, 72 kPa 50.94. So the cliff
+  lies between 58 and 61 kPa.
+- **Nodes under half the standard air's torque:** 8 before P09, 9 after.
+  The new one is 2254 rpm, full load, 58 kPa, 25 °C.
+
+Why the edge moved has not been measured. The first suspect is stage 1's
+port flow, which changed this engine's VE by up to 10% (FINDING-028), and
+so its trapped charge and compression temperature.
+
+Drive and Enjoy show each engine's measured Leh error, so single10's place
+field will show 36% instead of 7.2%. **The options above stand, and the
+choice is the owner's.**

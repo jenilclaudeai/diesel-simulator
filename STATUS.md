@@ -1,8 +1,16 @@
 # Status
 
-**Updated:** 2026-10-15, session 9 (P09: the owner chose k = 4; ADR-019
+**Updated:** 2026-10-15, session 9 (P09: the rebuild finished, but its
+cold cells carry about 10× a real cold start's friction (FINDING-030),
+which makes the automatic hunt on a cold start; and single10's Leh check is
+36% (FINDING-027). Two questions for the owner; the rebuilt grids are NOT
+committed. On `feat/p09-knock`).
+*(Was: "2026-10-15, session 9 (P09: the rebuild finished; single10's
+Leh check rose to 36% (FINDING-027's misfire edge moved one node), a
+question for the owner; the suites and the PR next, on `feat/p09-knock`).")*
+*(Was: "2026-10-15, session 9 (P09: the owner chose k = 4; ADR-019
 written; the ten grids' rebuild running since 2026-10-14 22:01 UTC, about
-8 h or more; then the full suite, CI and the PR, all on `feat/p09-knock`).
+8 h or more; then the full suite, CI and the PR, all on `feat/p09-knock`).")*
 *(Was: "2026-10-14, session 9 (P09: the owner chose C; building it
 found numerical limits at the 1° step and a ~~22%~~ 18% torque error on single10
 (FINDING-028); two questions for the owner, round 2; all on #129, docs
@@ -31,6 +39,58 @@ duplicate test removed in #121)"; before that "2026-10-11, session 9 (B-05
 and B-06 fixed, PR open; #118 and #119 still waiting to merge)"; before
 that "2026-10-10, session 8 (Phase 7 step 7 built,
 PR #119; all seven steps built)".)*
+
+**Session 9, the rebuild done (2026-10-15), `feat/p09-knock`:**
+- **The rebuild** ran from 2026-10-14 22:01 to 2026-10-15 07:40 UTC (9 h
+  39 min): the cells take 231–1509 s per grid and the weather 853–4550 s.
+  Unsettled cells per grid: 0–22; weather pieces: 0–68.
+- **The Leh checks moved by 0.11 points or less, except single10's: 7.20%
+  → 36.08%.** It is FINDING-027's misfire cliff. Its 58 kPa / 25 °C node at
+  2254 rpm and full load now misfires on some cycles: 3.36 N·m, unsettled;
+  before P09 it fired. Fresh solves reproduce the table exactly. The cliff
+  lies between 58 and 61 kPa. Five of the six check cells are within
+  2.3 N·m. Recorded in FINDING-027 as an update. **Question for the owner:**
+  ship with 36% stated, or more work first (see the reply).
+- **Drive's place line was stale**: "Friction and sound stay sea level's".
+  It now says the knock follows the air. The unit spec was updated, and a
+  mutant (the old sentence) is caught, baseline 7 of 7. Units 130 of 130.
+- **Audit:** 0 dead, 2 frozen (known), 0 tiny. **Solver fast tests:** 20 +
+  15, 0 failed.
+- ~~**Running:** the full Python suite, and the Dyno accuracy table (`--pull`,
+  then `--write-accuracy`).~~
+- **The full Python suite on the rebuilt grids: 74 passed, 15 failed, 3
+  known.** Stage 2 had been checked with its own tests and mutants only.
+  The full suite was not run after `40e0699`, and should have been. *(My
+  miss.)* The 15:
+  - the accuracy table: regenerated (`diag_torque_limiter.py --pull`, then
+    `--write-accuracy`; rows within 0.2 points);
+  - 9 golden points: stage 2 moved them. The stage-1 tree (`15a19a6`)
+    still gives the old values to 6 decimals. Re-baselined with the reason
+    (p_max +0.8 to +2.4%, torque −0.015 to −0.09%);
+  - 2 weather tests read `dpdt_max` from `perf`; it is in the cell's meta
+    table (`src_meta`). Fixed. The toy table gains a knock slope, and its
+    linear check is relative past 1 (the knock is ~1e9);
+  - the live synth test divided 0 by 0. Unstepped, it sits on the grid's
+    no-fuel row, where the burn-law knock is 0 (FINDING-029; the old grid
+    had 0.6–6.5e9 there, an artefact). Guarded;
+  - ADR-011 live friction and P08: their helpers warmed the coolant but
+    not `T_chamber`. Fixed: own-cell diff 0.0, and P08 7 of 7.
+  Each fixed test passes on its own. The full suite has not been rerun yet.
+- **FINDING-030 (new): the cold cells' friction.** `cold_start_walls` puts
+  the liner at 273 K, and `friction.py` takes the skirt's film at liner
+  − 20 K. crdi15 at 1343 rpm / 0.2: FMEP 13.73 bar (warm 0.98, cold before
+  P09 1.26), with the skirt 19.1 kW. The driven torque is unaffected (the
+  live friction), but P08's map reads the cells' brake torque. On a cold
+  start crdi15 at 50 km/h hunts (7 shifts in 20 s at 120 s), and the gears
+  differ from `main`'s for about 2 minutes. Options A/B/C in the finding;
+  recommended A (friction at `WALL_FOLLOW`'s walls in the cold cells),
+  which means another ~9.7 h rebuild.
+- **A sound change to tell the owner:** with the knock from the burn law,
+  the combustion part goes silent where no fuel burns (overrun, fuel cut).
+  Before, the old measure played 0.6–6.5e9 there.
+- **The rebuilt grids are left uncommitted** until FINDING-030 is decided:
+  option A would replace them, and committing 50 MB twice bloats the
+  history.
 
 **Session 9, k chosen (2026-10-15), `feat/p09-knock`:**
 - **The owner chose k = 4** (`KNOCK_GAIN_EXP`, `livesound.py` and
