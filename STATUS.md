@@ -65,7 +65,10 @@ as a fast-forward):
   (`6ab9760d77b9`, checked) and each cold cell changes only in perf
   torque/power/bsfc/fmep/nox and meta Pb/load (measured: nothing else moves;
   traces and waveforms byte-identical). New hash `8a6fbfc806dd`.
-  **Running** (log `$CLAUDE_JOB_DIR/tmp/cold_rebuild.log`).
+  ~~**Running**~~ **Done**: 480 cold cells in ~70 min, no refusal; each
+  grid's worst cold/warm FMEP is `main`'s again (1.78–2.84×; was 5.8–139×).
+  Committed with the ten grids (`ecc9dc2`, the first commit of P09's
+  rebuilt files).
 - **The cold creep, measured for the owner** (P09 physics, untouched by the
   fix): crdi15 automatic at 20% pedal from a 25 °C start sits at 779 rpm /
   5.8 km/h for 74 s (old grid: 11 s). The cause is heat transfer, mostly
@@ -85,7 +88,18 @@ as a fast-forward):
   Options A (accept, state it) / B (faster warm-up) / C (a cold-start ECU:
   fast idle, pedal fuel covering the extra friction). Recommended A for
   P09's merge, C as its own proposal.
-- **Next:** the rebuild's end, the full suite, the web suites, push, PR.
+- **Verified on the final grids:** Python suite **91 passed, 0 failed, 3
+  known, 4 skipped** (no scipy here); audit 0 dead / 2 frozen (known) / 0
+  tiny; `gen_fixtures --check` all ok; TS 5 + 51 + 12 + 11 and solver
+  20 + 15, 0 failed. **App units not run locally:** this Mac's Node is 20.19
+  and 24.2, Angular needs >= 22.22.3 / 24.15; CI runs them (no app code
+  changed; only grid data and the accuracy table's hash).
+- **Pushed** onto `feat/p09-knock` (fast-forward from `50746bc`); PR to
+  `main` opened as a draft. **Open for the owner:** single10's Leh check
+  36% (FINDING-027, below), and FINDING-031 (A/B/C). The main checkout
+  still holds the rebuild's uncommitted pre-fix grids: discard them there
+  (checkout of `web/app/public/grids`) before pulling.
+- **Next:** read every CI job on the PR; the owner's two answers.
 
 **Session 9, the rebuild done (2026-10-15), `feat/p09-knock`:**
 - **The rebuild** ran from 2026-10-14 22:01 to 2026-10-15 07:40 UTC (9 h
