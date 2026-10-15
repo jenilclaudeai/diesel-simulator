@@ -1,5 +1,28 @@
 # Status
 
+**Session 9, P13 option N built (2026-10-16), `feat/p13-native-grid` (from `main`):**
+- **The owner chose "both, go ahead with N first"** (P13: N, then B + C).
+  `reviews/PROPOSAL-P13.md` and PLAN's P13 entry are on #131's branch, not
+  here; this branch is from `main` so its grids carry the live site's hash.
+- **Built:** `tools/build_my_grid.py` (engine file from Dyno -> Custom ->
+  Export; cells then weather; checks the copy's solver against the live
+  site's stamp by a 4 KiB range read; weighted progress with a wave-based
+  estimate; prints what to import), `buildgrid/build.sh` / `build.bat`
+  (own venv, numpy + certifi, as `bench/`), `buildgrid/README.md`.
+  `build_live_grids.build` / `add_weather` take an optional progress
+  callback (ordered `imap`, same results). Front end unchanged.
+- **Found on the way:** python.org's macOS Python fails every https request
+  (CERTIFICATE_VERIFY_FAILED) until its "Install Certificates" step; the
+  wrappers install certifi and the check uses it. The first estimate
+  (elapsed / done x left) read 344 min at the first row of a ~1 h build:
+  replaced by waves (a unit = phase time / waves / weight, the rest over the
+  workers).
+- **Verified:** a 2x2 grid through `build.sh` from a fresh venv, imported on
+  the **live site's /enjoy** and driven (711 rpm, 1st, Auto). New test
+  `test_build_my_grid_tool` 7 of 7; mutants 7 of 7 caught (baseline
+  passing). **Running:** a full-size build (494 solves) to time it; then the
+  old-vs-new file identity check, the full suite, PR.
+
 **Updated:** 2026-10-14, session 9 (P09: the owner chose C; building it
 found numerical limits at the 1° step and a ~~22%~~ 18% torque error on single10
 (FINDING-028); two questions for the owner, round 2; all on #129, docs
