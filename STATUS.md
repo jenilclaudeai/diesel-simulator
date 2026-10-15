@@ -74,7 +74,17 @@ as a fast-forward):
   the piston alone at 273 K gives 75% of the loss, the head 33%, the liner
   and port ~0. The delay is not the cause at idle (premix on its 0.72 cap).
   The live loop warms every wall as one 60 s lump; a real piston crown
-  heats in seconds. Sweep over engines and boxes: below.
+  heats faster (not yet sourced).
+- **FINDING-031 (new, for the owner): light pedal from a cold start.**
+  crdi15 / crdi22 / hatch15, TC and DCT, warm / 25 °C / 0 °C, 20% and 30%,
+  fixed P09 grids against `main`'s. (1) At 0 °C, 20% pedal never moves the
+  car **on `main` too**: the fuel-fraction pedal against cold-oil friction,
+  not P09. (2) P09 slows cold launches 1.3–3×. Over the edge: crdi15 TC
+  25 °C 11.7 s → never (74 s in a 120 s run), hatch15 TC 25 °C 10.1 → 53 s.
+  A 15 s chamber constant helps only partly (37 s, 31 s; 0 °C still never).
+  Options A (accept, state it) / B (faster warm-up) / C (a cold-start ECU:
+  fast idle, pedal fuel covering the extra friction). Recommended A for
+  P09's merge, C as its own proposal.
 - **Next:** the rebuild's end, the full suite, the web suites, push, PR.
 
 **Session 9, the rebuild done (2026-10-15), `feat/p09-knock`:**
