@@ -1,5 +1,44 @@
 # Status
 
+**Session 9, P13 option N built (2026-10-16), `feat/p13-native-grid` (from `main`):**
+- **The owner chose "both, go ahead with N first"** (P13: N, then B + C).
+  `reviews/PROPOSAL-P13.md` and PLAN's P13 entry are on #131's branch, not
+  here; this branch is from `main` so its grids carry the live site's hash.
+- **Built:** `tools/build_my_grid.py` (engine file from Dyno -> Custom ->
+  Export; cells then weather; checks the copy's solver against the live
+  site's stamp by a 4 KiB range read; weighted progress with a wave-based
+  estimate; prints what to import), `buildgrid/build.sh` / `build.bat`
+  (own venv, numpy + certifi, as `bench/`), `buildgrid/README.md`.
+  `build_live_grids.build` / `add_weather` take an optional progress
+  callback (ordered `imap`, same results). Front end unchanged.
+- **Found on the way:** python.org's macOS Python fails every https request
+  (CERTIFICATE_VERIFY_FAILED) until its "Install Certificates" step; the
+  wrappers install certifi and the check uses it. The first estimate
+  (elapsed / done x left) read 344 min at the first row of a ~1 h build:
+  replaced by waves (a unit = phase time / waves / weight, the rest over the
+  workers).
+- **Verified:** a 2x2 grid through `build.sh` from a fresh venv, imported on
+  the **live site's /enjoy** and driven (711 rpm, 1st, Auto). New test
+  `test_build_my_grid_tool` 7 of 7; mutants 7 of 7 caught (baseline
+  passing). ~~**Running:** a full-size build …~~
+- **Full size:** 494 solves in **84.4 min** on this M2 (23 min of cells, 61 of
+  weather; my tests shared the CPU for the first ~20 min, and laptops throttle
+  under long load). The 5.1 MB file **imported on the live site's /drive and
+  ran** (746 rpm); at High plateau the page said the torque "follow[s] this air
+  through the engine's weather table (measured within 2.7% ...)", the file's
+  own check. The README now says 1-1.5 h on a laptop. (Your Drive place was
+  put back to Standard air afterwards.)
+- **The progress callback changes nothing:** the same engine (2x2, weather
+  included) built by `build_live_grids.py` and by the script: **0 of 26 keys
+  differ** (build time removed).
+- **Python suite 86 passed, 0 failed, 3 known, 4 skipped. PR #132 opened;
+  CI 10 of 10 at `78dcdd0`** (every job read; Pyodide 35.3 min). `build.bat`
+  is not run (no Windows machine here).
+- **Next:** the owner merges #131 (P09, draft: its open questions) and #132
+  (whichever is second fixes the STATUS conflict in its first push); then P13
+  B + C as one solver change with one rebuild (~5 h with B); mark
+  `reviews/PROPOSAL-P13.md` decided once #131 is in.
+
 **Updated:** 2026-10-14, session 9 (P09: the owner chose C; building it
 found numerical limits at the 1° step and a ~~22%~~ 18% torque error on single10
 (FINDING-028); two questions for the owner, round 2; all on #129, docs

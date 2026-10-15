@@ -101,6 +101,18 @@ def weather_piece(task):
                                                            "fuel_limit": flim, "p": p, "T": T})))
 
 
+def pmap(pool, fn, tasks, progress=None, phase=""):
+    """pool.map, in order, calling progress(phase, done, total) after each piece
+    (P13: tools/build_my_grid.py shows a long build's progress). Same results."""
+    if progress is None:
+        return pool.map(fn, tasks)
+    out = []
+    for r in pool.imap(fn, tasks):
+        out.append(r)
+        progress(phase, len(out), len(tasks))
+    return out
+
+
 def grid_engine_ref(data):
     """The bridge's form of the engine a grid file records."""
     if data.get("engine_json"):
@@ -110,7 +122,7 @@ def grid_engine_ref(data):
     return {"preset": data["preset"]}
 
 
-def add_weather(path, pool, ghash):
+def add_weather(path, pool, ghash, progress=None):
     """Phase 7 step 4: add the weather table (shape A3) to an existing grid
     file, leaving every other byte as it was. Refused for a stale grid: the
     table's solves must come from the code that solved its cells."""
@@ -128,7 +140,7 @@ def add_weather(path, pool, ghash):
     tasks = [(ref, data["rpms"][q["i"]], data["loads"][q["j"]], data["fuel_limits"][q["i"]], q["p"], q["T"])
              for q in plan["pieces"] + plan["check"]]
     t0 = time.time()
-    got = pool.map(weather_piece, tasks)
+    got = pmap(pool, weather_piece, tasks, progress, "weather")
     n = len(plan["pieces"])
     table = json.loads(bridge.live_weather_assemble(json.dumps({
         "engine": ref, "grid": {k: data[k] for k in ("rpms", "loads", "perf")},
@@ -156,16 +168,17 @@ def annotate(path):
     print(f"annotated {os.path.relpath(path)}")
 
 
-def build(key, pool, ghash, edef=None, out_path=None, extra=None, size=(N_RPM, N_LOAD)):
+def build(key, pool, ghash, edef=None, out_path=None, extra=None, size=(N_RPM, N_LOAD), progress=None):
     edef = edef or key
     n_rpm, n_load = size
     plan = json.loads(bridge.live_grid_plan(json.dumps({"engine": engine_ref(edef), "n_rpm": n_rpm, "n_load": n_load})))
     rpms, loads = plan["rpms"], plan["loads"]
     t0 = time.time()
-    flims = pool.map(row_limit, [(edef, r) for r in rpms])
+    flims = pmap(pool, row_limit, [(edef, r) for r in rpms], progress, "rows")
     grids = {}
     for tag, cold in (("warm", False), ("cold", True)):
-        cells = pool.map(cell, [(edef, r, l, f, cold) for r, f in zip(rpms, flims) for l in loads])
+        cells = pmap(pool, cell, [(edef, r, l, f, cold) for r, f in zip(rpms, flims) for l in loads],
+                     progress, f"{tag} cells")
         grids[tag] = [cells[i * n_load:(i + 1) * n_load] for i in range(n_rpm)]
     # a roster engine's grid depends on its engines/<key>.json, which the grid
     # hash (dieselsim/ only) does not cover: record the file it was built from
