@@ -121,6 +121,9 @@ class DieselEngine:
     # and reports whether its last cycles settled (CycleResult.converged).
     # For offline builds: too slow for the browser.
     CONVERGED_CYCLES = 200
+    # P13 option B: a converged solve stops once settled (cycle.EARLY_STOP_KEYS,
+    # EARLY_STOP_HOLD); CONVERGED_CYCLES is its ceiling. False: always the ceiling.
+    EARLY_STOP = True
 
     def __init__(self, spec: EngineSpec = None, dtheta: float = 1.0,
                  preset: str = "hd_i6"):
@@ -499,7 +502,7 @@ class DieselEngine:
             state0=self._state if warm_start else None,
             smoke_afr=self.spec.afr_limit if limiter else None,
             **(dict(n_cycles=self.CONVERGED_CYCLES, spool_accel=1.0,
-                    check_convergence=True) if conv
+                    check_convergence=True, early_stop=self.EARLY_STOP) if conv
                else dict(n_cycles=n_cycles)))
         if limiter:
             fuel_mg = cyc.m_fuel * 1e6       # what the limiter let the injectors deliver

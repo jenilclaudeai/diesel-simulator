@@ -242,6 +242,15 @@ EGR_VALVE_MIN_START = 0.005
 
 TAIL_CYCLES = 10       # cycles judged by _tail_converged
 TAIL_TOL = 1e-3        # relative spread allowed over them
+# P13 option B (reviews/PROPOSAL-P13.md, rule R2): a converged solve stops once
+# work, boost, the intake's burned fraction (the EGR the cylinders see) and the
+# turbo speed have each passed the tail test for EARLY_STOP_HOLD cycles running.
+# Work and boost alone (rule R1) stopped before the EGR loop had settled: NOx
+# up to 9.9%. Measured over 108 solves: x1.91, brake torque within 0.019% of
+# full load of the 200-cycle answer, EGR within 0.04 points, NOx 0.52%; the
+# solves that never settle still run all CONVERGED_CYCLES.
+EARLY_STOP_KEYS = ("work", "boost", "yb_int", "turbo_rpm")
+EARLY_STOP_HOLD = 10
 
 
 def egr_boost_raise(spec, egr_cmd):
@@ -253,13 +262,14 @@ def egr_boost_raise(spec, egr_cmd):
     return 1.0 + 0.42 * (egr_target / max(spec.air.egr_max_fraction, 1e-6))
 
 
-def _tail_converged(means, n=TAIL_CYCLES, tol=TAIL_TOL):
-    """True when gross work and boost each vary by less than tol (relative)
-    over the last n cycles. Meaningful only for a real-time solve: in an
-    accelerated one the last two cycles run at a different rate."""
+def _tail_converged(means, n=TAIL_CYCLES, tol=TAIL_TOL, keys=("work", "boost")):
+    """True when each of `keys` (gross work and boost by default) varies by
+    less than tol (relative) over the last n cycles. Meaningful only for a
+    real-time solve: in an accelerated one the last two cycles run at a
+    different rate."""
     if len(means) < n:
         return False
-    for key in ("work", "boost"):
+    for key in keys:
         v = [m[key] for m in means[-n:]]
         mean = sum(v) / n
         if (max(v) - min(v)) > tol * max(abs(mean), 1e-12):
@@ -371,7 +381,7 @@ class CycleSolver:
     def run(self, rpm, fuel_mg_per_cycle, turbo, egr_cmd=0.0,
             p_amb=101325.0, T_amb=298.0, n_cycles=12, boost_target=None,
             soi_shift=0.0, state0=None, spool_accel=14.0,
-            check_convergence=False, smoke_afr=None) -> CycleResult:
+            check_convergence=False, smoke_afr=None, early_stop=False) -> CycleResult:
         """smoke_afr: a modern ECU's smoke limiter (ADR-016 item 2). Each cycle's
         fuel is capped at the fresh air the previous cycle trapped / smoke_afr,
         so the limiter settles with the turbo inside one solve, as an ECU acting
@@ -462,6 +472,7 @@ class CycleSolver:
         cycle_means = []
         m_fuel_cmd = m_fuel
         knock_peak = 0.0          # FINDING-029: Pa/deg, cylinder 1, last cycle
+        held = 0                  # P13: cycles the early-stop test has passed running
         for cyc in range(n_cycles):
             if smoke_afr and cyc > 0:
                 m_air_prev = float(np.mean(m_trap * (1.0 - yb_trap)))
@@ -474,7 +485,12 @@ class CycleSolver:
                     mdot_inj, inj_dur = self.injection_profile(m_fuel, rail, rpm)
                     dur_pilot = inj_dur * f_pilot
                     dur_main = inj_dur * (1.0 - f_pilot)
-            last = (cyc == n_cycles - 1)
+            # P13: the traces and the knock are recorded only in the last cycle,
+            # so a cycle that may end an early stop is run as the last one; if
+            # the test fails after it, the next last cycle records them afresh
+            last = (cyc == n_cycles - 1) or (early_stop and held >= EARLY_STOP_HOLD - 1)
+            if last:
+                knock_peak = 0.0
             accel = 1.0 if cyc >= n_cycles - 2 else spool_accel
             cm_yb = cm_megr = cm_mc = cm_pint = 0.0
 
@@ -889,12 +905,16 @@ class CycleSolver:
                 work=float(np.mean(SN["Wg"])),
                 imep_net=float(np.mean(SN["Wg"]) + np.mean(SN["Wp"]))
                 / g.displacement_cyl))
+            if early_stop:
+                held = held + 1 if _tail_converged(cycle_means, keys=EARLY_STOP_KEYS) else 0
+                if held >= EARLY_STOP_HOLD:   # it began at HOLD - 1, so it ran as the last
+                    break
 
         # ================= results =================
         r = CycleResult(rpm=rpm)
         # per-cycle means, every cycle: a convergence diagnostic (FINDING-013)
         r.cycle_means = cycle_means
-        r.n_cycles_used = n_cycles
+        r.n_cycles_used = len(cycle_means)   # fewer than n_cycles after an early stop (P13)
         # FINDING-013: this was `r.converged = True` at the end of every
         # solve, unchecked (the dead-signal audit allow-listed it). A
         # fixed-count accelerated solve establishes nothing, so it now stays

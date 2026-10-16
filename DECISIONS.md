@@ -1382,3 +1382,49 @@ FINDING-029.
 **Revisit if** the owner hears the knock as too much or too little on the
 phone at a real place; or if a cranking-speed start is wanted (a new live
 state, and cells at cranking rpm).
+
+## ADR-020 — P13: a drivable grid built faster (N, then B + C)
+
+**Status:** Accepted (2026-10-16). The owner: "Both, go ahead with N first"
+(N, then B + C). The stopping rule wasn't named in the answer: R2, the
+recommended one, is used and said so. Details: `reviews/PROPOSAL-P13.md`.
+
+### Decision
+
+1. **N: a native build in one command** (`buildgrid/build.sh`,
+   `build.bat`, `tools/build_my_grid.py`; PR #132). The same file as the
+   browser, imported with Import grid. The front end is unchanged.
+2. **B: a converged solve stops once settled**, rule R2: work, boost, the
+   intake's burned fraction and the turbo speed each pass the tail test
+   (`cycle.TAIL_TOL` over `TAIL_CYCLES`) for `EARLY_STOP_HOLD` = 10 cycles
+   running (`cycle.EARLY_STOP_KEYS`). `CONVERGED_CYCLES` (200) becomes a
+   ceiling. The cycle that may end the stop is run as the last one, because
+   the traces and the knock are recorded only then; if the test fails after
+   it, the next last cycle records them afresh (and the knock's running
+   peak restarts). `DieselEngine.EARLY_STOP` turns it off.
+3. **C: the reference integrals once** (`thermo._INT_CP_*_REF`),
+   bit-identical.
+
+### Why
+
+- A drivable grid was ~73% weather table, and all of it the pure-Python
+  crank loop: crdi15 58 min natively, ~1.4–1.8 h in a browser.
+- R2 against the 200-cycle answer, over 108 solves (three engines; warm,
+  cold, 58 kPa / −20 °C): ×1.91; torque within 0.019% of full load; EGR
+  within 0.04 points; T_exh 0.1 K; NOx 0.52%. 200 cycles already sits up to
+  0.36% from 400 (FINDING-013).
+- R1 (work and boost) stopped before the EGR loop had settled (NOx 9.9%).
+  Stopping at the first pass flipped settled flags: one cell was 10.8% of
+  full-load torque off.
+
+### Consequences
+
+- Every converged solve changes slightly (the Dyno's accuracy table, the
+  converged golden points, every grid): one rebuild, with P09's grids.
+- `n_cycles_used` varies on the converged path; the cells that never settle
+  still run all 200.
+- Slap events snap to the grid's sample where the side force changes sign:
+  in 1 of 90 stopped cells one moved by a 1° step (discreteness, not
+  convergence).
+- Measured not worth it: chaining weather solves (×1.26, path dependence),
+  rewriting the loop (ADR-001).

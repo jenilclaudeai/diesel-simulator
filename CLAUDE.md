@@ -140,6 +140,12 @@ grep its readers and solve with it changed.
   in `environment.py`, which no cell solve may import.
 - Read `h_ring_mid`, not `h_ring_tdc` (always its 12 nm clamp).
 - Use `n_cycles >= 9`; at 6 the drift is 10.8%.
+- **A converged solve stops once settled** (P13, ADR-020): `CONVERGED_CYCLES`
+  is a ceiling, `op.cycle.n_cycles_used` says how many ran. To compare with
+  a full 200-cycle solve set `DieselEngine.EARLY_STOP = False`. The cycle
+  that may end a stop is run as the last one (the traces and the knock are
+  recorded only then): code that reads `last` must allow a last cycle that
+  is followed by another.
 - `CycleTraces.theta`: per-cylinder arrays are in that cylinder's own crank
   angle, manifold traces in global engine angle. Don't overlay naively;
   never `ravel()` a 2D field and index `theta` with the result.
@@ -225,11 +231,12 @@ grep its readers and solve with it changed.
 
 ## Decisions
 
-`DECISIONS.md` holds ADR-001 to ADR-019 (ADR-013: the personas are review
+`DECISIONS.md` holds ADR-001 to ADR-020 (ADR-013: the personas are review
 lenses; ADR-014: custom engines, drivable; ADR-015: Phase 6's scope, staged;
 ADR-016: Phase 7's six decisions, and v2 as a separate list; ADR-017: P08, the automatic shifts by the fuel map; ADR-018: P10, the sound's
 balance and loudness, and FINDING-028 hidden in the synth; ADR-019: P09, the
-port flow and the knock fixed, the knock at altitude and on a cold start). Don't reopen one without a
+port flow and the knock fixed, the knock at altitude and on a cold start; ADR-020: P13, a
+native build in one command and converged solves that stop once settled). Don't reopen one without a
 measured reason. The ones most easily undone by accident: the Python solver
 runs **unmodified** under Pyodide (ADR-001); audio is a TypeScript
 AudioWorklet with no `SharedArrayBuffer`, so no COOP/COEP headers, so GitHub
