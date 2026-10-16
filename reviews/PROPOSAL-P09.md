@@ -207,3 +207,14 @@ more than a cold start); `k`, chosen by ear, sets how loud.
    long, as on a real engine); the knock in the weather table; the synth's
    gain `k`, chosen by ear.
 3. **One rebuild** of all ten grids, with their weather tables.
+
+**The listening round (2026-10-15).** The owner chose **k = 4**. That is
+between the files' 3 and 5. Measured at idle (crdi15 and hatch15, cabin and
+intake): a cold start or Leh +2.4 to +4.4 dB, both +8.7 to +10.2 dB. The
+decision is ADR-019.
+
+*Recorded late:* the cold-start model that was built is cold walls plus a
+chamber warm-up in the live loop. It has **no cranking speed**, which the
+chat said when building it ("Cranking speed won't be modelled"), but which
+this file didn't record. Cold intake air comes in through the manifold
+walls and the place's air. See ADR-019, item 3.

@@ -22,7 +22,10 @@ import { fileURLToPath } from "node:url";
 // Re-baselined for FINDING-013 item 2 (EGR valve starts at 0.14 x command,
 // not 25 % open; was 111.71143779402043) and FINDING-018 (continuous cam
 // lift; was 122.62764269929146).
-const NATIVE_TORQUE = 122.58034073824089;
+// Re-baselined for P09 (ADR-019: the semi-implicit port flow, the burn
+// integrated per step, the premixed burn following the delay; was
+// 122.58034073824089, which main's solver tree still gives to every digit).
+const NATIVE_TORQUE = 122.45818276199483;
 // Agreement with native was ~1e-10 and the tolerance 1e-8. After item 1 it is
 // 1.2e-6 here: the limiter's calibration is a chain of warm-started 9-cycle
 // solves, and without EGR the VGT limit cycle (FINDING-013 item 3) is active
@@ -78,8 +81,9 @@ check("out-of-range load is rejected", e?.kind === "invalid-request", e?.message
 
 // Phase 6 (ADR-015): a cycle's traces through the real worker match native CPython
 // (bridge.solve_cycle, crdi15 1800 rpm 0.6, native, 2026-10-05): the peak, the IMEP,
-// and the whole pressure trace through its sum
-const NATIVE_CYCLE = { p_max: 13004649.134651296, imep_net: 1134730.1025235609, p_sum: 911129969.1293999 };
+// and the whole pressure trace through its sum. Re-baselined for P09 (was p_max 13004649.134651296,
+// imep_net 1134730.1025235609, p_sum 911129969.1293999; main's tree still gives those)
+const NATIVE_CYCLE = { p_max: 12921295.756149627, imep_net: 1133655.4208301392, p_sum: 911183645.2173551 };
 const cyc = await solver.solveCycle({ engine: { preset: "crdi15" }, rpm: 1800, load: 0.6 });
 // (optional chaining: a wrongly shaped answer fails the check rather than crashing the test)
 const cycRel = Math.max(Math.abs((cyc.summary?.p_max ?? NaN) - NATIVE_CYCLE.p_max) / NATIVE_CYCLE.p_max,
@@ -92,8 +96,9 @@ e = await expectError(solver.solveCycle({ engine: { preset: "crdi15" }, rpm: 180
 check("solveCycle refuses n_cycles below 9", e?.kind === "invalid-request", e?.message ?? "no error");
 
 // Phase 6 (ADR-015): a durability run stepped through the real worker matches native
-// (DieselEngine.durability_run(50, step_h=50) on crdi15, native, 2026-10-05)
-const NATIVE_DUR = { torque: 202.37961214603365, bore_wear_um: 0.033379075126331016, health: 0.02781589593860918 };
+// (DieselEngine.durability_run(50, step_h=50) on crdi15, native, 2026-10-05). Re-baselined for P09
+// (was torque 202.37961214603365, bore_wear_um 0.033379075126331016, health 0.02781589593860918)
+const NATIVE_DUR = { torque: 202.43137831467428, bore_wear_um: 0.033351045515160556, health: 0.027792537929300466 };
 const dStart = JSON.parse(await solver.durabilityCall("durability_start",
   JSON.stringify({ engine: { preset: "crdi15" }, hours: 50, step_h: 50 }))) as { id: string };
 const dNext = JSON.parse(await solver.durabilityCall("durability_next", JSON.stringify({ id: dStart.id }))) as

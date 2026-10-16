@@ -68,7 +68,9 @@ export function weatherLine(key: string, state: 'standard' | 'table' | 'no table
   if (state === 'table') {
     const pct = checkPct != null ? ` (measured within ${fmt1.format(checkPct)}% of full-load torque at Leh)` : '';
     return `${air} Torque, fuel, boost and the exhaust follow this air through the engine's weather table${pct}. ` +
-      'Friction and sound stay sea level\'s; the cooling and the cold start see the ambient.';
+      // P09 (ADR-019): the knock is in the weather table, and the synth plays it up
+      'The sound\'s knock follows this air too; friction and the rest of the sound stay sea level\'s. ' +
+      'The cooling and the cold start see the ambient.';
   }
   if (state === 'no table') {
     return `${air} This engine's grid has no weather table, so its torque, fuel and boost stay standard air's; ` +

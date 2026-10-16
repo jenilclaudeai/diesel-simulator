@@ -1,9 +1,54 @@
 # Status
 
-**Updated:** 2026-10-14, session 9 (P09: the owner chose C; building it
+**CI on PR #131 (2026-10-15, run 38721543892): three red jobs, one fixed.**
+(1) `sweep.e2e.mjs` expected "5.8%"; `accuracy.ts` now says crdi15 -5.9, so
+the page says 5.9%. Test changed to 5.9% (not yet re-run). (2) `web/solver`
+`roundtrip.test.ts`: its native goldens (`NATIVE_TORQUE` 122.5803,
+`NATIVE_CYCLE`, `NATIVE_DUR`) predate P09. Pyodide gave torque 122.4582
+(rel diff 9.97e-4), p_max 129.2 bar (6.4e-3), durability 8.4e-4. NOT yet
+re-baselined: they need native CPython values, not CI's Pyodide ones.
+(3) `test_physics.py` "streaming sound matches the offline render" fails on
+3.10 and 3.12 (source level 1.2% off, tolerance 0.03 is met; third-octave
+1.24 dB is met; the shape check fails: rumble 1.63 dB vs the 1.5 limit).
+NOT yet fixed; the 1.5 dB limit's comment says 1.52-1.56 was seen before.
+*Resolved (the FINDING-030 session, same day):* (2) re-baselined from
+native CPython (`main`'s tree still gives the old values to every digit);
+full `web/solver` `npm test` 20 + 15 + 30, 0 failed. (3) is the noise:
+over 12 seed pairs (3 synth x 4 render) the rumble's shape reads
+1.02-2.58 dB on `main` (median 1.68) and 0.98-2.54 on P09; every other
+source <= 0.68. `main` passed 1.5 dB by the seeds' luck (1.40). The rumble
+now has a 3.0 dB limit, the rest stay at 1.5. Mutants 4 of 4 caught
+(baseline passing): low edge 40 -> 60 Hz (by the mix's third-octave check,
+2.54 dB; its rumble shape 2.34 is under 3.0), high edge 480 -> 320 Hz,
+first order, firing modulation off. Run locally with scipy in a scratch
+venv (this Mac's Python has none, so the suite SKIPs it).
+
+**2026-10-16, the owner's answers for #131:** ship with single10's 36% Leh
+check stated (FINDING-027), and FINDING-031's option A (the cold creep stated;
+a cold-start ECU as its own proposal). #131 marked ready for review. P13: N is
+#132 (CI 10 of 10); B + C on `feat/p13-early-stop`, rule being revised (see
+that branch's STATUS).
+
+**Updated:** 2026-10-15, session 9 (FINDING-030 fixed by option A, the owner's
+choice: cold-cell friction at the running walls; the ten grids' COLD cells
+re-solved by `tools/rebuild_cold_cells.py`, ~80 min, not a full rebuild; the
+cold creep measured for the owner. On `feat/p09-cold-friction`, from
+`feat/p09-knock`).
+*(Was: "2026-10-15, session 9 (P09: the rebuild finished, but its
+cold cells carry about 10× a real cold start's friction (FINDING-030),
+which makes the automatic hunt on a cold start; and single10's Leh check is
+36% (FINDING-027). Two questions for the owner; the rebuilt grids are NOT
+committed. On `feat/p09-knock`).")*
+*(Was: "2026-10-15, session 9 (P09: the rebuild finished; single10's
+Leh check rose to 36% (FINDING-027's misfire edge moved one node), a
+question for the owner; the suites and the PR next, on `feat/p09-knock`).")*
+*(Was: "2026-10-15, session 9 (P09: the owner chose k = 4; ADR-019
+written; the ten grids' rebuild running since 2026-10-14 22:01 UTC, about
+8 h or more; then the full suite, CI and the PR, all on `feat/p09-knock`).")*
+*(Was: "2026-10-14, session 9 (P09: the owner chose C; building it
 found numerical limits at the 1° step and a ~~22%~~ 18% torque error on single10
 (FINDING-028); two questions for the owner, round 2; all on #129, docs
-only). *(Corrected later the same day: about 18%; the 0.25° solve it was measured against still zig-zags. See FINDING-028.)* *(Was: "P09 measured: FINDING-029 and `reviews/PROPOSAL-P09.md`,
+only).")* *(Corrected later the same day: about 18%; the 0.25° solve it was measured against still zig-zags. See FINDING-028.)* *(Was: "P09 measured: FINDING-029 and `reviews/PROPOSAL-P09.md`,
 three questions for the owner; on #129 with P10's merge record".)* *(Was: "P10 merged and live: #128 merged
 2026-10-14 08:10 UTC, CI 9 of 9 read; Pages deployed `196f8d3`; the owner
 listened and accepted it; #129, docs only, open".)* *(Was: "… next, the
@@ -28,6 +73,265 @@ duplicate test removed in #121)"; before that "2026-10-11, session 9 (B-05
 and B-06 fixed, PR open; #118 and #119 still waiting to merge)"; before
 that "2026-10-10, session 8 (Phase 7 step 7 built,
 PR #119; all seven steps built)".)*
+
+**Session 9, P13 feasibility (2026-10-15), docs only, on #131's branch:**
+- The owner asked for P13's feasibility (the sheet: "Make the building
+  drivable grid faster ... with script. Let the front end stay same for
+  now"). Measured on today's code: `reviews/PROPOSAL-P13.md`.
+- **The weather table is ~73% of a drivable grid** (the browser builds it by
+  default): crdi15 958 s of cells + 2,532 s of weather = 58 min natively.
+- **B (stop once settled):** the naive rule is unsafe (10.8% of full-load
+  torque at margin 10, via flipped settled flags; EGR/NOx up to 22%). Rule
+  R2 (work, boost, intake EGR, turbo speed held 10 cycles): ×1.91, 0 flips,
+  torque ≤ 0.019% of full load, EGR ≤ 0.04 pts, NOx ≤ 0.52% over 108 solves.
+  One slap pulse moved one 1° step in 1 of 90 cells (discreteness).
+- **C:** ×1.083, byte-identical. **Chaining weather solves:** ×1.26 more,
+  path dependence 0.15%; not worth it. **N:** the native pieces exist; a
+  one-command script is missing.
+- **Questions for the owner:** which reading of "with a script" (N, B + C,
+  or both, recommended), and whether R2 is acceptable.
+
+**CI on #131 at `8d22068`: 10 of 10 jobs passed** (every job read; physics
+3.10 43.5 min, 3.12 41.3, Pyodide **57.5 of its 60 min**, close to the limit).
+
+**Session 9, FINDING-030 fixed (2026-10-15), `feat/p09-cold-friction`** (a
+second session; branched from `feat/p09-knock` `50746bc`, to be pushed onto it
+as a fast-forward):
+- **The owner chose option A** (asked by this session, which had found the
+  same problem in crdi15's rebuilt file before reading FINDING-030).
+  FINDING-030's "about 10×" is corrected there: over every cell of the ten
+  P09 grids the cold/warm FMEP is **5.8–139×** (`main`: 1.08–2.84×).
+- **The fix** (`engine.py`, hashed): `cold_start_walls` keeps the
+  `WALL_FOLLOW` liner for friction (`_friction_liner`), `operating_point`
+  uses it, and `_apply_thermal_state` drops it. Six converged crdi15 cells:
+  warm 0 differences; cold gas side within 6.7e-16; cold FMEP = `main`'s
+  (1343/0.2: 1.25 bar; P09 13.72).
+- **Tests:** `test_cold_start_friction_sees_the_running_walls`,
+  `test_shipped_grids_cold_friction` (≤ 4×). Mutants 5 of 5 caught, baseline
+  passing. Committed `9429e9c`.
+- **Cold cells only, not a 9.7 h rebuild:** `tools/rebuild_cold_cells.py`
+  (new). It refuses unless the pre-change tree hashes to the stamp
+  (`6ab9760d77b9`, checked) and each cold cell changes only in perf
+  torque/power/bsfc/fmep/nox and meta Pb/load (measured: nothing else moves;
+  traces and waveforms byte-identical). New hash `8a6fbfc806dd`.
+  ~~**Running**~~ **Done**: 480 cold cells in ~70 min, no refusal; each
+  grid's worst cold/warm FMEP is `main`'s again (1.78–2.84×; was 5.8–139×).
+  Committed with the ten grids (`ecc9dc2`, the first commit of P09's
+  rebuilt files).
+- **The cold creep, measured for the owner** (P09 physics, untouched by the
+  fix): crdi15 automatic at 20% pedal from a 25 °C start sits at 779 rpm /
+  5.8 km/h for 74 s (old grid: 11 s). The cause is heat transfer, mostly
+  the piston: at 800 rpm / 20% the indicated torque is 24.7 warm, 23.6
+  walls-following, 19.7 true cold; wall heat 48% → 55% → 68% of the fuel;
+  the piston alone at 273 K gives 75% of the loss, the head 33%, the liner
+  and port ~0. The delay is not the cause at idle (premix on its 0.72 cap).
+  The live loop warms every wall as one 60 s lump; a real piston crown
+  heats faster (not yet sourced).
+- **FINDING-031 (new, for the owner): light pedal from a cold start.**
+  crdi15 / crdi22 / hatch15, TC and DCT, warm / 25 °C / 0 °C, 20% and 30%,
+  fixed P09 grids against `main`'s. (1) At 0 °C, 20% pedal never moves the
+  car **on `main` too**: the fuel-fraction pedal against cold-oil friction,
+  not P09. (2) P09 slows cold launches 1.3–3×. Over the edge: crdi15 TC
+  25 °C 11.7 s → never (74 s in a 120 s run), hatch15 TC 25 °C 10.1 → 53 s.
+  A 15 s chamber constant helps only partly (37 s, 31 s; 0 °C still never).
+  Options A (accept, state it) / B (faster warm-up) / C (a cold-start ECU:
+  fast idle, pedal fuel covering the extra friction). Recommended A for
+  P09's merge, C as its own proposal.
+- **Verified on the final grids:** Python suite **91 passed, 0 failed, 3
+  known, 4 skipped** (no scipy here); audit 0 dead / 2 frozen (known) / 0
+  tiny; `gen_fixtures --check` all ok; TS 5 + 51 + 12 + 11 and solver
+  20 + 15, 0 failed. **App units not run locally:** this Mac's Node is 20.19
+  and 24.2, Angular needs >= 22.22.3 / 24.15; CI runs them (no app code
+  changed; only grid data and the accuracy table's hash).
+- **Pushed** onto `feat/p09-knock` (fast-forward from `50746bc`); PR to
+  `main` opened as a draft. **Open for the owner:** single10's Leh check
+  36% (FINDING-027, below), and FINDING-031 (A/B/C). The main checkout
+  still holds the rebuild's uncommitted pre-fix grids: discard them there
+  (checkout of `web/app/public/grids`) before pulling.
+- **PR #131** (draft, `feat/p09-knock` -> `main`). First CI run: 6 jobs
+  passed (both grid e2e, golden fixtures + TS ports, web app, web e2e,
+  custom engine e2e); **SolverPort failed 5 of 30**: `web/solver`'s
+  round-trip test pins native references (crdi15 1800 rpm / 60%) that
+  P09's solver moved. Neither this session nor the last ran the full
+  `web/solver` `npm test` (only `test:fast`): *a miss.* Re-baselined
+  with the old values kept in the comments; `main`'s solver tree still
+  gives the old ones to every digit. Local full run 20 + 15 + **30**, 0
+  failed. **claude-review failed** on the workflow's bot rule ("initiated
+  by non-human actor: claude ... Add bot to allowed_bots"), not on the
+  code: the owner's call.
+- **Next:** read every CI job of the new run; the owner's two answers.
+
+**Session 9, the rebuild done (2026-10-15), `feat/p09-knock`:**
+- **The rebuild** ran from 2026-10-14 22:01 to 2026-10-15 07:40 UTC (9 h
+  39 min): the cells take 231–1509 s per grid and the weather 853–4550 s.
+  Unsettled cells per grid: 0–22; weather pieces: 0–68.
+- **The Leh checks moved by 0.11 points or less, except single10's: 7.20%
+  → 36.08%.** It is FINDING-027's misfire cliff. Its 58 kPa / 25 °C node at
+  2254 rpm and full load now misfires on some cycles: 3.36 N·m, unsettled;
+  before P09 it fired. Fresh solves reproduce the table exactly. The cliff
+  lies between 58 and 61 kPa. Five of the six check cells are within
+  2.3 N·m. Recorded in FINDING-027 as an update. **Question for the owner:**
+  ship with 36% stated, or more work first (see the reply).
+- **Drive's place line was stale**: "Friction and sound stay sea level's".
+  It now says the knock follows the air. The unit spec was updated, and a
+  mutant (the old sentence) is caught, baseline 7 of 7. Units 130 of 130.
+- **Audit:** 0 dead, 2 frozen (known), 0 tiny. **Solver fast tests:** 20 +
+  15, 0 failed.
+- ~~**Running:** the full Python suite, and the Dyno accuracy table (`--pull`,
+  then `--write-accuracy`).~~
+- **The full Python suite on the rebuilt grids: 74 passed, 15 failed, 3
+  known.** Stage 2 had been checked with its own tests and mutants only.
+  The full suite was not run after `40e0699`, and should have been. *(My
+  miss.)* The 15:
+  - the accuracy table: regenerated (`diag_torque_limiter.py --pull`, then
+    `--write-accuracy`; rows within 0.2 points);
+  - 9 golden points: stage 2 moved them. The stage-1 tree (`15a19a6`)
+    still gives the old values to 6 decimals. Re-baselined with the reason
+    (p_max +0.8 to +2.4%, torque −0.015 to −0.09%);
+  - 2 weather tests read `dpdt_max` from `perf`; it is in the cell's meta
+    table (`src_meta`). Fixed. The toy table gains a knock slope, and its
+    linear check is relative past 1 (the knock is ~1e9);
+  - the live synth test divided 0 by 0. Unstepped, it sits on the grid's
+    no-fuel row, where the burn-law knock is 0 (FINDING-029; the old grid
+    had 0.6–6.5e9 there, an artefact). Guarded;
+  - ADR-011 live friction and P08: their helpers warmed the coolant but
+    not `T_chamber`. Fixed: own-cell diff 0.0, and P08 7 of 7.
+  Each fixed test passes on its own. The full suite has not been rerun yet.
+- **FINDING-030 (new): the cold cells' friction.** `cold_start_walls` puts
+  the liner at 273 K, and `friction.py` takes the skirt's film at liner
+  − 20 K. crdi15 at 1343 rpm / 0.2: FMEP 13.73 bar (warm 0.98, cold before
+  P09 1.26), with the skirt 19.1 kW. The driven torque is unaffected (the
+  live friction), but P08's map reads the cells' brake torque. On a cold
+  start crdi15 at 50 km/h hunts (7 shifts in 20 s at 120 s), and the gears
+  differ from `main`'s for about 2 minutes. Options A/B/C in the finding;
+  recommended A (friction at `WALL_FOLLOW`'s walls in the cold cells),
+  which means another ~9.7 h rebuild.
+- **A sound change to tell the owner:** with the knock from the burn law,
+  the combustion part goes silent where no fuel burns (overrun, fuel cut).
+  Before, the old measure played 0.6–6.5e9 there.
+- **The rebuilt grids are left uncommitted** until FINDING-030 is decided:
+  option A would replace them, and committing 50 MB twice bloats the
+  history.
+
+**Session 9, k chosen (2026-10-15), `feat/p09-knock`:**
+- **The owner chose k = 4** (`KNOCK_GAIN_EXP`, `livesound.py` and
+  `synth.ts`). Measured at idle (`tools/p09_listen.py` with k = 0 and 4;
+  crdi15 and hatch15, cabin and intake): a cold start or Leh is +2.4 to
+  +4.4 dB, both +8.7 to +10.2 dB. **Not answered:** whether the warm
+  sea-level sound differs from P10's.
+- **The sound fixture** gains a fifth segment with `dpdt_max` / `dpdt_ref`
+  (×1.4), so the TS gain path is checked. `gen_fixtures --check`: all ok.
+  TS: 5 + 51 + 12 + 11, 0 failed. **The gain-path mutants: 3 of 3
+  caught** (baseline passing): T7, the gain off (it survived at k = 0), the
+  ratio inverted, and k = 3. Each fails "the synth matches livesound's pure
+  mode", and k = 3 also fails the constants check. The gap is closed.
+- **ADR-019** written. CLAUDE.md gains the P09 traps (`dpdtheta_knock`, the
+  true cold cells, `T_chamber`, the knock the synth hears); the
+  FINDING-028 trap is struck through. PLAN's P09 entry is updated.
+- **The cold-start model is narrower than round 2's wording.** The earlier
+  chat said "Cranking speed won't be modelled", but the docs didn't record
+  it. ADR-019 now does: cold walls plus a chamber warm-up, no cranking
+  speed, and cold intake air via the manifold walls and the weather table.
+- **The rebuild is running** (`out/p09_rebuild.sh`, log
+  `out/p09_rebuild.log`): `build_live_grids.py`, then `--weather`. Started
+  2026-10-14 22:01 UTC. `livesound.py` is unhashed, so k didn't wait for it.
+- **Next:** when it finishes, run the full Python suite (the three grid
+  tests should pass again), the accuracy table, audit_dead_signals,
+  Pyodide, and the web suites; then push, open the PR, and read every CI
+  job.
+
+**Session 9, stage 2 built (2026-10-14), `feat/p09-knock` `40e0699`; ~~the
+listening round is with the owner~~ (the owner chose k = 4 on 2026-10-15):**
+- **The burn law** (`cycle.PREMIX_DELAY_EXP` 0.5, `D_PRE_FLOOR` 2°): no
+  φ term, and faster by (delay / injection)^0.5 once the delay outlasts
+  the injection. crdi15 at idle: Leh +17%, a cold start +17%, both +40%;
+  1500 / 30%: +4%, +15%, +13%. Sea level, roster: full-load torque
+  ≤ 0.53%, BSFC ≤ 1.2%, p_max −0.8% to +5%; the idle knock ×1.79. The
+  exponent is chosen, not calibrated (b = 1 runs into the floor and goes
+  flat).
+- **The cold start:** the grid's cold cells have every wall at 273 K
+  (`engine.cold_start_walls`). The live loop's `T_chamber` warms with a
+  60 s time constant (cools with 600 s) toward the WALL_FOLLOW steady value
+  (`chamber_follow`, crdi15 0.35), and every warm/cold blend uses it. The
+  worker sends it to the worklet.
+- **Hearing it:**
+  - the weather table gains `dpdt_max`;
+  - the live loop's `_knock()` sets `knock_live` (the blend at T_chamber
+    plus the weather's change) and `knock_ref` (warm, standard air) each
+    step;
+  - the synth multiplies the knock by `(dpdt_max/dpdt_ref)^KNOCK_GAIN_EXP`;
+    the exponent is 0 until the owner picks it;
+  - `acoustics.KNOCK_REF` 7.5e9 (×1.5).
+  - Python, TS and the fixtures all mirror it. The live fixture's grid
+    carries synthetic knock tables, so the path is checked in both
+    languages.
+- **Tests:** 2 new Python tests, both passing; TS 5 + 51 + 12 + 11. ~~**TS
+  mutants: T1–T5 caught so far** (running).~~ **TS mutants: 8 of 9 caught**
+  (baseline passing). T7, the synth's gain switched off, survives, because
+  `KNOCK_GAIN_EXP` is 0 (see the gap below). **Python mutants: 8 of 8
+  caught** (baseline 2 / 0): the delay term off, the φ term back, cold
+  walls following the coolant, the loop blending at the coolant, the
+  chamber 10× slower, the synth's gain ignored, the weather dropping the
+  knock, the chamber's target = the coolant.
+- **Listening files sent** (`tools/p09_listen.py`, crdi15 and hatch15,
+  cabin and intake, k = 0 / 3 / 5 / 8). At k = 3, a cold start or Leh is
+  +1.5 to +3.3 dB and both +6.0 to +7.7 dB; at k = 5, +3.4 to +5.5 and
+  +11.4 to +12.9 dB.
+- ~~**Gap, for after the owner picks k:**~~ *(Closed 2026-10-15: the
+  fixture's fifth segment; T7 caught.)* While `KNOCK_GAIN_EXP` is 0 the
+  TS synth's gain path can't be checked by the sound fixture. Add a fixture
+  segment with `dpdt_ref` once k is non-zero.
+- **Then:** set k, rerun the suite, the rebuild (10 grids with weather
+  tables, ~8 h+), CI, the PR.
+
+**Session 9, stage 1 written into `dieselsim/` (2026-10-14), branch
+`feat/p09-knock` (from #129's head; one branch for stage 1, stage 2 and
+the rebuild; NOT mergeable before the rebuild, the shipped grids are stale):**
+- `cycle.implicit_flow`: closed-form semi-implicit port flow, at the
+  valves and at an NA engine's air-side orifices. It returns the explicit
+  flow unchanged unless the step would overshoot.
+- `cycle.wiebe_step`: the pilot and main burns integrated exactly over each
+  step.
+- `CycleResult.dpdtheta_knock`: the burn law's peak `(γ−1)/V × dQ/dθ`,
+  8 samples a step, cylinder 1, last cycle; `acoustics` meta `dpdt_max`
+  reads it. The references are unchanged: at full load it reads ~1.47× the
+  old trace value, and ~1.03–1.06× at idle and cruise.
+- **Measured:** 8 points take 29.0 s against 28.7 s today. single10 is
+  identical to the prototype; crdi15 differs slightly because the pilot is
+  now integrated exactly too.
+- **Tests:**
+  - new `test_port_flow_does_not_overshoot` (crdi15 and the built-in
+    `single`, 1° against 0.5° at idle);
+  - new `test_knock_from_the_burn_law` (spread over sub-degree SOI shifts
+    0.9%; the old trace value 15.9%);
+  - `test_port_flow_zigzag_is_not_heard` now requires the raw ripple
+    < 0.1 (it is 0.037).
+  - All three pass. ~~**Running:** 7 mutants against a baseline, and the
+    full suite …~~ **Mutants: 7 of 7 caught** (baseline 3 / 0). M7 (the
+    sound's averaging off) survived at first, because the solver no longer
+    zig-zags; the test now also makes the averaging null a synthetic 1°
+    zig-zag.
+  - **Full suite on stage 1** (run before the test updates): 76 passed,
+    14 failed, 3 known. Of the 14:
+    - 9 golden points, re-baselined (`15a19a6`): p_max −1.5% to −2.0%,
+      torque −0.04% to +0.004%;
+    - FINDING-025's fuel `==`, which passed by luck (the limiter path's
+      `cmd × 1e-6 × 1e6` round trip lands one ulp away for some commands);
+      now relative 1e-12, with the reason;
+    - the old zig-zag test (already updated);
+    - 3 that compare against the shipped grids (the accuracy table's hash,
+      cell from pieces, weather pieces): **stale until the rebuild**.
+  - Audit: 0 dead, 2 frozen (known), 0 tiny. Fixtures: all current.
+- **Found for stage 2:** the grid's "cold" cells are not a cold start.
+  With the coolant at 273 K the walls follow it only partly (`WALL_FOLLOW`):
+  crdi15's piston is at 510 K and its head at 395 K. Every wall at the
+  air's temperature lengthens crdi15's idle delay +24% (sea level), +34%
+  (−20 °C) and +30% (Leh), against +9% for the cold cell. With stage 1's
+  burn law that is still only +8–11% knock. Also seen: at −20 °C with the
+  oil at −20 °C, crdi15's idle torque reads −1561 N·m (oil friction; not
+  looked into).
+- **Running:** the owner's cases (warm and a true cold start, sea level
+  and Leh) under stage 1, V1, and V4 with b = 0.5 and 1.0.
 
 **Session 9, stage 1 (the numerics) started (2026-10-14), scratch only:**
 - **Why brute sub-stepping is costly:** with 4+ cylinders some valve is

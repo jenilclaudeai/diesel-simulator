@@ -42,6 +42,10 @@ export const SOURCE_BALANCE: Partial<Record<Part, number>> = { exhaust: 8.0, mec
 export const HISS_WEIGHT = 0.18;
 /** FINDING-028: acoustics.PORT_SMOOTH_DEG and smooth_port_flow. */
 export const PORT_SMOOTH_DEG = 2.0;
+/** P09: acoustics.KNOCK_REF, the knock's reference (x1.5 the old 5.0e9, for the burn-law knock), and
+ *  livesound.KNOCK_GAIN_EXP, the playback gain on the live knock's ratio to the warm standard air's. */
+export const KNOCK_REF = 7.5e9;
+export const KNOCK_GAIN_EXP = 4.0;
 
 /** A circular moving average over PORT_SMOOTH_DEG of a 720-degree source on a
  *  dtheta grid, summed in smooth_port_flow's order: it nulls the solver
@@ -97,7 +101,7 @@ export class LiveSynth {
   readonly n_src: number;
   private readonly ref_mdot: number;
   private readonly ref_Pb: number;
-  private readonly ref_dpdt = 5.0e9;
+  private readonly ref_dpdt = KNOCK_REF;
   private readonly ref_vseat = 0.10;
   private readonly ref_turbo = 1.2e5;
   private readonly ref_boost: number;          // FINDING-022
@@ -305,7 +309,7 @@ export class LiveSynth {
     this.sampleInto("dpdth", theta, dp);
     for (let i = 0; i < n; i++) exc[i] = dp[i]! * (rpm_s[i]! / 60.0 * 360.0);
     N["exc"]!.applyInto(exc, exc);
-    const sharp = Math.min(3.0, meta["dpdt_max"]! / 5.0e9);
+    const sharp = Math.min(3.0, meta["dpdt_max"]! / KNOCK_REF);
     knock.fill(0);
     for (const [bq, f0, gn] of this.knock) {
       bq.processInto(exc, kr);
@@ -316,6 +320,11 @@ export class LiveSynth {
     const combustion = P.combustion;
     N["knock"]!.applyInto(knock, combustion);
     for (let i = 0; i < n; i++) combustion[i] = combustion[i]! * kComb;
+    // P09 (livesound): the live knock against the warm standard air's, played up by KNOCK_GAIN_EXP
+    if (meta["dpdt_ref"] !== undefined) {
+      const kGain = (meta["dpdt_max"]! / Math.max(meta["dpdt_ref"]!, 1.0e6)) ** KNOCK_GAIN_EXP;
+      for (let i = 0; i < n; i++) combustion[i] = combustion[i]! * kGain;
+    }
 
     // ---- mechanical impulses ----
     const pa = sc.get("pa"), pb = sc.get("pb");

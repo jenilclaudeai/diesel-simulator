@@ -10,12 +10,12 @@ export interface PresetAccuracy {
   governedNm: number;
 }
 
-export const ACCURACY_SOLVER = 'b45ef76512c53f254da1f6a156c475e7b80dadb3b59a14479348e4b24caa872b';
+export const ACCURACY_SOLVER = '8a6fbfc806dd7e0727b22e6c8091f2b3299efa25292844104a58df676b9dd5ff';
 
 export const ACCURACY: Record<string, PresetAccuracy> = {
-  crdi15: { worstPct: -5.8, worstRpm: 1650, governedNm: 1.8 },
-  crdi_1p5: { worstPct: -8.5, worstRpm: 1200, governedNm: 23.9 },
-  hd_i6: { worstPct: -3.3, worstRpm: 1950, governedNm: 14.2 },
-  ld_i4: { worstPct: -3.7, worstRpm: 2600, governedNm: 5.1 },
+  crdi15: { worstPct: -5.9, worstRpm: 1650, governedNm: 1.6 },
+  crdi_1p5: { worstPct: -8.3, worstRpm: 1200, governedNm: 23.9 },
+  hd_i6: { worstPct: -3.1, worstRpm: 1950, governedNm: 14.3 },
+  ld_i4: { worstPct: -3.8, worstRpm: 2600, governedNm: 5.1 },
   single: { worstPct: 0.0, worstRpm: 0, governedNm: 0.0 },
 };

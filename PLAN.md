@@ -376,7 +376,17 @@ plays the sea-level sound at every place. A scratch fix (V1) turns the
 trend the right way, with torque and fuel within 0.6%. Even so, after P10
 the change is 0.0–0.4 dB at the mics: not audible. Recommended: record it
 now, and fix the physics at the next rebuild, with FINDING-028's solver
-fix. **Not decided; nothing built.**
+fix. ~~**Not decided; nothing built.**~~
+**Decided (ADR-019).** The owner chose C, for a modern CRDi at Leh and a
+cold start, staged, with a cold-start model (2026-10-14), and the synth's
+gain k = 4 by ear (2026-10-15). **Built** on `feat/p09-knock`:
+- stage 1, the numerics: FINDING-028 option B, the burn integrated over
+  each step, the knock from the burn law (FINDING-029);
+- stage 2: the burn law, a true cold start with a chamber warm-up in the
+  live loop, the knock in the weather table, and the synth's gain.
+
+**Waiting on** the rebuild of the ten grids with their weather tables
+(started 2026-10-14 22:01 UTC, about 8 h or more), then CI, then the PR.
 
 ## P10 — a deeper, bassier diesel sound (the owner's request, 2026-10-13)
 
@@ -396,6 +406,23 @@ tests. **Merged and live** (#128, 2026-10-14 08:10 UTC; CI 9 of 9).
 ~~Waiting on the owner's ear on the phone.~~ **The owner listened and
 accepted it** (full pedal "is little louder. But fine I guess"). Left for later: FINDING-028's solver fix
 (option B), at the next rebuild.
+
+## P13 — build a drivable grid faster, front end unchanged (the owner's request, 2026-10-15)
+
+Measured in `reviews/PROPOSAL-P13.md` on P09's code. A drivable grid is now
+~73% weather table (the browser build includes it by default): crdi15 58 min
+natively, ~1.4–1.8 h in a browser. Options: **N** a one-command native script
+for a custom engine, then Import grid (no solver change); **B** stop converged
+solves once settled, rule R2 (×1.9, torque ≤ 0.02% of full load, one rebuild);
+**C** hoist two constants in `thermo.py` (×1.08, bit-identical). Recommended N
+now, B + C after #131. ~~**Not decided; nothing built.** Two questions for the
+owner.~~ **Decided 2026-10-16: both, N first.** N built (#132); B + C on
+`feat/p13-early-stop`.
+
+**Next proposal, from FINDING-031 (the owner, 2026-10-16):** a cold-start ECU in the
+live loop (fast idle when cold, the pedal's fuel raised to cover the extra
+friction), so light pedal moves the car from a cold start. At 0 °C, 20% pedal
+doesn't move it today, on `main` too.
 
 ---
 

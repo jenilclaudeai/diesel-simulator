@@ -65,6 +65,11 @@ export class LiveEngine {
   // ADR-011: friction live, from the cells' pressure traces
   adr011: boolean;
   T_oil: number;
+  // P09: the chamber walls' temperature, which the grid's warm/cold blend follows (live.py)
+  T_chamber: number;
+  chamber_follow = 1.0;
+  knock_live = 0.0;   // P09: Pa/s, see knock()
+  knock_ref = 0.0;
   T_fric = 0.0;     // mean friction torque [N.m], held between evaluations
   fmep_live = 0.0;
   P_mech = 0.0;     // friction heat into the oil [W]
@@ -90,6 +95,10 @@ export class LiveEngine {
   static readonly FUEL_TAU_RUN = 420.0;
   static readonly FUEL_TAU_OFF = 1800.0;
   static readonly FUEL_RETURN_SHARE = 0.6;
+  /** P09 (live.py): the chamber walls warm within about a minute of starting, and cool back to
+   *  the coolant over ~10 min stopped. Approximations, stated as such. */
+  static readonly CHAMBER_TAU_RUN = 60.0;
+  static readonly CHAMBER_TAU_OFF = 600.0;
 
   constructor(readonly g: PerfGrid, preset = "hd_i6", trans: Transmission = "dct", view?: EngineView) {
     this.spec = g.spec;
@@ -119,9 +128,17 @@ export class LiveEngine {
     }
     gb.p_peak = p_peak;
     this.T_oil = this.spec.thermal.ambient_T; // cold start, like the coolant
+    this.T_chamber = this.spec.thermal.ambient_T; // P09: a cold start too
     if (this.adr011) {
       if (!view) throw new Error("an ADR-011 grid needs the engine view (spec, cams, oil, wear) for live friction");
       this.fspec = structuredClone(view.spec);
+      // P09: a running engine's walls by WALL_FOLLOW, as a share of the grid's warm-to-cold blend
+      // (live.py: the mean over the piston, head and liner top)
+      const ga = g as Adr011Grid, span = ga.T_warm - ga.T_cold, th = view.spec.thermal;
+      if (th.piston_T === undefined || th.head_T === undefined) throw new Error("the engine view lacks piston_T / head_T");
+      this.chamber_follow = (WALL_FOLLOW.piston_T * span / Math.max(th.piston_T - ga.T_cold, 1.0)
+        + WALL_FOLLOW.head_T * span / Math.max(th.head_T - ga.T_cold, 1.0)
+        + WALL_FOLLOW.liner_T_top * span / Math.max(th.liner_T_top - ga.T_cold, 1.0)) / 3.0;
       this.th0 = { liner_T_top: view.spec.thermal.liner_T_top, liner_T_bot: view.spec.thermal.liner_T_bot };
       this.fric = new FrictionModel(this.fspec, view.cams);
       this.oil = new Oil(this.fspec.oil, { ...view.oil });
@@ -142,8 +159,8 @@ export class LiveEngine {
     fs.thermal.liner_T_bot = this.th0!.liner_T_bot + WALL_FOLLOW.liner_T_bot * f;
     this.oil!.cond.T_oil = this.T_oil;
     const rpm = Math.max(this.rpm, 0.25 * this.spec.idle_rpm);
-    const p = g.blendPerfT(rpm, this.load_eff, this.T_coolant);
-    const r = this.fric!.evaluate(g.grid_deg, g.blendPCyl(rpm, this.load_eff, this.T_coolant), rpm, this.oil!,
+    const p = g.blendPerfT(rpm, this.load_eff, this.T_chamber);
+    const r = this.fric!.evaluate(g.grid_deg, g.blendPCyl(rpm, this.load_eff, this.T_chamber), rpm, this.oil!,
       this.wear!, 1.05e5, p["fuel_mg"]!, p["p_rail"]!);
     this.fmep_live = r["fmep"]!;
     this.P_mech = r["P_mech"]!;
@@ -159,20 +176,42 @@ export class LiveEngine {
    *  turbo speed and load, and under ADR-011 the live friction's. */
   sound_inputs(): Record<string, number> {
     const out: Record<string, number> = { boost: this.boost, turbo_rpm: this.turbo_rpm, load: this.load_eff };
-    if (this.adr011) Object.assign(out, { Pb: this.Pb_live, skirt_clr: this.skirt_live, v_seating: this.vseat_live });
+    if (this.adr011) {
+      Object.assign(out, { Pb: this.Pb_live, skirt_clr: this.skirt_live, v_seating: this.vseat_live });
+      // P09 (live.py): the synth plays their ratio up (KNOCK_GAIN_EXP)
+      if (this.knock_ref > 0.0) Object.assign(out, { dpdt_max: this.knock_live, dpdt_ref: this.knock_ref });
+    }
     return out;
+  }
+
+  /** P09 (live.py _knock): the knock at the live chamber temperature and air, and the warm standard
+   *  air's at the same point, for sound_inputs. Nothing without the grid's source scalars. */
+  private knock(): void {
+    if (!this.adr011) return;
+    const g = this.g as Adr011Grid;
+    if (!g.meta || !g.meta_cold) return;
+    const rpm = Math.max(this.rpm, 0.25 * this.spec.idle_rpm);
+    let k = g.blendMeta(rpm, this.load_eff, this.T_chamber, "dpdt_max");
+    const t = this.spec.thermal;
+    if (g.weather && g.weather.d.keys.includes("dpdt_max") && (t.ambient_p !== 101325.0 || t.ambient_T !== 298.0)) {
+      k += g.weather.delta(rpm, this.load_eff, t.ambient_p, t.ambient_T)["dpdt_max"]!;
+    }
+    this.knock_live = Math.max(k, 1.0e6);
+    this.knock_ref = g.blendMeta(rpm, this.load_eff, g.T_warm, "dpdt_max");
   }
 
   /** Grid performance at the live state; torque is BRAKE torque either way. */
   private perfAt(rpm: number, load: number): Perf {
     if (this.adr011) {
       const g = this.g as Adr011Grid;
-      const p = g.blendPerfT(rpm, load, this.T_coolant);
+      const p = g.blendPerfT(rpm, load, this.T_chamber);
       const t = this.spec.thermal;
       // Phase 7 step 4: off the standard air, the weather table's difference; friction and sound
       // stay the grid's. At the standard air this is skipped outright (live.py _perf).
       if (g.weather && (t.ambient_p !== 101325.0 || t.ambient_T !== 298.0)) {
-        for (const [k, d] of Object.entries(g.weather.delta(rpm, load, t.ambient_p, t.ambient_T))) p[k] = p[k]! + d;
+        for (const [k, d] of Object.entries(g.weather.delta(rpm, load, t.ambient_p, t.ambient_T))) {
+          if (k in p) p[k] = p[k]! + d;   // P09: dpdt_max is the sound's (sound_inputs)
+        }
       }
       p["torque"] = p["torque_ind"]! - this.T_fric;
       return p;
@@ -188,7 +227,7 @@ export class LiveEngine {
       return [p["torque"]!, p["fuel_kg_h"]!];
     }
     const g = this.g as Adr011Grid;
-    const p = g.blendPerfT(rpm, load, this.T_coolant);
+    const p = g.blendPerfT(rpm, load, this.T_chamber);
     let T = p["torque"]!, f = p["fuel_kg_h"]!;
     const t = this.spec.thermal;
     if (g.weather && (t.ambient_p !== 101325.0 || t.ambient_T !== 298.0)) {
@@ -305,7 +344,22 @@ export class LiveEngine {
     }
     this.T_coolant += ((Q_in - Q_out) * dt) / C;
     this.T_coolant = Math.min(Math.max(this.T_coolant, 240.0), 420.0);
+    this.chamber(dt);
     this.protect();
+  }
+
+  /** P09 (live.py _chamber): running, toward where a running engine's walls sit at the live coolant;
+   *  stopped, toward the coolant. The grid blends warm/cold by it. */
+  private chamber(dt: number): void {
+    const L = LiveEngine;
+    const running = !(this.stalled || this.engine_stopped || this.fuel_waxed || this.out_of_fuel)
+      && this.rpm > 0.5 * this.spec.idle_rpm;
+    let target = this.T_coolant;
+    if (running && this.adr011) {
+      const g = this.g as Adr011Grid;
+      target = g.T_warm - this.chamber_follow * (g.T_warm - this.T_coolant);
+    }
+    this.T_chamber += (target - this.T_chamber) * Math.min(1.0, dt / (running ? L.CHAMBER_TAU_RUN : L.CHAMBER_TAU_OFF));
   }
 
   private protect(): void {
@@ -391,6 +445,7 @@ export class LiveEngine {
     for (let k = 0; k < n_sub; k++) this.sub(dt / n_sub);
     this.totals(dt);
     this.thermal(dt);
+    this.knock();
     this.coldFlow(dt);
   }
 

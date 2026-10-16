@@ -555,7 +555,8 @@ def live_grid_assemble(req_json):
 # ==========================================================================
 WEATHER_P_NODES = (58000.0, 72000.0, 101325.0)   # Pa: about 4300 m, 2800 m, sea level
 WEATHER_T_NODES = (253.15, 298.0, 318.15)        # K: -20, 25, 45 C
-WEATHER_KEYS = ("torque_ind", "fuel_kg_h", "boost", "turbo_rpm", "afr", "T_exh")
+# P09: + the knock the sound reads (the cell's sound meta dpdt_max), so Enjoy hears altitude
+WEATHER_KEYS = ("torque_ind", "fuel_kg_h", "boost", "turbo_rpm", "afr", "T_exh", "dpdt_max")
 # the live loop clamps the air to this box: linear extrapolation a little past the
 # nodes was measured (52 kPa: within 5.5% of full-load torque); further is not
 WEATHER_RANGE = {"p": (50000.0, 105000.0), "T": (243.15, 323.15)}
@@ -580,10 +581,11 @@ def live_weather_plan(req_json):
                                  for (i, j) in check]})
 
 
-def _weather_values(spec, perf):
+def _weather_values(spec, perf, meta):
     k_t = spec.geom.displacement / (4.0 * math.pi)
     v = dict(perf)
     v["torque_ind"] = perf["torque"] + perf["fmep"] * k_t
+    v["dpdt_max"] = meta["dpdt_max"]
     return [float(v[k]) for k in WEATHER_KEYS]
 
 
@@ -594,9 +596,10 @@ def live_weather_cell(req_json):
     spec = _resolve_spec(req.get("engine"))
     spec.thermal.ambient_p = float(_num(req, "p", lo=30000.0, hi=120000.0))
     spec.thermal.ambient_T = float(_num(req, "T", lo=200.0, hi=340.0))
-    _, perf = solve_cell(spec, _num(req, "rpm", lo=300.0, hi=10000.0), _num(req, "load", lo=0.0, hi=1.0),
-                         converged=True, fuel_limit=float(_num(req, "fuel_limit", lo=0.0)))
-    return json.dumps({"values": _weather_values(spec, perf), "settled": float(perf.get("settled", 1.0))})
+    src, perf = solve_cell(spec, _num(req, "rpm", lo=300.0, hi=10000.0), _num(req, "load", lo=0.0, hi=1.0),
+                           converged=True, fuel_limit=float(_num(req, "fuel_limit", lo=0.0)))
+    return json.dumps({"values": _weather_values(spec, perf, src["_meta"]),
+                       "settled": float(perf.get("settled", 1.0))})
 
 
 def live_weather_assemble(req_json):
@@ -616,7 +619,8 @@ def live_weather_assemble(req_json):
     vals = [[[[None] * nT for _ in range(nP)] for _ in range(n_load)] for _ in range(n_rpm)]
     for i in range(n_rpm):
         for j in range(n_load):
-            vals[i][j][WEATHER_STD[0]][WEATHER_STD[1]] = _weather_values(spec, grid["perf"][i][j])
+            vals[i][j][WEATHER_STD[0]][WEATHER_STD[1]] = _weather_values(spec, grid["perf"][i][j],
+                                                                         grid["src_meta"][i][j])
     unsettled = 0
     for piece, got in zip(plan["pieces"], pieces):
         ip, iT = WEATHER_P_NODES.index(piece["p"]), WEATHER_T_NODES.index(piece["T"])

@@ -115,11 +115,27 @@ def known(name, cond, note):
 # limiter's warm-started calibration chain amplifies a ~1e-10 platform
 # difference to ~1e-6 (Pyodide/numpy 2.4.6 vs native/numpy 2.1.0: 4.9e-8 at
 # crdi15 1800/0.6).
+#
+# Re-baselined 2026-10-14 for P09 stage 1 (FINDING-028 option B, FINDING-029):
+# the port flow is solved semi-implicitly where a step would overshoot, and
+# the pilot and main burns are integrated exactly over each step. p_max falls
+# 1.5-2.0% (the burn's peak is no longer sampled at a step's end); torque
+# moves -0.04% to +0.004%:
+#   crdi15 1800/0.6  torque 122.580341 -> 122.542628, bsfc 238.524968 -> 237.571137, p_max 130.046491 -> 128.152693
+#   crdi15 3000/1.0  torque 216.888323 -> 216.836794, bsfc 214.552248 -> 214.636031, p_max 152.273735 -> 149.270383
+#   hd_i6  1700/1.0  torque 2313.603180 -> 2313.695766, bsfc 214.080003 -> 214.071436, p_max 178.839201 -> 176.244574
+# Re-baselined 2026-10-15 for P09 stage 2 (ADR-019; commit 40e0699 left them at stage 1's, and the
+# full suite was not run until the rebuild): the premixed burn has no phi term and is faster by
+# (delay / injection)^0.5. p_max rises 0.8-2.4%, torque falls 0.015-0.09%, BSFC rises 0.05-0.34%.
+# The stage-1 tree (15a19a6) still gives stage 1's values to 6 decimals (out/golden_at.py, not kept):
+#   crdi15 1800/0.6  torque 122.542628 -> 122.458183, bsfc 237.571137 -> 238.377425, p_max 128.152693 -> 129.212958
+#   crdi15 3000/1.0  torque 216.836794 -> 216.803723, bsfc 214.636031 -> 214.752423, p_max 149.270383 -> 152.904679
+#   hd_i6  1700/1.0  torque 2313.695766 -> 2311.634363, bsfc 214.071436 -> 214.262334, p_max 176.244574 -> 180.332689
 GOLDEN_TOL = 1e-5
 GOLDEN = {
-    ("crdi15", 1800, 0.6): dict(torque=122.580341, bsfc=238.524968, pmax=130.046491),
-    ("crdi15", 3000, 1.0): dict(torque=216.888323, bsfc=214.552248, pmax=152.273735),
-    ("hd_i6", 1700, 1.0): dict(torque=2313.603180, bsfc=214.080003, pmax=178.839201),
+    ("crdi15", 1800, 0.6): dict(torque=122.458183, bsfc=238.377425, pmax=129.212958),
+    ("crdi15", 3000, 1.0): dict(torque=216.803723, bsfc=214.752423, pmax=152.904679),
+    ("hd_i6", 1700, 1.0): dict(torque=2311.634363, bsfc=214.262334, pmax=180.332689),
 }
 
 
@@ -1207,6 +1223,9 @@ def test_adr011_live_friction():
     g = _toy_adr011_grid()
     live = LiveEngine(g, "crdi15", trans="tc")
     live.T_coolant, live.T_oil, live.rpm, live.load_eff = 361.0, 373.0, g.rpms[1], g.loads[1]
+    # P09: the trace blends at the chamber walls, which start at the air's: warm them too.
+    # Held warm below, so "cold coolant only" moves the friction model's walls alone
+    live.T_chamber = 361.0
     live._update_friction()
     own = abs(live.fmep_live / g.perf[1][1]["fmep"] - 1.0)
     warm = live.T_fric
@@ -1246,6 +1265,8 @@ def _toy_weather(g, slope):
         row = []
         for j in range(len(g.loads)):
             c = dict(g.perf[i][j], torque_ind=g.perf[i][j]["torque"] + g.perf[i][j]["fmep"] * k_t)
+            # P09: the knock is the sources' scalar, not perf's (bridge._weather_values)
+            c["dpdt_max"] = g.meta[i][j]["dpdt_max"] if g.meta is not None else 0.0
             row.append([[[c[k] + (1 + i + 2 * j) * slope[k][0] * (p - 101325.0) / 1000.0
                           + slope[k][1] * (T - 298.0) for k in keys]
                          for T in bridge.WEATHER_T_NODES] for p in bridge.WEATHER_P_NODES])
@@ -1270,7 +1291,9 @@ def test_weather_table_in_the_live_loop():
     import copy
     from dieselsim import live as L
     slope = {"torque_ind": (0.9, -0.2), "fuel_kg_h": (0.01, 0.002), "boost": (-0.012, 0.001),
-             "turbo_rpm": (-300.0, 50.0), "afr": (0.3, -0.05), "T_exh": (-2.0, 1.1)}
+             "turbo_rpm": (-300.0, 50.0), "afr": (0.3, -0.05), "T_exh": (-2.0, 1.1),
+             "dpdt_max": (-2.0e7, -4.0e6)}    # P09: the knock; _knock() adds it, not _perf
+    perf_keys = [k for k in slope if k != "dpdt_max"]
     g = _toy_adr011_grid()
     wt = L.WeatherTable(g.rpms, g.loads, _toy_weather(g, slope))
     zero = all(v == 0.0 for r in g.rpms for ld in g.loads for v in wt.delta(r, ld, 101325.0, 298.0).values())
@@ -1286,7 +1309,8 @@ def test_weather_table_in_the_live_loop():
     for (p, T) in ((65764.1, 293.15), (90000.0, 263.0), (52000.0, 278.15), (101325.0, 318.15), (58000.0, 253.15)):
         d = wt.delta(rpm, load, p, T)
         for k in slope:
-            worst = max(worst, abs(d[k] - want_d(k, p, T)))
+            # relative past 1 (the knock is ~1e9 Pa/s), absolute below
+            worst = max(worst, abs(d[k] - want_d(k, p, T)) / max(1.0, abs(want_d(k, p, T))))
     lo = wt.delta(rpm, load, 40000.0, 230.0)
     clamped = abs(lo["torque_ind"] - want_d("torque_ind", 50000.0, 243.15)) < 1e-9
 
@@ -1315,7 +1339,7 @@ def test_weather_table_in_the_live_loop():
     a, b = e_hi._perf(1500.0, 0.6), e_no._perf(1500.0, 0.6)
     cf6 = 1.0 + (1500.0 - g.rpms[0]) / (g.rpms[1] - g.rpms[0]) + 2.0 * 0.6
     want = {k: cf6 * sp * (72000.0 - 101325.0) / 1000.0 for k, (sp, _) in slope.items()}
-    moved = all(abs((a[k] - b[k]) - want[k]) < 1e-9 for k in slope) \
+    moved = all(abs((a[k] - b[k]) - want[k]) < 1e-9 for k in perf_keys) \
         and abs((a["torque"] - b["torque"]) - want["torque_ind"]) < 1e-9
     states = (e_std.weather_state(), e_hi.weather_state(), e_no.weather_state())
     parts = {
@@ -1450,7 +1474,7 @@ def test_weather_pieces_match_the_grid():
                                                           "load": g["loads"][j], "fuel_limit": g["fuel_limits"][i],
                                                           "p": 101325.0, "T": 298.0})))["values"]
     k_t = bridge._resolve_spec({"preset": "crdi15"}).geom.displacement / (4.0 * 3.141592653589793)
-    c = g["perf"][i][j]
+    c = dict(g["perf"][i][j], dpdt_max=g["src_meta"][i][j]["dpdt_max"])   # P09: the knock is the sources' scalar
     want = [c["torque"] + c["fmep"] * k_t if k == "torque_ind" else c[k] for k in bridge.WEATHER_KEYS]
     worst = max(abs(a - b) / max(abs(b), 1e-12) for a, b in zip(got, want))
     tables, std_bad = 0, []
@@ -1467,6 +1491,7 @@ def test_weather_pieces_match_the_grid():
         for ii, row in enumerate(d["perf"]):
             for jj, cell in enumerate(row):
                 std = d["weather"]["values"][ii][jj][sp][sT]
+                cell = dict(cell, dpdt_max=d["src_meta"][ii][jj]["dpdt_max"])
                 ref = [cell["torque"] + cell["fmep"] * kt if k == "torque_ind" else cell[k] for k in bridge.WEATHER_KEYS]
                 if std != ref:
                     std_bad.append(f"{f} [{ii}][{jj}]")
@@ -1679,14 +1704,21 @@ def test_livesound_matches_render():
         a, b = a / a.sum(), b / b.sum()
         mk = b > 1e-3 * b.max()
         shape[k] = float(np.abs(10 * np.log10(a[mk] / b[mk])).max())
-    worst_shape = max(shape, key=shape.get)
+    # the rumble is noise (boundary friction), and its two generators are
+    # independent: on its 25-63 Hz bands, one or two Welch bins each, the
+    # shape scatters with the seeds. Over 12 seed pairs (3 synth x 4 render)
+    # it read 1.02-2.58 dB on main (median 1.68) and 0.98-2.54 on P09; every
+    # other source within 0.68. 1.5 dB passed on main by the seeds' luck
+    # (1.40) and failed after P09 (1.63) with nothing wrong (PR #131's CI).
+    limit = {k: 3.0 if k == "rumble" else 1.5 for k in shape}
+    worst_shape = max(shape, key=lambda k: shape[k] / limit[k])
     worst_lvl = max(abs(v - 1.0) for v in lvl.values())
     ok = (worst < 1e-9 and paths < 1e-9 and worst_lvl < 0.03 and float(db.max()) < 1.5
-          and shape[worst_shape] < 1.5)
+          and all(shape[k] < limit[k] for k in shape))
     check("streaming sound matches the offline render (filters, paths, levels, spectrum)", 1.0 if ok else 0.0, 1.0, 0.0,
           f"filter response {worst:.1e}; pure vs scipy {paths:.1e}; worst source level {100 * worst_lvl:.1f}% off; "
           f"worst third-octave {float(db.max()):.2f} dB over {int(m.sum())} bands; "
-          f"worst source shape {shape[worst_shape]:.2f} dB ({worst_shape})")
+          f"worst source shape {shape[worst_shape]:.2f} dB ({worst_shape}, limit {limit[worst_shape]:.1f})")
 
 
 _CRDI15_SRC = {}
@@ -1715,15 +1747,15 @@ def _centroid_and_bass(y):
 
 
 def test_port_flow_zigzag_is_not_heard():
-    """FINDING-028 option A: at idle the solver's port mass flows zig-zag at
-    its 1-degree step's Nyquist (order 180 per revolution) -- a numerical
-    chatter, gone at a 0.5-degree step. The cells keep it (option B, the
-    solver fix, waits for the next rebuild), so the sound must average it
-    out before differentiating the flow: crdi15's idle exhaust had a 2,159 Hz
-    centroid with it and 208 Hz without. Checked in the streaming synth and,
-    where scipy is present, in acoustics.render. The first line also guards
-    the defect itself: when the solver is fixed it fails, and this test
-    should then drop its "raw" half."""
+    """FINDING-028 option A: at idle the solver's port mass flows zig-zagged at
+    its 1-degree step's Nyquist (order 180 per revolution), and the sound
+    averages the flows over 2 degrees before differentiating them: crdi15's
+    idle exhaust had a 2,159 Hz centroid with the zig-zag and 208 Hz without.
+    Since option B (cycle.implicit_flow) the solver's own flow is clean
+    (test_port_flow_does_not_overshoot), so the raw ripple must now be small;
+    the averaging stays (ADR-018), for any engine the fix misses. Checked in
+    the streaming synth and, where scipy is present, in acoustics.render.
+    (Was: the raw ripple had to stay > 0.3 until the solver was fixed.)"""
     import numpy as np
     from dieselsim import acoustics as A
     d = _crdi15_sources(800.0, 0.05)
@@ -1734,6 +1766,10 @@ def test_port_flow_zigzag_is_not_heard():
         return float(np.fft.irfft(np.where(orders >= 90, X, 0), len(x)).std() / np.std(x))
     raw = ripple(d["src"]["exh_flow"])
     smooth = ripple(A.smooth_port_flow(d["src"]["exh_flow"], d["es"].dtheta))
+    # the averaging itself, on a flow that still zig-zags as a 1-degree solve's did
+    # (the source grid is 0.5 degree, so the zig-zag repeats every 2 samples there)
+    zz = d["src"]["exh_flow"] + 0.5 * np.std(d["src"]["exh_flow"]) * np.repeat([1.0, -1.0], 2)[np.arange(len(d["src"]["exh_flow"])) % 4]
+    zz_raw, zz_smooth = ripple(zz), ripple(A.smooth_port_flow(zz, d["es"].dtheta))
     parts = _stream(d["spec"], d["src"], 2.5, rpm=800.0, mic="cabin", parts=True)[1]
     c_live = _centroid_and_bass(parts["exhaust"])[0]
     import importlib.util
@@ -1743,11 +1779,221 @@ def test_port_flow_zigzag_is_not_heard():
     else:
         c_ref, ref = 0.0, ", render not checked (no scipy)"
     check("FINDING-028: the idle port flows' zig-zag is averaged out before the sound hears it",
-          1.0 if raw > 0.3 and smooth < raw / 10 and c_live < 500.0 and c_ref < 500.0 else 0.0, 1.0, 0.0,
-          f"crdi15 idle exhaust flow ripple {raw:.2f} raw -> {smooth:.3f} averaged (at least 10x less; raw must stay "
-          f"> 0.3 until the solver is fixed); the exhaust part's centroid: synth {c_live:.0f} Hz{ref} "
-          f"(each < 500; 2,159 with the zig-zag)")
+          1.0 if raw < 0.1 and smooth <= raw and zz_smooth < zz_raw / 10 and c_live < 500.0 and c_ref < 500.0
+          else 0.0, 1.0, 0.0,
+          f"crdi15 idle exhaust flow ripple {raw:.3f} raw (< 0.1 since the solver fix; was 0.78) -> {smooth:.3f} "
+          f"averaged; a synthetic 1-degree zig-zag {zz_raw:.2f} -> {zz_smooth:.3f} averaged (at least 10x less); "
+          f"the exhaust part's centroid: synth {c_live:.0f} Hz{ref} (each < 500; 2,159 with the zig-zag)")
 
+
+
+def _flow_ripple(x):
+    """A port flow's power at orders >= 45 per revolution, as an RMS over the
+    flow's own (a 720-degree trace: bin k is order k/2)."""
+    import numpy as np
+    X = np.abs(np.fft.rfft(np.asarray(x, float) - np.mean(x)))
+    orders = np.arange(len(X)) / 2.0
+    return float(np.sqrt(np.sum(X[orders >= 45] ** 2) / max(np.sum(X ** 2), 1e-30)))
+
+
+def test_port_flow_does_not_overshoot():
+    """FINDING-028 option B (cycle.implicit_flow): where an explicit 1-degree
+    step would carry the pressure difference across a valve past zero, the
+    flow is solved against the end-of-step pressures. Without it the idle
+    flows zig-zagged at the step's Nyquist, and a 1-degree solve disagreed
+    with a 0.5-degree one: crdi15's idle VE by 1.8%, and the NA single's
+    (preset "single", like roster single10) VE by 10.3% and torque by 10.8%
+    at 600 rpm / 0.4 (single10's shipped grid ~18% low there). With it:
+    0.09%, 0.21% and 0.82%. Built-in presets only, so it runs under Pyodide."""
+    pts = []
+    ok = True
+    for key, rpm, load in (("crdi15", 800.0, 0.05), ("single", 600.0, 0.4)):
+        a = DieselEngine(preset=key).operating_point(rpm, load=load, n_cycles=9)
+        b = DieselEngine(preset=key, dtheta=0.5).operating_point(rpm, load=load, n_cycles=9)
+        q = _flow_ripple(a.cycle.traces.mdot_exh[0])
+        dve = abs(a.cycle.ve / b.cycle.ve - 1.0) * 100
+        dtq = abs(a.torque / b.torque - 1.0) * 100
+        ok = ok and q < 0.1 and dve < 0.5 and (key != "single" or dtq < 2.0)
+        pts.append(f"{key} {rpm:.0f}/{load}: ripple {q:.3f} (< 0.1; was 0.80-0.99), 1 vs 0.5 deg VE {dve:.2f}% "
+                   f"(< 0.5)" + (f", torque {dtq:.2f}% (< 2)" if key == "single" else ""))
+    check("FINDING-028: a 1-degree step's port flow doesn't overshoot (agrees with 0.5 degrees at idle)",
+          1.0 if ok else 0.0, 1.0, 0.0, "; ".join(pts))
+
+
+def test_knock_from_the_burn_law():
+    """FINDING-029: the sound's knock (meta dpdt_max) was the peak of a central
+    difference of the 1-degree combustion-pressure trace. A rise made within
+    one step read about half, so it moved with where combustion started
+    inside the step: over four injection timings 0.25 degree apart, crdi15's
+    idle trace value spread 15.9%. It now comes from the burn law,
+    cycle.dpdtheta_knock (peak (gamma - 1)/V dQ/dtheta, sampled inside each
+    step), whose spread is 0.9%. Also: the sound reads it, and wiebe_step
+    releases exactly the whole burn whatever the start's phase."""
+    import math
+    import numpy as np
+    from dieselsim.acoustics import EngineSound
+    from dieselsim.config import PRESETS
+    from dieselsim.cycle import wiebe_step
+    vals = []
+    for sh in (0.0, 0.25, 0.5, 0.75):
+        spec = PRESETS["crdi15"]()
+        spec.inj.soi_deg_btdc += sh
+        eng = DieselEngine(spec=spec)
+        op = eng.operating_point(800.0, load=0.05, n_cycles=9)
+        vals.append(op.cycle.dpdtheta_knock)
+    spread = (max(vals) - min(vals)) / np.mean(vals) * 100
+    meta = EngineSound(eng.spec).build_sources(op)["_meta"]["dpdt_max"]
+    reads = abs(meta / (op.cycle.dpdtheta_knock * 1e5 * 800.0 * 6.0) - 1.0) < 1e-12
+    worst = 0.0
+    for phase in (0.0, 0.3, 0.7):
+        tot = sum(wiebe_step(k + phase, 1.0, 6.9, 2.4, 4.6) for k in range(0, 12))
+        worst = max(worst, abs(tot - (1.0 - math.exp(-6.9))))
+    check("FINDING-029: the knock comes from the burn law, the same wherever combustion starts in the step",
+          1.0 if spread < 3.0 and reads and worst < 1e-12 else 0.0, 1.0, 0.0,
+          f"crdi15 idle dpdtheta_knock {' '.join(f'{v:.3f}' for v in vals)} bar/deg over SOI +0/0.25/0.5/0.75 deg: "
+          f"spread {spread:.1f}% (< 3; the old trace value 15.9%); the sound reads it: {reads}; "
+          f"wiebe_step's total off by {worst:.1e} (< 1e-12)")
+
+
+def _p09_knock(p, T, cold):
+    """crdi15 at idle (800 rpm, 5%): the burn law's knock [bar/deg], warm or a
+    cold start (every wall, the coolant and the oil at the air's temperature)."""
+    from dieselsim.config import PRESETS
+    spec = PRESETS["crdi15"]()
+    spec.thermal.ambient_p, spec.thermal.ambient_T = p, T
+    eng = DieselEngine(spec=spec)
+    if cold:
+        eng.cold_start_walls(T)
+        eng.oil.cond.T_oil = T
+    return eng.operating_point(800.0, load=0.05, n_cycles=9).cycle.dpdtheta_knock
+
+
+def test_p09_knock_at_altitude_and_a_cold_start():
+    """P09 (the owner: "modern CRDi at Leh and a cold start"): the solver's
+    knock must rise in both, and most for both. Before, the premixed burn
+    slowed as the air thinned (its duration carried 30 * phi), and at idle a
+    longer delay changed nothing (the whole injection was over before
+    ignition; the premix fraction sat on its 0.72 cap): crdi15 at idle read
+    Leh -7%, a cold start +8%, both +1%. The burn now uses the mixture the
+    delay prepared (cycle.PREMIX_DELAY_EXP): +17%, +17%, +40%. Also: a cold
+    start's walls are all at the air's temperature (engine.cold_start_walls,
+    the grid's cold cells), not partly following the coolant."""
+    from dieselsim.environment import pressure_at
+    from dieselsim.config import PRESETS
+    leh = (pressure_at(3500.0), 293.15)
+    sea = _p09_knock(101325.0, 298.0, False)
+    cold = _p09_knock(101325.0, 298.0, True) / sea - 1.0
+    alt = _p09_knock(*leh, False) / sea - 1.0
+    both = _p09_knock(*leh, True) / sea - 1.0
+    eng = DieselEngine(spec=PRESETS["crdi15"]())
+    eng.cold_start_walls(273.0)
+    t = eng.spec.thermal
+    walls = (t.piston_T, t.head_T, t.liner_T_top, t.liner_T_bot, t.port_T_exh, eng.T_coolant)
+    # the weather table carries the knock, from each cell's sound meta (or Enjoy can't hear altitude)
+    from dieselsim import bridge
+    probe = bridge._weather_values(eng.spec, dict(torque=1.0, fmep=0.0, fuel_kg_h=1.0, boost=1.0, turbo_rpm=1.0,
+                                                  afr=20.0, T_exh=700.0), {"dpdt_max": 1.234e9})
+    wx = "dpdt_max" in bridge.WEATHER_KEYS and probe[bridge.WEATHER_KEYS.index("dpdt_max")] == 1.234e9
+    ok = cold > 0.10 and alt > 0.10 and both > max(cold, alt) and all(w == 273.0 for w in walls) and wx
+    check("P09: crdi15's idle knocks harder at Leh and on a cold start, most for both",
+          1.0 if ok else 0.0, 1.0, 0.0,
+          f"against warm sea level ({sea:.2f} bar/deg): cold start {100 * cold:+.0f}%, Leh {100 * alt:+.0f}%, both "
+          f"{100 * both:+.0f}% (each > +10%, both the most; before: +8%, -7%, +1%); a cold start's walls "
+          f"{', '.join(f'{w:.0f}' for w in walls)} K (all 273); the weather table carries the knock: {wx}")
+
+
+def test_cold_start_friction_sees_the_running_walls():
+    """FINDING-030: a cold start (engine.cold_start_walls, the grid's cold
+    cells) puts every chamber wall at 273 K for the combustion and the heat
+    transfer, but friction keeps the liner WALL_FOLLOW gives, as the live
+    loop's friction does. friction.py takes the skirt's film at liner - 20 K:
+    fed the 273 K liner with warm oil it sat at -20 C, and crdi15 at 1343 rpm
+    / 20% read 13.7 bar FMEP (warm 0.98). The grid's oil is warm, so here too.
+    Parts: the cold start's FMEP within 3% of the walls-follow engine's (the
+    traces differ a little); under 2x warm; the cold walls still reach the
+    knock (> 3% from the walls-follow engine's); the liner restored after; and
+    a cold start warmed back through _apply_thermal_state is the warm engine
+    again (the friction's own liner is dropped)."""
+    from dieselsim.config import PRESETS
+
+    def solve(mode):
+        eng = DieselEngine(spec=PRESETS["crdi15"]())
+        if mode == "follow":
+            eng.T_coolant = 273.0
+            eng._apply_thermal_state()
+        elif mode in ("start", "rewarmed"):
+            eng.cold_start_walls(273.0)
+        if mode == "rewarmed":
+            eng.T_coolant = eng.spec.thermal.coolant_T
+            eng._apply_thermal_state()
+        op = eng.operating_point(1342.857142857143, load=0.2, n_cycles=9)
+        t = eng.spec.thermal
+        return op.fmep, op.cycle.dpdtheta_knock, (t.liner_T_top, t.liner_T_bot)
+    warm, follow, start, rewarmed = solve("warm"), solve("follow"), solve("start"), solve("rewarmed")
+    near = abs(start[0] / follow[0] - 1.0)
+    knock = abs(start[1] / follow[1] - 1.0)
+    ok = (near < 0.03 and start[0] < 2.0 * warm[0] and knock > 0.03 and start[2] == (273.0, 273.0)
+          and rewarmed == warm)
+    check("FINDING-030: a cold start's friction sees the running walls, its combustion the cold ones",
+          1.0 if ok else 0.0, 1.0, 0.0,
+          f"crdi15 1343 rpm / 20%, FMEP bar: cold start {start[0] / 1e5:.2f}, walls following "
+          f"{follow[0] / 1e5:.2f} ({100 * near:.1f}%, < 3%), warm {warm[0] / 1e5:.2f} (cold < 2x; P09 "
+          f"before the fix: 13.7); knock vs walls following {100 * knock:+.1f}% (> 3%); liner after "
+          f"{start[2][0]:.0f}/{start[2][1]:.0f} K (273/273); re-warmed == warm: {rewarmed == warm}")
+
+
+def test_p09_chamber_walls_warm_and_the_synth_hears_the_knock():
+    """P09: the live loop's chamber-wall temperature (live.LiveEngine._chamber)
+    starts at the air's, warms within about a minute running (CHAMBER_TAU_RUN,
+    faster than the coolant), and the grid's warm/cold blend follows it: the
+    torque the loop uses is the blend at T_chamber. The synth plays the live
+    knock's ratio to the warm standard air's up by KNOCK_GAIN_EXP: exactly
+    nothing at a ratio of 1, and ratio^k on the combustion part otherwise."""
+    if _no_prebuilt_grids("P09: chamber walls warm, the synth hears the knock"):
+        return
+    import numpy as np
+    from dieselsim import livesound as LS
+    from dieselsim.live import LiveEngine
+    g = _prebuilt_grid("crdi15")
+    live = LiveEngine(g, "crdi15", trans="dct")
+    T0, Tc0 = live.T_chamber, live.T_coolant
+    for _ in range(60 * 60):                      # a minute at idle, 60 Hz
+        live.step(1 / 60)
+    target = g.T_warm - live.chamber_follow * (g.T_warm - live.T_coolant)
+    share = (live.T_chamber - T0) / max(target - T0, 1e-9)
+    uses = abs(live._perf(live.rpm, live.load_eff)["torque_ind"]
+               - g.blend_perf_T(live.rpm, live.load_eff, live.T_chamber)["torque_ind"]) < 1e-9
+    differs = abs(g.blend_perf_T(live.rpm, live.load_eff, live.T_chamber)["torque_ind"]
+                  - g.blend_perf_T(live.rpm, live.load_eff, live.T_coolant)["torque_ind"]) > 1e-6
+    # the synth's gain, at a fixed exponent
+    d = _crdi15_sources(800.0, 0.05)
+    k_was = LS.KNOCK_GAIN_EXP
+
+    def comb(live_in, k):
+        LS.KNOCK_GAIN_EXP = k
+        try:
+            syn = LS.LiveSynth(d["spec"], "cabin")
+            syn.set_sources(d["src"])
+            parts = []
+            for b in range(int(0.6 * LS.FS / LS.BLOCK)):
+                syn.block(800.0, live_in)
+                parts.append(syn.last_parts["combustion"])
+            return np.concatenate(parts)
+        finally:
+            LS.KNOCK_GAIN_EXP = k_was
+    ref = d["src"]["_meta"]["dpdt_max"]
+    plain = comb({}, 3.0)
+    unity = comb({"dpdt_max": ref, "dpdt_ref": ref}, 3.0)
+    up = comb({"dpdt_max": ref, "dpdt_ref": ref / 1.25}, 3.0)
+    gain = float(np.sqrt(np.mean(up ** 2)) / np.sqrt(np.mean(unity ** 2)))
+    ok = (share > 0.6 and live.T_chamber - T0 > live.T_coolant - Tc0 and uses and differs
+          and np.array_equal(plain, unity) and abs(gain / 1.25 ** 3 - 1.0) < 1e-6)
+    check("P09: the chamber walls warm within a minute, the blend follows them, the synth plays the knock up",
+          1.0 if ok else 0.0, 1.0, 0.0,
+          f"after 60 s at idle T_chamber {T0:.0f} -> {live.T_chamber:.1f} K ({100 * share:.0f}% of the way to "
+          f"{target:.1f}; > 60%), coolant {Tc0:.0f} -> {live.T_coolant:.1f} K; the loop's torque is the blend at "
+          f"T_chamber: {uses} (and differs from the coolant's: {differs}); synth: a ratio of 1 changes nothing: "
+          f"{bool(np.array_equal(plain, unity))}, a ratio of 1.25 at k = 3 gives x{gain:.4f} (want {1.25 ** 3:.4f})")
 
 # today's (pre-P10) synth RMS for crdi15 at 2000 rpm / 0.3, per mic (tools/p10_trim.py on main at 509e0fd)
 _PRE_P10_CRUISE_RMS = dict(exhaust_tip=0.0431, intake=0.0534, engine_bay=0.3052, cabin=0.0518, exterior_7m=0.0482)
@@ -1837,6 +2083,28 @@ def _prebuilt_grid(key):
     return _GRIDS[key]
 
 
+def test_shipped_grids_cold_friction():
+    """FINDING-030: in every prebuilt grid, each cold cell's FMEP is at most
+    4x its warm cell's. Before P09 the ten grids ran 1.08-2.84x; P09's
+    rebuild, with friction fed the 273 K liner, 5.8-139x. P08's automatic
+    reads the cells' brake torque (live._econ_map), so this is not cosmetic."""
+    if _no_prebuilt_grids("FINDING-030: the shipped grids' cold friction"):
+        return
+    import json
+    worst, bad = (0.0, ""), []
+    for f in sorted(os.listdir(GRID_DIR)):
+        if not f.endswith(".json"):
+            continue
+        with open(os.path.join(GRID_DIR, f)) as fh:
+            g = json.load(fh)
+        r = max(c["fmep"] / w["fmep"] for rc, rw in zip(g["perf_cold"], g["perf"]) for c, w in zip(rc, rw))
+        worst = max(worst, (r, f))
+        if r > 4.0:
+            bad.append(f"{f} {r:.1f}x")
+    check("FINDING-030: every shipped grid's cold FMEP is at most 4x warm", float(len(bad)), 0.0, 0.0,
+          (f"over: {', '.join(bad)}; " if bad else "") + f"worst {worst[0]:.2f}x ({worst[1]})")
+
+
 def test_grid_sources_warm_and_cold():
     """Phase 4: every prebuilt grid carries each cell's acoustic sources,
     warm and cold, and none is silent or non-finite (the dead-signal
@@ -1914,11 +2182,12 @@ def test_live_sound_follows_the_engine():
 
     def run(T_oil):
         live = LiveEngine(g, "crdi15")
-        live.T_coolant, live.T_oil = 361.0, T_oil
+        # warm walls (P09: the grid blends by the chamber walls, not the coolant)
+        live.T_coolant, live.T_chamber, live.T_oil = 361.0, 361.0, T_oil
         live._update_friction()
         inp = live.sound_inputs()
         syn = LS.LiveSynth(g.spec)
-        syn.set_sources(g.blend_sources(live.rpm, live.load_eff, live.T_coolant))
+        syn.set_sources(g.blend_sources(live.rpm, live.load_eff, live.T_chamber))
         acc = {}
         for b in range(int(1.2 * LS.FS / LS.BLOCK)):
             syn.block(live.rpm, inp)
@@ -1928,7 +2197,9 @@ def test_live_sound_follows_the_engine():
         return inp, {k: float(np.sqrt(np.mean(np.concatenate(v) ** 2))) for k, v in acc.items()}
     ic, rc = run(273.0)
     iw, rw = run(361.0)
-    moved = {k: rc[k] / rw[k] - 1.0 for k in ("mech", "rumble", "combustion")}
+    # unstepped, the loop sits on the grid's no-fuel row, where the burn-law knock is 0
+    # (P09, FINDING-029): combustion is silent in both runs, so it has no ratio
+    moved = {k: (rc[k] / rw[k] - 1.0 if rw[k] > 0.0 else 0.0) for k in ("mech", "rumble", "combustion")}
     ok = abs(moved["rumble"]) > 0.01
     check("the live synth follows the live friction: cold oil (Phase 4)", 1.0 if ok else 0.0, 1.0, 0.0,
           "oil 273 vs 361 K, coolant 361 K, idle: " + ", ".join(f"{k} {100 * v:+.1f}%" for k, v in moved.items())
@@ -2295,8 +2566,11 @@ def test_spec_ambient_reaches_the_solve():
         and thin["nox_g_kwh"] > base["nox_g_kwh"] and thin["soot_g_kwh"] > base["soot_g_kwh"],
         "318 K: exhaust hotter": hot["T_exh"] > base["T_exh"] + 5.0,
         "spec 70 kPa equals explicit p_amb 70 kPa": thin["torque"] == explicit.torque and thin["afr"] == explicit.cycle.afr,
-        "half load at 79.5 kPa: standard's fuel, less torque": half_2k.fuel_mg == half_sl.fuel_mg
-        and half_2k.torque < half_sl.torque,
+        # relative 1e-12, not ==: off the rating's air the limiter path reports the cycle's own fuel,
+        # cmd * 1e-6 * 1e6, which lands one ulp away for some commands (3.6e-15 mg after
+        # FINDING-028's fix moved the calibrated limit; before it the value round-tripped exactly)
+        "half load at 79.5 kPa: standard's fuel, less torque":
+        abs(half_2k.fuel_mg / half_sl.fuel_mg - 1.0) < 1e-12 and half_2k.torque < half_sl.torque,
         "compressor point at the spec's inlet T": c318 is not None and c298 is not None
         and abs(c318["T_in"] - 318.0) < 1e-9 and abs(c298["T_in"] - 298.0) < 1e-9,
     }
@@ -2612,6 +2886,7 @@ def _p08_live(key, trans="tc"):
         grid = _prebuilt_grid(key)
     live = LiveEngine(grid, key, trans)
     live.T_coolant, live.T_oil = 361.0, 373.0
+    live.T_chamber = 361.0      # P09: the grid blends at the chamber walls, which start at the air's
     live.FRICTION_EVERY = 60
     return live
 
@@ -2887,8 +3162,14 @@ def main():
                test_livesound_carries_physics,
                test_livesound_matches_render,
                test_port_flow_zigzag_is_not_heard,
+               test_port_flow_does_not_overshoot,
+               test_knock_from_the_burn_law,
+               test_p09_knock_at_altitude_and_a_cold_start,
+               test_cold_start_friction_sees_the_running_walls,
+               test_p09_chamber_walls_warm_and_the_synth_hears_the_knock,
                test_p10_deeper_sound,
                test_intake_and_boost_levels_carry_physics,
+               test_shipped_grids_cold_friction,
                test_grid_sources_warm_and_cold,
                test_live_sound_follows_the_engine,
                test_roster_engines_make_their_numbers,
