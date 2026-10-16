@@ -23,6 +23,12 @@ now has a 3.0 dB limit, the rest stay at 1.5. Mutants 4 of 4 caught
 first order, firing modulation off. Run locally with scipy in a scratch
 venv (this Mac's Python has none, so the suite SKIPs it).
 
+**2026-10-16, the owner's answers for #131:** ship with single10's 36% Leh
+check stated (FINDING-027), and FINDING-031's option A (the cold creep stated;
+a cold-start ECU as its own proposal). #131 marked ready for review. P13: N is
+#132 (CI 10 of 10); B + C on `feat/p13-early-stop`, rule being revised (see
+that branch's STATUS).
+
 **Updated:** 2026-10-15, session 9 (FINDING-030 fixed by option A, the owner's
 choice: cold-cell friction at the running walls; the ten grids' COLD cells
 re-solved by `tools/rebuild_cold_cells.py`, ~80 min, not a full rebuild; the

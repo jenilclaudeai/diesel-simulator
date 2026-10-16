@@ -80,5 +80,7 @@ port flow, which changed this engine's VE by up to 10% (FINDING-028), and
 so its trapped charge and compression temperature.
 
 Drive and Enjoy show each engine's measured Leh error, so single10's place
-field will show 36% instead of 7.2%. **The options above stand, and the
-choice is the owner's.**
+field will show 36% instead of 7.2%. ~~**The options above stand, and the
+choice is the owner's.**~~
+**Decided (the owner, 2026-10-16): ship with the 36% stated** (P09, #131). The
+misfire cliff itself stays open, with the options above.

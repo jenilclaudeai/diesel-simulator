@@ -1,6 +1,9 @@
 # PROPOSAL — P13: build a drivable grid faster, front end unchanged
 
-**Date:** 2026-10-15 (session 9). **Status:** measured; **two questions for the owner** (end).
+**Date:** 2026-10-15 (session 9). **Status:** ~~measured; **two questions for the owner** (end).~~ **Decided (the owner,
+2026-10-16): "Both, go ahead with N first"** (ADR-020). N is #132. B + C are on
+`feat/p13-early-stop` (no PR until #131 merges); rule R2 turned out to stop on a
+slow creep in hot thin air (see that branch's STATUS), being revised.
 **The sheet's P13** (priority 1, "Into Consideration"): "Make the building
 drivable grid faster: can we make drivable grid faster with script. Let
 the front end stay same for now."
