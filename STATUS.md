@@ -85,9 +85,25 @@ PR #119; all seven steps built)".)*
   three that read the stale grids and accuracy table), 3 known, 4 skipped;
   the 4 scipy tests in a venv pass; `web/solver` full 20 + 15 + 30, 0
   failed; audit 0 dead / 2 frozen (known) / 0 tiny.
-- **Running:** the rebuild (`out/p13_rebuild.sh`, log `out/p13_rebuild.log`),
-  started 2026-10-16 05:23 UTC; then the accuracy table, the acceptance check
-  (`accept.py`: every cell against the P09 grids), the suite, push.
+- ~~**Running:** the rebuild …~~ **The rebuild ran 6 h 38 min** (P09's 9 h 39
+  min: x1.46; cells x1.86, weather x1.40: each grid's never-settling weather
+  pieces still run 200 cycles and the pool waits for them). Unsettled counts
+  and Leh checks identical to P09's in all ten grids.
+- **Acceptance, against the P09 grids:** cells fine (torque <= 0.025% of the
+  engine's peak, EGR <= 0.05 pts, T_exh <= 0.22 K, 0 settled flips, slap
+  pulses identical). *My criterion "0.05% of full load at that rpm" was
+  ill-defined: at 4600 rpm the governed full-load torque is near zero and it
+  read 0.07-0.29%.* **The weather tables are not fine:** torque corrections
+  differ by up to 0.49% of peak (truck127) and 0.38% (v8hd). Against 400
+  cycles, the worst pieces (hot, thin air, high load) are 0.50% / 0.41% off
+  with the early stop and 0.01% / 0.03% with 200 cycles. **R2 stops on a slow
+  creep** (under 0.1% within any 10 cycles, ~0.8% over 100). My 108-solve
+  sample had cold thin air only, so "within 0.019%" was too general (*my
+  miss*; to be corrected in PROPOSAL-P13 and ADR-020).
+- **The R2 grids are not committed** (kept in scratch). **Running:** 180
+  solves of 400 cycles (the 108 configurations plus hot thin air on the four
+  heavy engines) to screen drift-aware rules offline; then the chosen rule,
+  its proof, and another rebuild.
 
 **Session 9, P13 feasibility (2026-10-15), docs only, on #131's branch:**
 - The owner asked for P13's feasibility (the sheet: "Make the building
