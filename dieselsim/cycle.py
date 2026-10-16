@@ -242,14 +242,18 @@ EGR_VALVE_MIN_START = 0.005
 
 TAIL_CYCLES = 10       # cycles judged by _tail_converged
 TAIL_TOL = 1e-3        # relative spread allowed over them
-# P13 option B (reviews/PROPOSAL-P13.md, rule R2): a converged solve stops once
-# work, boost, the intake's burned fraction (the EGR the cylinders see) and the
-# turbo speed have each passed the tail test for EARLY_STOP_HOLD cycles running.
-# Work and boost alone (rule R1) stopped before the EGR loop had settled: NOx
-# up to 9.9%. Measured over 108 solves: x1.91, brake torque within 0.019% of
-# full load of the 200-cycle answer, EGR within 0.04 points, NOx 0.52%; the
-# solves that never settle still run all CONVERGED_CYCLES.
-EARLY_STOP_KEYS = ("work", "boost", "yb_int", "turbo_rpm")
+# P13 option B (ADR-020, rule R5): a converged solve stops once work, boost, the
+# intake's burned fraction (the EGR the cylinders see), the turbo speed and the
+# net IMEP (what the stored torque comes from) have each varied by less than
+# EARLY_STOP_TOL over TAIL_CYCLES, for EARLY_STOP_HOLD cycles running.
+# Rule R2 (the first four keys at TAIL_TOL) stopped on a slow creep in hot thin
+# air at high load: truck127 0.50% of peak torque from 400 cycles where 200
+# cycles is 0.01% (under 0.1% in any 10 cycles, ~0.8% over 100). Screened on
+# 180 solves of 400 cycles and checked on 108 held out: R5 is never worse than
+# the 200-cycle answer by more than 0.017% of peak torque, x1.65-1.71 fewer
+# cycles. The solves that never settle still run all CONVERGED_CYCLES.
+EARLY_STOP_KEYS = ("work", "boost", "yb_int", "turbo_rpm", "imep_net")
+EARLY_STOP_TOL = 2e-4
 EARLY_STOP_HOLD = 10
 
 
@@ -906,7 +910,8 @@ class CycleSolver:
                 imep_net=float(np.mean(SN["Wg"]) + np.mean(SN["Wp"]))
                 / g.displacement_cyl))
             if early_stop:
-                held = held + 1 if _tail_converged(cycle_means, keys=EARLY_STOP_KEYS) else 0
+                held = held + 1 if _tail_converged(cycle_means, tol=EARLY_STOP_TOL,
+                                                   keys=EARLY_STOP_KEYS) else 0
                 if held >= EARLY_STOP_HOLD:   # it began at HOLD - 1, so it ran as the last
                     break
 

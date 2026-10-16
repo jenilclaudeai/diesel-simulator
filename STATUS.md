@@ -100,10 +100,23 @@ PR #119; all seven steps built)".)*
   creep** (under 0.1% within any 10 cycles, ~0.8% over 100). My 108-solve
   sample had cold thin air only, so "within 0.019%" was too general (*my
   miss*; to be corrected in PROPOSAL-P13 and ADR-020).
-- **The R2 grids are not committed** (kept in scratch). **Running:** 180
-  solves of 400 cycles (the 108 configurations plus hot thin air on the four
-  heavy engines) to screen drift-aware rules offline; then the chosen rule,
-  its proof, and another rebuild.
+- **The R2 grids are not committed** (kept in scratch). ~~**Running:** 180
+  solves of 400 cycles … to screen drift-aware rules~~
+- **R5 replaces R2** (ADR-020 revised, PROPOSAL-P13 corrected visibly): the
+  four keys plus the net IMEP, tolerance 2e-4 (was 1e-3), hold 10. Screened
+  offline on 180 solves of 400 cycles, then checked on 108 held out: no stop
+  worse than the 200-cycle answer beyond its own error and 0.05% of peak
+  (worst excess 0.017%, the case R2 missed by 0.50%); x1.65 / x1.71 fewer
+  cycles. Rejected on the same data: tighter R2 tolerances (3e-4 still 3
+  bad), hold 30 (3 bad), R2 + a drift test (x1.51-1.61).
+- **Proved:** 12 solves (8 stopping at 44-196, 4 at 200; hot thin air
+  included) equal the old solver capped at R5's stop, bit for bit. **Test**
+  7 of 7 parts (a hot-air case where the IMEP is the last key to settle);
+  **mutants 8 of 8 caught**, baseline passing (incl. the R2 tolerance and the
+  IMEP dropped).
+- **Next:** the suite (running), then the rebuild with R5, the acceptance check
+  (cells, weather, and the worst weather pieces against 400 cycles), the
+  accuracy table.
 
 **Session 9, P13 feasibility (2026-10-15), docs only, on #131's branch:**
 - The owner asked for P13's feasibility (the sheet: "Make the building
