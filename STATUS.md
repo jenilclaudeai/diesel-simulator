@@ -68,6 +68,27 @@ and B-06 fixed, PR open; #118 and #119 still waiting to merge)"; before
 that "2026-10-10, session 8 (Phase 7 step 7 built,
 PR #119; all seven steps built)".)*
 
+**Session 9, P13 B + C built (2026-10-16), `feat/p13-early-stop`** (from
+`feat/p09-knock`; pushed, **no PR until #131 merges**, to avoid a stack; ADR-020):
+- **B, rule R2** (`cycle.EARLY_STOP_KEYS`, `EARLY_STOP_HOLD` 10;
+  `DieselEngine.EARLY_STOP`): the cycle that may end the stop runs as the
+  last (traces and knock are recorded only then), the knock's peak restarts
+  with each last cycle. **12 solves equal the old solver capped at R2's stop,
+  bit for bit** (every perf, meta, waveform and trace value; 4 of them run
+  all 200), so the proposal's numbers hold.
+- **C:** `thermo._INT_CP_*_REF`; 24 replies byte-identical.
+- **Test** `test_p13_early_stop` 6 of 6; mutants 6 of 6 caught, baseline
+  passing. One equivalent mutant (a redundant guard) was removed from the
+  code. The knock reset matters on 0 of 80 crdi15 cells, so the test forces
+  a wasted last cycle (13.81 vs 13.69 without the reset).
+- **Before the rebuild:** Python suite 89 passed, **3 failed** (exactly the
+  three that read the stale grids and accuracy table), 3 known, 4 skipped;
+  the 4 scipy tests in a venv pass; `web/solver` full 20 + 15 + 30, 0
+  failed; audit 0 dead / 2 frozen (known) / 0 tiny.
+- **Running:** the rebuild (`out/p13_rebuild.sh`, log `out/p13_rebuild.log`),
+  started 2026-10-16 05:23 UTC; then the accuracy table, the acceptance check
+  (`accept.py`: every cell against the P09 grids), the suite, push.
+
 **Session 9, P13 feasibility (2026-10-15), docs only, on #131's branch:**
 - The owner asked for P13's feasibility (the sheet: "Make the building
   drivable grid faster ... with script. Let the front end stay same for
