@@ -114,9 +114,13 @@ PR #119; all seven steps built)".)*
   7 of 7 parts (a hot-air case where the IMEP is the last key to settle);
   **mutants 8 of 8 caught**, baseline passing (incl. the R2 tolerance and the
   IMEP dropped).
-- **Next:** the suite (running), then the rebuild with R5, the acceptance check
-  (cells, weather, and the worst weather pieces against 400 cycles), the
-  accuracy table.
+- **Suite on R5:** 90 passed, 2 failed (the stale grids' checks), 3 known, 4
+  skipped. **Running:** the rebuild with R5 (`out/p13_rebuild_r5.log`); then
+  the acceptance check (cells, weather, and the worst weather pieces against
+  400 cycles), the accuracy table, the suite.
+- **#131 (ready, the owner's answers recorded) and #132: CI 10 of 10 on their
+  heads** (`4355863`, `78dcdd0`); both wait for the owner's merge. Whichever
+  merges second fixes the STATUS conflict; then this branch's PR, onto `main`.
 
 **Session 9, P13 feasibility (2026-10-15), docs only, on #131's branch:**
 - The owner asked for P13's feasibility (the sheet: "Make the building
