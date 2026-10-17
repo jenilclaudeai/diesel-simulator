@@ -1290,3 +1290,95 @@ the mix and the clicks 65–82%.
 **Revisit if** the owner hears full pedal as too loud, or idle as too
 quiet, on the phone; or once FINDING-028's solver fix lands (then drop the
 smoothing, with a measurement showing it changes nothing).
+
+## ADR-019 — P09: the port flow and the knock fixed, then the knock at altitude and on a cold start, heard in Enjoy
+
+**Status:** Accepted (2026-10-15). The owner chose C ("Hear in enjoy
+also"), for "modern CRDi at Leh and a cold start" (2026-10-14). In round 2
+they chose "Staged (Recommended)" and "Add a cold-start model". After the
+listening round (`tools/p09_listen.py`: k = 0, 3, 5, 8) they chose k = 4
+(2026-10-15). Details: `reviews/PROPOSAL-P09.md`, FINDING-028 and
+FINDING-029.
+
+### Decision
+
+1. **Stage 1, the numerics.** Each was checked against 0.5° and 0.25°
+   solves.
+   - **The port flow is semi-implicit wherever an explicit step would
+     overshoot** (FINDING-028 option B, `cycle.implicit_flow`): at the
+     valves, and at an NA engine's plenum and manifold orifices.
+   - **The burn is integrated over each step** (`cycle.wiebe_step`).
+   - **The knock comes from the burn law**, not from the 1° trace's central
+     difference (`CycleResult.dpdtheta_knock`, FINDING-029). The sound
+     reads it, and `acoustics.KNOCK_REF` becomes 7.5e9 (×1.5) so that the
+     sea level's sound stays near P10's.
+2. **Stage 2, the burn law.** The premixed burn has no φ term, and it is
+   faster by (delay / injection)^0.5 once the delay outlasts the injection,
+   with a floor of 2° (`PREMIX_DELAY_EXP`, `D_PRE_FLOOR`). The exponent is
+   chosen, not calibrated.
+3. **The cold-start model.** It is narrower than the round-2 question
+   offered, and the chat said so at the time:
+   - the grid's cold cells are a true cold start: every wall, and the
+     coolant, at 273 K (`engine.cold_start_walls`);
+   - the live loop has a chamber-wall temperature, `T_chamber`, which warms
+     with a 60 s time constant and cools with a 600 s one, toward the warm
+     walls' `WALL_FOLLOW` value; every warm/cold blend uses it.
+   - **Cranking speed is not modelled.**
+   - **Cold intake air is already in the model:** the charge picks up heat
+     from manifold walls at the coolant's temperature, and the place's air
+     temperature reaches the live loop through the weather table.
+4. **Enjoy hears it.**
+   - The weather table carries the knock (`dpdt_max` in
+     `bridge.WEATHER_KEYS`).
+   - The live loop sends the knock at `T_chamber` with the weather's
+     change, and the warm standard air's knock at the same point.
+   - The synth multiplies the combustion part by their ratio to the power
+     **`KNOCK_GAIN_EXP` = 4**: a playback gain, chosen by ear, not physics.
+
+### Why
+
+- **Stage 1 (measured):**
+  - crdi15's idle port-flow ripple fell 0.80 → 0.022, with its VE within
+    0.09% of a 0.5° solve;
+  - the NA single's error against a fine step fell from 10.3% to 0.21%
+    (VE) and from 10.8% to 0.82% (torque);
+  - the knock moves 0.9% over small shifts in injection timing (the
+    trace's measure moved 15.9%);
+  - the cost is about the same (29.0 s against 28.7 s);
+  - the roster's full-load torque moves 0.27% or less.
+- **Stage 2 (crdi15 at idle, the physics alone):** knock +17% at Leh, +17%
+  on a cold start, +40% for both. At sea level the roster's full-load torque
+  moves 0.53% or less and its BSFC 1.2% or less.
+- **The gain:** without it +40% is under 1 dB in the P10 mix, which is not
+  audible. At k = 4 (`tools/p09_listen.py`, idle):
+
+  | engine, mic | a cold start | Leh | both |
+  |---|---|---|---|
+  | crdi15, cabin | +2.4 dB | +2.4 dB | +8.7 dB |
+  | crdi15, intake | +3.6 dB | +3.2 dB | +9.9 dB |
+  | hatch15, cabin | +3.8 dB | +3.2 dB | +9.3 dB |
+  | hatch15, intake | +4.4 dB | +3.8 dB | +10.2 dB |
+
+### Consequences
+
+- `cycle.py`, `engine.py` and `acoustics.py` are hashed, so all ten grids
+  were rebuilt with their weather tables, and the golden points were
+  re-baselined (`tests/test_physics.py`'s `GOLDEN`).
+- **single10's torque at 600 rpm, 40% load moves about 18%** to its correct
+  value (FINDING-028).
+- **A warm engine at sea level gets no gain** (its ratio is 1). Its knock
+  still changes, with the new knock measure and burn law, offset by
+  `KNOCK_REF` ×1.5. Whether it sounds like P10's was asked on 2026-10-14
+  and is not yet answered.
+- **A cold Enjoy start knocks for about a minute** before the chamber warms.
+  A warm restart within a few minutes does not, because the chamber cools
+  over 600 s.
+- The traps are in CLAUDE.md: `T_chamber`, the true cold cells,
+  `dpdtheta_knock`, and the `dpdt_max` weather key.
+- **Left open:**
+  - PMEP converges only to first order in the step;
+  - the −20 °C cold-oil idle torque reads −1561 N·m, not yet investigated.
+
+**Revisit if** the owner hears the knock as too much or too little on the
+phone at a real place; or if a cranking-speed start is wanted (a new live
+state, and cells at cranking rpm).

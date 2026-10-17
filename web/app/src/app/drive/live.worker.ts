@@ -100,7 +100,8 @@ function tick(): void {
     if (sound) {
       const e = live;
       // play.py's rule: silent only when stalled (a stopped engine still turns)
-      const s: LoopSound = { rpm: e.rpm, load: e.load_eff, T: e.T_coolant, live: e.sound_inputs(), running: !e.stalled };
+      // T: the chamber walls' temperature, which the grid's warm/cold blend follows (P09)
+      const s: LoopSound = { rpm: e.rpm, load: e.load_eff, T: e.T_chamber, live: e.sound_inputs(), running: !e.stalled };
       sound.postMessage(s);
     }
   }

@@ -258,7 +258,8 @@ export async function buildLiveGrid(engine: EngineRef, workers: LiveCaller[], op
   if (opts.weather) {
     // the table, from the warm cells (its standard air's node) and the pieces, in the plan's order
     extra["weather"] = JSON.parse(await workers[0]!.liveCall("live_weather_assemble", JSON.stringify({
-      engine, grid: { rpms: plan.rpms, loads: plan.loads, perf: cells.warm.map(row => row.map(c => c!.perf)) },
+      engine, grid: { rpms: plan.rpms, loads: plan.loads, perf: cells.warm.map(row => row.map(c => c!.perf)),
+        src_meta: cells.warm.map(row => row.map(c => c!.meta)) },   // P09: the knock's standard node
       pieces: wxOut.slice(0, wplan.pieces.length), checks: wxOut.slice(wplan.pieces.length),
     })));
   }

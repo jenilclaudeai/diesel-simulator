@@ -134,13 +134,19 @@ def solve_cell(spec, rpm, load, n_cycles=GRID_CYCLES, fs=44100,
     of the oscillation.
     fuel_limit: the calibrated full-load fuel at this rpm, if the builder has
     already found it (shared across a row, see seed_fuel_limit).
-    T_coolant: solve with the walls at this coolant temperature (ADR-011's
-    cold grid); None keeps the spec's own (warm) walls.
+    T_coolant: ADR-011's cold grid, a cold START since P09: the coolant and
+    every chamber wall (piston, head, liner, exhaust port) at this
+    temperature. It used to set the coolant and let the walls follow it
+    partly (engine.WALL_FOLLOW), which is a running engine held cold by its
+    thermostat: crdi15's piston stayed at 510 K and its head at 395 K, and the
+    ignition delay grew 9% where a real cold start's grows 24% (FINDING-029).
+    The live loop blends towards these cells by its chamber-wall temperature,
+    which warms within about a minute of starting. None keeps the spec's own
+    (warm) walls.
     """
     eng = DieselEngine(spec=spec)
     if T_coolant is not None:
-        eng.T_coolant = float(T_coolant)
-        eng._apply_thermal_state()
+        eng.cold_start_walls(float(T_coolant))
     eng.converged_mode = bool(converged)
     if fuel_limit is not None:
         eng.seed_fuel_limit(float(rpm), fuel_limit)

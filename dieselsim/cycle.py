@@ -45,6 +45,74 @@ TAU_MIX_REV = 1.25   # burned-gas / excess-air entrainment time,
 TAU_WALL = 0.11      # s, burned-zone wall heat-loss time constant
 NOX_CAL = 0.030       # calibration of the lumped Zeldovich source
 SOOT_CAL = 0.28
+GAMMA_FLOW = 1.35     # FINDING-028: the pressure response to a port flow, in implicit_flow
+KNOCK_SUBSTEPS = 8    # FINDING-029: samples of the burn rate inside each step
+# P09 (FINDING-029): the premixed burn's duration. It used to be 0.30 x the
+# whole burn's, which grows with the overall equivalence ratio, so thinner air
+# (altitude) made the premixed spike burn SLOWER; and at idle, where the whole
+# injection is over before ignition, a longer delay changed nothing. Real
+# engines go the other way (SAE 2013-01-1516, idle, 550-4500 m: a longer delay,
+# a shorter combustion). Now the premixed part burns the mixture the delay
+# prepared: no phi term, and faster by (delay / injection)^PREMIX_DELAY_EXP once
+# the delay outlasts the injection. The exponent is chosen, not calibrated:
+# 0.5 gives crdi15 at idle +17% knock at Leh, +17% on a cold start and +40% for
+# both (1.0 runs into the floor and flattens). Floor: D_PRE_FLOOR degrees.
+PREMIX_DELAY_EXP = 0.5
+D_PRE_FLOOR = 2.0
+
+
+def implicit_flow(md, dt, pa, Ta, Ra, Va, dVa, pb, Tb, Rb, Vb, dVb, A):
+    """FINDING-028: a port flow (kg/s, a -> b positive) that cannot overshoot.
+
+    At a 1 deg step the explicit flow `md` between a cylinder and a manifold
+    at nearly equal pressure carried the difference past zero every step,
+    a zig-zag at the step's Nyquist (the idle rows of the shipped grids;
+    single10 through whole strokes, where it was ~18% low on torque at 600
+    rpm). The square-root orifice law's conductance is unbounded at zero
+    difference, so a finer step only narrowed the band.
+
+    The end-of-step pressures are linear in the flow q: each side changes
+    by GAMMA_FLOW * R * T * q * dt / V, plus the piston's own GAMMA_FLOW *
+    p * dV / V. If `md` keeps the sign of that end-of-step difference, it is
+    returned unchanged, so flows that don't overshoot are bit for bit as
+    before. Otherwise q is solved against the end-of-step difference x:
+    near zero difference the flow is incompressible, q = A sqrt(2 rho x),
+    and x = x0 - K q makes that a quadratic in sqrt(x), solved in closed
+    form. Measured on 8 points (crdi15, single10): it differs from the exact
+    root (40 bisection steps) by <= 0.003 N.m, and the solves take 9%
+    longer than without it, where the bisection took 151% longer.
+
+    Va = 1e9 stands for the open air (an engine without a turbo)."""
+    if A <= 0.0:
+        return md
+    k_a = GAMMA_FLOW * dt / Va
+    k_b = GAMMA_FLOW * dt / Vb
+    pa0 = pa - GAMMA_FLOW * pa * dVa / Va
+    pb0 = pb - GAMMA_FLOW * pb * dVb / Vb
+    RT = Ra * Ta if md > 0.0 else Rb * Tb
+    if (pa - pb) * ((pa0 - k_a * RT * md) - (pb0 + k_b * RT * md)) >= 0.0:
+        return md
+    x0 = pa0 - pb0
+    if x0 >= 0.0:
+        RTu, pu = Ra * Ta, max(pa0, 1e3)
+    else:
+        RTu, pu = Rb * Tb, max(pb0, 1e3)
+    C = A * math.sqrt(2.0 * pu / RTu)
+    KC = (k_a + k_b) * RTu * C
+    s = 0.5 * (-KC + math.sqrt(KC * KC + 4.0 * abs(x0)))
+    return math.copysign(C * s, x0)
+
+
+def wiebe_step(rel, dth, a, m, dur):
+    """FINDING-029: the Wiebe burn fraction released over the step (rel - dth,
+    rel], exactly: the cumulative 1 - exp(-a x^(m+1)) at both ends (x capped
+    at 1, where dwiebe stops). The rate times the step, which this replaces,
+    depended on where combustion started inside the step once a premixed
+    spike was only a few steps wide."""
+    def cum(q):
+        x = min(max(q, 0.0) / dur, 1.0)
+        return 1.0 - math.exp(-a * x ** (m + 1.0))
+    return cum(rel) - cum(rel - dth)
 
 
 @dataclass
@@ -126,6 +194,10 @@ class CycleResult:
     p_max: float = 0.0
     dpdtheta_max: float = 0.0
     dpdtheta_comb: float = 0.0   # combustion-driven only; see FINDING-002
+    # FINDING-029: the peak combustion-driven pressure rise from the burn law,
+    # (gamma - 1) / V * dQ/dtheta, found inside each step. Unlike the two above
+    # it does not depend on the crank step; the sound reads it. bar/deg.
+    dpdtheta_knock: float = 0.0
     T_max: float = 0.0
     T_burned_max: float = 0.0
     theta_pmax: float = 0.0
@@ -367,6 +439,7 @@ class CycleSolver:
         soc_p = np.full(nc, -1.0); soc_m = np.full(nc, -1.0)
         m_inj = np.zeros(nc); xb_p = np.zeros(nc); xb_m = np.zeros(nc)
         premix = np.zeros(nc); burn_dur = np.full(nc, 50.0)
+        phi_main = np.zeros(nc); delay_ratio = np.zeros(nc)   # P09: the premixed burn's inputs
         p_prev = np.full(nc, 1e5)
         mbz = np.zeros(nc); Tbz = np.full(nc, 1200.0)
         NOx = np.zeros(nc); soot = np.zeros(nc)
@@ -388,6 +461,7 @@ class CycleSolver:
 
         cycle_means = []
         m_fuel_cmd = m_fuel
+        knock_peak = 0.0          # FINDING-029: Pa/deg, cylinder 1, last cycle
         for cyc in range(n_cycles):
             if smoke_afr and cyc > 0:
                 m_air_prev = float(np.mean(m_trap * (1.0 - yb_trap)))
@@ -438,6 +512,14 @@ class CycleSolver:
                     mdot_t, _ = thermo.signed_orifice(p_exh, T_exh, yb_exh,
                                                       p_back, T_amb, 1.0,
                                                       self.A_ex_out)
+                    # FINDING-028: single10's small manifolds against the open
+                    # air zig-zagged as the valves did (1e9 m^3: the open air)
+                    mdot_c = implicit_flow(mdot_c, dt, p_in, T_amb, thermo.R_AIR, 1e9, 0.0,
+                                           p_int, T_int, thermo.gas_R(yb_int), V_int, 0.0,
+                                           self.A_in_rest)
+                    mdot_t = implicit_flow(mdot_t, dt, p_exh, T_exh, thermo.gas_R(yb_exh), V_exh, 0.0,
+                                           p_back, T_amb, thermo.gas_R(1.0), 1e9, 0.0,
+                                           self.A_ex_out)
 
                 # EGR: closed-loop on the burnt fraction in the plenum.
                 # A high-pressure EGR loop needs exhaust-to-intake dP, so the
@@ -499,6 +581,12 @@ class CycleSolver:
                                                   p, T, yb, Ai[kk])
                     me, _ = thermo.signed_orifice(p, T, yb, p_exh, T_exh,
                                                   yb_exh, Ae[kk])
+                    # FINDING-028: no step may carry the difference past zero
+                    dV_step = dV_arr[kk] * dth_rad
+                    mi = implicit_flow(mi, dt, p_int, T_int, thermo.gas_R(yb_int), V_int, 0.0,
+                                       p, T, R, V, dV_step, Ai[kk])
+                    me = implicit_flow(me, dt, p, T, R, V, dV_step,
+                                       p_exh, T_exh, thermo.gas_R(yb_exh), V_exh, 0.0, Ae[kk])
                     ml = 0.0
                     if A_leak > 0.0:
                         ml, _ = thermo.signed_orifice(p, T, yb, p_exh, T_exh,
@@ -575,29 +663,48 @@ class CycleSolver:
                                 else:
                                     b = 0.02
                                 premix[c] = min(0.72, max(0.02, b))
+                                phi_main[c] = phi
+                                delay_ratio[c] = b
                                 burn_dur[c] = self.burn_duration(
                                     dur_main, phi, rpm)
 
                     # ---------- heat release ----------
                     dQ = 0.0
                     eta_c = self.comb_efficiency(m_inj[c], m, yb)
+                    # FINDING-029: each burn is integrated exactly over the step
+                    # (wiebe_step), and the knock is the peak of the burn rate
+                    # sampled KNOCK_SUBSTEPS times inside it, so neither depends
+                    # on where combustion started within the step.
+                    rate = []
                     if soc_p[c] >= 0.0 and f_pilot > 0.0 and xb_p[c] < 1.0:
                         d_p = max(6.0, 2.2 * dur_pilot + 4.0)
-                        x = ((tl - soc_p[c]) % 720.0) / d_p
-                        r = self.dwiebe(x, 6.9, 1.6, d_p)
-                        xb_p[c] = min(1.0, xb_p[c] + r * dth)
-                        dQ += m_fuel * f_pilot * Fuel.LHV * eta_c * r * dth
+                        rel_p = (tl - soc_p[c]) % 720.0
+                        dx = min(wiebe_step(rel_p, dth, 6.9, 1.6, d_p), 1.0 - xb_p[c])
+                        xb_p[c] += dx
+                        dQ += m_fuel * f_pilot * Fuel.LHV * eta_c * dx
+                        rate.append((f_pilot, rel_p, ((6.9, 1.6, d_p, 1.0),)))
                     if soc_m[c] >= 0.0 and xb_m[c] < 1.0:
                         bd = burn_dur[c]
                         rel = (tl - soc_m[c]) % 720.0
-                        xr = rel / bd
-                        d_pre = max(4.0, 0.30 * bd)
-                        r_pre = self.dwiebe(rel / d_pre, 6.9, 2.4, d_pre)
-                        r_dif = self.dwiebe(xr, 6.9, 0.80, bd)
-                        r = premix[c] * r_pre + (1.0 - premix[c]) * r_dif
-                        xb_m[c] = min(1.0, xb_m[c] + r * dth)
-                        dQ += m_fuel * (1.0 - f_pilot) * Fuel.LHV * eta_c \
-                            * r * dth
+                        # P09: the burn of the mixture the delay prepared (see PREMIX_DELAY_EXP)
+                        d_pre = max(4.0, 0.30 * (bd - 30.0 * min(phi_main[c], 1.3)))
+                        d_pre = max(D_PRE_FLOOR, d_pre / max(1.0, delay_ratio[c]) ** PREMIX_DELAY_EXP)
+                        dx = (premix[c] * wiebe_step(rel, dth, 6.9, 2.4, d_pre)
+                              + (1.0 - premix[c]) * wiebe_step(rel, dth, 6.9, 0.80, bd))
+                        dx = min(dx, 1.0 - xb_m[c])
+                        xb_m[c] += dx
+                        dQ += m_fuel * (1.0 - f_pilot) * Fuel.LHV * eta_c * dx
+                        rate.append((1.0 - f_pilot, rel, ((6.9, 2.4, d_pre, premix[c]),
+                                                          (6.9, 0.80, bd, 1.0 - premix[c]))))
+                    if rate and c == 0 and last:
+                        g_k = (thermo.gamma_mix(T, yb) - 1.0) / V * m_fuel * Fuel.LHV * eta_c
+                        for i_k in range(1, KNOCK_SUBSTEPS + 1):
+                            back = dth * (1.0 - i_k / KNOCK_SUBSTEPS)
+                            r_k = 0.0
+                            for share, rel_k, parts in rate:
+                                for a_w, m_w, dur_w, wt in parts:
+                                    r_k += share * wt * self.dwiebe((rel_k - back) / dur_w, a_w, m_w, dur_w)
+                            knock_peak = max(knock_peak, g_k * r_k)
 
                     # ---------- wall heat transfer (Woschni) ----------
                     if kk == ivc_i:
@@ -811,6 +918,7 @@ class CycleSolver:
         _pc = p_tr[0] - pm_tr[0]
         _dpc = np.diff(np.concatenate([_pc, _pc[:1]])) / dth
         r.dpdtheta_comb = float(_dpc.max()) / 1e5
+        r.dpdtheta_knock = knock_peak / 1e5
         r.m_fuel = m_fuel
         r.m_air_trapped = float(np.mean(SN["mtr"] * (1.0 - SN["ybtr"])))
         r.afr = r.m_air_trapped / max(m_fuel, 1e-15)

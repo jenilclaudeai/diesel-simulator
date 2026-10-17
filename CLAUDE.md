@@ -59,6 +59,8 @@ python3 tools/build_live_grids.py --engine my.json   # a custom engine's grid ->
 sh buildgrid/build.sh my.json                   # P13 N: the same, cells + weather, one command, own venv
                                                 # (Windows: buildgrid\build.bat); then the app's Import grid
 python3 tools/build_live_grids.py --weather [key]    # add the weather table to grid files (~45-85 min each)
+python3 tools/rebuild_cold_cells.py <pre-change dir>  # only the grids' cold cells, after a change that
+                                                # reaches only cold friction (asserts it; ~80 min for ten)
 python3 tools/environments_json.py --check           # the places file Drive and Enjoy read is current
 cd tools/pyodide && npm ci && npm run suite     # the same suite under Pyodide
 cd web/solver  && npm ci && npm run test:fast   # cache tests, seconds
@@ -101,7 +103,33 @@ grep its readers and solve with it changed.
   calibration chain starts cold. Before that it reset only the gas state and
   only a fresh engine was clean. A cold solve on a used engine still differs
   from a *warm* one on a fresh engine -- compare like with like.
-- `dpdtheta_max` measures compression; read **`dpdtheta_comb`**.
+- `dpdtheta_max` measures compression; read **`dpdtheta_comb`**. For the
+  knock's sharpness read **`dpdtheta_knock`** (P09, FINDING-029): it is
+  computed from the burn law, while `dpdtheta_comb` differentiates the 1°
+  trace and swings 16% with a small shift in injection timing.
+  `acoustics.build_sources` reads `dpdtheta_knock`.
+- **The grid's cold cells are a true cold start** (P09, ADR-019): every
+  wall, plus the coolant, at 273 K (`engine.cold_start_walls`). Before P09
+  the walls followed the coolant by `WALL_FOLLOW`. For a cold test call
+  `cold_start_walls(T)` and set cold oil too. **Friction keeps the
+  `WALL_FOLLOW` liner** (FINDING-030, `_friction_liner`): `friction.py`'s
+  film offsets (skirt at liner − 20 K) assume a hot running liner, and fed
+  a 273 K one they gave 6–140× warm FMEP. Setting the liner by hand after
+  `cold_start_walls` reaches the combustion only; `_apply_thermal_state`
+  drops the friction liner.
+- **The live loop blends warm and cold at `LiveEngine.T_chamber`**, not at
+  `T_coolant`. The chamber walls warm with a 60 s time constant and cool
+  with a 600 s one. A test that warms the coolant to get a warm engine
+  must set `T_chamber` too (the warm fixture drives start at 361 K).
+- **The knock the synth hears** (P09): `live.LiveEngine._knock()` sends
+  `dpdt_max` (the blend at `T_chamber`, plus the weather table's change)
+  and `dpdt_ref` (the warm blend at standard air). The synth multiplies
+  combustion by their ratio to the power `KNOCK_GAIN_EXP` (4, chosen by
+  ear; a playback gain, not physics). The gain lives in unhashed
+  `livesound.py`, and `KNOCK_REF` in hashed `acoustics.py`. Mirror both in
+  `synth.ts`. The weather table's keys (`bridge.WEATHER_KEYS`) include
+  `dpdt_max`: a grid whose table lacks it plays no altitude knock, and
+  raises no error.
 - Off the rating's air (101325 Pa / 298 K), a modern ECU (`spec.ecu_modern`,
   ADR-016) targets absolute boost and caps each cycle's fuel at
   trapped air / `afr_limit`. There, **`op.fuel_mg` is the fuel injected,
@@ -174,11 +202,16 @@ grep its readers and solve with it changed.
   Pyodide against CPython): about 1e-13 for a converged cell, about 1e-6
   through the limiter's calibration chain. Never compare against a shipped
   grid exactly; use `GOLDEN_TOL`.
-- At idle the solver's port mass flows (`mdot_exh`, `mdot_int`) zig-zag at
-  its 1° step's Nyquist (FINDING-028), in the shipped grids' idle rows too.
-  The sound averages them over 2° (`acoustics.smooth_port_flow`, in
+- ~~At idle the solver's port mass flows (`mdot_exh`, `mdot_int`) zig-zag at
+  its 1° step's Nyquist (FINDING-028), in the shipped grids' idle rows too.~~
+  Since P09 (ADR-019) the port flow is semi-implicit wherever an explicit
+  step would overshoot (`cycle.implicit_flow`), and the zig-zag is gone:
+  crdi15's idle ripple dropped from 0.80 to 0.022. The grids lose it at
+  P09's rebuild.
+  The sound still averages them over 2° (`acoustics.smooth_port_flow`, in
   `render` and `LiveSynth.set_sources`) before differentiating; anything new
-  that differentiates a port flow must too. The source balance and each
+  that differentiates a port flow should too. A test still checks that the
+  averaging removes a synthetic zig-zag. The source balance and each
   mic's loudness are `SOURCE_BALANCE` and `MIC_TRIM` (ADR-018) in hashed
   `acoustics.py`: mirror them in `web/physics/src/audio/synth.ts`,
   regenerate `--only sound`, and re-stamp the grids.
@@ -194,10 +227,11 @@ grep its readers and solve with it changed.
 
 ## Decisions
 
-`DECISIONS.md` holds ADR-001 to ADR-018 (ADR-013: the personas are review
+`DECISIONS.md` holds ADR-001 to ADR-019 (ADR-013: the personas are review
 lenses; ADR-014: custom engines, drivable; ADR-015: Phase 6's scope, staged;
 ADR-016: Phase 7's six decisions, and v2 as a separate list; ADR-017: P08, the automatic shifts by the fuel map; ADR-018: P10, the sound's
-balance and loudness, and FINDING-028 hidden in the synth). Don't reopen one without a
+balance and loudness, and FINDING-028 hidden in the synth; ADR-019: P09, the
+port flow and the knock fixed, the knock at altitude and on a cold start). Don't reopen one without a
 measured reason. The ones most easily undone by accident: the Python solver
 runs **unmodified** under Pyodide (ADR-001); audio is a TypeScript
 AudioWorklet with no `SharedArrayBuffer`, so no COOP/COEP headers, so GitHub
