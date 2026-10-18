@@ -35,6 +35,7 @@ import json
 import os
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import get_context
 
 
@@ -99,6 +100,35 @@ def weather_piece(task):
     ref, rpm, load, flim, p, T = task
     return json.loads(bridge.live_weather_cell(json.dumps({"engine": ref, "rpm": rpm, "load": load,
                                                            "fuel_limit": flim, "p": p, "T": T})))
+
+
+class SafePool:
+    """The process pool the build tools use: multiprocessing.Pool's map, imap
+    and imap_unordered, over concurrent.futures. When a worker dies (the system
+    killed six of them 24 min into a weather pass, 2026-10-16), Pool replaces it
+    and its map waits forever for the lost task: that build sat at 0% CPU for
+    55 h. Here the pool breaks instead: BrokenProcessPool, and the build stops
+    with the reason. Spawned workers, as before."""
+
+    def __init__(self, workers):
+        self.ex = ProcessPoolExecutor(max_workers=max(1, workers), mp_context=get_context("spawn"))
+
+    def map(self, fn, tasks):
+        return list(self.ex.map(fn, tasks))
+
+    def imap(self, fn, tasks):
+        return self.ex.map(fn, tasks)
+
+    def imap_unordered(self, fn, tasks):
+        for f in as_completed([self.ex.submit(fn, t) for t in tasks]):
+            yield f.result()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.ex.shutdown(wait=exc[0] is None, cancel_futures=exc[0] is not None)
+        return False
 
 
 def pmap(pool, fn, tasks, progress=None, phase=""):
@@ -223,7 +253,7 @@ def main():
         paths = [a if a.endswith(".json") else os.path.join(OUT, f"{a}.json") for a in args] \
             or sorted(os.path.join(OUT, f) for f in os.listdir(OUT) if f.endswith(".json"))
         ghash = grid_hash()
-        with get_context("spawn").Pool(min(int(os.environ.get("WEATHER_WORKERS", 6)), os.cpu_count() or 1)) as pool:
+        with SafePool(min(int(os.environ.get("WEATHER_WORKERS", 6)), os.cpu_count() or 1)) as pool:
             for p in paths:
                 add_weather(p, pool, ghash)
         return
@@ -233,7 +263,7 @@ def main():
     keys = [a for a in args if not a.startswith("-")] or ([] if custom else sorted(PRESETS))
     # the hash of the tree the workers import, taken before they start
     ghash = grid_hash()
-    with get_context("spawn").Pool(min(6, os.cpu_count() or 1)) as pool:
+    with SafePool(min(6, os.cpu_count() or 1)) as pool:
         for key in keys:
             build(key, pool, ghash, size=size)
         if custom:

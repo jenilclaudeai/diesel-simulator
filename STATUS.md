@@ -200,7 +200,12 @@ PR #119; all seven steps built)".)*
   Killed; **the weather pass restarted 2026-10-18 22:45 UTC**
   (`out/p13_weather.log`) with a watchdog (`HANG?` when the workers' CPU falls
   under 20%). A tool fix to consider: a pool that fails loudly when a worker
-  dies (`concurrent.futures`' `BrokenProcessPool`) instead of hanging.
+  dies (`concurrent.futures`' `BrokenProcessPool`) instead of hanging. **Done:**
+  `build_live_grids.SafePool` (`ProcessPoolExecutor`, spawn), used by
+  `build_live_grids`, `build_my_grid` and `rebuild_cold_cells`. A worker killed
+  mid-task: SafePool raises `BrokenProcessPool` after 0.6 s; `multiprocessing.Pool`
+  was still waiting after 30 s. The same 2x2 engine (cells + weather) with
+  both pools: 0 of 26 keys differ. The tool tests pass (7 of 7, 6 of 6).
 - **Then:** the acceptance check (cells, weather, the worst weather pieces
   against 400 cycles), the accuracy table, the suite; merge `main` (#131 is in).
 - **#131 merged 2026-10-16 16:19 UTC** (`7a15f11`). **#132:** `main` was merged

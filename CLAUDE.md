@@ -195,6 +195,11 @@ grep its readers and solve with it changed.
   built from the same code as the cells, so the one stamp covers both. The
   table only corrects the live loop (Drive, Enjoy); the solving pages solve
   the air directly.
+- **The build tools' pool fails loudly** (`build_live_grids.SafePool`, P13):
+  `multiprocessing.Pool` replaces a killed worker and its `map` then waits
+  forever (a weather pass sat at 0% CPU for 55 h, 2026-10-16). A
+  `BrokenProcessPool` from a build means a worker was killed: rerun it
+  (`--weather` alone if the cells are built).
 - A roster engine's file must be **`engines/<key>.json`**. Under any other
   name its grid records no engine-file fingerprint, and the tests do not
   find it. `load_engine_dir` registers every file in `engines/`, so

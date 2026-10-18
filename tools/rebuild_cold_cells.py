@@ -33,12 +33,12 @@ import json
 import os
 import sys
 import time
-from multiprocessing import get_context
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, REPO)
 from dieselsim import bridge  # noqa: E402
 from dieselsim.builder import load_engine_dir  # noqa: E402
+from build_live_grids import SafePool  # noqa: E402
 
 load_engine_dir(os.path.join(REPO, "engines"))   # spawned workers re-run this on import
 GRIDS = os.path.join(REPO, "web", "app", "public", "grids")
@@ -136,7 +136,7 @@ def main(argv):
     if keys:
         files = [f for f in files if os.path.splitext(os.path.basename(f))[0] in keys]
     print(f"pre-change tree {old_hash[:12]}, new {new_hash[:12]}; {len(files)} grids", flush=True)
-    with get_context("spawn").Pool(WORKERS) as pool:
+    with SafePool(WORKERS) as pool:
         for f in files:
             rebuild(f, pool, old_hash, new_hash, dry)
     with open(ACCURACY, "rb") as fh:

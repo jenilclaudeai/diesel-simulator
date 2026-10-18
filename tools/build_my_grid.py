@@ -28,7 +28,6 @@ import re
 import sys
 import time
 import urllib.request
-from multiprocessing import get_context
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -159,7 +158,7 @@ def main(argv=None):
 
     t0 = time.time()
     prog = Progress(phases, workers=a.workers)
-    with get_context("spawn").Pool(max(1, a.workers)) as pool:
+    with B.SafePool(a.workers) as pool:
         B.build(key, pool, ghash, edef=d, size=size, out_path=out, progress=prog,
                 extra={"custom": True, "vehicle": d["vehicle"], "engine_json": d, "engine_file_sha256": sha})
         if not a.no_weather:
