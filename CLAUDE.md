@@ -56,6 +56,8 @@ cd web/physics && npm ci && npm test            # TypeScript ports vs fixtures (
 python3 tools/fixtures/gen_fixtures.py --only live   # after changing dieselsim/live.py
 python3 tools/build_live_grids.py               # after a SOLVER change: prebuilt converged grids (~2 h, 10 grids)
 python3 tools/build_live_grids.py --engine my.json   # a custom engine's grid -> out/grids/ (ADR-014)
+sh buildgrid/build.sh my.json                   # P13 N: the same, cells + weather, one command, own venv
+                                                # (Windows: buildgrid\build.bat); then the app's Import grid
 python3 tools/build_live_grids.py --weather [key]    # add the weather table to grid files (~45-85 min each)
 python3 tools/rebuild_cold_cells.py <pre-change dir>  # only the grids' cold cells, after a change that
                                                 # reaches only cold friction (asserts it; ~80 min for ten)
