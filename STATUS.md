@@ -115,12 +115,20 @@ PR #119; all seven steps built)".)*
   **mutants 8 of 8 caught**, baseline passing (incl. the R2 tolerance and the
   IMEP dropped).
 - **Suite on R5:** 90 passed, 2 failed (the stale grids' checks), 3 known, 4
-  skipped. **Running:** the rebuild with R5 (`out/p13_rebuild_r5.log`); then
-  the acceptance check (cells, weather, and the worst weather pieces against
-  400 cycles), the accuracy table, the suite.
-- **#131 (ready, the owner's answers recorded) and #132: CI 10 of 10 on their
-  heads** (`4355863`, `78dcdd0`); both wait for the owner's merge. Whichever
-  merges second fixes the STATUS conflict; then this branch's PR, onto `main`.
+  skipped. The R5 rebuild's cells finished (2026-10-16 15:58 UTC; unsettled
+  counts as P09's), but **the weather pass hung**: ~24 min in, all six workers
+  were respawned within a minute (killed, most likely by the system), and
+  `Pool.map` then waits forever for their tasks; found 55 h later at 0% CPU.
+  Killed; **the weather pass restarted 2026-10-18 22:45 UTC**
+  (`out/p13_weather.log`) with a watchdog (`HANG?` when the workers' CPU falls
+  under 20%). A tool fix to consider: a pool that fails loudly when a worker
+  dies (`concurrent.futures`' `BrokenProcessPool`) instead of hanging.
+- **Then:** the acceptance check (cells, weather, the worst weather pieces
+  against 400 cycles), the accuracy table, the suite; merge `main` (#131 is in).
+- **#131 merged 2026-10-16 16:19 UTC** (`7a15f11`). **#132:** `main` was merged
+  into it on 2026-10-18 (`d7254e4`, by another session; my identical merge
+  was dropped), **CI 10 of 10 at `d7254e4`**; it waits for the owner. Then
+  this branch's PR, onto `main`.
 
 **Session 9, P13 feasibility (2026-10-15), docs only, on #131's branch:**
 - The owner asked for P13's feasibility (the sheet: "Make the building
