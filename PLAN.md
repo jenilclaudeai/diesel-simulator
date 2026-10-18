@@ -415,8 +415,14 @@ natively, ~1.4–1.8 h in a browser. Options: **N** a one-command native script
 for a custom engine, then Import grid (no solver change); **B** stop converged
 solves once settled, rule R2 (×1.9, torque ≤ 0.02% of full load, one rebuild);
 **C** hoist two constants in `thermo.py` (×1.08, bit-identical). Recommended N
-now, B + C after #131. **Not decided; nothing built.** Two questions for the
-owner.
+now, B + C after #131. ~~**Not decided; nothing built.** Two questions for the
+owner.~~ **Decided 2026-10-16: both, N first.** N built (#132); B + C on
+`feat/p13-early-stop`.
+
+**Next proposal, from FINDING-031 (the owner, 2026-10-16):** a cold-start ECU in the
+live loop (fast idle when cold, the pedal's fuel raised to cover the extra
+friction), so light pedal moves the car from a cold start. At 0 °C, 20% pedal
+doesn't move it today, on `main` too.
 
 ---
 

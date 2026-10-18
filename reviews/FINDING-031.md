@@ -4,7 +4,9 @@
 true cold start after FINDING-030's fix, at the owner's request ("measure
 more first").
 **Lens:** the driver's view (lead), PHY1, PHY2
-**Status:** **open, for the owner.** Nothing changed yet.
+**Status:** ~~**open, for the owner.** Nothing changed yet.~~ **Decided (the owner,
+2026-10-16): A**: P09 merges with the creep stated; **C** (a cold-start ECU: fast
+idle, the pedal's fuel covering the extra friction) comes as its own proposal.
 **Reproduce:** scratch scripts `creep.py` (live-loop launches) and
 `decomp.py` (one cycle, wall by wall), in the session's job directory; the
 numbers are below.
