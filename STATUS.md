@@ -1,5 +1,13 @@
 # Status
 
+**2026-10-19 — where things stand:** #131 (P09) and **#132 (P13 N) are merged**
+(#132 at 2026-10-18 22:57 UTC), so the native one-command build is on `main`.
+`main` is merged into `feat/p13-early-stop` (B + C, rule R5; the solver hash
+is unchanged by the merge, `42073eceb02c`). **Running:** R5's weather pass
+(restarted 2026-10-18 22:45 UTC after the first one hung). Then the acceptance
+check, the accuracy table, the suite, and B + C's PR. Details: the
+"P13 B + C built" block below.
+
 **2026-10-18: `main` merged into #132 (`feat/p13-native-grid`).** #131 (P09)
 merged 2026-10-16 16:19 UTC as `7a15f11`. The one conflict was this file's
 top (both sides kept; #132's stale first line of the old **Updated:**
