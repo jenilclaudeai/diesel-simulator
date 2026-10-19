@@ -10,6 +10,10 @@ import { DriveEnvPicker } from '../weather/drive-env-picker';
 import { applyProject, engineChoice, parseProject } from '../spec/project';
 import { SpecEdits } from '../spec/spec-edits';
 import type { DriveScript, GridFile } from './protocol';
+import {
+  distance, distanceUnit, pressureBar, pressureUnit, speed, speedUnit, temperature, temperatureUnit, Units, volume,
+  volumeUnit,
+} from '../units/units';
 
 const fmt0 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 const fmt1 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
@@ -67,6 +71,17 @@ export class DrivePage implements OnDestroy {
   protected readonly soundError = this.s.soundError;
   protected readonly recording = this.s.recording;
   protected readonly rpmFrac = computed(() => Math.min(1, (this.v()?.rpm ?? 0) / 5000));
+  /** Phase 8: the driver's units (Metric, US or UK), kept per browser and shared with /enjoy. */
+  protected readonly u = inject(Units).system;
+  protected readonly U = computed(() => {
+    const s = this.u();
+    return { speed: speedUnit(s), dist: distanceUnit(s), vol: volumeUnit(s), temp: temperatureUnit(s), pres: pressureUnit(s) };
+  });
+  protected readonly sp = (kmh: number) => speed(kmh, this.u());
+  protected readonly T = (K: number) => temperature(K - 273.15, this.u());
+  protected readonly dist = (km: number) => distance(km, this.u());
+  protected readonly vol = (L: number) => volume(L, this.u());
+  protected readonly pres = (bar: number) => pressureBar(bar, this.u());
   private readonly held = new Set<string>();
 
   constructor() {

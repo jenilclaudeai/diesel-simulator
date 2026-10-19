@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { DriveEnv, FUELS, fuelLine, PLACES, SOLD_HERE, weatherLine } from './drive-env';
+import { temperature, temperatureUnit, UNIT_SYSTEMS, Units } from '../units/units';
 
 /**
  * The place Drive and Enjoy drive in (Phase 7 step 4). A change stops the engine (the page's own
@@ -20,7 +21,14 @@ import { DriveEnv, FUELS, fuelLine, PLACES, SOLD_HERE, weatherLine } from './dri
       <select class="drive-fuel" (change)="pickFuel($any($event.target).value)">
         <option [value]="SOLD_HERE" [selected]="env.fuel() === SOLD_HERE">Sold here</option>
         @for (f of fuels; track f.key) {
-          <option [value]="f.key" [selected]="f.key === env.fuel()">{{ f.name }} (CFPP {{ f.cfpp_C }} °C)</option>
+          <option [value]="f.key" [selected]="f.key === env.fuel()">{{ f.name }} (CFPP {{ cfpp(f.cfpp_C) }})</option>
+        }
+      </select>
+    </label>
+    <label class="field"><span>Units</span>
+      <select class="drive-units" (change)="units.set($any($event.target).value)">
+        @for (s of systems; track s.key) {
+          <option [value]="s.key" [selected]="s.key === units.system()">{{ s.name }}</option>
         }
       </select>
     </label>
@@ -42,11 +50,18 @@ export class DriveEnvPicker {
   readonly state = input<'standard' | 'table' | 'no table' | undefined>(undefined);
   readonly checkPct = input<number | null | undefined>(undefined);
   readonly changed = output<string>();
-  protected readonly line = computed(() => weatherLine(this.env.current(), this.state(), this.checkPct()));
+  /** Phase 8: the driver's units, shared by /drive and /enjoy; a change doesn't stop the engine */
+  protected readonly units = inject(Units);
+  protected readonly systems = UNIT_SYSTEMS;
+  protected readonly line = computed(() => weatherLine(this.env.current(), this.state(), this.checkPct(), this.units.system()));
   protected readonly fuels = FUELS;
   protected readonly SOLD_HERE = SOLD_HERE;
   /** Phase 7 step 6: what the picked fuel does at this place ('' for the place's own) */
-  protected readonly fuelNote = computed(() => fuelLine(this.env.current(), this.env.fuel()));
+  protected readonly fuelNote = computed(() => fuelLine(this.env.current(), this.env.fuel(), this.units.system()));
+  protected cfpp(C: number): string {
+    const s = this.units.system();
+    return `${Math.round(temperature(C, s))} ${temperatureUnit(s)}`;
+  }
 
   protected pickFuel(key: string): void {
     this.env.setFuel(key);

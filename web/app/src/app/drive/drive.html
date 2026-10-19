@@ -81,17 +81,17 @@
     <dl class="readouts gauges">
       <div><dt>Engine</dt><dd><strong class="rpm">{{ fmt0.format(s.rpm) }}</strong> rpm
         <span class="meter" [style.--f]="rpmFrac()"></span></dd></div>
-      <div><dt>Speed</dt><dd><strong class="kmh">{{ fmt0.format(s.kmh) }}</strong> km/h</dd></div>
+      <div><dt>Speed</dt><dd><strong class="kmh">{{ fmt0.format(sp(s.kmh)) }}</strong> {{ U().speed }}</dd></div>
       <div><dt>Gear</dt><dd><strong class="gear">{{ s.gear }}</strong>
         @if (s.trans === 'manual') { {{ s.assist ? 'auto-clutch' : 'clutch ' + fmt0.format(100 * s.clutch) + '%' }} }
         @if (s.lockup) { lock-up } @if (s.cruise) { cruise } @if (s.stalled) { <span class="err">stalled</span> }</dd></div>
       <div><dt>Pedals</dt><dd>throttle {{ fmt0.format(100 * s.throttle) }}% · brake {{ fmt0.format(100 * s.brake) }}%</dd></div>
-      <div><dt>Coolant / oil</dt><dd>{{ fmt0.format(s.T_coolant - 273.15) }} / {{ fmt0.format(s.T_oil - 273.15) }} °C</dd></div>
-      <div><dt>Friction (live)</dt><dd>{{ fmt2.format(s.fmep_bar) }} bar FMEP</dd></div>
+      <div><dt>Coolant / oil</dt><dd>{{ fmt0.format(T(s.T_coolant)) }} / {{ fmt0.format(T(s.T_oil)) }} {{ U().temp }}</dd></div>
+      <div><dt>Friction (live)</dt><dd>{{ fmt2.format(pres(s.fmep_bar)) }} {{ U().pres }} FMEP</dd></div>
       <div><dt>Boost</dt><dd>{{ fmt2.format(s.boost) }} pressure ratio</dd></div>
       <div><dt>Grade</dt><dd>{{ fmt0.format(100 * s.grade) }}%</dd></div>
-      <div><dt>Fuel</dt><dd class="fuel-state">{{ fmt1.format(s.T_fuel - 273.15) }} °C · filter passes {{ fmt0.format(100 * s.wax_frac) }}%{{ s.fuel_waxed ? ' · waxed' : '' }}</dd></div>
-      <div><dt>Trip</dt><dd>{{ fmt1.format(s.trip_km) }} km · {{ fmt2.format(s.trip_L) }} L</dd></div>
+      <div><dt>Fuel</dt><dd class="fuel-state">{{ fmt1.format(T(s.T_fuel)) }} {{ U().temp }} · filter passes {{ fmt0.format(100 * s.wax_frac) }}%{{ s.fuel_waxed ? ' · waxed' : '' }}</dd></div>
+      <div><dt>Trip</dt><dd>{{ fmt1.format(dist(s.trip_km)) }} {{ U().dist }} · {{ fmt2.format(vol(s.trip_L)) }} {{ U().vol }}</dd></div>
     </dl>
     <p class="about">Loop {{ fmt0.format(s.hz) }} Hz, frame {{ fmt0.format(s.frames) }}.</p>
   }

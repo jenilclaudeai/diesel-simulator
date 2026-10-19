@@ -1,5 +1,27 @@
 # Status
 
+**Session 9, Phase 8's units toggle built (2026-10-19), `feat/phase8-units`** (from `main`
+after #133):
+- **The owner asked "are we good with the initial plan?":** phases 0-7 done; Phase 8
+  open (units, P01 vibration, P06 random roads); Phase 5's exit waits on the owner's
+  phone re-check (REVIEW-007 M-1). Then "Continue": the units toggle first.
+- **The owner's choices:** driver pages only (Enjoy, Drive, their place notes; the
+  engineering pages stay SI), and Metric / US / UK.
+- **Built:** `units/units.ts` (exact factors; US: mph, mi, US gal, mpg (US), °F, psi,
+  inHg; UK: mph, mi, litres, mpg (UK), °C, psi, hPa), a Units selector beside Place and
+  Fuel (`DriveEnvPicker`, both pages), kept per browser (`dieselsim-units`); Enjoy's
+  dash (the speedometer gets an mph scale, capped at 150), the strip and the trip
+  computer; Drive's readouts; the place and fuel notes. Boost stays a ratio.
+- **Found and fixed:** `check:labels` lost /enjoy and still passed: it found fuel
+  figures by the literal "L/100", now printed from units.ts (5 of 10 at a floor of 5).
+  It now knows `U().econ`, and the floor is 6; the mutant (without it) fails.
+- **Verified:** app units **137 passed** (130 + 7 new; run locally under Node 24.15
+  via npx); mutants 7 of 7 caught; `check:labels` 6 of 10; `build:pages` builds;
+  **e2e:enjoy 29 passed** (a new units check: US reads mph, mi, gal, mpg (US), °F,
+  psi, kept per browser), its mutant (trip left in km) caught; **e2e:drive 10 passed**.
+- **Next:** PR and CI; then P01 vibration, then P06's proposal (my recommended order, which
+  the owner continued with).
+
 **2026-10-19 — where things stand:** #131 (P09) and **#132 (P13 N) are merged**
 (#132 at 2026-10-18 22:57 UTC), so the native one-command build is on `main`.
 `main` is merged into `feat/p13-early-stop` (B + C, rule R5; the solver hash

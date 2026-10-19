@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { speed, speedUnit, type UnitSystem } from '../units/units';
 
 /** The dial's sweep: 240 degrees, from -120 (zero) to +120 (full scale). */
 export const SWEEP = 240;
@@ -24,12 +25,14 @@ export function tachScale(maxRpm: number): Scale {
   return { max: dialMax(maxRpm, 1000), step: 250, labelEvery: 4, labelScale: 1000, unit: '×1000 rpm' };
 }
 
-/** A speedometer's scale, to at most 240 km/h: labels every 10, 20 or 40,
- *  and the full scale rounded so its end is labelled. */
-export function speedScale(vmaxKmh: number): Scale {
-  const max = Math.min(240, vmaxKmh > 160 ? dialMax(vmaxKmh, 40) : dialMax(vmaxKmh, 20));
+/** A speedometer's scale, to at most 240 km/h (150 mph): labels every 10, 20
+ *  or 40, and the full scale rounded so its end is labelled. In mph (Phase 8,
+ *  US and UK) the same rules on the speed in mph. */
+export function speedScale(vmaxKmh: number, units: UnitSystem = 'metric'): Scale {
+  const v = speed(vmaxKmh, units), cap = units === 'metric' ? 240 : 150;
+  const max = Math.min(cap, v > 160 ? dialMax(v, 40) : dialMax(v, 20));
   const step = max <= 60 ? 5 : 10;
-  return { max, step, labelEvery: max > 160 ? 4 : 2, labelScale: 1, unit: 'km/h' };
+  return { max, step, labelEvery: max > 160 ? 4 : 2, labelScale: 1, unit: speedUnit(units) };
 }
 
 interface Tick { x1: number; y1: number; x2: number; y2: number; label?: { x: number; y: number; text: string } }

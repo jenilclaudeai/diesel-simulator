@@ -417,7 +417,8 @@ solves once settled, rule R2 (×1.9, torque ≤ 0.02% of full load, one rebuild)
 **C** hoist two constants in `thermo.py` (×1.08, bit-identical). Recommended N
 now, B + C after #131. ~~**Not decided; nothing built.** Two questions for the
 owner.~~ **Decided 2026-10-16: both, N first.** N built (#132); B + C on
-`feat/p13-early-stop`.
+`feat/p13-early-stop`. **All merged:** N (#132, 2026-10-18), B + C (#133, 2026-10-19; rule R5,
+ADR-020).
 
 **Next proposal, from FINDING-031 (the owner, 2026-10-16):** a cold-start ECU in the
 live loop (fast idle when cold, the pedal's fuel raised to cover the extra
@@ -430,7 +431,7 @@ doesn't move it today, on `main` too.
 
 ~~GitHub Pages.~~ Done early, 2026-10-04 (#85), for the Phase 5 phone check:
 https://jenilclaudeai.github.io/diesel-simulator/, published from `main`.
-Metric/imperial toggle. Accessibility: gauges need text
+~~Metric/imperial toggle.~~ **Built 2026-10-19** (`feat/phase8-units`): the owner's choice, Metric / US / UK on the driver pages only (Enjoy, Drive and their place notes; the engineering pages stay SI), kept per browser beside the place and the fuel. Accessibility: gauges need text
 alternatives, and warnings must not be encoded in colour alone.
 **Accessibility built 2026-10-13** (`feat/phase8-a11y`): measured with
 axe-core on every page (7 clean) and by hand on Enjoy's dash; the dials
