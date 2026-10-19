@@ -25,7 +25,8 @@ export interface DriveScript {
 
 export type ToWorker =
   // air: Phase 7 step 4, the place's ambient pressure [Pa] and temperature [K]; absent is standard air
-  | { type: 'load'; grid: GridFile; trans: Transmission; air?: { p: number; T: number }; cfpp?: number }  // cfpp [K]: step 6
+  | { type: 'load'; grid: GridFile; trans: Transmission; air?: { p: number; T: number }; cfpp?: number;  // cfpp [K]: step 6
+      route?: string }                                                                                  // P06: a route key
   | { type: 'key'; key: string; down: boolean }
   | { type: 'run' | 'pause' }
   | { type: 'script'; script: DriveScript; init: Record<string, number> }
@@ -55,6 +56,9 @@ export interface LiveView {
   derate_heat: number;  // the overheat part of derate (engine protection); the rest is charge-air density
   // Phase 7 step 6: the fuel's temperature [K], the share of full-load fuel the filter passes, waxed out
   T_fuel: number; wax_frac: number; fuel_waxed: boolean;
+  // P06: the road -- m along the route, m above its start, wind (m/s, headwind +),
+  // rolling resistance x the surface's, speed breakers hit too fast, the last jolt (0-1)
+  route_s: number; route_alt: number; wind: number; crr_x: number; breaker_hits: number; jolt: number;
 }
 
 /** What the dashboard needs once per engine: its scales and limits. */

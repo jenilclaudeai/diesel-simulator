@@ -2,12 +2,19 @@ import { TestBed } from '@angular/core/testing';
 import { speedScale } from '../enjoy/gauge';
 import { weatherLine } from '../weather/drive-env';
 import {
-  airPressure, distance, economy, economyUnit, pressureBar, speed, temperature, Units, UNITS_KEY, volume,
+  airPressure, distance, economy, economyUnit, elevation, elevationUnit, pressureBar, speed, temperature, Units, UNITS_KEY, volume,
 } from './units';
 
 const near = (a: number, b: number, tol = 1e-9) => Math.abs(a - b) <= tol * Math.max(1, Math.abs(b));
 
 describe('driver units (Phase 8: Metric, US, UK)', () => {
+  it('P06: a climb in metres, or feet in the US', () => {
+    expect(elevation(267, 'metric')).toBe(267);
+    expect(elevation(267, 'uk')).toBe(267);
+    expect(near(elevation(1000, 'us'), 3280.839895013123)).toBe(true);
+    expect([elevationUnit('metric'), elevationUnit('us'), elevationUnit('uk')]).toEqual(['m', 'ft', 'm']);
+  });
+
   it('metric passes every figure through unchanged', () => {
     expect(speed(123.4, 'metric')).toBe(123.4);
     expect(distance(5.5, 'metric')).toBe(5.5);

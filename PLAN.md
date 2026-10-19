@@ -453,6 +453,12 @@ rolling resistance, headwind, altitude through Phase 7's weather table), a
 suspension, stated), and goals on a route. One PRNG in Python and TS, so
 the live fixture holds. Its own proposal comes after Phase 7 step 4, and
 places the build in the order.
+**Tier 1 built (2026-10-20, `feat/p06-roads`, ADR-021, `reviews/PROPOSAL-P06.md`):**
+everything above except goals, in /enjoy only (the owner's choice). It has
+three named routes and random ones shared by `?route=random:<seed>`, and a
+breaker buzzes the phone (P01). **Tier 2, goals on a route, is next**, with
+its own short proposal (what a goal is: reach the top, a fuel budget, a
+time).
 
 ---
 

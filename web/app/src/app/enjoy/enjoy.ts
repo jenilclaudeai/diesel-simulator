@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, HostListener, inject, OnDestroy, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import type { Transmission } from '@dieselsim/physics';
 import { releaseFocus } from '../drive/drive';
 import { controlKey, MIC_KEYS, MICS } from '../drive/drive-keys';
@@ -18,8 +18,9 @@ import { derateLit } from './lamps';
 import { Pedal } from './pedal';
 import { ROSTER } from './roster';
 import { VibrationSetting, Vibrator } from './vibration';
+import { newSeed, parseRouteParam, roadAhead, ROUTE_CHOICES, routeKey, routeOf, routeSummary, SURFACE_FILL } from './road';
 import {
-  distance, distanceUnit, economy, economyUnit, pressureBar, pressureUnit, speed, speedUnit,
+  distance, distanceUnit, economy, economyUnit, elevation, elevationUnit, pressureBar, pressureUnit, speed, speedUnit,
   temperature, temperatureUnit, Units, volume, volumeUnit,
 } from '../units/units';
 
@@ -129,6 +130,59 @@ export class EnjoyPage implements OnDestroy {
   }
   private readonly e2e = typeof location !== 'undefined' && location.search.includes('e2e');
 
+  /** P06 (ADR-021): the road. `?route=city` or `?route=random:1234` opens on it: the address is the link to share. */
+  protected readonly ROUTE_CHOICES = ROUTE_CHOICES;
+  protected readonly SURFACE_FILL = SURFACE_FILL;
+  private readonly router = inject(Router);
+  private readonly initialRoute = parseRouteParam(
+    typeof location !== 'undefined' ? new URLSearchParams(location.search).get('route') : null);
+  protected readonly routeChoice = signal(this.initialRoute.choice);
+  protected readonly seed = signal<number | null>(this.initialRoute.seed);
+  protected readonly routeKey = computed(() => routeKey(this.routeChoice(), this.seed()));
+  /** The picker's note: length, highest point, breakers */
+  protected readonly routeNote = computed(() => {
+    const r = routeOf(this.routeKey());
+    if (!r) return null;
+    const m = routeSummary(r), u = this.u();
+    const b = m.breakers ? `${m.breakers} speed breaker${m.breakers > 1 ? 's' : ''} (take them at ${fmt0.format(speed(15, u))} ${speedUnit(u)})` : 'no speed breakers';
+    return `${distance(m.km, u).toFixed(1)} ${distanceUnit(u)} a lap, up to ${fmt0.format(elevation(m.top, u))} ${elevationUnit(u)} above the start, ${b}. To share it, copy this page's address.`;
+  });
+  /** The route the engine is driving (set at Start; the picker stops the engine) */
+  private readonly driven = signal<string | undefined>(undefined);
+  private readonly drivenRoute = computed(() => routeOf(this.driven()));
+  protected readonly road = computed(() => {
+    const r = this.drivenRoute(), s = this.v();
+    return r && s ? roadAhead(r, s.route_s) : null;
+  });
+  /** The strip's words (and its screen-reader label): grade, surface, wind, height, the next breaker */
+  protected readonly roadText = computed(() => {
+    const r = this.road(), s = this.v(), u = this.u();
+    if (!r || !s) return '';
+    const kmh = Math.abs(s.wind) * 3.6;
+    const wind = kmh < 1 ? 'calm' : `${s.wind > 0 ? 'headwind' : 'tailwind'} ${fmt0.format(speed(kmh, u))} ${speedUnit(u)}`;
+    const up = elevation(s.route_alt, u);
+    const parts = [`grade ${(r.grade * 100).toFixed(1)} %`, r.surface, wind,
+      `${up >= 0 ? '+' : '−'}${fmt0.format(Math.abs(up))} ${elevationUnit(u)}`];
+    if (r.nextBreakerM !== null) parts.push(`breaker in ${fmt0.format(elevation(r.nextBreakerM, u))} ${elevationUnit(u)}`);
+    return parts.join(' · ');
+  });
+
+  protected selectRoute(choice: string): void {
+    this.routeChoice.set(choice);
+    if (choice === 'random' && this.seed() === null) this.seed.set(newSeed());
+    this.routeChanged();
+  }
+  protected setSeed(raw: string): void {
+    const n = Math.floor(Number(raw));
+    this.seed.set(Number.isFinite(n) && n >= 1 ? Math.min(n, 999_999) : null);
+    this.routeChanged();
+  }
+  protected rollSeed(): void { this.seed.set(newSeed()); this.routeChanged(); }
+  private routeChanged(): void {
+    this.s.stop();
+    void this.router.navigate([], { queryParams: { route: this.routeKey() ?? null }, queryParamsHandling: 'merge', replaceUrl: true });
+  }
+
   constructor() {
     effect(() => {
       const s = this.v(), i = this.info();
@@ -143,7 +197,7 @@ export class EnjoyPage implements OnDestroy {
     if (typeof location !== 'undefined' && location.search.includes('e2e')) {
       (globalThis as Record<string, unknown>)['__enjoy'] = {
         view: () => this.v(), level: () => this.s.levelDb(), soundError: () => this.soundError(),
-        info: () => this.s.info(), vibes: () => this.vibes.slice(),
+        info: () => this.s.info(), vibes: () => this.vibes.slice(), road: () => this.road(), routeKey: () => this.routeKey(),
       };
     }
   }
@@ -161,12 +215,14 @@ export class EnjoyPage implements OnDestroy {
     if (!this.soundOn()) await this.s.soundStart();
     const g = this.imported();
     const p = this.preset();
-    if (p === IMPORTED && g) await this.s.loadGrid(g, this.trans(), true, this.env.air(), this.env.cfpp());
+    const route = this.routeKey();
+    this.driven.set(route);
+    if (p === IMPORTED && g) await this.s.loadGrid(g, this.trans(), true, this.env.air(), this.env.cfpp(), route);
     else if (p.startsWith(MY)) {
       const saved = await engineLibrary().grid(p.slice(MY.length)).catch(() => undefined);
-      if (saved) await this.s.loadGrid(saved, this.trans(), true, this.env.air(), this.env.cfpp());
+      if (saved) await this.s.loadGrid(saved, this.trans(), true, this.env.air(), this.env.cfpp(), route);
       else this.s.error.set('that engine is no longer saved in this browser');
-    } else await this.s.load(p, this.trans(), true, this.env.air(), this.env.cfpp());
+    } else await this.s.load(p, this.trans(), true, this.env.air(), this.env.cfpp(), route);
   }
 
   /** "Open project" (Phase 7 step 7): as on /drive; a dual clutch drives as Auto here. */

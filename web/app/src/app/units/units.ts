@@ -37,6 +37,15 @@ export function distanceUnit(s: UnitSystem): string {
   return s === 'metric' ? 'km' : 'mi';
 }
 
+/** P06: height (a route's climb): metres, or feet in the US. */
+export const M_PER_FT = 0.3048;
+export function elevation(m: number, s: UnitSystem): number {
+  return s === 'us' ? m / M_PER_FT : m;
+}
+export function elevationUnit(s: UnitSystem): string {
+  return s === 'us' ? 'ft' : 'm';
+}
+
 /** Fuel volume: litres, or US gallons in the US. UK fuel is sold, and a UK trip meter reads, in litres. */
 export function volume(L: number, s: UnitSystem): number {
   return s === 'us' ? L / L_PER_US_GAL : L;

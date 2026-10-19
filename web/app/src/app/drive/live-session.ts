@@ -36,7 +36,7 @@ export class LiveSession {
 
   /** Load a preset's prebuilt grid into a fresh worker; `run` starts the loop. */
   async load(preset: string, trans: Transmission, run: boolean, air?: { p: number; T: number },
-             cfpp?: number): Promise<void> {
+             cfpp?: number, route?: string): Promise<void> {
     this.stop();
     this.status.set('loading');
     this.error.set(undefined);
@@ -51,12 +51,12 @@ export class LiveSession {
       this.status.set('error');
       return;
     }
-    await this.loadGrid(grid, trans, run, air, cfpp);
+    await this.loadGrid(grid, trans, run, air, cfpp, route);
   }
 
-  /** Load a grid already in hand (an imported custom engine, ADR-014). */
+  /** Load a grid already in hand (an imported custom engine, ADR-014). `route`: P06, a route key (Enjoy). */
   async loadGrid(grid: GridFile, trans: Transmission, run: boolean, air?: { p: number; T: number },
-                 cfpp?: number): Promise<void> {
+                 cfpp?: number, route?: string): Promise<void> {
     this.stop();
     this.status.set('loading');
     this.error.set(undefined);
@@ -69,7 +69,7 @@ export class LiveSession {
         w.addEventListener('error', e => reject(new Error(`the drive worker failed: ${e.message || 'script error'}`)));
         w.addEventListener('message', (ev: MessageEvent<FromWorker>) => {
           const m = ev.data;
-          if (m.type === 'ready') { w.postMessage({ type: 'load', grid, trans, air, cfpp }); resolve(); }
+          if (m.type === 'ready') { w.postMessage({ type: 'load', grid, trans, air, cfpp, route }); resolve(); }
           else if (m.type === 'state') this.v.set(m.view);
           else if (m.type === 'info') this.info.set(m.info);
           else if (m.type === 'scriptResult') this.scriptWaiter?.(m);

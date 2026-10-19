@@ -1454,3 +1454,66 @@ rebuild showed it stopping on slow creeps (below). Details:
   convergence).
 - Measured not worth it: chaining weather solves (×1.26, path dependence),
   rewriting the loop (ADR-001).
+
+
+---
+
+## ADR-021 — P06 tier 1: random roads in /enjoy (a route the live loop drives)
+
+**Status:** Accepted (2026-10-19, built 2026-10-20). The owner's answers:
+Enjoy only; tier 1 first, then goals; everything in PLAN; named and random
+routes, the random ones shared by their seed. Details:
+`reviews/PROPOSAL-P06.md`.
+
+### Decision
+
+1. **The route lives in the live loop** (`dieselsim/live.py`: `Route`,
+   `random_route`, `ROUTES`, `route_from`; `LiveEngine.set_route` and
+   `_road`), mirrored line for line in `web/physics/src/live/route.ts`. It
+   is **not** in the solver: no grid goes stale. `live.py` is outside the
+   grid hash.
+2. **One generator, mulberry32, on both sides**, and arithmetic that IEEE
+   makes bit-identical. Where libm differs (CPython's `**` against V8's,
+   1,958 of 20,000 altitudes in the last bit), the code uses series (`_ln`,
+   `_exp`). A route is computed from its key (`'city'`, `'random:1234'`),
+   never sent as data.
+3. **What the engine feels:**
+   - the grade, through the driveline's existing input;
+   - the surface, as rolling resistance × `SURFACES`;
+   - the wind, as aero on the air speed;
+   - a speed breaker, as a 0.15 s resistive pulse worth `BREAKER_LOSS`
+     (6 %) of speed × j, where j rises from 0 at 15 km/h to 1 at 50 km/h,
+     plus a hint;
+   - the altitude, as ISA air relative to the start's place, which the
+     grid's weather table turns into the cells' correction.
+
+   The breaker's 6 % is a tuning constant, not a measurement.
+4. **No suspension** (ADR-002's out-of-scope list stands). A breaker is a
+   speed loss and a buzz.
+5. **The share is the address:** `/enjoy?route=random:4242`. There is no
+   server and no storage, so ADR-003 is untouched.
+6. **The live fixture holds the port** (ADR-004). It has two route drives:
+   the city on the plain grid, and random:1234 on the weather grid, which
+   drives on the **converter box**, because there the dual clutch's sync
+   threshold turns a 1e-9 nudge into a 12-frame event shift in Python
+   alone.
+
+### Why
+
+- Only the live loop's code changes, so the cells, the grids and their
+  stamps stay as they are.
+- A seed is a few bytes, and both sides build the identical road from it.
+  The fixture proves that frame by frame: worst 2.9e-14 per step.
+
+### Consequences
+
+- Changing a route constant (`SURFACES`, `BREAKER_*`, `ROUTES`, the
+  generator's draws) changes the live fixture: regenerate it with
+  `--only live` and re-match `route.ts`.
+- Anything new that sets the air from a height uses `LiveEngine._isa`
+  (series), not `**`.
+- `set_route` copies the spec and its thermal block: the grid's spec is
+  shared between drives (a mutant found a climb leaking into the next
+  drive).
+- Tier 2 (goals on a route) builds on `route_s`, `route_alt` and
+  `breaker_hits`, which `LiveView` already carries.

@@ -463,6 +463,69 @@ if (unitOpts.length) {
   await page.select("select.drive-units", "metric");
 }
 
+// ---- P06 (ADR-021): the road -- a shared link, the picker, the road ahead, a breaker taken too fast ----
+// The link is opened in a tab of its own. Measured (2026-10-20): reloading this tab this late in the run
+// left Chrome without touch emulation -- the page saw CDP touches as clicks only (no touchstart, no
+// pointerdown), so buttons worked and the pedals heard nothing, and Emulation.setTouchEmulationEnabled
+// did not bring them back; in a fresh browser the same reload kept touch (3 of 3). This tab drives on.
+const linkTab = await browser.newPage();
+linkTab.on("pageerror", e => problems.push(`pageerror (link tab): ${e.message}`));
+await linkTab.goto(`http://localhost:${port}${BASE}enjoy?e2e&route=random:4242`, { waitUntil: "load" });
+await linkTab.waitForSelector("select.route");
+const linked = await linkTab.evaluate(() => ({ route: document.querySelector("select.route").value,
+  seed: document.querySelector("input.seed")?.value, note: document.querySelector(".route-note")?.textContent ?? "" }));
+await linkTab.close();
+await page.bringToFront();
+if (await page.$("button.stop")) await tapEl("button.stop");
+await page.waitForSelector("select.route");
+check("P06: a ?route=random:<seed> link opens on that random road, its seed shown, with a note on its length and climb",
+  linked.route === "random" && linked.seed === "4242" && /km a lap, up to \d+ m above the start/.test(linked.note), JSON.stringify(linked));
+await page.select("select.route", "city");
+await page.waitForFunction(() => location.search.includes("route=city"), { timeout: 5000 }).catch(() => {});
+const addr = await page.evaluate(() => location.search);
+check("P06: picking a route rewrites the address, so it is the link to share (and keeps the others)",
+  /route=city/.test(addr) && /e2e/.test(addr) && !/random/.test(addr), addr);
+await page.select('select[aria-label="Engine"]', "hatch15");
+await tapEl(".seg button:nth-child(1)");                 // Auto
+await page.waitForSelector("button.start");
+await tapEl("button.start");
+await page.waitForFunction(() => globalThis.__enjoy.view() && document.querySelector(".road svg path.line"), { timeout: 60_000 }).catch(() => {});
+await sleep(800);
+const road0 = await page.evaluate(() => ({ key: globalThis.__enjoy.routeKey(), s: globalThis.__enjoy.view().route_s,
+  breakers: document.querySelectorAll(".road line.breaker").length, text: document.querySelector(".road-kv")?.textContent ?? "",
+  label: document.querySelector(".road svg")?.getAttribute("aria-label") ?? "" }));
+check("P06: the road ahead: the city's four breakers in the next 1.5 km, the grade, the surface, the next breaker",
+  road0.key === "city" && road0.breakers === 4 && /grade 0\.0 %/.test(road0.text) && /asphalt/.test(road0.text)
+  && /breaker in \d+ m/.test(road0.text) && road0.label === "Road ahead: " + road0.text, JSON.stringify(road0));
+await touch("touchStart", [await at(".throttle .pedal", 0.95)]);
+await page.waitForFunction(() => globalThis.__enjoy.view()?.breaker_hits >= 1, { timeout: 45_000, polling: 50 }).catch(() => {});
+const hit = await page.evaluate(() => ({ v: globalThis.__enjoy.view(), toast: document.querySelector(".toast")?.textContent ?? "",
+  vibes: globalThis.__enjoy.vibes() }));
+await touch("touchEnd", []);
+const bump = hit.vibes.find(p => Array.isArray(p) && p.length === 3 && p[1] === 70);
+check("P06: the first breaker taken flat out jolts: counted, the phone bumps twice, the hint says take them at 15",
+  hit.v.breaker_hits === 1 && hit.v.jolt > 0 && !!bump && /Speed breaker at \d+ km\/h: take them at 15/.test(hit.toast)
+  && hit.v.route_s > 250, `hits ${hit.v.breaker_hits}, jolt ${hit.v.jolt.toFixed(2)} at ${hit.v.route_s.toFixed(0)} m, `
+  + `${hit.v.kmh.toFixed(0)} km/h; buzz ${JSON.stringify(bump)}; toast "${hit.toast.trim()}"; `
+  + `throttle ${hit.v.throttle.toFixed(2)}`);
+await page.screenshot({ path: path.join(here, "out", "enjoy-road.png") });
+// B-02 with the road on screen: at 846 x 300 the strip sits between the dials and the panel below, overlapping neither
+await page.setViewport({ width: 846, height: 300, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true, isLandscape: true });
+await sleep(400);
+const roadBox = await page.evaluate(() => {
+  const r = sel => { const b = document.querySelector(sel)?.getBoundingClientRect(); return b ? { top: b.top, bottom: b.bottom, h: b.height } : null; };
+  return { gauges: r(".gauges"), road: r(".road"), strip: r(".strip"), svg: r(".road svg") };
+});
+await page.screenshot({ path: path.join(here, "out", "enjoy-road-300.png") });
+await page.setViewport({ width: 915, height: 412, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true, isLandscape: true });
+const rb = roadBox;
+check("P06: 846 x 300: the road strip between the dials and the panel, overlapping neither, still drawn",
+  !!rb.gauges && !!rb.road && !!rb.strip && rb.road.top >= rb.gauges.bottom - 0.5 && rb.strip.top >= rb.road.bottom - 0.5
+  && rb.svg.h >= 27, JSON.stringify(rb));
+if (await page.$("button.stop")) await tapEl("button.stop");
+await page.waitForSelector("select.route");
+await page.select("select.route", "");                    // the open road again for anything after
+
 // ---- portrait ----
 await page.setViewport({ width: 412, height: 915, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true, isLandscape: false });
 await sleep(300);

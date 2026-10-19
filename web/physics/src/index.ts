@@ -9,6 +9,7 @@ export { Adr011Grid, SOURCE_KEYS, type Adr011GridData, type SourceKey, type Sour
 export { vehicleFor, finishVehicle, VEHICLE_KEYS, type Transmission, type Vehicle } from "./live/vehicle.js";
 export { Driveline, Gearbox, LaunchClutch, ManualClutch, TorqueConverter } from "./live/driveline.js";
 export { LiveEngine, handleKey, pedalReturn, type LiveState } from "./live/engine.js";
+export { Route, ROUTES, randomRoute, routeFrom, SURFACES, type Segment } from "./live/route.js";
 export { BLOCK, FS } from "./audio/dsp.js";
 export { running_skirt_clearance, SLAP_CLR_REF } from "./slap.js";
 export { LiveSynth, MICS, type Mic, type Part, type SoundSpec } from "./audio/synth.js";
