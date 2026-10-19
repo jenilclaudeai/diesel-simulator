@@ -779,6 +779,139 @@ class Gearbox:
             self.request(-1, coast=throttle < 0.05)
 
 
+# ==========================================================================
+# P06 (ADR-021): routes -- a road the live loop drives
+# ==========================================================================
+# Rolling resistance by surface, times the vehicle's own (asphalt). Concrete is
+# a little smoother; gravel and dirt roughly double and treble a car's.
+SURFACES = {"asphalt": 1.0, "concrete": 0.9, "gravel": 2.0, "dirt": 2.6}
+BREAKER_SAFE_KMH = 15.0      # taken at or under this, a speed breaker costs nothing
+BREAKER_FULL_KMH = 50.0      # at or over this, the full jolt
+BREAKER_LOSS = 0.06          # the full jolt's share of the speed, shed over BREAKER_PULSE_S
+BREAKER_PULSE_S = 0.15
+
+
+def mulberry32(seed):
+    """Uniform floats in [0, 1) from mulberry32: the same bits in Python and
+    TypeScript (livesound.noise_table uses the same generator)."""
+    s = seed & 0xFFFFFFFF
+
+    def nxt():
+        nonlocal s
+        s = (s + 0x6D2B79F5) & 0xFFFFFFFF
+        t = s
+        t = ((t ^ (t >> 15)) * (t | 1)) & 0xFFFFFFFF
+        t ^= (t + (((t ^ (t >> 7)) * (t | 61)) & 0xFFFFFFFF)) & 0xFFFFFFFF
+        return ((t ^ (t >> 14)) & 0xFFFFFFFF) / 4294967296.0
+    return nxt
+
+
+def _q(x, step):
+    """x to the nearest multiple of step, halves up (Python's round and
+    JavaScript's Math.round disagree on halves; floor(x + 0.5) does not)."""
+    return math.floor(x / step + 0.5) * step
+
+
+class Route:
+    """
+    A road: segments (start m, length m, grade, surface, wind m/s, headwind
+    positive) and speed breakers (positions, m). It repeats once driven to its
+    end. The altitude follows the grade from the start (relative, m); the live
+    loop turns it into air through the weather table (LiveEngine.set_route).
+    """
+
+    def __init__(self, name, segments, breakers, seed=None):
+        self.name, self.seed = name, seed
+        self.segments, start, alt = [], 0.0, 0.0
+        self.alts = []
+        for length, grade, surface, wind in segments:
+            if surface not in SURFACES:
+                raise ValueError(f"unknown surface {surface!r}")
+            self.segments.append((start, float(length), float(grade), surface, float(wind)))
+            self.alts.append(alt)
+            start += float(length)
+            alt += float(length) * float(grade)
+        self.length = start
+        self.climb = alt                         # the altitude at the end, from the start
+        self.breakers = sorted(float(b) for b in breakers)
+
+    def at(self, s):
+        """The segment index at distance s (the route repeats)."""
+        x = s % self.length
+        lo, hi = 0, len(self.segments) - 1
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            if self.segments[mid][0] <= x:
+                lo = mid
+            else:
+                hi = mid - 1
+        return lo
+
+    def altitude(self, s):
+        """Metres above the start at distance s; each lap adds the route's climb."""
+        laps = math.floor(s / self.length)
+        x = s - laps * self.length
+        i = self.at(x)
+        return laps * self.climb + self.alts[i] + (x - self.segments[i][0]) * self.segments[i][2]
+
+    def breakers_between(self, s0, s1):
+        """How many breakers lie in (s0, s1], counted over laps."""
+        if s1 <= s0:
+            return 0
+        n, L = 0, self.length
+        for b in self.breakers:
+            n += math.floor((s1 - b) / L) - math.floor((s0 - b) / L)
+        return n
+
+
+def random_route(seed, length_m=12000.0):
+    """A seeded route: 200-800 m segments; the grade wanders (+-8 %) and the
+    altitude stays within 0-2500 m of the start; mostly asphalt; winds up to
+    +-8 m/s; a speed breaker on a quarter of the paved segments."""
+    r = mulberry32(seed)
+    segs, breakers, s, g, alt = [], [], 0.0, 0.0, 0.0
+    while s < length_m:
+        length = _q(200.0 + 600.0 * r(), 10.0)
+        g = min(0.08, max(-0.08, 0.5 * g + (r() - 0.5) * 0.12))
+        g = _q(g, 0.005)
+        if not 0.0 <= alt + length * g <= 2500.0:
+            g = -g
+        u = r()
+        surface = "asphalt" if u < 0.70 else "concrete" if u < 0.82 else "gravel" if u < 0.94 else "dirt"
+        wind = _q((r() - 0.5) * 16.0, 0.5)
+        if surface in ("asphalt", "concrete") and r() < 0.25:
+            breakers.append(s + _q(length * r(), 1.0))
+        segs.append((length, g, surface, wind))
+        s += length
+        alt += length * g
+    return Route(f"random {seed}", segs, breakers, seed=seed)
+
+
+# named routes: (length m, grade, surface, wind m/s) per segment, and breaker positions
+ROUTES = {
+    "pass": Route("Mountain pass", [
+        (800, 0.0, "asphalt", 0.0), (1500, 0.06, "asphalt", 2.0), (1200, 0.08, "asphalt", 4.0),
+        (600, 0.03, "concrete", 6.0), (900, 0.07, "asphalt", 6.0), (500, 0.0, "asphalt", 8.0),
+        (1400, -0.06, "asphalt", -4.0), (1500, -0.07, "asphalt", -2.0), (900, -0.02, "asphalt", 0.0)],
+        breakers=[]),
+    "city": Route("City streets", [
+        (400, 0.0, "asphalt", 0.0), (300, 0.02, "concrete", 0.0), (500, 0.0, "asphalt", 0.0),
+        (300, -0.02, "asphalt", 0.0), (600, 0.01, "concrete", 0.0), (400, 0.0, "asphalt", 0.0)],
+        breakers=[250, 650, 1050, 1450, 1900, 2300]),
+    "desert": Route("Desert highway", [
+        (3000, 0.0, "asphalt", 6.0), (800, 0.01, "asphalt", 8.0), (1200, 0.0, "gravel", 8.0),
+        (2000, -0.01, "asphalt", -6.0), (1500, 0.0, "dirt", -4.0), (2500, 0.0, "asphalt", 0.0)],
+        breakers=[]),
+}
+
+
+def route_from(key):
+    """A named route ('pass', 'city', 'desert') or 'random:<seed>'."""
+    if key.startswith("random:"):
+        return random_route(int(key.split(":", 1)[1]))
+    return ROUTES[key]
+
+
 def s_inertia(dl, gb):
     """Extra clutch capacity that clears the latched slip on schedule."""
     J = dl.spec_J
@@ -816,6 +949,12 @@ class Driveline:
         self.J_in = 0.055 * veh.mass / 1750.0 + 0.02
         self.spec_J = spec.geom.flywheel_inertia + self.J_in
         self.grade = 0.0
+        # P06: the road under the car -- rolling resistance x the surface's,
+        # wind (m/s, headwind positive), a speed breaker's force pulse (N, s left)
+        self.crr_x = 1.0
+        self.wind = 0.0
+        self.pulse_f = 0.0
+        self.pulse_t = 0.0
         self.brake = 0.0
         self.lockup = False
         self.lock_allowed = True
@@ -854,11 +993,16 @@ class Driveline:
     def resistance(self):
         v = self.veh
         th = math.atan(self.grade)
-        f_roll = v.Crr * v.mass * 9.81 * math.cos(th) * \
+        f_roll = v.Crr * self.crr_x * v.mass * 9.81 * math.cos(th) * \
             (1.0 if self.v > 0.05 else 0.0)
         f_grade = v.mass * 9.81 * math.sin(th)
-        f_aero = 0.5 * 1.20 * v.CdA * self.v ** 2
+        # P06: the air the car moves through (a tailwind can push); without
+        # wind the old expression, so every drive without a route is unchanged
+        vr = self.v + self.wind
+        f_aero = 0.5 * 1.20 * v.CdA * (self.v ** 2 if self.wind == 0.0 else vr * abs(vr))
         f_brake = self.brake * 0.55 * v.mass * 9.81
+        if self.pulse_t > 0.0:                   # P06: a speed breaker's jolt
+            f_roll += self.pulse_f
         return f_roll + f_grade + f_aero, f_brake
 
     # ------------------------------------------------------------------
@@ -1308,6 +1452,14 @@ class LiveEngine:
         self.wax_frac = 1.0            # the share of full-load fuel the filter passes
         self.fuel_waxed = False        # too little to keep the engine running
         self.starve_t = 0.0            # s a part-waxed engine hasn't run (its message waits 3 s)
+        # ---- P06 (ADR-021): the road ------------------------------------
+        # None: no route, every drive as before (Drive's grade keys still work)
+        self.route = None
+        self.route_s = 0.0             # m driven along the route
+        self.route_air0 = None         # (p, T, ISA altitude of p) where the route starts
+        self.route_alt = 0.0           # m above the route's start
+        self.breaker_hits = 0          # speed breakers crossed above BREAKER_SAFE_KMH
+        self.jolt = 0.0                # the last one's jolt, 0-1
         self.perf = grid.blend_perf(self.rpm, 0.0)
         self.lock = threading.Lock()
         if self.veh.trans == "manual":
@@ -1717,10 +1869,65 @@ class LiveEngine:
             self._frame += 1
         for _ in range(n_sub):
             self._sub(dt / n_sub)
+        self._road(dt)
         self._totals(dt)
         self._thermal(dt)
         self._knock()
         self._cold_flow(dt)
+
+    # ISA troposphere: p = 101325 (1 - ISA_K h) ^ ISA_N, T falls 6.5 K/km
+    ISA_K, ISA_N, LAPSE = 2.25577e-5, 5.25588, 0.0065
+
+    def set_route(self, route):
+        """P06: drive a Route from its start, from the air the engine has now
+        (the place's): the route's altitude moves the air from there, through
+        the weather table (which clamps to its range)."""
+        self.route, self.route_s, self.route_alt = route, 0.0, 0.0
+        self.breaker_hits, self.jolt = 0, 0.0
+        # the route moves this engine's air: its own spec and thermal, not the
+        # grid's (shared by every engine made from it; a climb leaked thinner
+        # air into the next drive until this -- the P06 test's mutants found it)
+        import copy
+        self.spec = copy.copy(self.spec)
+        self.spec.thermal = copy.copy(self.spec.thermal)
+        t = self.spec.thermal
+        h0 = (1.0 - (t.ambient_p / 101325.0) ** (1.0 / self.ISA_N)) / self.ISA_K
+        self.route_air0 = (t.ambient_p, t.ambient_T, h0)
+        self._road(0.0)
+
+    def _road(self, dt):
+        """P06: move along the route; the segment under the car sets the grade,
+        the surface and the wind; the altitude sets the air; a speed breaker
+        crossed above BREAKER_SAFE_KMH sheds speed as a short force pulse."""
+        dl = self.dl
+        if dl.pulse_t > 0.0:
+            dl.pulse_t = max(0.0, dl.pulse_t - dt)
+        if self.route is None:
+            return
+        r = self.route
+        s0, s1 = self.route_s, self.route_s + dl.v * dt
+        self.route_s = s1
+        start, _, grade, surface, wind = r.segments[r.at(s1)]
+        dl.grade, dl.crr_x, dl.wind = grade, SURFACES[surface], wind
+        n = r.breakers_between(s0, s1)
+        if n:
+            kmh = dl.v * 3.6
+            j = min(1.0, max(0.0, (kmh - BREAKER_SAFE_KMH) / (BREAKER_FULL_KMH - BREAKER_SAFE_KMH)))
+            if j > 0.0:
+                dl.pulse_f = self.veh.mass * BREAKER_LOSS * j * dl.v / BREAKER_PULSE_S
+                dl.pulse_t = BREAKER_PULSE_S
+                self.breaker_hits += n
+                self.jolt = j
+                self.hint = f"speed breaker at {int(kmh)} km/h -- take them at {int(BREAKER_SAFE_KMH)}"
+                self.hint_t = 3.0
+        alt = r.altitude(s1)
+        if alt != self.route_alt:
+            self.route_alt = alt
+            p0, T0, h0 = self.route_air0
+            f = lambda h: (1.0 - self.ISA_K * h) ** self.ISA_N
+            t = self.spec.thermal
+            t.ambient_p = p0 * f(h0 + alt) / f(h0)
+            t.ambient_T = T0 - self.LAPSE * alt
 
     def _cold_flow(self, dt):
         """Phase 7 step 6: the fuel's temperature, and the share of full-load
