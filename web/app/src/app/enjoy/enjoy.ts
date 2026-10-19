@@ -17,6 +17,10 @@ import { touchHint } from './hints';
 import { derateLit } from './lamps';
 import { Pedal } from './pedal';
 import { ROSTER } from './roster';
+import {
+  distance, distanceUnit, economy, economyUnit, pressureBar, pressureUnit, speed, speedUnit,
+  temperature, temperatureUnit, Units, volume, volumeUnit,
+} from '../units/units';
 
 const fmt0 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 const PHASE = ['', 'shifting: torque phase', 'shifting: inertia phase'];
@@ -61,10 +65,21 @@ export class EnjoyPage implements OnDestroy {
   protected readonly rpmFrac = computed(() => Math.min(1, (this.v()?.rpm ?? 0) / 5000));
   protected readonly phase = computed(() => PHASE[this.v()?.phase ?? 0] ?? '');
   protected readonly info = this.s.info;
-  protected readonly C = (K: number) => K - 273.15;
+  /** Phase 8: the driver's units (Metric, US or UK), kept per browser and shared with /drive. */
+  protected readonly u = inject(Units).system;
+  protected readonly U = computed(() => {
+    const s = this.u();
+    return { speed: speedUnit(s), dist: distanceUnit(s), vol: volumeUnit(s), econ: economyUnit(s),
+             temp: temperatureUnit(s), pres: pressureUnit(s) };
+  });
+  protected readonly sp = (kmh: number) => speed(kmh, this.u());
+  protected readonly T = (K: number) => temperature(K - 273.15, this.u());
+  protected readonly dist = (km: number) => distance(km, this.u());
+  protected readonly vol = (L: number) => volume(L, this.u());
+  protected readonly pres = (bar: number) => pressureBar(bar, this.u());
   /** Dial scales from the engine and vehicle (the worker's info message). */
   protected readonly tach = computed(() => tachScale(this.info()?.max_rpm ?? 5000));
-  protected readonly speed = computed(() => speedScale(this.info()?.vmax_kmh ?? 200));
+  protected readonly speed = computed(() => speedScale(this.info()?.vmax_kmh ?? 200, this.u()));
   /** The lamp cluster: every lamp always shown, lit when on, as a real dash is. */
   protected readonly lamps = computed(() => {
     const s = this.v(), i = this.info();
@@ -89,11 +104,16 @@ export class EnjoyPage implements OnDestroy {
   /** The coolant bar's marks in words: on screen they differ by shape and colour, which a screen reader can't see. */
   protected readonly coolantMarks = computed(() => {
     const i = this.info();
-    return i ? `Warning from ${fmt0.format(this.C(i.T_warn))} °C, derate from ${fmt0.format(this.C(i.T_derate))} °C` : null;
+    const t = this.U().temp;
+    return i ? `Warning from ${fmt0.format(this.T(i.T_warn))} ${t}, derate from ${fmt0.format(this.T(i.T_derate))} ${t}` : null;
   });
-  protected readonly avg = computed(() => { const s = this.v(); return s ? avgL100(s.trip_L, s.trip_km) : null; });
-  protected readonly now = computed(() => { const s = this.v(); return s ? nowL100(s.inst_kmpl, s.kmh) : null; });
-  protected readonly range = computed(() => { const s = this.v(); return s ? rangeKm(s.tank_L, s.trip_L, s.trip_km) : null; });
+  // economy() and distance() are in the driver's units; economy() stays null where there is no figure
+  protected readonly avg = computed(() => { const s = this.v(); return s ? economy(avgL100(s.trip_L, s.trip_km), this.u()) : null; });
+  protected readonly now = computed(() => { const s = this.v(); return s ? economy(nowL100(s.inst_kmpl, s.kmh), this.u()) : null; });
+  protected readonly range = computed(() => {
+    const s = this.v(), r = s ? rangeKm(s.tank_L, s.trip_L, s.trip_km) : null;
+    return r === null ? null : distance(r, this.u());
+  });
   protected fmt1(x: number | null): string { return x === null ? '—' : x.toFixed(1); }
   private pedals: Pedals = { throttle: null, brake: 0, clutch: 0 };
   private readonly held = new Set<string>();

@@ -2,6 +2,7 @@ import { computed, Injectable, signal } from '@angular/core';
 import type { Transmission } from '@dieselsim/physics';
 import ENVS from './environments.json';
 import FUELS_JSON from './fuels.json';
+import { airPressure, airPressureUnit, temperature, temperatureUnit, type UnitSystem } from '../units/units';
 
 /**
  * The place Drive and Enjoy drive in (Phase 7 step 4, ADR-016 item 1). The five places come from a
@@ -32,12 +33,12 @@ export function cfppOf(placeKey: string, fuelKey: string): number | undefined {
 }
 
 /** What the page says about the fuel at this place: '' when it's the place's own and safe. */
-export function fuelLine(placeKey: string, fuelKey: string): string {
+export function fuelLine(placeKey: string, fuelKey: string, units: UnitSystem = 'metric'): string {
   const pl = PLACES.find(x => x.key === placeKey);
   const f = FUELS.find(x => x.key === fuelKey);
   if (!pl || !f) return '';
-  const c = f.cfpp_C, t = pl.T_C;
-  const at = `${f.name} (CFPP ${fmt0.format(c)} °C) at ${fmt0.format(t)} °C`;
+  const c = f.cfpp_C, t = pl.T_C, u = temperatureUnit(units);
+  const at = `${f.name} (CFPP ${fmt0.format(temperature(c, units))} ${u}) at ${fmt0.format(temperature(t, units))} ${u}`;
   if (t >= c + 2) return `${at}: it flows.`;
   if (t <= c - 6) return `${at}: it gels, and the engine won't start. Real drivers carry the local grade.`;
   return `${at}: the filter is waxing, so the engine is short of fuel until it warms (if it starts).`;
@@ -49,6 +50,7 @@ export const DRIVE_ENV_KEY = 'dieselsim-drive-environment';
 
 const fmt1 = new Intl.NumberFormat('en', { maximumFractionDigits: 1, minimumFractionDigits: 1 });
 const fmt0 = new Intl.NumberFormat('en', { maximumFractionDigits: 0 });
+const fmt2 = new Intl.NumberFormat('en', { maximumFractionDigits: 2, minimumFractionDigits: 2 });
 
 /** The air the drive worker takes for a place, or undefined at the standard air. */
 export function airOf(key: string): { p: number; T: number } | undefined {
@@ -61,10 +63,13 @@ export function airOf(key: string): { p: number; T: number } | undefined {
  * (DashInfo.weather, DashInfo.weather_check_pct). '' at the standard air.
  */
 export function weatherLine(key: string, state: 'standard' | 'table' | 'no table' | undefined,
-                            checkPct: number | null | undefined): string {
+                            checkPct: number | null | undefined, units: UnitSystem = 'metric'): string {
   const pl = PLACES.find(x => x.key === key);
   if (!pl || pl.key === STANDARD) return '';
-  const air = `${pl.place}: ${fmt1.format(pl.p_amb / 1000)} kPa, ${fmt1.format(pl.T_C)} °C.`;
+  // Phase 8: the air as the driver's country reports it (kPa, inHg, hPa; deg C or deg F)
+  const p = airPressure(pl.p_amb, units), pf = units === 'us' ? fmt2 : units === 'uk' ? fmt0 : fmt1;
+  const tU = temperatureUnit(units);
+  const air = `${pl.place}: ${pf.format(p)} ${airPressureUnit(units)}, ${fmt1.format(temperature(pl.T_C, units))} ${tU}.`;
   if (state === 'table') {
     const pct = checkPct != null ? ` (measured within ${fmt1.format(checkPct)}% of full-load torque at Leh)` : '';
     return `${air} Torque, fuel, boost and the exhaust follow this air through the engine's weather table${pct}. ` +
@@ -74,7 +79,7 @@ export function weatherLine(key: string, state: 'standard' | 'table' | 'no table
   }
   if (state === 'no table') {
     return `${air} This engine's grid has no weather table, so its torque, fuel and boost stay standard air's; ` +
-      `only the cooling and the cold start see ${fmt0.format(pl.T_C)} °C.`;
+      `only the cooling and the cold start see ${fmt0.format(temperature(pl.T_C, units))} ${tU}.`;
   }
   return air;
 }

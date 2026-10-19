@@ -428,6 +428,32 @@ const csel = await page.$eval("select", s => s.selectedOptions[0]?.textContent ?
 check("an imported custom engine drives, in the vehicle its file names", /Test engine/.test(csel) && /SUV/.test(cinfo?.vehicle ?? ""),
   `engine "${csel.trim()}", vehicle "${cinfo?.vehicle}"`);
 
+// ---- Phase 8: the driver's units (the owner's choice: Metric / US / UK, driver pages only) ----
+// US, then back to metric: this browser carries localStorage from page to page (CLAUDE.md)
+if (await page.$("button.stop")) await tapEl("button.stop");
+await page.waitForSelector("select.drive-units", { timeout: 10_000 }).catch(() => {});
+const unitOpts = await page.$$eval("select.drive-units option", os => os.map(o => o.value)).catch(() => []);
+if (unitOpts.length) await page.select("select.drive-units", "us");
+await tapEl("button.start");
+await page.waitForFunction(() => globalThis.__enjoy.view() && document.querySelector(".speedo svg"), { timeout: 60_000 }).catch(() => {});
+await sleep(1500);
+const us = await page.evaluate(() => {
+  // innerText keeps the line breaks between the trip computer's lines (textContent ran "gal" into
+  // "Average"); an SVG element has no innerText, so the dial's unit falls back to textContent
+  const t = sel => { const e = document.querySelector(sel); return (e?.innerText ?? e?.textContent ?? "").replace(/\s+/g, " ").trim(); };
+  return { speedUnit: t(".speedo svg text.unit"), digits: t(".digits"), trip: t(".trip"), strip: t(".thermal"),
+    stored: localStorage.getItem("dieselsim-units") };
+});
+check("Phase 8 units: US reads mph, miles, US gallons, mpg (US), °F and psi, and is kept per browser",
+  unitOpts.join() === "metric,us,uk" && us.speedUnit === "mph" && /\bmph\b/.test(us.digits) && /\bmi\b/.test(us.trip)
+  && /\bgal\b/.test(us.trip) && /mpg \(US\)/.test(us.trip) && /°F/.test(us.strip) && /\bpsi\b/.test(us.strip)
+  && !/km|L\/100|°C|\bbar\b/.test(us.trip + us.strip + us.digits) && us.stored === "us", JSON.stringify({ unitOpts, ...us }));
+if (await page.$("button.stop")) await tapEl("button.stop");
+if (unitOpts.length) {
+  await page.waitForSelector("select.drive-units", { timeout: 10_000 });
+  await page.select("select.drive-units", "metric");
+}
+
 // ---- portrait ----
 await page.setViewport({ width: 412, height: 915, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true, isLandscape: false });
 await sleep(300);
