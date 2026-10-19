@@ -217,7 +217,9 @@ PR #119; all seven steps built)".)*
 - **Accuracy table:** regenerated (`--pull`, `--write-accuracy`): rows
   unchanged, only `ACCURACY_SOLVER`. Fixtures all current; audit 0 dead / 2
   frozen (known) / 0 tiny. `main` (#132) merged in. **Suite: 93 passed, 0
-  failed, 3 known, 4 skipped.** PR next.
+  failed, 3 known, 4 skipped.** **PR #133 opened; CI 10 of 10 at `0768973`**
+  (every job read; Pyodide 55.1 min of its 60, close to the limit). Waits for
+  the owner.
 - **#131 merged 2026-10-16 16:19 UTC** (`7a15f11`). **#132:** `main` was merged
   into it on 2026-10-18 (`d7254e4`, by another session; my identical merge
   was dropped), **CI 10 of 10 at `d7254e4`**; it waits for the owner. Then
