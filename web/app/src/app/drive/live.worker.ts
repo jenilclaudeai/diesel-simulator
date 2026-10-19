@@ -60,6 +60,7 @@ function info(): DashInfo {
     idle_rpm: s.idle_rpm, rated_rpm: s.rated_rpm, max_rpm: s.max_rpm,
     vmax_kmh: topSpeedKmh(),
     vehicle: v.name, tank_L: v.fuel_tank_L, gears: v.gears.length,
+    cylinders: s.geom.n_cyl ?? 4,
     T_warn: c.T_warn, T_derate: c.T_derate, T_shutdown: c.T_shutdown, fan_on_T: c.fan_on_T,
     weather: e.weatherState(),
     weather_check_pct: (e.g as Adr011Grid).weather?.d.check?.worst_pct_of_full_load ?? null,
