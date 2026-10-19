@@ -1,5 +1,52 @@
 # Status
 
+**Session 10, P06 tier 1 built (2026-10-20), `feat/p06-roads`** (3 commits, pushed;
+branched from #135's `feat/p01-vibration`, so **its PR waits until #135 merges**, which
+avoids a stack). ADR-021, `reviews/PROPOSAL-P06.md`.
+- **The owner's choices (2026-10-19):** Enjoy only; tier 1 first, then goals; everything
+  in PLAN; named routes and random ones shared by their seed.
+- **Built:**
+  - routes in the live loop (`live.py`: `Route`, `random_route` by mulberry32,
+    `ROUTES` pass/city/desert, `route_from`; `set_route`, `_road`), mirrored in
+    `web/physics/src/live/route.ts`;
+  - what the engine feels: grade, surface (rolling resistance x 1.0/0.9/2.0/2.6), wind on
+    air speed, a breaker's 0.15 s pulse (6 % of speed x j, j from 15 to 50 km/h) and its
+    hint, and ISA altitude through the weather table;
+  - Enjoy: a route picker (Open road, three named routes, or Random with a seed and New
+    road). The picker sets `?route=` in the address, which is the link to share; a note
+    gives length, highest point and breakers;
+  - Enjoy: a road-ahead strip (1.5 km of profile, surfaces, breakers, and a line with
+    grade, surface, wind, height and the next breaker);
+  - Enjoy: a two-bump buzz for a breaker taken too fast, and the breaker hint in the
+    driver's units.
+  - **No grid goes stale**: `live.py` is outside the grid hash.
+- **Measured on the way:**
+  1. A climb leaked into the grid's shared spec. Mutants found it; `set_route` now
+     copies `spec` and `spec.thermal`.
+  2. CPython's `**` and V8's differ in the last bit at 1,958 of 20,000 altitudes. The
+     ISA power is now a series on both sides.
+  3. The DCT on random:1234 is knife-edge: a 1e-9 nudge in Python alone moves an event
+     12 frames. That fixture drive uses the converter box.
+  4. A `page.goto` late in the Enjoy e2e lost touch emulation. The link check opens its
+     own tab.
+  5. A strip test passed on all-`NaN` values (its mutant survived). It is fixed.
+  All five are in the proposal; traps 1, 2, 3 and 4 are in CLAUDE.md.
+- **Verified (local):**
+  - Python suite **95 passed, 0 failed, 3 known, 4 skipped** (scipy-gated sound
+    tests; was 93 plus the two P06 tests);
+  - TS physics 5 + 61 + 12 + 11, 0 failed (route drives per step 2.9e-14, every event
+    on the same step);
+  - TS mutants 7 of 7 caught; app units 153/153, also with `physics-version.ts` moved
+    aside; app mutants 10 of 10 non-equivalent caught;
+  - e2e:enjoy 36/36; e2e:drive 10/10; check:labels 6 of 10; audit 0 DEAD, 2 FROZEN
+    (the known h_ring clamp); fixtures current.
+  - **CI not yet run** (no PR).
+- **Next:**
+  - open the P06 PR once #135 merges, read every CI job;
+  - then tier 2 (goals on a route), with its own short proposal;
+  - owner: merge #135; feel P01 and the breaker buzz on the S9+; the Phase 5 phone
+    re-check.
+
 **Session 9, P01 vibration built (2026-10-19), `feat/p01-vibration`** (on top of
 `feat/phase8-units`, #134; its PR waits until #134 merges, to avoid a stack):
 - **The owner's choices:** events (start, stall, gear change, the limiter) plus a shake
