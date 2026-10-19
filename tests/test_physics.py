@@ -1902,6 +1902,87 @@ def test_p09_knock_at_altitude_and_a_cold_start():
           f"{', '.join(f'{w:.0f}' for w in walls)} K (all 273); the weather table carries the knock: {wx}")
 
 
+def test_p13_early_stop():
+    """P13 option B (ADR-020, rule R5): a converged solve stops once work, boost,
+    the intake's burned fraction, the turbo speed and the net IMEP have each
+    varied by under 2e-4 over 10 cycles, for 10 cycles running (R2, the first
+    four at 1e-3, stopped on slow creeps); CONVERGED_CYCLES is a ceiling.
+    The traces and the knock are recorded only in the last cycle, so the cycle
+    that may end the stop is run as the last one. Parts (crdi15, warm, the
+    shipped grid's row fuel):
+    - 1343 rpm / 20% stops early, the rule having held at each of its last 10
+      cycles, and not 10 cycles sooner;
+    - its answer equals the same solve without the early stop, capped at that
+      cycle: torque, p_max, the knock, the whole pressure trace (bit for bit);
+    - 1886 rpm / 60% (it never settles, FINDING-013) runs all 200;
+    - the accelerated path (not converged) runs what it is asked;
+    - a last cycle that does not end the stop leaves no knock behind (forced:
+      it never happens on crdi15)."""
+    import numpy as np
+    from dieselsim.config import PRESETS
+    from dieselsim import cycle as C
+    keys, tol = ("work", "boost", "yb_int", "turbo_rpm", "imep_net"), 2e-4
+
+    def solve(rpm, load, fl, early=True, cap=None):
+        eng = DieselEngine(spec=PRESETS["crdi15"]())
+        eng.converged_mode = True
+        eng.EARLY_STOP = early
+        if cap:
+            eng.CONVERGED_CYCLES = cap
+        eng.seed_fuel_limit(rpm, fl)
+        return eng.operating_point(rpm, load=load)
+    op = solve(1342.857142857143, 0.2, 47.11)
+    k = op.cycle.n_cycles_used
+    means = op.cycle.cycle_means
+    held = all(C._tail_converged(means[:k - i], tol=tol, keys=keys) for i in range(10))
+    first = not all(C._tail_converged(means[:k - 10 - i], tol=tol, keys=keys) for i in range(10))
+    ref = solve(1342.857142857143, 0.2, 47.11, early=False, cap=k)
+    same = (op.torque == ref.torque and op.p_max == ref.p_max
+            and op.cycle.dpdtheta_knock == ref.cycle.dpdtheta_knock and op.cycle.dpdtheta_knock > 0
+            and np.array_equal(op.cycle.traces.p, ref.cycle.traces.p) and float(op.cycle.traces.p.max()) > 0)
+    never = solve(1885.7142857142858, 0.6, 43.55)
+    # hot thin air at high load, where R2 stopped on a slow creep (truck127 0.50%
+    # of peak torque from 400 cycles): here the IMEP is the last key to settle
+    # (without it the stop came 4 cycles sooner)
+    hot = DieselEngine(spec=PRESETS["crdi15"]())
+    hot.spec.thermal.ambient_p, hot.spec.thermal.ambient_T = 72000.0, 318.15
+    hot.converged_mode = True
+    hot.seed_fuel_limit(4057.1428571428573, 37.91)
+    hop = hot.operating_point(4057.1428571428573, load=0.8)
+    hk, hm = hop.cycle.n_cycles_used, hop.cycle.cycle_means
+    hot_held = hk < 200 and all(C._tail_converged(hm[:hk - i], tol=tol, keys=keys) for i in range(10))
+    fast = DieselEngine(spec=PRESETS["crdi15"]()).operating_point(1342.857142857143, load=0.2, n_cycles=9)
+    # a last cycle that doesn't end the stop must leave no knock behind. On crdi15
+    # it never matters (0 of 80 cells), so force one: the test scripted to pass at
+    # cycles 1-9 (cycle 9, still in the transient, runs as the last), fail at 10,
+    # pass from 30 (the stop at 39). Without the reset the knock read 13.81, not 13.69.
+    real = C._tail_converged
+
+    def scripted(m, n=C.TAIL_CYCLES, tol=C.TAIL_TOL, keys=("work", "boost")):
+        return (len(m) <= 9 or len(m) >= 30) if keys == C.EARLY_STOP_KEYS else real(m, n, tol, keys)
+    C._tail_converged = scripted
+    try:
+        wasted = solve(800.0, 0.6, 33.3)
+    finally:
+        C._tail_converged = real
+    wasted_ref = solve(800.0, 0.6, 33.3, early=False, cap=wasted.cycle.n_cycles_used)
+    parts = {
+        "settles and stops early": 10 < k < 200 and bool(op.cycle.converged),
+        "the rule held at each of the last 10 cycles, not before": held and first,
+        "equals the capped solve bit for bit (torque, p_max, knock, trace)": same,
+        "a solve that never settles runs all 200": never.cycle.n_cycles_used == 200 and not never.cycle.converged,
+        "hot thin air: every key, the IMEP too, held for the last 10 cycles": hot_held,
+        "the accelerated path runs what it is asked": fast.cycle.n_cycles_used == 9,
+        "a last cycle that didn't end the stop leaves no knock behind": wasted.cycle.n_cycles_used == 39
+        and wasted.cycle.dpdtheta_knock == wasted_ref.cycle.dpdtheta_knock,
+    }
+    bad = [p for p, ok in parts.items() if not ok]
+    check("P13: a converged solve stops once settled (rule R5)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ")
+          + f"1343 rpm / 20% stopped at cycle {k} of 200; 1886 / 60% ran {never.cycle.n_cycles_used}; "
+          f"4057 / 80% at 72 kPa, 45 C stopped at {hk}")
+
+
 def test_cold_start_friction_sees_the_running_walls():
     """FINDING-030: a cold start (engine.cold_start_walls, the grid's cold
     cells) puts every chamber wall at 273 K for the combustion and the heat
@@ -3230,7 +3311,7 @@ def main():
                test_port_flow_does_not_overshoot,
                test_knock_from_the_burn_law,
                test_p09_knock_at_altitude_and_a_cold_start,
-               test_cold_start_friction_sees_the_running_walls,
+               test_p13_early_stop, test_cold_start_friction_sees_the_running_walls,
                test_p09_chamber_walls_warm_and_the_synth_hears_the_knock,
                test_p10_deeper_sound,
                test_intake_and_boost_levels_carry_physics,

@@ -95,18 +95,24 @@ def _int_cp_burned(T):
 
 
 T_REF = 298.15
+# P13 option C: the reference integrals, once. They were recomputed in every
+# u_mix / h_mix call (about half of the solver's 31 M _int_cp_* calls per
+# converged cell). The same floats, so every result is bit-identical: a
+# converged cell's live_cell JSON byte for byte, x1.083 (PROPOSAL-P13.md).
+_INT_CP_AIR_REF = _int_cp_air(T_REF)
+_INT_CP_BURNED_REF = _int_cp_burned(T_REF)
 
 
 def u_mix(T, yb):
     """Sensible internal energy referenced to 298.15 K (J/kg)."""
-    h = ((1.0 - yb) * (_int_cp_air(T) - _int_cp_air(T_REF))
-         + yb * (_int_cp_burned(T) - _int_cp_burned(T_REF)))
+    h = ((1.0 - yb) * (_int_cp_air(T) - _INT_CP_AIR_REF)
+         + yb * (_int_cp_burned(T) - _INT_CP_BURNED_REF))
     return h - gas_R(yb) * (T - T_REF)
 
 
 def h_mix(T, yb):
-    return ((1.0 - yb) * (_int_cp_air(T) - _int_cp_air(T_REF))
-            + yb * (_int_cp_burned(T) - _int_cp_burned(T_REF)))
+    return ((1.0 - yb) * (_int_cp_air(T) - _INT_CP_AIR_REF)
+            + yb * (_int_cp_burned(T) - _INT_CP_BURNED_REF))
 
 
 def T_from_u(u_target, yb, T_guess=800.0, tol=1e-6, itmax=30):

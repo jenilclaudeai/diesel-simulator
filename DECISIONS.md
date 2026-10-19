@@ -1382,3 +1382,75 @@ FINDING-029.
 **Revisit if** the owner hears the knock as too much or too little on the
 phone at a real place; or if a cranking-speed start is wanted (a new live
 state, and cells at cranking rpm).
+
+## ADR-020 — P13: a drivable grid built faster (N, then B + C)
+
+**Status:** Accepted (2026-10-16). The owner: "Both, go ahead with N first"
+(N, then B + C). The stopping rule wasn't named in the answer: R2, the
+recommended one, was used and said so. **Revised the same day to R5**: R2's
+rebuild showed it stopping on slow creeps (below). Details:
+`reviews/PROPOSAL-P13.md`.
+
+### Decision
+
+1. **N: a native build in one command** (`buildgrid/build.sh`,
+   `build.bat`, `tools/build_my_grid.py`; PR #132). The same file as the
+   browser, imported with Import grid. The front end is unchanged.
+2. **B: a converged solve stops once settled**, rule **R5**: work, boost,
+   the intake's burned fraction, the turbo speed and the net IMEP each vary
+   by under `EARLY_STOP_TOL` = 2e-4 over `TAIL_CYCLES`, for `EARLY_STOP_HOLD`
+   = 10 cycles running (`cycle.EARLY_STOP_KEYS`). *(Was R2: the first four
+   keys at `TAIL_TOL` = 1e-3.)* `CONVERGED_CYCLES` (200) becomes a
+   ceiling. The cycle that may end the stop is run as the last one, because
+   the traces and the knock are recorded only then; if the test fails after
+   it, the next last cycle records them afresh (and the knock's running
+   peak restarts). `DieselEngine.EARLY_STOP` turns it off.
+3. **C: the reference integrals once** (`thermo._INT_CP_*_REF`),
+   bit-identical.
+
+### Why
+
+- A drivable grid was ~73% weather table, and all of it the pure-Python
+  crank loop: crdi15 58 min natively, ~1.4–1.8 h in a browser.
+- ~~R2 against the 200-cycle answer, over 108 solves (three engines; warm,
+  cold, 58 kPa / −20 °C): ×1.91; torque within 0.019% of full load; EGR
+  within 0.04 points; T_exh 0.1 K; NOx 0.52%.~~ True on that sample, which had
+  cold thin air only. **R2's rebuild** (6 h 38 min against 9 h 39 min) left
+  the cells within 0.025% of peak torque, but **the weather tables up to 0.49%
+  of peak** (truck127) and 0.38% (v8hd). Against 400 cycles the worst pieces
+  (hot, thin air, high load) were 0.50% / 0.41% off, where 200 cycles is
+  0.01% / 0.03%: R2 stopped on a slow creep, under 0.1% within any 10 cycles
+  and ~0.8% over 100.
+- **R5** was screened on 180 solves of 400 cycles (the 108 configurations,
+  plus hot thin air at 58 and 72 kPa on the four heavy engines) and checked on
+  108 held out (crdi15, crdi22, hatch15, hd_i6; 72 kPa / 45 °C, desert,
+  plateau). In neither is any stop worse than the 200-cycle answer by more
+  than its own error and 0.05% of peak; the largest excess is 0.017% (the
+  case R2 missed by 0.50%). ×1.65 / ×1.71 fewer cycles. 200 cycles itself sits
+  up to 1.34% from 400 in a limit cycle (FINDING-013), which every rule
+  inherits.
+- R1 (work and boost) stopped before the EGR loop had settled (NOx 9.9%).
+  Stopping at the first pass flipped settled flags: one cell was 10.8% of
+  full-load torque off.
+
+### Consequences
+
+- Every converged solve changes slightly (the Dyno's accuracy table, the
+  converged golden points, every grid): one rebuild after P09's grids (R2's
+  rebuild was discarded).
+- Wall time gains less than cycles: R2's rebuild was ×1.46 for ×1.86 fewer
+  cycles, because each grid's pool waits for its never-settling pieces.
+- **R5's rebuild** (2026-10-16/19): cells 5,452 s against P09's 9,653 (×1.77),
+  weather 20,410 s against 26,102 (×1.28), about **×1.34 overall** (7.2 h against
+  9.7 h). Against the P09 grids, every cell of all ten: torque within 0.003% of
+  peak, EGR 0.007 pts, T_exh 0.04 K, NOx 0.30%; 0 settled-flag flips; unsettled
+  counts, slap pulses and Leh checks identical; weather tables within 0.042%
+  of peak torque (R2: 0.49%). The Dyno's accuracy table: rows unchanged, only
+  its hash.
+- `n_cycles_used` varies on the converged path; the cells that never settle
+  still run all 200.
+- Slap events snap to the grid's sample where the side force changes sign:
+  in 1 of 90 stopped cells one moved by a 1° step (discreteness, not
+  convergence).
+- Measured not worth it: chaining weather solves (×1.26, path dependence),
+  rewriting the loop (ADR-001).

@@ -1,5 +1,13 @@
 # Status
 
+**2026-10-19 — where things stand:** #131 (P09) and **#132 (P13 N) are merged**
+(#132 at 2026-10-18 22:57 UTC), so the native one-command build is on `main`.
+`main` is merged into `feat/p13-early-stop` (B + C, rule R5; the solver hash
+is unchanged by the merge, `42073eceb02c`). **Running:** R5's weather pass
+(restarted 2026-10-18 22:45 UTC after the first one hung). Then the acceptance
+check, the accuracy table, the suite, and B + C's PR. Details: the
+"P13 B + C built" block below.
+
 **2026-10-18: `main` merged into #132 (`feat/p13-native-grid`).** #131 (P09)
 merged 2026-10-16 16:19 UTC as `7a15f11`. The one conflict was this file's
 top (both sides kept; #132's stale first line of the old **Updated:**
@@ -137,6 +145,85 @@ duplicate test removed in #121)"; before that "2026-10-11, session 9 (B-05
 and B-06 fixed, PR open; #118 and #119 still waiting to merge)"; before
 that "2026-10-10, session 8 (Phase 7 step 7 built,
 PR #119; all seven steps built)".)*
+
+**Session 9, P13 B + C built (2026-10-16), `feat/p13-early-stop`** (from
+`feat/p09-knock`; pushed, **no PR until #131 merges**, to avoid a stack; ADR-020):
+- **B, rule R2** (`cycle.EARLY_STOP_KEYS`, `EARLY_STOP_HOLD` 10;
+  `DieselEngine.EARLY_STOP`): the cycle that may end the stop runs as the
+  last (traces and knock are recorded only then), the knock's peak restarts
+  with each last cycle. **12 solves equal the old solver capped at R2's stop,
+  bit for bit** (every perf, meta, waveform and trace value; 4 of them run
+  all 200), so the proposal's numbers hold.
+- **C:** `thermo._INT_CP_*_REF`; 24 replies byte-identical.
+- **Test** `test_p13_early_stop` 6 of 6; mutants 6 of 6 caught, baseline
+  passing. One equivalent mutant (a redundant guard) was removed from the
+  code. The knock reset matters on 0 of 80 crdi15 cells, so the test forces
+  a wasted last cycle (13.81 vs 13.69 without the reset).
+- **Before the rebuild:** Python suite 89 passed, **3 failed** (exactly the
+  three that read the stale grids and accuracy table), 3 known, 4 skipped;
+  the 4 scipy tests in a venv pass; `web/solver` full 20 + 15 + 30, 0
+  failed; audit 0 dead / 2 frozen (known) / 0 tiny.
+- ~~**Running:** the rebuild …~~ **The rebuild ran 6 h 38 min** (P09's 9 h 39
+  min: x1.46; cells x1.86, weather x1.40: each grid's never-settling weather
+  pieces still run 200 cycles and the pool waits for them). Unsettled counts
+  and Leh checks identical to P09's in all ten grids.
+- **Acceptance, against the P09 grids:** cells fine (torque <= 0.025% of the
+  engine's peak, EGR <= 0.05 pts, T_exh <= 0.22 K, 0 settled flips, slap
+  pulses identical). *My criterion "0.05% of full load at that rpm" was
+  ill-defined: at 4600 rpm the governed full-load torque is near zero and it
+  read 0.07-0.29%.* **The weather tables are not fine:** torque corrections
+  differ by up to 0.49% of peak (truck127) and 0.38% (v8hd). Against 400
+  cycles, the worst pieces (hot, thin air, high load) are 0.50% / 0.41% off
+  with the early stop and 0.01% / 0.03% with 200 cycles. **R2 stops on a slow
+  creep** (under 0.1% within any 10 cycles, ~0.8% over 100). My 108-solve
+  sample had cold thin air only, so "within 0.019%" was too general (*my
+  miss*; to be corrected in PROPOSAL-P13 and ADR-020).
+- **The R2 grids are not committed** (kept in scratch). ~~**Running:** 180
+  solves of 400 cycles … to screen drift-aware rules~~
+- **R5 replaces R2** (ADR-020 revised, PROPOSAL-P13 corrected visibly): the
+  four keys plus the net IMEP, tolerance 2e-4 (was 1e-3), hold 10. Screened
+  offline on 180 solves of 400 cycles, then checked on 108 held out: no stop
+  worse than the 200-cycle answer beyond its own error and 0.05% of peak
+  (worst excess 0.017%, the case R2 missed by 0.50%); x1.65 / x1.71 fewer
+  cycles. Rejected on the same data: tighter R2 tolerances (3e-4 still 3
+  bad), hold 30 (3 bad), R2 + a drift test (x1.51-1.61).
+- **Proved:** 12 solves (8 stopping at 44-196, 4 at 200; hot thin air
+  included) equal the old solver capped at R5's stop, bit for bit. **Test**
+  7 of 7 parts (a hot-air case where the IMEP is the last key to settle);
+  **mutants 8 of 8 caught**, baseline passing (incl. the R2 tolerance and the
+  IMEP dropped).
+- **Suite on R5:** 90 passed, 2 failed (the stale grids' checks), 3 known, 4
+  skipped. The R5 rebuild's cells finished (2026-10-16 15:58 UTC; unsettled
+  counts as P09's), but **the weather pass hung**: ~24 min in, all six workers
+  were respawned within a minute (killed, most likely by the system), and
+  `Pool.map` then waits forever for their tasks; found 55 h later at 0% CPU.
+  Killed; **the weather pass restarted 2026-10-18 22:45 UTC**
+  (`out/p13_weather.log`) with a watchdog (`HANG?` when the workers' CPU falls
+  under 20%). A tool fix to consider: a pool that fails loudly when a worker
+  dies (`concurrent.futures`' `BrokenProcessPool`) instead of hanging. **Done:**
+  `build_live_grids.SafePool` (`ProcessPoolExecutor`, spawn), used by
+  `build_live_grids`, `build_my_grid` and `rebuild_cold_cells`. A worker killed
+  mid-task: SafePool raises `BrokenProcessPool` after 0.6 s; `multiprocessing.Pool`
+  was still waiting after 30 s. The same 2x2 engine (cells + weather) with
+  both pools: 0 of 26 keys differ. The tool tests pass (7 of 7, 6 of 6).
+- **The R5 weather pass finished** 2026-10-19 04:26 UTC (5 h 40 min, no hang).
+  Totals: cells 5,452 s (P09 9,653, x1.77), weather 20,410 s (P09 26,102,
+  x1.28; crdi15's slowed by my identity test): **about x1.34 overall**.
+- **Acceptance, all ten grids against P09's: pass.** Cells: torque <= 0.003% of
+  peak, EGR <= 0.007 pts, T_exh <= 0.04 K, NOx <= 0.30%, 0 settled flips,
+  unsettled counts, slap pulses and Leh checks identical. Weather tables:
+  torque corrections <= 0.042% of peak (R2: 0.49%; truck127 0.017%, v8hd
+  0.011%). Even the original, ill-defined criterion passes 10 of 10.
+- **Accuracy table:** regenerated (`--pull`, `--write-accuracy`): rows
+  unchanged, only `ACCURACY_SOLVER`. Fixtures all current; audit 0 dead / 2
+  frozen (known) / 0 tiny. `main` (#132) merged in. **Suite: 93 passed, 0
+  failed, 3 known, 4 skipped.** **PR #133 opened; CI 10 of 10 at `0768973`**
+  (every job read; Pyodide 55.1 min of its 60, close to the limit). Waits for
+  the owner.
+- **#131 merged 2026-10-16 16:19 UTC** (`7a15f11`). **#132:** `main` was merged
+  into it on 2026-10-18 (`d7254e4`, by another session; my identical merge
+  was dropped), **CI 10 of 10 at `d7254e4`**; it waits for the owner. Then
+  this branch's PR, onto `main`.
 
 **Session 9, P13 feasibility (2026-10-15), docs only, on #131's branch:**
 - The owner asked for P13's feasibility (the sheet: "Make the building

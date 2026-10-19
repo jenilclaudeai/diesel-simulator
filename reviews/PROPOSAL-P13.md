@@ -68,6 +68,16 @@ flip, by construction):
 | **R2: + intake EGR + turbo speed, H = 10** | **×1.91** | 90/108 | **0** | **0.019%** | **0.04 pts** | **0.1 K** | **0.52%** |
 | R3: as R2, H = 20 | ×1.77 | 89/108 | 0 | 0.009% | 0.00 pts | 0.0 K | 0.16% |
 
+**Correction (2026-10-16), R2's rebuild:** the sample above had cold thin air
+only. In hot thin air at high load R2 stops on a slow creep: the rebuilt
+weather tables differed by up to 0.49% of peak torque, and the worst pieces
+were 0.50% (truck127) and 0.41% (v8hd) from 400 cycles where 200 cycles is
+0.01% / 0.03%. "Torque within 0.019%" was too general (*my miss*). **R5 replaces
+it** (ADR-020): the same keys plus the net IMEP, at a tolerance of 2e-4. On
+180 screening solves and 108 held out (400 cycles each), no R5 stop is worse
+than the 200-cycle answer by more than 0.017% of peak torque beyond that
+answer's own error; ×1.65-1.71 fewer cycles. The text below is as written.
+
 For scale, 200 cycles already sits up to 0.36% from 400 (FINDING-013). R2's
 other fields: boost 0.06%, AFR 0.07%, turbo 0.08%, pressure trace 0.05%,
 exhaust-flow source 0.83%. One exception: the **slap** waveform differs by
