@@ -362,6 +362,12 @@ export class Driveline {
   J_in: number;
   spec_J: number;
   grade = 0.0;
+  // P06: the road under the car (live.Driveline): surface x rolling resistance,
+  // wind (m/s, headwind positive), a speed breaker's force pulse (N, s left)
+  crr_x = 1.0;
+  wind = 0.0;
+  pulse_f = 0.0;
+  pulse_t = 0.0;
   brake = 0.0;
   lockup = false;
   lock_allowed = true;
@@ -410,10 +416,13 @@ export class Driveline {
   resistance(): [number, number] {
     const v = this.veh;
     const th = Math.atan(this.grade);
-    const f_roll = v.Crr * v.mass * 9.81 * Math.cos(th) * (this.v > 0.05 ? 1.0 : 0.0);
+    let f_roll = v.Crr * this.crr_x * v.mass * 9.81 * Math.cos(th) * (this.v > 0.05 ? 1.0 : 0.0);
     const f_grade = v.mass * 9.81 * Math.sin(th);
-    const f_aero = 0.5 * 1.2 * v.CdA * this.v ** 2;
+    // P06: the air the car moves through; without wind the old expression (live.py)
+    const vr = this.v + this.wind;
+    const f_aero = 0.5 * 1.2 * v.CdA * (this.wind === 0.0 ? this.v ** 2 : vr * Math.abs(vr));
     const f_brake = this.brake * 0.55 * v.mass * 9.81;
+    if (this.pulse_t > 0.0) f_roll += this.pulse_f;   // P06: a speed breaker's jolt
     return [f_roll + f_grade + f_aero, f_brake];
   }
 

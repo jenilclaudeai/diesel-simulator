@@ -424,6 +424,17 @@ def live_inputs():
                         "cfpp": 258.75, "script": live_script(), "init": {}},
                        {"name": "adr011_limp", "trans": "dct", "grid": "adr011", "air": [101325.0, 265.15],
                         "cfpp": 265.15, "script": live_script(), "init": {}},
+                       # P06 (ADR-021): the city's speed breakers on the plain grid; a random route's
+                       # hills, surfaces and wind on the weather grid, its altitude moving the air
+                       {"name": "route_city", "trans": "tc", "route": "city", "script": live_script(),
+                        "init": {"T_coolant": 361.0, "T_oil": 373.0}},
+                       # tc, not dct: on this route the dct's clutch-sync threshold is knife-edge.
+                       # Measured: T_oil 373 vs 373 + 1e-9 moved an event 3096 -> 3108 in Python
+                       # itself, the same frame the TS port's last-bit friction noise moved it to;
+                       # with tc the 60 events stay put (and the per-step check covers the dct's step)
+                       {"name": "adr011_route", "trans": "tc", "grid": "adr011", "air": [101325.0, 298.0],
+                        "route": "random:1234", "script": live_script(),
+                        "init": {"T_coolant": 361.0, "T_oil": 373.0, "T_chamber": 361.0}},
                        {"name": "tc_kickdown", "trans": "tc", "script": live_script_kickdown(),
                         "init": {"dl.v": 20.0, "dl.gb.gear": 5, "dl.gb.gear_from": 5,
                                  "dl.w_in": 20.0 / 0.315 * 0.67 * 4.30, "rpm": 20.0 / 0.315 * 0.67 * 4.30 * 60.0 / (2.0 * math.pi)}}],
@@ -445,6 +456,9 @@ def live_run(inp, drv):
     live = LiveEngine(grid, inp["preset"], trans=drv["trans"])
     if drv.get("cfpp") is not None:       # Phase 7 step 6: the fuel picked
         live.fuel_cfpp = drv["cfpp"]
+    if drv.get("route"):                  # P06: the road (before the init, as the TS test does)
+        from dieselsim.live import route_from
+        live.set_route(route_from(drv["route"]))
     for k, v in drv["init"].items():      # dotted paths: "dl.gb.gear"
         *path, last = k.split(".")
         obj = live

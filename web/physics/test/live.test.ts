@@ -17,6 +17,7 @@ import { PerfGrid } from "../src/live/grid.js";
 import { Adr011Grid, type Adr011GridData, type WeatherTableData } from "../src/live/adr011.js";
 import type { EngineView } from "../src/friction.js";
 import { finishVehicle, vehicleFor, type Transmission } from "../src/live/vehicle.js";
+import { routeFrom } from "../src/live/route.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fx = JSON.parse(readFileSync(path.resolve(here, "..", "..", "fixtures", "live.json"), "utf8")) as {
@@ -25,7 +26,7 @@ const fx = JSON.parse(readFileSync(path.resolve(here, "..", "..", "fixtures", "l
     preset: string; spec: LiveSpec; sample_every: number; engine_view: EngineView;
     grid: { rpms: number[]; loads: number[]; perf: Perf[][] };
     drives: { name: string; trans: Transmission; script: Script; init: Record<string, number>; grid?: string;
-      air?: [number, number]; cfpp?: number }[];
+      air?: [number, number]; cfpp?: number; route?: string }[];
     weather_table: WeatherTableData;
   };
   outputs: Record<string, {
@@ -60,11 +61,12 @@ const weatherGrid = (air: [number, number]) => {
   spec.thermal.ambient_T = air[1];
   return new Adr011Grid(spec, { ...adrData, weather: fx.inputs.weather_table });
 };
-const fresh = (tr: Transmission, g?: string, air?: [number, number], cfpp?: number) => {
+const fresh = (tr: Transmission, g?: string, air?: [number, number], cfpp?: number, route?: string) => {
   const e = g === "adr011"
     ? new LiveEngine(air ? weatherGrid(air) : adrGrid, fx.inputs.preset, tr, fx.inputs.engine_view)
     : new LiveEngine(grid, fx.inputs.preset, tr);
   if (cfpp !== undefined) e.fuel_cfpp = cfpp;    // Phase 7 step 6: the fuel picked
+  if (route !== undefined) e.setRoute(routeFrom(route));   // P06: the road, before the init (live_run)
   return e;
 };
 
@@ -96,7 +98,7 @@ function diffState(got: LiveState, want: LiveState): { worst: number; where: str
 
 /** The fixture generator's live_run(), in TypeScript. */
 function drive(d: (typeof fx.inputs.drives)[number]) {
-  const live = fresh(d.trans, d.grid, d.air, d.cfpp), sc = d.script;
+  const live = fresh(d.trans, d.grid, d.air, d.cfpp, d.route), sc = d.script;
   for (const [k, v] of Object.entries(d.init)) {  // dotted paths: "dl.gb.gear"
     const path = k.split("."), last = path.pop()!;
     let obj = live as unknown as Record<string, unknown>;
@@ -138,7 +140,7 @@ for (const drv of fx.inputs.drives) {
   // ---- per-step ----
   let worst = 0, where = "";
   for (const s of out.snapshots) {
-    const e = fresh(drv.trans, drv.grid, drv.air, drv.cfpp);
+    const e = fresh(drv.trans, drv.grid, drv.air, drv.cfpp, drv.route);
     e.setState(s.before);
     e.step(drv.script.dt);
     const d = diffState(e.getState(), s.after);

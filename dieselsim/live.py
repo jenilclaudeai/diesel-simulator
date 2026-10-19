@@ -806,6 +806,28 @@ def mulberry32(seed):
     return nxt
 
 
+def _ln(x):
+    """ln x for x in about (0.25, 4), as 2 atanh((x - 1) / (x + 1)) by series:
+    +, -, *, / only, so Python and TypeScript agree to the bit. libm's pow
+    did not: (1 - k h) ** 5.25588 differed in the last bit at 10% of altitudes
+    between CPython and V8, and a hilly route moves the air every frame."""
+    z = (x - 1.0) / (x + 1.0)
+    z2, term, s = z * z, z, 0.0
+    for k in range(60):
+        s += term / (2 * k + 1)
+        term *= z2
+    return 2.0 * s
+
+
+def _exp(y):
+    """e ** y for |y| up to about 3, by its Taylor series (as _ln: no libm)."""
+    term, s = 1.0, 1.0
+    for n in range(1, 40):
+        term *= y / n
+        s += term
+    return s
+
+
 def _q(x, step):
     """x to the nearest multiple of step, halves up (Python's round and
     JavaScript's Math.round disagree on halves; floor(x + 0.5) does not)."""
@@ -1891,9 +1913,13 @@ class LiveEngine:
         self.spec = copy.copy(self.spec)
         self.spec.thermal = copy.copy(self.spec.thermal)
         t = self.spec.thermal
-        h0 = (1.0 - (t.ambient_p / 101325.0) ** (1.0 / self.ISA_N)) / self.ISA_K
+        h0 = (1.0 - _exp(_ln(t.ambient_p / 101325.0) / self.ISA_N)) / self.ISA_K
         self.route_air0 = (t.ambient_p, t.ambient_T, h0)
         self._road(0.0)
+
+    def _isa(self, h):
+        """(1 - ISA_K h) ** ISA_N, without libm (_ln, _exp)."""
+        return _exp(self.ISA_N * _ln(1.0 - self.ISA_K * h))
 
     def _road(self, dt):
         """P06: move along the route; the segment under the car sets the grade,
@@ -1924,9 +1950,8 @@ class LiveEngine:
         if alt != self.route_alt:
             self.route_alt = alt
             p0, T0, h0 = self.route_air0
-            f = lambda h: (1.0 - self.ISA_K * h) ** self.ISA_N
             t = self.spec.thermal
-            t.ambient_p = p0 * f(h0 + alt) / f(h0)
+            t.ambient_p = p0 * self._isa(h0 + alt) / self._isa(h0)
             t.ambient_T = T0 - self.LAPSE * alt
 
     def _cold_flow(self, dt):
