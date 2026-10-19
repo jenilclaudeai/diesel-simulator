@@ -206,8 +206,18 @@ PR #119; all seven steps built)".)*
   mid-task: SafePool raises `BrokenProcessPool` after 0.6 s; `multiprocessing.Pool`
   was still waiting after 30 s. The same 2x2 engine (cells + weather) with
   both pools: 0 of 26 keys differ. The tool tests pass (7 of 7, 6 of 6).
-- **Then:** the acceptance check (cells, weather, the worst weather pieces
-  against 400 cycles), the accuracy table, the suite; merge `main` (#131 is in).
+- **The R5 weather pass finished** 2026-10-19 04:26 UTC (5 h 40 min, no hang).
+  Totals: cells 5,452 s (P09 9,653, x1.77), weather 20,410 s (P09 26,102,
+  x1.28; crdi15's slowed by my identity test): **about x1.34 overall**.
+- **Acceptance, all ten grids against P09's: pass.** Cells: torque <= 0.003% of
+  peak, EGR <= 0.007 pts, T_exh <= 0.04 K, NOx <= 0.30%, 0 settled flips,
+  unsettled counts, slap pulses and Leh checks identical. Weather tables:
+  torque corrections <= 0.042% of peak (R2: 0.49%; truck127 0.017%, v8hd
+  0.011%). Even the original, ill-defined criterion passes 10 of 10.
+- **Accuracy table:** regenerated (`--pull`, `--write-accuracy`): rows
+  unchanged, only `ACCURACY_SOLVER`. Fixtures all current; audit 0 dead / 2
+  frozen (known) / 0 tiny. `main` (#132) merged in. **Suite: 93 passed, 0
+  failed, 3 known, 4 skipped.** PR next.
 - **#131 merged 2026-10-16 16:19 UTC** (`7a15f11`). **#132:** `main` was merged
   into it on 2026-10-18 (`d7254e4`, by another session; my identical merge
   was dropped), **CI 10 of 10 at `d7254e4`**; it waits for the owner. Then

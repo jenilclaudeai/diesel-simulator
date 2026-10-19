@@ -1440,6 +1440,13 @@ rebuild showed it stopping on slow creeps (below). Details:
   rebuild was discarded).
 - Wall time gains less than cycles: R2's rebuild was ×1.46 for ×1.86 fewer
   cycles, because each grid's pool waits for its never-settling pieces.
+- **R5's rebuild** (2026-10-16/19): cells 5,452 s against P09's 9,653 (×1.77),
+  weather 20,410 s against 26,102 (×1.28), about **×1.34 overall** (7.2 h against
+  9.7 h). Against the P09 grids, every cell of all ten: torque within 0.003% of
+  peak, EGR 0.007 pts, T_exh 0.04 K, NOx 0.30%; 0 settled-flag flips; unsettled
+  counts, slap pulses and Leh checks identical; weather tables within 0.042%
+  of peak torque (R2: 0.49%). The Dyno's accuracy table: rows unchanged, only
+  its hash.
 - `n_cycles_used` varies on the converged path; the cells that never settle
   still run all 200.
 - Slap events snap to the grid's sample where the side force changes sign:
