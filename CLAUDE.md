@@ -236,7 +236,9 @@ grep its readers and solve with it changed.
   stays metric in the loop (the fixtures compare it); the page converts it with
   `units.hintInUnits` (Drive) or `touchHint` (Enjoy). Phase 8 missed the waxed-fuel
   one. Since Phase 8 the driver's
-  units are kept too (`dieselsim-units`: metric, us, uk; `units/units.ts`).
+  units are kept too (`dieselsim-units`: metric, us, uk; `units/units.ts`), and
+  P01's vibration switch (`dieselsim-vibration`: 'off' when off). Under `?e2e`
+  `/enjoy` records what it asked the phone to vibrate (`__enjoy.vibes()`).
   Opening a project also
   sets `/spec`'s edits. One e2e browser carries all of it from page to
   page; clear `localStorage` before a check that assumes the defaults.

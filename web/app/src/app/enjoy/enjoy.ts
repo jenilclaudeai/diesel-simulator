@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, HostListener, inject, OnDestroy, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, HostListener, inject, OnDestroy, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import type { Transmission } from '@dieselsim/physics';
 import { releaseFocus } from '../drive/drive';
@@ -17,6 +17,7 @@ import { touchHint } from './hints';
 import { derateLit } from './lamps';
 import { Pedal } from './pedal';
 import { ROSTER } from './roster';
+import { VibrationSetting, Vibrator } from './vibration';
 import {
   distance, distanceUnit, economy, economyUnit, pressureBar, pressureUnit, speed, speedUnit,
   temperature, temperatureUnit, Units, volume, volumeUnit,
@@ -118,7 +119,22 @@ export class EnjoyPage implements OnDestroy {
   private pedals: Pedals = { throttle: null, brake: 0, clutch: 0 };
   private readonly held = new Set<string>();
 
+  /** P01: the phone vibrates (events, and a shake while idling or lugging); on unless switched off */
+  protected readonly vibration = inject(VibrationSetting);
+  private readonly vibes: (number[] | number)[] = [];
+  private readonly vib = new Vibrator(p => this.buzz(p));
+  private buzz(p: number[] | number): boolean {
+    if (this.e2e) this.vibes.push(p);
+    return typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function' ? navigator.vibrate(p) : false;
+  }
+  private readonly e2e = typeof location !== 'undefined' && location.search.includes('e2e');
+
   constructor() {
+    effect(() => {
+      const s = this.v(), i = this.info();
+      if (!this.vibration.on() || this.status() !== 'driving' || !s || !i) { this.vib.stop(); return; }
+      this.vib.frame(s, { idle_rpm: i.idle_rpm, max_rpm: i.max_rpm, cylinders: i.cylinders }, performance.now());
+    });
     void engineLibrary().list().then(list => {
       this.mine.set(list);
       const want = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('engine') : null;
@@ -127,7 +143,7 @@ export class EnjoyPage implements OnDestroy {
     if (typeof location !== 'undefined' && location.search.includes('e2e')) {
       (globalThis as Record<string, unknown>)['__enjoy'] = {
         view: () => this.v(), level: () => this.s.levelDb(), soundError: () => this.soundError(),
-        info: () => this.s.info(),
+        info: () => this.s.info(), vibes: () => this.vibes.slice(),
       };
     }
   }
@@ -141,6 +157,7 @@ export class EnjoyPage implements OnDestroy {
   protected async start(): Promise<void> {
     releaseFocus();
     this.pedals = { throttle: null, brake: 0, clutch: 0 };
+    this.vib.started();
     if (!this.soundOn()) await this.s.soundStart();
     const g = this.imported();
     const p = this.preset();

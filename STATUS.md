@@ -30,6 +30,26 @@ at `4c2a301`; independent of #135 and of `feat/p06-roads`):
 - **When `feat/p06-roads` meets this:** `enjoy/hints.ts` conflicts. Keep both: the
   breaker rule and the `hintInUnits` fallback.
 
+**Session 9, P01 vibration built (2026-10-19), `feat/p01-vibration`** (on top of
+`feat/phase8-units`, #134; its PR waits until #134 merges, to avoid a stack):
+- **The owner's choices:** events (start, stall, gear change, the limiter) plus a shake
+  while idling or lugging; on by default, with a switch on Enjoy's start screen.
+- **Measured first:** the Vibration API (MDN, W3C) takes on/off durations only (no
+  strength), needs a tap first, a new call replaces the running pattern; iOS Safari
+  has none. A phone's motor can't follow 27 Hz (a 4-cylinder's idle firing), so the
+  shake pulses at the firing rate up to 12 Hz (the single at idle, 5 Hz) and is a
+  light buzz above (12 of every 50 ms; 25 when lugging).
+- **Built:** `enjoy/vibration.ts` (patterns, the controller, the switch kept per
+  browser), Enjoy's wiring (an effect on each frame), `DashInfo.cylinders` from the
+  grid's spec.
+- **Found by the e2e:** no start shudder: the page stopped the motor while the engine
+  loaded, and that disarmed the start. Fixed; a unit test now guards it (its mutant
+  caught).
+- **Verified:** app units **143 passed**; mutants **8 of 8** caught; e2e:enjoy **31
+  passed** (the switch on by default; the start's shudder, the idle shake and the
+  shift's jolt recorded); TS physics 5 + 51 + 12 + 11. **Not verifiable here: the feel
+  on a real phone** (the owner's S9+).
+
 **Session 9, Phase 8's units toggle built (2026-10-19), `feat/phase8-units`** (from `main`
 after #133):
 - **The owner asked "are we good with the initial plan?":** phases 0-7 done; Phase 8

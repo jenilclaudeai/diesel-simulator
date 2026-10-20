@@ -9,7 +9,8 @@ export interface LiveSpec {
   idle_rpm: number;
   rated_rpm: number;
   max_rpm: number;
-  geom: { displacement: number; flywheel_inertia: number };
+  // n_cyl: the dash's firing rate (P01 vibration); every grid file carries it, older test specs may not
+  geom: { displacement: number; flywheel_inertia: number; n_cyl?: number };
   thermal: {
     ambient_T: number; ambient_p: number; thermostat_open_T: number; thermostat_full_T: number;
     coolant_volume: number; metal_mass: number;

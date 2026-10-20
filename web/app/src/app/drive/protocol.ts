@@ -62,6 +62,7 @@ export interface DashInfo {
   idle_rpm: number; rated_rpm: number; max_rpm: number;
   vmax_kmh: number;          // the speedometer's scale: min(gearing, drag-limited top speed)
   vehicle: string; tank_L: number; gears: number;
+  cylinders: number;         // P01: the firing rate the phone's idle shake follows
   T_warn: number; T_derate: number; T_shutdown: number; fan_on_T: number;
   /** Phase 7 step 4: what the loop does with the air, and the table's measured worst at Leh */
   weather: 'standard' | 'table' | 'no table';
