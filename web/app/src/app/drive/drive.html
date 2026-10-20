@@ -71,7 +71,7 @@
       @case ('loading') { Loading the grid. }
       @case ('error') { <span class="err">{{ error() }}</span> }
       @case ('driving') {
-        @if (v()?.hint) { {{ v()!.hint }} } @else if (v()?.overheat) { <span class="err">{{ v()!.overheat }}</span> }
+        @if (v()?.hint) { {{ hintIn(v()!.hint) }} } @else if (v()?.overheat) { <span class="err">{{ v()!.overheat }}</span> }
         @else { Running. Keys below. }
       }
     }

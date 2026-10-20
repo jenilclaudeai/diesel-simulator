@@ -232,7 +232,10 @@ grep its readers and solve with it changed.
   in Manual.
 - Since Phase 7 step 7, Drive's gearbox is kept per browser
   (`DriveEnv.gearbox`, localStorage), like the place and the fuel, and
-  `/enjoy` starts in Manual when it is `manual`. Since Phase 8 the driver's
+  `/enjoy` starts in Manual when it is `manual`. A live-loop hint with a unit in it
+  stays metric in the loop (the fixtures compare it); the page converts it with
+  `units.hintInUnits` (Drive) or `touchHint` (Enjoy). Phase 8 missed the waxed-fuel
+  one. Since Phase 8 the driver's
   units are kept too (`dieselsim-units`: metric, us, uk; `units/units.ts`), and
   P01's vibration switch (`dieselsim-vibration`: 'off' when off). Under `?e2e`
   `/enjoy` records what it asked the phone to vibrate (`__enjoy.vibes()`).
