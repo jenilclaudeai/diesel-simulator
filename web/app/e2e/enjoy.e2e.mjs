@@ -524,6 +524,34 @@ check("P06: 846 x 300: the road strip between the dials and the panel, overlappi
   && rb.svg.h >= 27, JSON.stringify(rb));
 if (await page.$("button.stop")) await tapEl("button.stop");
 await page.waitForSelector("select.route");
+
+// ---- P06 tier 2: a time trial on the city, against the par (a ghost lap at a steady 70 %, its own worker) ----
+await page.select("select.goal", "time");
+await page.waitForFunction(() => location.search.includes("goal=time"), { timeout: 5000 }).catch(() => {});
+const goalAddr = await page.evaluate(() => location.search);
+await tapEl("button.start");
+await page.waitForFunction(() => globalThis.__enjoy.view() && globalThis.__enjoy.lap(), { timeout: 60_000 }).catch(() => {});
+await page.waitForFunction(() => { const p = globalThis.__enjoy.par(); return p && p !== "working"; }, { timeout: 120_000, polling: 250 }).catch(() => {});
+const parNow = await page.evaluate(() => ({ par: globalThis.__enjoy.par(), ms: globalThis.__enjoy.parMs(), text: globalThis.__enjoy.goalText() }));
+await touch("touchStart", [await at(".throttle .pedal", 0.95)]);
+await page.waitForFunction(() => ["finished", "failed"].includes(globalThis.__enjoy.lap()?.phase), { timeout: 240_000, polling: 100 }).catch(() => {});
+await touch("touchEnd", []);
+await page.waitForFunction(() => globalThis.__enjoy.verdict(), { timeout: 10_000 }).catch(() => {});
+const tt = await page.evaluate(() => ({ lap: globalThis.__enjoy.lap(), verdict: globalThis.__enjoy.verdict(),
+  text: globalThis.__enjoy.goalText(), shown: document.querySelector(".goal-kv")?.textContent ?? "" }));
+const p = parNow.par, l = tt.lap, vd = tt.verdict;
+check("P06 tier 2: Time trial on the city: the address carries the goal; the par comes back from its worker, a finished lap",
+  /goal=time/.test(goalAddr) && /route=city/.test(goalAddr) && !!p && typeof p === "object" && p.finished && p.t_s > 30 && p.fuel_L > 0
+  && /par fuel/.test(parNow.text),
+  `${goalAddr}; par ${p && typeof p === "object" ? `${p.t_s.toFixed(1)} s (+${5 * p.hits} s), ${p.fuel_L.toFixed(3)} L, in ${Math.round(parNow.ms)} ms` : JSON.stringify(p)}`);
+check("P06 tier 2: flat out to the line: the lap finishes, the breakers cost 5 s each, the par's fuel is the limit, the dash says so",
+  !!l && l.phase === "finished" && l.hits >= 1 && !!vd && vd.limit === p.fuel_L && vd.score === l.time_s
+  && vd.ok === (l.fuel_L <= p.fuel_L) && /Time trial lap: \d+:\d\d\.\d \(\+\d+ s, \d+ breakers?\) on [\d.]+ L -- /.test(tt.shown)
+  && tt.shown === tt.text,
+  `lap ${l ? `${l.time_s.toFixed(1)} s with ${l.hits} hits, ${l.fuel_L.toFixed(3)} L` : "none"}; verdict ${JSON.stringify(vd)}; "${tt.shown}"`);
+if (await page.$("button.stop")) await tapEl("button.stop");
+await page.waitForSelector("select.route");
+await page.select("select.goal", "free");
 await page.select("select.route", "");                    // the open road again for anything after
 
 // ---- portrait ----

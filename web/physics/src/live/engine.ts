@@ -761,4 +761,26 @@ export function pedalReturn(live: LiveEngine, dt: number): void {
   live.dl.clutch_pedal = Math.max(0.0, live.dl.clutch_pedal - dt / 1.4);
 }
 
+/** P06 tier 2 (live.PAR_THROTTLE, BREAKER_PENALTY_S): the par's constant throttle; seconds a breaker hit costs. */
+export const PAR_THROTTLE = 0.7;
+export const BREAKER_PENALTY_S = 5.0;
+
+export interface ParResult { t_s: number; time_s: number; fuel_L: number; hits: number; finished: boolean; stopped: boolean }
+
+/** One lap of `live`'s route at a constant throttle (live.par_run): the par a goal is set against. */
+export function parRun(live: LiveEngine, throttle = PAR_THROTTLE, dt = 1.0 / 60.0, capS = 3600.0): ParResult {
+  const r = live.route!;
+  const L0 = live.trip_L;
+  let n = 0;
+  while (live.route_s < r.length && n * dt < capS && !live.engine_stopped) {
+    live.throttle = throttle;
+    pedalReturn(live, dt);
+    live.step(dt);
+    n++;
+  }
+  const t = n * dt;
+  return { t_s: t, time_s: t + BREAKER_PENALTY_S * live.breaker_hits, fuel_L: live.trip_L - L0,
+           hits: live.breaker_hits, finished: live.route_s >= r.length, stopped: live.engine_stopped };
+}
+
 export { Gearbox };

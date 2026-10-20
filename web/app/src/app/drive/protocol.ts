@@ -1,5 +1,5 @@
 // Messages between the drive page and its 60 Hz worker.
-import type { Adr011GridData, EngineView, LiveSpec, Transmission } from '@dieselsim/physics';
+import type { Adr011GridData, EngineView, LiveSpec, ParResult, Transmission } from '@dieselsim/physics';
 
 /** A prebuilt grid file (tools/build_live_grids.py, public/grids/<preset>.json). */
 export interface GridFile extends Adr011GridData {
@@ -60,6 +60,12 @@ export interface LiveView {
   // rolling resistance x the surface's, speed breakers hit too fast, the last jolt (0-1)
   route_s: number; route_alt: number; wind: number; crr_x: number; breaker_hits: number; jolt: number;
 }
+
+/** P06 tier 2: the par worker's request -- the drive's grid, air, fuel and route (the box is always the automatic). */
+export interface ToParWorker { grid: GridFile; air?: { p: number; T: number }; cfpp?: number; route: string }
+export type FromParWorker =
+  | { type: 'par'; result: ParResult; ms: number }
+  | { type: 'error'; message: string };
 
 /** What the dashboard needs once per engine: its scales and limits. */
 export interface DashInfo {

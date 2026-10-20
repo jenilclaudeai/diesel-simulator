@@ -52,7 +52,17 @@
             [value]="seed() ?? ''" [disabled]="status() === 'loading'" (change)="setSeed($any($event.target).value)" /></label>
           <button type="button" class="reroll" [disabled]="status() === 'loading'" (click)="rollSeed()">New road</button>
         }
+        @if (routeKey()) {
+          <!-- P06 tier 2: a goal against the par (a ghost lap at a steady 70 %, worked out when you start) -->
+          <select class="goal" aria-label="Goal" [disabled]="status() === 'loading'" (change)="selectGoal($any($event.target).value)">
+            @for (g of GOALS; track g.key) { <option [value]="g.key" [selected]="g.key === goal()">{{ g.name }}</option> }
+          </select>
+        }
       </div>
+      @if (routeKey() && goal() !== 'free') {
+        <p class="goal-note">{{ goal() === 'time' ? 'Time trial: the fastest lap on no more fuel than the par.' : 'Economy run: the least fuel within the par\'s time.' }}
+          The par is a lap at a steady 70 % throttle in Auto, at this place's air; each speed breaker taken too fast adds 5 s. Steady-state fuel figures (FINDING-009).</p>
+      }
       @if (routeNote(); as n) { <p class="route-note">{{ n }}</p> }
       <!-- P01: the phone vibrates (Android Chrome; iOS has no Vibration API). Kept per browser. -->
       <label class="vibrate"><input type="checkbox" class="vibration" [checked]="vibration.on()"
@@ -99,6 +109,7 @@
             <line class="car" x1="1" x2="1" y1="0" y2="40" vector-effect="non-scaling-stroke" />
           </svg>
           <span class="road-kv">{{ roadText() }}</span>
+          @if (goalText()) { <span class="goal-kv" role="status" [class.ok]="verdict()?.ok === true" [class.bad]="verdict()?.ok === false">{{ goalText() }}</span> }
         </div>
       }
       <div class="strip">

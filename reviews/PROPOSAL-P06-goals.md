@@ -6,7 +6,9 @@
   personal bests kept per browser;
 - **overheating dropped as a goal:** a stop on overheat fails any run;
 - **+5 s per breaker** taken too fast.
-Being built on `feat/p06-roads`.
+~~Being built on `feat/p06-roads`.~~ **Built 2026-10-21** (ADR-022), with one change:
+every par is computed in the browser at the driver's own air, none shipped (ADR-022 says
+why).
 **From:** ADR-016's addendum: "goals on a route (reach a pass without overheating, an
 economy run, a time to beat)", v1, after tier 1 (built, ADR-021).
 **Lenses:** PM, PHY1, QA1, USR1, USR2

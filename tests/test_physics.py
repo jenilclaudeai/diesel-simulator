@@ -2063,6 +2063,49 @@ def test_p06_routes():
           + f"20 seeds: {mean_b:.2f} breakers a route on average")
 
 
+def test_p06_par_run():
+    """P06 tier 2 (PROPOSAL-P06-goals): live.par_run, the par a goal is set
+    against. On the toy grid (no files: runs under Pyodide too). Parts:
+    - the owner's numbers: a steady 70 % throttle, 5 s a breaker;
+    - a short route with two breakers: the lap finishes, the time is the
+      elapsed time plus 5 s for each breaker hit, the fuel is the lap's;
+    - a lap that can't be finished in the cap reports so (a par then sets no
+      limit, goals.ts judge);
+    - an engine that has stopped (overheat) reports stopped, without a lap.
+    The TS port (parRun) is held to it by the live fixture's pars."""
+    from dieselsim import live as L
+    name = "P06 tier 2: the par (a steady-throttle lap) and its 5 s breakers"
+    parts, notes = [], []
+    parts.append(("70 % and 5 s", L.PAR_THROTTLE == 0.7 and L.BREAKER_PENALTY_S == 5.0))
+
+    e = _toy_live("tc")
+    e.set_route(L.Route("t", [(400.0, 0.0, "asphalt", 0.0)], [150.0, 300.0]))
+    e.trip_L = 0.5                # a used trip meter: the par's fuel is the lap's, not the trip's
+    L0 = e.trip_L
+    r = L.par_run(e)
+    parts.append(("a short lap finishes", r["finished"] and not r["stopped"] and e.route_s >= 400.0))
+    parts.append(("time = elapsed + 5 s a breaker", r["hits"] == 2 and r["time_s"] == r["t_s"] + 10.0))
+    parts.append(("the lap's fuel, not the trip's", r["fuel_L"] == e.trip_L - 0.5 and 0.0 < r["fuel_L"] < 0.5))
+    notes.append(f"lap {r['t_s']:.2f} s + {5 * r['hits']} s, {r['fuel_L'] * 1000:.1f} mL")
+
+    e = _toy_live("tc")
+    e.set_route(L.Route("t", [(50000.0, 0.0, "asphalt", 0.0)], []))
+    r = L.par_run(e, cap_s=5.0)
+    parts.append(("a lap past the cap doesn't finish", not r["finished"] and abs(r["t_s"] - 5.0) < 1e-9
+                  and r["time_s"] == r["t_s"]))
+
+    e = _toy_live("tc")
+    e.set_route(L.Route("t", [(400.0, 0.0, "asphalt", 0.0)], []))
+    e.engine_stopped = True
+    r = L.par_run(e)
+    parts.append(("a stopped engine reports it", r["stopped"] and not r["finished"] and r["t_s"] == 0.0))
+
+    ok = all(v for _, v in parts)
+    bad = [k for k, v in parts if not v]
+    check(name, 1.0 if ok else 0.0, 1.0, 0.0,
+          f"{sum(v for _, v in parts)} of {len(parts)} parts; " + "; ".join(notes) + (f"; FAILED: {bad}" if bad else ""))
+
+
 def test_p06_the_engine_feels_the_road():
     """P06 (ADR-021): on the shipped crdi15 grid, warm, full throttle from rest
     for 25 s. Parts:
@@ -3417,7 +3460,7 @@ def main():
                test_p09_knock_at_altitude_and_a_cold_start,
                test_p13_early_stop, test_cold_start_friction_sees_the_running_walls,
                test_p09_chamber_walls_warm_and_the_synth_hears_the_knock, test_p06_routes,
-               test_p06_the_engine_feels_the_road,
+               test_p06_the_engine_feels_the_road, test_p06_par_run,
                test_p10_deeper_sound,
                test_intake_and_boost_levels_carry_physics,
                test_shipped_grids_cold_friction,

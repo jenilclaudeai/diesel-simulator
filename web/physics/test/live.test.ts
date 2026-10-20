@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { LiveSpec, Perf } from "../src/live/common.js";
-import { handleKey, LiveEngine, pedalReturn, type LiveState } from "../src/live/engine.js";
+import { handleKey, LiveEngine, PAR_THROTTLE, parRun, pedalReturn, type LiveState, type ParResult } from "../src/live/engine.js";
 import { PerfGrid } from "../src/live/grid.js";
 import { Adr011Grid, type Adr011GridData, type WeatherTableData } from "../src/live/adr011.js";
 import type { EngineView } from "../src/friction.js";
@@ -28,6 +28,8 @@ const fx = JSON.parse(readFileSync(path.resolve(here, "..", "..", "fixtures", "l
     drives: { name: string; trans: Transmission; script: Script; init: Record<string, number>; grid?: string;
       air?: [number, number]; cfpp?: number; route?: string }[];
     weather_table: WeatherTableData;
+    pars?: { name: string; trans: Transmission; grid?: string; air?: [number, number]; route: string; cap_s: number;
+      init?: Record<string, number> }[];
   };
   outputs: Record<string, {
     veh: Record<string, unknown>;
@@ -183,6 +185,22 @@ for (const drv of fx.inputs.drives) {
   e.step(drv.script.dt);
   const d = diffState(e.getState(), s.after);
   check("self-test: a 1e-9 nudge to rpm fails the per-step bound", d.worst > PER_STEP, `gives ${d.worst.toExponential(2)} at ${d.where}`);
+}
+
+// P06 tier 2: the par (live.par_run), on a fresh engine -- the same frames, hits and outcome as Python's,
+// time and fuel within the terminal bound
+const pars = (fx.outputs as unknown as { pars?: Record<string, ParResult> }).pars ?? {};
+for (const p of fx.inputs.pars ?? []) {
+  const want = pars[p.name]!;
+  const e = fresh(p.trans, p.grid, p.air, undefined, p.route);
+  for (const [k, v] of Object.entries(p.init ?? {})) (e as unknown as Record<string, number>)[k] = v;   // live_run's init
+  const got = parRun(e, PAR_THROTTLE, 1.0 / 60.0, p.cap_s);
+  const rel = (a: number, b: number) => Math.abs(a - b) / Math.max(Math.abs(b), 1e-9);
+  check(`${p.name}: the par matches Python (frames, hits, finished, stopped; time and fuel 1e-6)`,
+    got.t_s === want.t_s && got.hits === want.hits && got.finished === want.finished && got.stopped === want.stopped
+    && rel(got.time_s, want.time_s) <= TERMINAL && rel(got.fuel_L, want.fuel_L) <= TERMINAL,
+    `TS ${got.t_s.toFixed(2)} s (${got.time_s.toFixed(2)} with ${got.hits} hits), ${got.fuel_L.toFixed(5)} L; `
+    + `Python ${want.t_s.toFixed(2)} s, ${want.fuel_L.toFixed(5)} L; finished ${got.finished}`);
 }
 
 const failed = results.filter(([, ok]) => !ok).length;

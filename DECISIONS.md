@@ -1517,3 +1517,55 @@ routes, the random ones shared by their seed. Details:
   drive).
 - Tier 2 (goals on a route) builds on `route_s`, `route_alt` and
   `breaker_hits`, which `LiveView` already carries.
+
+
+---
+
+## ADR-022 — P06 tier 2: goals on a route, against a par
+
+**Status:** Accepted (the owner, 2026-10-20: every recommendation in
+`reviews/PROPOSAL-P06-goals.md`). Built 2026-10-21 on `feat/p06-roads`.
+
+### Decision
+
+1. **Two goals, each one score with one limit:**
+   - **time trial:** the fastest lap on at most the par's fuel;
+   - **economy run:** the least fuel within the par's time.
+
+   Personal bests are kept per browser (`dieselsim-goal-bests`), keyed by
+   engine, route, goal, place and gearbox.
+2. **The par** is a ghost lap of the same route at a steady 70 %
+   (`live.PAR_THROTTLE`) with the automatic, from the start the driver gets:
+   the same grid, place air and fuel (`make-engine.ts`, shared with the
+   drive worker). It runs in a worker of its own (`par.worker.ts`), so the
+   60 Hz loop never waits. `live.par_run` is the reference; the live
+   fixture holds `parRun` to it with three pars:
+   - the city, with breakers, finishing;
+   - the pass, with hills, finishing;
+   - a cold start at Leh on the fixture grid that never finishes
+     (FINDING-033).
+3. **A breaker taken too fast adds 5 s** (`BREAKER_PENALTY_S`) to a lap's
+   time, the par's included.
+4. **Overheating is not a goal.** A stop on overheat, or running dry,
+   fails any run. Measured: four of five roster engines can't overheat
+   even on a 1,050 m climb at 42 °C.
+5. **A par that never finishes sets no limit**, and the dash says so.
+6. **The clock starts** at the first throttle above 5 %, or at the car's
+   first metre; the lap ends at the route's length. The fuel burnt idling
+   before the start isn't counted.
+
+### One change from the proposal, and why
+
+The proposal said named routes would ship precomputed pars. They don't:
+**every par is computed in the browser**, at the driver's own place and
+fuel. A shipped par would be right only at standard air, and at Leh it
+would set the wrong fuel limit. Measured cost: 6.2 s for the city on this
+Mac (Chrome). On a phone it is several times longer, and it runs while
+the driver drives.
+
+### Consequences
+
+- Changing `PAR_THROTTLE`, `BREAKER_PENALTY_S` or the start rule changes
+  the goals' meaning: regenerate the live fixture (`--only live`), and
+  personal bests made under the old rule stay in browsers.
+- A goal can be shared: `/enjoy?route=city&goal=time`.

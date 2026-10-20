@@ -2194,3 +2194,29 @@ def pedal_return(live: LiveEngine, dt: float) -> None:
     throttle; measured, session 5)."""
     live.dl.brake = max(0.0, live.dl.brake - dt / 0.45)
     live.dl.clutch_pedal = max(0.0, live.dl.clutch_pedal - dt / 1.4)
+
+
+# P06 tier 2 (PROPOSAL-P06-goals): the par a goal is set against -- one lap of the
+# engine's route at a constant throttle, with the automatic, from the start the driver
+# gets. A run's time counts BREAKER_PENALTY_S for each breaker taken too fast.
+PAR_THROTTLE = 0.7
+BREAKER_PENALTY_S = 5.0
+
+
+def par_run(live: LiveEngine, throttle: float = PAR_THROTTLE, dt: float = 1.0 / 60.0,
+            cap_s: float = 3600.0) -> dict:
+    """Drive `live` (a fresh LiveEngine with its route set) one lap at a constant
+    throttle. Returns the lap's time [s], its time with the breaker penalty, the
+    fuel [L], the breakers hit, whether it finished and whether the engine stopped
+    (overheat). Stops early if the engine stops."""
+    r = live.route
+    L0, n = live.trip_L, 0
+    while live.route_s < r.length and n * dt < cap_s and not live.engine_stopped:
+        live.throttle = throttle
+        pedal_return(live, dt)
+        live.step(dt)
+        n += 1
+    t = n * dt
+    return {"t_s": t, "time_s": t + BREAKER_PENALTY_S * live.breaker_hits, "fuel_L": live.trip_L - L0,
+            "hits": int(live.breaker_hits), "finished": bool(live.route_s >= r.length),
+            "stopped": bool(live.engine_stopped)}

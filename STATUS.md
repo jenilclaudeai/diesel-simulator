@@ -1,5 +1,40 @@
 # Status
 
+**Session 10, P06 tier 2 built (2026-10-21), on `feat/p06-roads`** (ADR-022). Its PR still
+waits for #135.
+- **Built:**
+  - goals in /enjoy: a Time trial (the fastest lap on the par's fuel) or an Economy run (the
+    least fuel within the par's time), chosen beside the route and carried in the link
+    (`?route=city&goal=time`);
+  - the par, a ghost lap at a steady 70 % in Auto: `live.par_run`, `parRun`, run in
+    `par.worker.ts` from `make-engine.ts`, which the drive worker now shares;
+  - +5 s for each breaker taken too fast; a stop on overheat or running dry fails a run;
+  - personal bests per browser, keyed by engine, route, goal, place and gearbox;
+  - the logic in `enjoy/goals.ts`.
+- **One change from the proposal (ADR-022):** every par is computed in the browser, at the
+  driver's own air and fuel. A shipped par would be right only at standard air.
+- **Found:**
+  - **FINDING-033** (latent, for the owner): on the fixture's small grid a cold start at
+    Leh drags the automatic to its 60 rpm floor, and it stays there "running", never
+    stalled. No shipped grid reaches it (40 runs, lowest 561 rpm). Recommended: A, stall
+    it so Enjoy offers Restart, after P06.
+  - `--check` crashed on the new `pars` key (`compare_live` read it as a drive). Fixed;
+    nudging a par's fuel by 0.1 % or its hits by one makes it report stale (see the PR).
+  - A par mutant ("the fuel from zero") survived on fresh engines. The tests now use a used
+    trip meter.
+- **Verified (local):**
+  - Python suite **96 passed, 0 failed, 3 known, 4 skipped** (95 + `test_p06_par_run`);
+  - TS live 64/0, three pars equal to Python (the city and the pass to the frame; the
+    stuck Leh par at its 600 s cap);
+  - par mutants 8 of 8 (4 Python, 4 TS); goals mutants 9 of 9;
+  - app units 160/160, also with `physics-version.ts` moved aside;
+  - e2e:enjoy 38/38: the par in 6.2 s in Chrome; a flat-out city lap was 101.0 s with
+    6 breakers on 0.417 L against the par's 0.305 L, so "over the par's fuel";
+  - fixtures current; audit 0 DEAD, 2 FROZEN; check:labels 6 of 10.
+- **#137 (FINDING-032, the place's air density):** CI 10 of 10, every job read (physics
+  99/0/3 on both Pythons, Pyodide 79, units 137, TS live 56, e2e drive 10 and enjoy 29).
+  **Ready to merge**, as is #136.
+
 **Session 10, P06 tier 2 measured (2026-10-20), on `feat/p06-roads`** (docs only):
 `reviews/PROPOSAL-P06-goals.md` and `reviews/FINDING-032.md`. ~~**Questions for the owner.**~~
 **Decided (2026-10-20): every recommendation** (B with C; overheating dropped as a goal;

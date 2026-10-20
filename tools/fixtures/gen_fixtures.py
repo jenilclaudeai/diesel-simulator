@@ -405,6 +405,16 @@ def live_inputs():
     spec_json["geom"]["displacement"] = spec.geom.displacement
     return {"preset": key, "spec": spec_json, "engine_view": friction_engine_view(DieselEngine(preset=key)),
             "grid": {"rpms": rpms, "loads": loads, "perf": perf},
+            # P06 tier 2: pars (live.par_run) -- the city's breakers and the pass's hills at the
+            # rating's air, both finishing; and a par that does not finish: on this fixture grid a
+            # cold start at Leh drags the automatic to its 60 rpm floor (FINDING-033), so the
+            # "no limit" path is held too, capped at 600 s
+            "pars": [{"name": "par_city", "trans": "tc", "grid": "adr011", "air": [101325.0, 298.0], "route": "city",
+                      "cap_s": 3600.0, "init": {"trip_L": 0.25}},   # a used trip meter: the lap's fuel only
+                     {"name": "par_pass", "trans": "tc", "grid": "adr011", "air": [101325.0, 298.0], "route": "pass",
+                      "cap_s": 3600.0},
+                     {"name": "par_random_leh", "trans": "tc", "grid": "adr011", "air": [65764.1, 293.15],
+                      "route": "random:1234", "cap_s": 600.0}],
             "drives": [{"name": "tc", "trans": "tc", "script": live_script(), "init": {}},
                        {"name": "dct", "trans": "dct", "script": live_script(), "init": {}},
                        {"name": "dct_hot", "trans": "dct", "script": live_script_hot(),
@@ -442,8 +452,9 @@ def live_inputs():
             "sample_every": 45}
 
 
-def live_run(inp, drv):
-    from dieselsim.live import LiveEngine, PerfGrid, handle_key, pedal_return
+def _live_engine(inp, drv):
+    """The LiveEngine a drive (or a par) starts from: its grid, air, fuel, route and initial state."""
+    from dieselsim.live import LiveEngine, PerfGrid
     spec = DieselEngine(preset=inp["preset"]).spec
     g = inp["grid"]
     grid = (adr011_grid_object(live_grid_adr011(inp["preset"])) if drv.get("grid") == "adr011"
@@ -467,6 +478,18 @@ def live_run(inp, drv):
         setattr(obj, last, v)
     if live.adr011 and drv["init"]:
         live._update_friction()           # at the initial state just set
+    return live
+
+
+def par_fixture(inp, par):
+    """P06 tier 2: live.par_run on a fresh engine (the driver's start), as the TS test runs parRun."""
+    from dieselsim.live import par_run
+    return par_run(_live_engine(inp, dict(par, init=par.get("init", {}))), cap_s=par["cap_s"])
+
+
+def live_run(inp, drv):
+    from dieselsim.live import handle_key, pedal_return
+    live = _live_engine(inp, drv)
     sc = drv["script"]
     keys = {k: c for k, c in sc["keys"]}
     grade = {k: v for k, v in sc["grade"]}
@@ -511,7 +534,9 @@ def live_run(inp, drv):
 
 
 def live_outputs(inp):
-    return {d["name"]: live_run(inp, d) for d in inp["drives"]}
+    out = {d["name"]: live_run(inp, d) for d in inp["drives"]}
+    out["pars"] = {p["name"]: par_fixture(inp, p) for p in inp.get("pars", [])}
+    return out
 
 
 # --------------------------------------------------------------------- sound
@@ -713,7 +738,12 @@ def compare_live(got, want, tol):
             r = abs(a - b) / max(abs(b), 1e-6)
             if r > worst[0]:
                 worst[:] = [r, path]
+    if set(got) != set(want):
+        return math.inf, f"drives {sorted(set(got) ^ set(want))}"
     for tr in want:
+        if tr == "pars":                  # P06 tier 2: par results, not drives
+            walk(got[tr], want[tr], "pars")
+            continue
         walk(got[tr]["events"], want[tr]["events"], f"{tr}.events")
         walk(got[tr]["hints"], want[tr]["hints"], f"{tr}.hints")
         for key in ("veh", "final", "snapshots", "trace"):
