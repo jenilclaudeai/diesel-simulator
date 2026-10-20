@@ -1,5 +1,31 @@
 # Status
 
+**Session 10, the units toggle finished (2026-10-20), `fix/units-wax-hint`** (from `main`
+at `4c2a301`; independent of #135 and of `feat/p06-roads`):
+- **The owner: "Go ahead with the units toggle first."** Checked first: the toggle was
+  already merged (#134, 2026-10-19 21:20 UTC) and live. The Pages deploy of `4c2a301`
+  succeeded, and the live bundle has the selector and both mpg labels.
+- **Found one gap the toggle missed:**
+  - The live loop's waxed-fuel hint ("this diesel gels below 18 C") is a string built in
+    `live.py` and the TS port, so it stayed Celsius in US units on both Drive and Enjoy,
+    while the fuel note beside it said "CFPP 64 °F".
+  - No other loop message carries a unit. Checked: every `hint` and `overheat_msg` in
+    `live.py`, and Drive's template. On `feat/p06-roads` the breaker hint does, and
+    Enjoy already converts it.
+- **Fixed:**
+  - `units.hintInUnits` rewrites "N C" in the driver's units. Every fuel's CFPP is a
+    whole °C, so it gives the same °F as the note: 64, 43, −26.
+  - Enjoy's `touchHint` and Drive's status line use it. Metric now reads "18 °C" (was
+    "18 C"). The loop's own string is unchanged, so no fixture moves.
+- **Verified (local):**
+  - app units **139 passed** (137 + 2), mutants **5 of 5** caught;
+  - **e2e:drive 11 passed** (a new US check: "gels below 64 °F", matching the note); its
+    mutant, Drive showing the raw hint, fails 2 checks;
+  - e2e:enjoy 29 passed; check:labels 6 of 10.
+  - CI: the PR's checks, read job by job, are reported in the next entry.
+- **When `feat/p06-roads` meets this:** `enjoy/hints.ts` conflicts. Keep both: the
+  breaker rule and the `hintInUnits` fallback.
+
 **Session 9, Phase 8's units toggle built (2026-10-19), `feat/phase8-units`** (from `main`
 after #133):
 - **The owner asked "are we good with the initial plan?":** phases 0-7 done; Phase 8
@@ -12,6 +38,9 @@ after #133):
   Fuel (`DriveEnvPicker`, both pages), kept per browser (`dieselsim-units`); Enjoy's
   dash (the speedometer gets an mph scale, capped at 150), the strip and the trip
   computer; Drive's readouts; the place and fuel notes. Boost stays a ratio.
+  **Correction (2026-10-20):** not quite every figure. The live loop's waxed-fuel hint
+  stayed "N C" in US units on both pages. It was fixed on `fix/units-wax-hint` (the
+  entry above).
 - **Found and fixed:** `check:labels` lost /enjoy and still passed: it found fuel
   figures by the literal "L/100", now printed from units.ts (5 of 10 at a floor of 5).
   It now knows `U().econ`, and the floor is 6; the mutant (without it) fails.
