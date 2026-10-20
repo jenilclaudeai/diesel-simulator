@@ -1,6 +1,12 @@
 # PROPOSAL — P06 tier 2: goals on a route
 
-**Date:** 2026-10-20 (session 10). **Status:** measured; **questions for the owner** (end).
+**Date:** 2026-10-20 (session 10). **Status:** ~~measured; **questions for the owner** (end).~~
+**Decided (the owner, 2026-10-20), every recommendation:**
+- **B with C:** a time trial on the par's fuel and an economy run in the par's time, with
+  personal bests kept per browser;
+- **overheating dropped as a goal:** a stop on overheat fails any run;
+- **+5 s per breaker** taken too fast.
+Being built on `feat/p06-roads`.
 **From:** ADR-016's addendum: "goals on a route (reach a pass without overheating, an
 economy run, a time to beat)", v1, after tier 1 (built, ADR-021).
 **Lenses:** PM, PHY1, QA1, USR1, USR2

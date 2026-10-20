@@ -3,7 +3,8 @@
 **Opened by:** session 10 (2026-10-20), measuring P06 tier 2's goals (whether
 "reach the pass without overheating" can be lost).
 **Lens:** PHY1, PHY2, QA1
-**Status:** **open, for the owner.** Nothing changed yet.
+**Status:** ~~**open, for the owner.** Nothing changed yet.~~ **Decided (the owner,
+2026-10-20): A**, fix it as its own PR (from `main`).
 **Reproduce:** scratch scripts in the session's job directory:
 `p06_density_probe.py` and `p06_longclimb_probe.py`. Both patch
 `LiveEngine._thermal` in memory only; the repo is untouched.

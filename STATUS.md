@@ -1,7 +1,9 @@
 # Status
 
 **Session 10, P06 tier 2 measured (2026-10-20), on `feat/p06-roads`** (docs only):
-`reviews/PROPOSAL-P06-goals.md` and `reviews/FINDING-032.md`. **Questions for the owner.**
+`reviews/PROPOSAL-P06-goals.md` and `reviews/FINDING-032.md`. ~~**Questions for the owner.**~~
+**Decided (2026-10-20): every recommendation** (B with C; overheating dropped as a goal;
++5 s a breaker; FINDING-032 A as its own PR). Next: FINDING-032's fix, then the goals.
 - **The goals as ADR-016 named them can't be won and lost on their own.**
   - "Reach the pass without overheating": four of five engines peak at 90-96 °C against a
     100 °C warning, flat out, in 42 °C desert, even on a 15 km, 7 % climb. Only single10
