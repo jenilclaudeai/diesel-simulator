@@ -233,7 +233,9 @@ grep its readers and solve with it changed.
 - Since Phase 7 step 7, Drive's gearbox is kept per browser
   (`DriveEnv.gearbox`, localStorage), like the place and the fuel, and
   `/enjoy` starts in Manual when it is `manual`. Since Phase 8 the driver's
-  units are kept too (`dieselsim-units`: metric, us, uk; `units/units.ts`).
+  units are kept too (`dieselsim-units`: metric, us, uk; `units/units.ts`), and
+  P01's vibration switch (`dieselsim-vibration`: 'off' when off). Under `?e2e`
+  `/enjoy` records what it asked the phone to vibrate (`__enjoy.vibes()`).
   Opening a project also
   sets `/spec`'s edits. One e2e browser carries all of it from page to
   page; clear `localStorage` before a check that assumes the defaults.
