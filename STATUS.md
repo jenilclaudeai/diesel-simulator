@@ -22,7 +22,11 @@ at `4c2a301`; independent of #135 and of `feat/p06-roads`):
   - **e2e:drive 11 passed** (a new US check: "gels below 64 °F", matching the note); its
     mutant, Drive showing the raw hint, fails 2 checks;
   - e2e:enjoy 29 passed; check:labels 6 of 10.
-  - CI: the PR's checks, read job by job, are reported in the next entry.
+  - ~~CI: the PR's checks, read job by job, are reported in the next entry.~~ **CI on
+    #136 (`ba877b4`): 10 of 10, every job read.** Physics 98/0/3 known on 3.10 and 3.12;
+    Pyodide 78/0/2/20 skipped; units 139 (26 files); check:labels 6 of 10; TS ports
+    5 + 51 + 12 + 11; SolverPort 20 + 15 + 30; e2e drive 11 (the US wax check
+    passes), enjoy 29; grid 9; custom 7. **Ready to merge.**
 - **When `feat/p06-roads` meets this:** `enjoy/hints.ts` conflicts. Keep both: the
   breaker rule and the `hintInUnits` fallback.
 
