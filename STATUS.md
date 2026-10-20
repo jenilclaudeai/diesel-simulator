@@ -8,7 +8,13 @@
   - Resolved by merging `main` in, keeping both sides; no rebase, no force-push.
   - #136's merged tree: units 145 (P01's 143 + 2), and the build passes.
   - #137's: TS live 56/0, units 143.
-  - Both MERGEABLE again; CI rerunning.
+  - Both MERGEABLE again. ~~CI rerunning.~~ **CI after the merge: 10 of 10 on both, every job
+    read.**
+    - #136: physics 98/0/3 on 3.10 and 3.12; Pyodide 78; units 145; TS live 51; e2e drive
+      11 (the US wax check passes), enjoy 31; grid 9; custom 7.
+    - #137: physics 99/0/3; Pyodide 79; units 143; TS live 56; e2e drive 10, enjoy 31;
+      grid 9; custom 7.
+    - **Both ready to merge, #136 first.**
 - **#138 (P06, tiers 1 and 2) opened**, with `main` merged in. Only P06's commits remain.
 - **Merge order: #136, #137, then #138.** #138 will conflict with both (`enjoy/hints.ts`,
   `live.py`, `engine.ts`, `driveline.ts`, `gen_fixtures.py`, `live.json`, `FINDING-032.md`,
