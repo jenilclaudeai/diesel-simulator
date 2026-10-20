@@ -438,8 +438,13 @@ axe-core on every page (7 clean) and by hand on Enjoy's dash; the dials
 speak in rpm and km/h, a lit warning lamp is 4.87:1, the redline and the
 derate mark differ by shape. Unlit lamps stay dim (the owner's choice).
 **Merged and live** (#125, 2026-10-12 UTC).
-Vibration on phones in `/enjoy` (the owner's Feat Prop P01, ADR-016),
-patterned on firing frequency and load; Android Chrome only.
+~~Vibration on phones in `/enjoy` (the owner's Feat Prop P01, ADR-016),
+patterned on firing frequency and load; Android Chrome only.~~ **Built 2026-10-19** (`feat/p01-vibration`): the owner's choice, events (start, stall,
+gear change, the limiter) plus a shake while idling or lugging, on by default with a
+switch. The Vibration API has no strength and a phone's motor can't follow a
+4-cylinder's 27 Hz idle firing, so the shake pulses at the firing rate only up to
+12 Hz (the single) and is a light buzz above it. **The feel is the owner's to judge on
+the phone.**
 
 **Random roads (the owner's P06, tiers 1–2, ADR-016 addendum,
 2026-10-08):** a seeded random route the engine feels (hills, surfaces as

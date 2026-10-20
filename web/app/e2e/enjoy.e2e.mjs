@@ -96,6 +96,9 @@ const fuel = await page.evaluate(() => {
 });
 check("the fuel is picked beside it: sold here first, then summer, winter and arctic (Phase 7 step 6)",
   !!fuel && fuel.n === 4 && fuel.value === "local", JSON.stringify(fuel));
+// P01: the vibration switch, on the start screen, on by default (the owner's choice)
+const vibSwitch = await page.evaluate(() => document.querySelector("main.dash input.vibration")?.checked ?? null);
+check("P01: the vibration switch is on the start screen, on by default", vibSwitch === true, String(vibSwitch));
 await tapEl("button.start");
 await page.waitForFunction(() => globalThis.__enjoy.view(), { timeout: 60_000 });
 await sleep(1500);
@@ -144,6 +147,12 @@ await sleep(1500);
 const g1 = await view();
 check("the shift paddle changes gear (and switches the automatic to manual shifting)",
   g1.gear !== g0 && g1.auto === false, `gear ${g0} -> ${g1.gear}, auto ${g1.auto}`);
+// P01: what the page asked the phone to do so far (recorded under ?e2e; a desktop has no motor)
+const vibes = await page.evaluate(() => globalThis.__enjoy.vibes());
+const vibHas = p => vibes.some(v => Array.isArray(v) && v.join() === p.join());
+const vibShake = vibes.some(v => Array.isArray(v) && v.length >= 8 && v.reduce((a, b) => a + b, 0) >= 400);
+check("P01: the phone vibrates: the start's shudder, the idle shake, the shift's jolt",
+  vibHas([60, 40, 60, 40, 140]) && vibShake && vibHas([45]), `${vibes.length} calls, first ${JSON.stringify(vibes.slice(0, 3))}`);
 
 await page.screenshot({ path: path.join(here, "out", "enjoy-landscape.png") });
 
