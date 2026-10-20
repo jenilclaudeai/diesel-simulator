@@ -1,5 +1,30 @@
 # Status
 
+**Session 10, P06 tier 2 measured (2026-10-20), on `feat/p06-roads`** (docs only):
+`reviews/PROPOSAL-P06-goals.md` and `reviews/FINDING-032.md`. **Questions for the owner.**
+- **The goals as ADR-016 named them can't be won and lost on their own.**
+  - "Reach the pass without overheating": four of five engines peak at 90-96 °C against a
+    100 °C warning, flat out, in 42 °C desert, even on a 15 km, 7 % climb. Only single10
+    overheats, and it can't climb the pass.
+  - A time alone is won flat out, and economy alone by going slower.
+  - A time limit plus a fuel budget is a real trade-off, but "beat the par on both" ranges
+    from narrow (hatch15, 1 s and 1.7 %) to near-impossible (truck127).
+- **Recommended:**
+  - B: one score with the par's limit on the other (a time trial on the par's fuel, an
+    economy run in the par's time), with personal bests (C);
+  - overheating dropped as a goal (a stop on overheat fails any run);
+  - +5 s per breaker taken too fast.
+- **Measured on the way:** the TS loop reproduces Python's full laps exactly and runs at
+  23x real time headless. Named routes can ship pars; a random route's par would compute
+  during the first lap.
+- **FINDING-032:** the live loop's radiator and fan use sea-level air density everywhere
+  (`rho_air = 1.20`). The place's density would add at most 3.2 °C, and no run crosses the
+  warning either way. Recommended: A, fix it as its own PR (the live fixtures move at
+  non-standard air; no grid goes stale).
+- **Elsewhere:** #136 (the wax hint in the driver's units) passed CI 10 of 10, every job
+  read (physics 98/0/3 on 3.10 and 3.12, Pyodide 78/0/2/20, units 139, e2e drive 11 and
+  enjoy 29). It is ready to merge.
+
 **Session 10, P06 tier 1 built (2026-10-20), `feat/p06-roads`** (3 commits, pushed;
 branched from #135's `feat/p01-vibration`, so **its PR waits until #135 merges**, which
 avoids a stack). ADR-021, `reviews/PROPOSAL-P06.md`.
