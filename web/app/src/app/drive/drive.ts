@@ -11,7 +11,7 @@ import { applyProject, engineChoice, parseProject } from '../spec/project';
 import { SpecEdits } from '../spec/spec-edits';
 import type { DriveScript, GridFile } from './protocol';
 import {
-  distance, distanceUnit, pressureBar, pressureUnit, speed, speedUnit, temperature, temperatureUnit, Units, volume,
+  distance, distanceUnit, hintInUnits, pressureBar, pressureUnit, speed, speedUnit, temperature, temperatureUnit, Units, volume,
   volumeUnit,
 } from '../units/units';
 
@@ -73,6 +73,8 @@ export class DrivePage implements OnDestroy {
   protected readonly rpmFrac = computed(() => Math.min(1, (this.v()?.rpm ?? 0) / 5000));
   /** Phase 8: the driver's units (Metric, US or UK), kept per browser and shared with /enjoy. */
   protected readonly u = inject(Units).system;
+  /** The loop's hint in the driver's units (the waxed fuel's temperature) */
+  protected readonly hintIn = (h: string) => hintInUnits(h, this.u());
   protected readonly U = computed(() => {
     const s = this.u();
     return { speed: speedUnit(s), dist: distanceUnit(s), vol: volumeUnit(s), temp: temperatureUnit(s), pres: pressureUnit(s) };
