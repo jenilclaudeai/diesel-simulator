@@ -169,6 +169,14 @@ grep its readers and solve with it changed.
   on its own keeps today's rpm schedule (`_power_schedule`), with no error.
   Changing any `ECO_*` constant changes the live fixtures: regenerate
   (`--only live`) and re-match the TS port.
+- **The live loop breathes the place's air** (FINDING-032): `live.air_density` scales the
+  rating's 1.20 kg/m³ by p and T for the radiator, the fan and the drag, exactly 1.0 at
+  101325 Pa / 298 K. Anything new in the loop that needs the air's density reads
+  `air_density(spec.thermal)` (or `dl.rho_air`), never a constant.
+- **In-place Python mutants:** a mutant of the same byte length, restored within a second,
+  leaves a `.pyc` Python still trusts (it checks size and whole-second mtime), so the
+  'restored' file keeps running the mutant. Run mutant subprocesses with
+  `PYTHONDONTWRITEBYTECODE=1`, and clear `__pycache__` before regenerating anything.
 - WebCrypto needs a secure context: over plain http on a LAN address the
   grid cache switches itself off by design.
 - `npm start` downloads the numpy wheel once (`prepare-assets.mjs`). Behind a

@@ -1,5 +1,43 @@
 # Status
 
+**Session 10, FINDING-032 fixed (2026-10-20), `fix/finding-032-air-density`** (from `main`
+at `4c2a301`; independent of #135, #136 and P06):
+- **The finding:** the live loop's radiator, fan and aerodynamic drag used 1.20 kg/m³
+  everywhere. Found while measuring P06's goals.
+  - The owner chose A (fix it), then widened it to the drag.
+  - Measured: cooling up to +3.2 °C peak, never crossing a warning; top speed at Leh +3.5 %
+    (hatch15) to +6 % (truck127), the desert +1 %.
+- **Fixed:**
+  - `live.air_density(thermal)` = 1.20 × (p / 101325) × (298 / T), exactly 1.20 at the
+    rating's air;
+  - the radiator's ram air, the fan's mass flow and the drag all follow it
+    (`Driveline.rho_air`, pushed each frame);
+  - mirrored in `web/physics`;
+  - a new live fixture drive, `adr011_weather_fan` (Leh with the fan running), because no
+    drive ran the fan at non-standard air.
+- **Proof at standard air:** the live fixture's seven standard-air drives: 0 of about
+  172,000 values changed; only `dl.rho_air` was added. The weather, limp and waxed drives
+  changed (10,710 / 11,028 / 61 values).
+- **Verified (local):**
+  - Python suite **94 passed, 0 failed, 3 known, 4 skipped** (main's 93 + 1);
+  - `test_finding_032_the_air_density` 5 of 5 parts, mutants 5 of 5 caught; TS live 56/0
+    (+ 5, 12, 11), TS mutants 4 of 4 caught. "The fan unscaled" survived until the fan
+    drive was added;
+  - fixtures current; audit 0 DEAD, 2 FROZEN (the known clamp);
+  - e2e:drive 10/10: Leh's worker equals native Python (worst 0), and Leh still ends
+    slower than standard air, 68.0 against 77.0 km/h.
+- **A trap, written into CLAUDE.md and memory:**
+  - A same-length mutant (`(a / b)` to `(b / a)`), restored within a second, left a
+    `.pyc` that Python still trusted. One fixture regeneration ran on the mutant.
+  - The TS port disagreeing caught it. Caches were cleared and every later check redone.
+  - Mutant runs now use `PYTHONDONTWRITEBYTECODE=1`.
+- **When P06 meets this:** `live.py`, `engine.ts`, `driveline.ts`, `gen_fixtures.py` and
+  `live.json` conflict.
+  - Keep both, then regenerate `live.json` with `--only live`.
+  - P06's routes change `spec.thermal` with altitude, and `step()` reads it each frame, so
+    the drag and the radiator then follow a climb too.
+  - `reviews/FINDING-032.md` conflicts as well: keep this branch's (fixed) text.
+
 **Session 9, Phase 8's units toggle built (2026-10-19), `feat/phase8-units`** (from `main`
 after #133):
 - **The owner asked "are we good with the initial plan?":** phases 0-7 done; Phase 8
