@@ -1,5 +1,22 @@
 # Status
 
+**Session 10, PRs (2026-10-21):**
+- **#135 (P01 vibration) merged** by the owner, 2026-10-20 21:27 UTC.
+- **#136 and #137 conflicted with it.**
+  - The owner reported it; the conflicts were docs only: STATUS.md in both, and CLAUDE.md's
+    units paragraph in #136.
+  - Resolved by merging `main` in, keeping both sides; no rebase, no force-push.
+  - #136's merged tree: units 145 (P01's 143 + 2), and the build passes.
+  - #137's: TS live 56/0, units 143.
+  - Both MERGEABLE again; CI rerunning.
+- **#138 (P06, tiers 1 and 2) opened**, with `main` merged in. Only P06's commits remain.
+- **Merge order: #136, #137, then #138.** #138 will conflict with both (`enjoy/hints.ts`,
+  `live.py`, `engine.ts`, `driveline.ts`, `gen_fixtures.py`, `live.json`, `FINDING-032.md`,
+  STATUS, CLAUDE.md).
+  - Then: merge `main` in, keep both sides, take #137's FINDING-032 text, and regenerate
+    `live.json` (`--only live`, after clearing `__pycache__`).
+  - Then rerun the TS tests, the suite and e2e:enjoy before saying #138 is ready.
+
 **Session 10, P06 tier 2 built (2026-10-21), on `feat/p06-roads`** (ADR-022). Its PR still
 waits for #135.
 - **Built:**
