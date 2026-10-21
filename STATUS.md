@@ -18,10 +18,23 @@
     Fast idle alone, or a 15 s chamber constant (option B), leaves most 0 °C / 20% stuck.
     Fuel over the minute: ~2.5–3× the stuck baseline.
   - The friction excess at coolant 70 °C with the oil lagging (42 °C) is still 6–54 N·m
-    across the roster; at a warm engine (88 / 100 °C) it is −0.02 to −0.27 on all ten. So
-    the gate should read **oil**, not coolant (being measured).
-- **Running:** all ten engines' idle and 20% launch; the warm launch reference; a 12-minute
-  0 °C warm-up per gate mode (coolant / oil / none) with warm invariance.
+    across the roster; at a warm engine (88 / 100 °C) it is −0.02 to −0.27 on all ten. ~~So
+    the gate should read **oil**, not coolant (being measured).~~ *Corrected the same day
+    (my hypothesis was wrong):* in the live loop the oil does not lag; it runs ~2 K ahead of
+    the coolant (crdi15 TC, 0 °C start, 30% / lift for 12 min). A warm engine's oil cools to
+    ~85 °C on that drive, so an oil gate (60–90 °C) wakes in warm driving: 234,600 of
+    259,200 warm values change (ungated: 248,328, +0.4% fuel). **The coolant gate (40–70 °C)
+    keeps warm driving bit-identical (0 of 259,200)** and drops at most ~0.008 load of cover
+    by minute 7. 12 min from 0 °C: 0.508 L covered, 0.447 `main`, 0.479 warm.
+  - **The warm reference** (same harness): crdi15 TC 20% warm 7.4 s / 57 km/h at 60 s /
+    36 mL; at 0 °C with the cover (friction + walls) 7.9 s / 58 / 53 mL. The cover gives a
+    cold engine a warm one's launch for ~45% more fuel. **Fast idle +200 overshoots** (4.3 s,
+    quicker than warm), because `main`'s governor acts with the pedal down too (up to 0.75
+    load below target). EDC16's idle control acts only with the pedal up; that variant is
+    being measured.
+- **Running:** all ten engines' idle and 20% launch; the 24 cold launches with pedal-up fast
+  idle (labelled "OIL:", but in the first 60 s both gates are fully open, so the gate makes
+  no difference there).
 - **Next:** write `reviews/PROPOSAL-cold-start-ECU.md` (options, lenses, questions for the
   owner), PLAN's entry, PR.
 
