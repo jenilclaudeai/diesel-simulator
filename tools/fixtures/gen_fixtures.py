@@ -405,16 +405,16 @@ def live_inputs():
     spec_json["geom"]["displacement"] = spec.geom.displacement
     return {"preset": key, "spec": spec_json, "engine_view": friction_engine_view(DieselEngine(preset=key)),
             "grid": {"rpms": rpms, "loads": loads, "perf": perf},
-            # P06 tier 2: pars (live.par_run) -- the city's breakers and the pass's hills at the
-            # rating's air, both finishing; and a par that does not finish: on this fixture grid a
-            # cold start at Leh drags the automatic to its 60 rpm floor (FINDING-033), so the
-            # "no limit" path is held too, capped at 600 s
+            # P06 tier 2: pars (live.par_run) -- the city's lap (breakers, grades) at the rating's
+            # air, finishing; and a par that does not finish: on this fixture grid a cold start at
+            # Leh drags the automatic to its 60 rpm floor by 30 s (FINDING-033), so the "no limit"
+            # path is held too. Python runs these at about real time (66 frames/s), so they are kept
+            # short: a pass par (243 s) and a 600 s cap pushed CI's fixtures job past its limit
+            # (#138, 2026-10-20); the route drives above check the hills frame by frame
             "pars": [{"name": "par_city", "trans": "tc", "grid": "adr011", "air": [101325.0, 298.0], "route": "city",
                       "cap_s": 3600.0, "init": {"trip_L": 0.25}},   # a used trip meter: the lap's fuel only
-                     {"name": "par_pass", "trans": "tc", "grid": "adr011", "air": [101325.0, 298.0], "route": "pass",
-                      "cap_s": 3600.0},
                      {"name": "par_random_leh", "trans": "tc", "grid": "adr011", "air": [65764.1, 293.15],
-                      "route": "random:1234", "cap_s": 600.0}],
+                      "route": "random:1234", "cap_s": 90.0}],
             "drives": [{"name": "tc", "trans": "tc", "script": live_script(), "init": {}},
                        {"name": "dct", "trans": "dct", "script": live_script(), "init": {}},
                        {"name": "dct_hot", "trans": "dct", "script": live_script_hot(),

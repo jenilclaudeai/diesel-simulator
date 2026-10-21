@@ -1539,11 +1539,14 @@ routes, the random ones shared by their seed. Details:
    the same grid, place air and fuel (`make-engine.ts`, shared with the
    drive worker). It runs in a worker of its own (`par.worker.ts`), so the
    60 Hz loop never waits. `live.par_run` is the reference; the live
-   fixture holds `parRun` to it with three pars:
+   fixture holds `parRun` to it with ~~three~~ two pars:
    - the city, with breakers, finishing;
-   - the pass, with hills, finishing;
+   - ~~the pass, with hills, finishing;~~ *(dropped 2026-10-21: Python
+     runs a par at about real time, so this one cost 243 s, and with a
+     600 s Leh cap it pushed CI's fixtures job past its 15-minute limit on
+     #138. The route drives check the hills frame by frame.)*
    - a cold start at Leh on the fixture grid that never finishes
-     (FINDING-033).
+     (FINDING-033), capped at 90 s *(was 600 s; it is at 60 rpm by 30 s)*.
 3. **A breaker taken too fast adds 5 s** (`BREAKER_PENALTY_S`) to a lap's
    time, the par's included.
 4. **Overheating is not a goal.** A stop on overheat, or running dry,

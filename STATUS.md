@@ -1,5 +1,27 @@
 # Status
 
+**Session 10, #138's fixtures job hit its time limit (2026-10-21):**
+- **What happened:** CI's "golden fixtures + TypeScript ports" job was cancelled at 15:17
+  against `timeout-minutes: 15`, still generating; not a failure of any check. The other 9
+  jobs passed (physics 101/0/3 on both Pythons, Pyodide 80, units 160, e2e enjoy 38,
+  drive 10).
+- **Measured:** Python runs a par at about real time (66 frames/s).
+  - par_city cost 75 s, par_pass 243 s, par_random_leh 542 s (600 s capped, though at 60 rpm
+    by 30 s).
+  - The live check took 1,189 s on this Mac.
+  - #137's fixtures job alone took 13.5 min of the 15.
+- **Fixed:**
+  - par_pass dropped: the route drives check the hills frame by frame;
+  - the Leh par capped at 90 s, still unfinished;
+  - the live check takes 556 s now;
+  - the job's limit raised from 15 to 25 minutes (`ci.yml`, with the reason);
+  - ADR-022 corrected in place.
+- **Rechecked:** TS live 63/0, both pars equal to Python; par mutants 8 of 8, the cap
+  mutant included.
+- **#137:** CI after the merge with #136: 10 of 10, every job read (physics 99/0/3 on both
+  Pythons, Pyodide 79, units 145, TS live 56, e2e drive 11 and enjoy 31). **Ready to merge.**
+- **#138 conflicts with `main`** since #136 merged. It gets resolved once, after #137 merges.
+
 **Session 10, PRs (2026-10-21):**
 - **#135 (P01 vibration) merged** by the owner, 2026-10-20 21:27 UTC.
 - **#136 and #137 conflicted with it.**
@@ -47,7 +69,7 @@ waits for #135.
     trip meter.
 - **Verified (local):**
   - Python suite **96 passed, 0 failed, 3 known, 4 skipped** (95 + `test_p06_par_run`);
-  - TS live 64/0, three pars equal to Python (the city and the pass to the frame; the
+  - TS live 64/0, three pars equal to Python *(since cut to two: see the entry above)* (the city and the pass to the frame; the
     stuck Leh par at its 600 s cap);
   - par mutants 8 of 8 (4 Python, 4 TS); goals mutants 9 of 9;
   - app units 160/160, also with `physics-version.ts` moved aside;
