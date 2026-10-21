@@ -1,5 +1,30 @@
 # Status
 
+**Session 11, the cold-start ECU proposal being measured (2026-10-22), `worktree-p-cold-start-ecu`**
+(from `main` at `173a65f`; docs only, nothing shipped changes):
+- **Start of session:** the four open PRs (#138 P06, #139 P01 driving, #140 B-07, #141 B-08)
+  are each CI 10 of 10 and wait on the owner (#141 also on the owner's ear, `out/b08/`). The
+  bug sheet has no new rows (B-09 on empty). Its Feat Prop tab has three priority-1 rows never
+  looked at: **P07** (multi-parameter sweep), **P11** (number of gears), **P12** (vehicle
+  weight).
+- **Taken:** PLAN's "next proposal", FINDING-031 C (the owner, 2026-10-16), a cold-start ECU.
+  FINDING-033 A waits for #138 (both touch `live.py`).
+- **Measured so far** (scratch `ecu.py`, a `LiveEngine` subclass with three hooks; with them
+  off it equals `LiveEngine` on 0 of 24,000 values, three engines and boxes):
+  - 24 cold launches (crdi15/crdi22/hatch15, TC/DCT, 25/0 °C, 20/30%) × 9 variants, on
+    today's (R5) grids. `main`: 9 of 24 never reach 10 km/h in 60 s. Every variant with the
+    friction cover (the pedal's fuel raised by live friction minus the warm cells') moves
+    all 24 (crdi15 TC 0 °C 20%: never → 13.0 s; with the cold walls' deficit too 7.9 s).
+    Fast idle alone, or a 15 s chamber constant (option B), leaves most 0 °C / 20% stuck.
+    Fuel over the minute: ~2.5–3× the stuck baseline.
+  - The friction excess at coolant 70 °C with the oil lagging (42 °C) is still 6–54 N·m
+    across the roster; at a warm engine (88 / 100 °C) it is −0.02 to −0.27 on all ten. So
+    the gate should read **oil**, not coolant (being measured).
+- **Running:** all ten engines' idle and 20% launch; the warm launch reference; a 12-minute
+  0 °C warm-up per gate mode (coolant / oil / none) with warm invariance.
+- **Next:** write `reviews/PROPOSAL-cold-start-ECU.md` (options, lenses, questions for the
+  owner), PLAN's entry, PR.
+
 **Session 10, FINDING-032 fixed (2026-10-20), `fix/finding-032-air-density`** (from `main`
 at `4c2a301`; independent of #135, #136 and P06):
 - **The finding:** the live loop's radiator, fan and aerodynamic drag used 1.20 kg/m³
