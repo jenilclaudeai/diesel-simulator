@@ -1,5 +1,37 @@
 # Status
 
+**Session 10, B-07 fixed (2026-10-21), `fix/b07-engine-stop`, PR #140** (from `main` at
+`173a65f`; independent of #138 and #139):
+- **The sheet's B-07** (/enjoy, all engines): "Engine doesn't stop even when we stop the
+  engine", sometimes, no steps. Taken by this session; the B-08 session (the sound's spikes,
+  synth only) found it in the sheet.
+- **Measured before the fix** (headless Chrome, the built app, scratch `b07_repro.mjs`):
+  - **The sound outlived Stop:** 1 of 40 Start/Stop tries unthrottled, 2 of 40 at a 4× CPU
+    throttle. It was still playing 6 s later at rms ~0.027 (an idle's level), until the next
+    Start.
+  - **Manual tapped while "Starting…":** at 4×, 6 of 6 stuck there for good; unthrottled,
+    1 of 6 drove anyway, in Auto with Manual shown.
+  - A double tap on the first Start: 0 of 16. Not fixed; a MINOR note (SR1): it could make a
+    second AudioContext.
+- **Causes:**
+  - the worklet plays its last frame until a `'reset'`. The reset (node port) and the frames
+    (their own channel) travel unordered, so a stopping worker's late frame set the sound again;
+  - `stop()` did nothing to a load in progress.
+- **Fixed** (app only):
+  - the worklet takes frames only from its current loop channel, and `'reset'` closes it;
+  - `LiveSession.stop()` ends earlier loads (a generation after the fetch), returns `'loading'`
+    to `'idle'`, and ignores a stopped worker's messages.
+- **Tests:** `e2e:enjoy` +5 on a fresh page, each race forced: `terminate` held back 150 ms;
+  the grid's fetch or the worker's `'ready'` held 1.5 s.
+  - **Mutants 6 of 6 caught**, baseline 36/0, every run to its totals.
+  - The first version's two survivors (rejecting the wait on Stop, a catch-side check) had no
+    visible effect and were removed.
+- **Verified (local, Node 24.15):** units 145 (also with `physics-version.ts` aside);
+  `e2e:enjoy` 36/0; `e2e:drive` 11/0; `build:pages` builds.
+- **Next:** read every CI job on #140; the owner tries Stop on the phone after the merge. Then
+  this session's parked plan: the cold-start ECU proposal (FINDING-031 C, PLAN's "next
+  proposal"), docs only.
+
 **Session 10, FINDING-032 fixed (2026-10-20), `fix/finding-032-air-density`** (from `main`
 at `4c2a301`; independent of #135, #136 and P06):
 - **The finding:** the live loop's radiator, fan and aerodynamic drag used 1.20 kg/m³
