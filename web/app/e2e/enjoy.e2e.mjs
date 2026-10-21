@@ -463,6 +463,91 @@ if (unitOpts.length) {
   await page.select("select.drive-units", "metric");
 }
 
+// ---- B-07 (the owner's sheet): "Engine doesn't stop even when we stop the engine" ----
+// A fresh page, so its wrappers touch nothing above. Measured before the fix (4x CPU
+// throttle): the sound outlived Stop in 2 of 40 tries, and a gearbox tapped while
+// "Starting…" left the page there for good in 6 of 6. Each check here forces its race:
+// - Worker.terminate is held back 150 ms, as a busy phone's worker can still post a
+//   frame after Stop's reset reaches the audio thread (the synth then held that frame
+//   and played it until the next Start). The worklet's level reports count the sound:
+//   it sends none while silent.
+// - a held request keeps the page "Starting…" while Manual is tapped: the grid's fetch
+//   (the load went on and drove in Auto), then the drive worker's script (the load
+//   waited for a worker Stop had ended, forever).
+{
+  const p2 = await browser.newPage();
+  await p2.emulate({ viewport: { width: 915, height: 412, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true, isLandscape: true },
+    userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 7a) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36" });
+  await p2.evaluateOnNewDocument(() => {
+    const Node = globalThis.AudioWorkletNode;
+    globalThis.__levels = [];
+    globalThis.AudioWorkletNode = class extends Node {
+      constructor(...a) {
+        super(...a);
+        this.port.addEventListener("message", ev => {
+          if (ev.data?.type === "level") globalThis.__levels.push([performance.now(), ev.data.rms]);
+        });
+      }
+    };
+    const terminate = Worker.prototype.terminate;
+    Worker.prototype.terminate = function () { setTimeout(() => terminate.call(this), 150); };
+  });
+  const p2problems = [];
+  p2.on("pageerror", e => p2problems.push(`pageerror: ${e.message}`));
+  p2.on("console", m => { if (m.type() === "error") p2problems.push(`console: ${m.text()}`); });
+  let hold = null;                                       // a request to hold back 1.5 s
+  await p2.setRequestInterception(true);
+  p2.on("request", r => { if (hold?.test(r.url())) setTimeout(() => r.continue(), 1500); else r.continue(); });
+  const cdp2 = await p2.createCDPSession();
+  const tap2 = async sel => {
+    const b = await p2.$eval(sel, e => { const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+    await cdp2.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: b.x, y: b.y, id: 1 }] });
+    await sleep(40);
+    await cdp2.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  };
+  const box = m => p2.evaluate(m => [...document.querySelectorAll(".seg button")].find(b => b.textContent.trim() === m).click(), m);
+  await p2.goto(`http://localhost:${port}${BASE}enjoy?e2e`, { waitUntil: "load" });
+  await p2.evaluate(() => localStorage.clear());
+  await p2.reload({ waitUntil: "load" });
+
+  await p2.waitForSelector("button.start");
+  await tap2("button.start");
+  await p2.waitForSelector("button.stop", { timeout: 60_000 });
+  await sleep(1500);
+  const before = await p2.evaluate(() => globalThis.__levels.filter(([, rms]) => rms > 1e-6).length);
+  const t0 = await p2.evaluate(() => performance.now());
+  await tap2("button.stop");
+  await sleep(1800);
+  const after = await p2.evaluate(t0 => globalThis.__levels.filter(([t, rms]) => t > t0 + 600 && rms > 1e-6).length, t0);
+  check("B-07: Stop silences the engine, even when the stopped worker posts after Stop's reset",
+    before > 0 && after === 0, `sound reports: ${before} while driving, ${after} from 0.6 to 1.8 s after Stop`);
+
+  const starting = async () => {
+    await p2.waitForSelector("button.start:not([disabled])");
+    await box("Auto");
+    await tap2("button.start");
+    await p2.waitForFunction(() => document.querySelector("button.start")?.disabled === true, { timeout: 5000 }).catch(() => {});
+    const loading = await p2.evaluate(() => document.querySelector("button.start")?.disabled === true);
+    await box("Manual");
+    hold = null;
+    await sleep(2500);
+    return { loading, ...(await p2.evaluate(() => ({ driving: !!document.querySelector("button.stop"),
+      start: document.querySelector("button.start")?.textContent.trim(), disabled: document.querySelector("button.start")?.disabled }))) };
+  };
+  for (const [what, re] of [["the grid's fetch", /grids\/[^/]+\.json$/], ["the drive worker's start", /\/worker-[^/]+\.js$/]]) {
+    hold = re;
+    const s = await starting();
+    check(`B-07: a gearbox tapped while "Starting…" (held in ${what}) stops the start, and the page can start again`,
+      s.loading && !s.driving && s.start === "Start engine" && s.disabled === false, JSON.stringify(s));
+  }
+  await tap2("button.start");
+  await p2.waitForFunction(() => globalThis.__enjoy.view(), { timeout: 60_000 }).catch(() => {});
+  const v2 = await p2.evaluate(() => globalThis.__enjoy.view());
+  check("B-07: the next Start drives in the gearbox now chosen", v2?.trans === "manual", `trans ${v2?.trans}`);
+  check("B-07: no page errors on its page", p2problems.length === 0, p2problems.slice(0, 3).join(" | "));
+  await p2.close();
+}
+
 // ---- portrait ----
 await page.setViewport({ width: 412, height: 915, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true, isLandscape: false });
 await sleep(300);
