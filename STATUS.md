@@ -28,9 +28,14 @@
     visible effect and were removed.
 - **Verified (local, Node 24.15):** units 145 (also with `physics-version.ts` aside);
   `e2e:enjoy` 36/0; `e2e:drive` 11/0; `build:pages` builds.
-- **Next:** read every CI job on #140; the owner tries Stop on the phone after the merge. Then
-  this session's parked plan: the cold-start ECU proposal (FINDING-031 C, PLAN's "next
-  proposal"), docs only.
+- **CI on #140 at `feb0606`: 10 of 10, every job read.** Web e2e: `e2e:enjoy` 36/0, the five
+  B-07 checks among them; the job's other suites 15, 11, 6, 18, 6, 5, 0 failed. Units 27 of 27
+  files. Physics 99/0/3 on 3.10 and 3.12, Pyodide 79/0/2 (20 skipped); grid, custom, fixtures
+  and SolverPort passed. **Ready to merge**, in any order with #138 and #139 (keep both sides
+  of STATUS.md's top, and the CSV's rows in ID order).
+- **Next:** the owner tries Stop on the phone after the merge. Then, the owner's pick: the
+  cold-start ECU proposal (FINDING-031 C, PLAN's "next proposal", docs only) or FINDING-033 A
+  (stall an automatic held at its 60 rpm floor; after #138, which changes `live.py` too).
 
 **Session 10, FINDING-032 fixed (2026-10-20), `fix/finding-032-air-density`** (from `main`
 at `4c2a301`; independent of #135, #136 and P06):
