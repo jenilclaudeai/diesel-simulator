@@ -27,7 +27,12 @@
     at 8 kB).
 - **Not verifiable here:** the feel on the S9+, and the battery cost of a continuous buzz.
   The switch turns it off.
-- **Next:** PR, read every CI job, the owner tries it on the phone after the merge.
+- ~~**Next:** PR, read every CI job, the owner tries it on the phone after the merge.~~
+  **PR #139; CI at `a901895`: 10 of 10, every job read.** Units 147 (27 files); check:labels
+  6 of 10; e2e enjoy **33/0** (36 vibrate calls; the Test tap and driving on-times 33, 25 ms),
+  drive 11, sound 6, dyno 15, cycle 11, spec 18, sweep 6, durability 5; physics 3.10, 3.12,
+  Pyodide, fixtures + TS ports, SolverPort, grid and custom e2e pass (no physics changed).
+  **Next:** the owner merges, then tries it on the S9+ (tap Test first, then drive).
 
 **Session 10, FINDING-032 fixed (2026-10-20), `fix/finding-032-air-density`** (from `main`
 at `4c2a301`; independent of #135, #136 and P06):
