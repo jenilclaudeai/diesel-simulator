@@ -1,5 +1,23 @@
 # Status
 
+**Session 10, #139 brought up to `main` after #138 (2026-10-22):** the owner asked for the
+conflicts to be resolved. Merged `main` (`ac3c15e`) in, no rebase, no force-push.
+- **Conflicts, each kept both sides:**
+  - `enjoy.html`: P06's route and goal pickers, then P01's switch with its Test button and
+    note;
+  - `enjoy.ts` and `vibration.spec.ts`: both imports. The spec keeps P06's breaker test, and
+    the shake test takes #139's title (its body was already #139's driving shake);
+  - STATUS.md: both entries.
+- **One check broke after the merge, not the app:** `e2e:enjoy`'s Test tap. P06's pickers make
+  the start screen scroll (481 px in 342 at 412 px high), and Test sat below the fold at
+  y 410, so the touch landed off screen. The check now scrolls to Test and back up to Start.
+  Mutant (Test unwired): caught, 39/1.
+- **Verified (local, Node 24.15):**
+  - units **164** (29 files; main's 162 + #139's 2), also with `physics-version.ts` aside;
+  - `build:pages` builds (`enjoy.css` 5.62 kB, over its 4 kB warning, under the 8 kB error);
+  - **`e2e:enjoy` 40/0** (main's 38 + #139's 2).
+- **Next:** CI on #139, every job read. Then #140 (B-07) needs the same merge.
+
 **Session 10, P01 widened: vibration while driving (2026-10-21), `fix/p01-driving-vibration`**
 (from `main` at `173a65f`, after #137):
 - **The owner: "The vibration is not working."** Measured before touching code:
@@ -33,6 +51,197 @@
   drive 11, sound 6, dyno 15, cycle 11, spec 18, sweep 6, durability 5; physics 3.10, 3.12,
   Pyodide, fixtures + TS ports, SolverPort, grid and custom e2e pass (no physics changed).
   **Next:** the owner merges, then tries it on the S9+ (tap Test first, then drive).
+
+**Session 10, #138 brought up to `main` (2026-10-21):** #137 merged at 13:40 UTC, after #136.
+- **The conflicts:**
+  - Code, resolved by keeping both:
+    - `live.py` and `driveline.ts`: the driveline keeps P06's road fields and #137's
+      `rho_air`. Drag is `0.5 · rho_air · CdA` times P06's wind-aware air-speed term, so a
+      climb's thinner air now reaches drag and the radiator too;
+    - `hints.ts`: P06's breaker rule, then `TOUCH`, then #136's `hintInUnits`;
+    - both specs.
+  - `FINDING-032.md`: `main`'s (fixed) text.
+  - STATUS: both sides kept.
+  - `live.json`: regenerated from the merged code.
+- **Proof, the fixture against P06's pre-merge one:**
+  - the eight drives with no route at standard air: 0 values changed;
+  - the weather, waxed and limp drives changed by exactly #137's counts (10,710 / 61 /
+    11,028);
+  - the two route drives changed (6,781 / 11,828): a route's altitude moves the air, which
+    now reaches drag and the radiator;
+  - added: `dl.rho_air` and #137's fan drive.
+- **Verified (local):**
+  - suite **97 passed, 0 failed, 3 known, 4 skipped** (96 + #137's test);
+  - TS live 68/0, both pars equal to Python;
+  - units 162 (160 + #136's 2);
+  - e2e: enjoy 38/38 (the goal run; the par in 2.4 s), drive 11/11 (Leh's worker equals
+    native Python, worst 0; the US °F check);
+  - fixtures current; audit 0 DEAD, 2 FROZEN.
+- ~~**Next:** CI on #138, every job read; then it is ready for the owner.~~ **CI on #138
+  (`8e631bf`): 10 of 10, every job read.**
+  - physics 102/0/3 on 3.10 and 3.12; Pyodide 81/0/2/21 skipped;
+  - units 162; check:labels 6 of 10;
+  - TS 5 + 68 + 12 + 11; SolverPort 20 + 15 + 30;
+  - e2e enjoy 38, drive 11 (the US wax check); grid 9; custom 7.
+  - The fixtures job took 19 min 17 s: inside the new 25-minute limit, past the old 15.
+  - **Ready to merge.**
+- **Owner, on the S9+:** a route's feel, the breaker buzz, a goal run, and P01's vibration;
+  the Phase 5 phone re-check. **Open for the owner:** FINDING-033 (recommended A, stall
+  an automatic that can't hold its speed, after P06).
+
+**Session 10, #138's fixtures job hit its time limit (2026-10-21):**
+- **What happened:** CI's "golden fixtures + TypeScript ports" job was cancelled at 15:17
+  against `timeout-minutes: 15`, still generating; not a failure of any check. The other 9
+  jobs passed (physics 101/0/3 on both Pythons, Pyodide 80, units 160, e2e enjoy 38,
+  drive 10).
+- **Measured:** Python runs a par at about real time (66 frames/s).
+  - par_city cost 75 s, par_pass 243 s, par_random_leh 542 s (600 s capped, though at 60 rpm
+    by 30 s).
+  - The live check took 1,189 s on this Mac.
+  - #137's fixtures job alone took 13.5 min of the 15.
+- **Fixed:**
+  - par_pass dropped: the route drives check the hills frame by frame;
+  - the Leh par capped at 90 s, still unfinished;
+  - the live check takes 556 s now;
+  - the job's limit raised from 15 to 25 minutes (`ci.yml`, with the reason);
+  - ADR-022 corrected in place.
+- **Rechecked:** TS live 63/0, both pars equal to Python; par mutants 8 of 8, the cap
+  mutant included.
+- **#137:** CI after the merge with #136: 10 of 10, every job read (physics 99/0/3 on both
+  Pythons, Pyodide 79, units 145, TS live 56, e2e drive 11 and enjoy 31). **Ready to merge.**
+- **#138 conflicts with `main`** since #136 merged. It gets resolved once, after #137 merges.
+
+**Session 10, PRs (2026-10-21):**
+- **#135 (P01 vibration) merged** by the owner, 2026-10-20 21:27 UTC.
+- **#136 and #137 conflicted with it.**
+  - The owner reported it; the conflicts were docs only: STATUS.md in both, and CLAUDE.md's
+    units paragraph in #136.
+  - Resolved by merging `main` in, keeping both sides; no rebase, no force-push.
+  - #136's merged tree: units 145 (P01's 143 + 2), and the build passes.
+  - #137's: TS live 56/0, units 143.
+  - Both MERGEABLE again. ~~CI rerunning.~~ **CI after the merge: 10 of 10 on both, every job
+    read.**
+    - #136: physics 98/0/3 on 3.10 and 3.12; Pyodide 78; units 145; TS live 51; e2e drive
+      11 (the US wax check passes), enjoy 31; grid 9; custom 7.
+    - #137: physics 99/0/3; Pyodide 79; units 143; TS live 56; e2e drive 10, enjoy 31;
+      grid 9; custom 7.
+    - **Both ready to merge, #136 first.**
+- **#138 (P06, tiers 1 and 2) opened**, with `main` merged in. Only P06's commits remain.
+- **Merge order: #136, #137, then #138.** #138 will conflict with both (`enjoy/hints.ts`,
+  `live.py`, `engine.ts`, `driveline.ts`, `gen_fixtures.py`, `live.json`, `FINDING-032.md`,
+  STATUS, CLAUDE.md).
+  - Then: merge `main` in, keep both sides, take #137's FINDING-032 text, and regenerate
+    `live.json` (`--only live`, after clearing `__pycache__`).
+  - Then rerun the TS tests, the suite and e2e:enjoy before saying #138 is ready.
+
+**Session 10, P06 tier 2 built (2026-10-21), on `feat/p06-roads`** (ADR-022). Its PR still
+waits for #135.
+- **Built:**
+  - goals in /enjoy: a Time trial (the fastest lap on the par's fuel) or an Economy run (the
+    least fuel within the par's time), chosen beside the route and carried in the link
+    (`?route=city&goal=time`);
+  - the par, a ghost lap at a steady 70 % in Auto: `live.par_run`, `parRun`, run in
+    `par.worker.ts` from `make-engine.ts`, which the drive worker now shares;
+  - +5 s for each breaker taken too fast; a stop on overheat or running dry fails a run;
+  - personal bests per browser, keyed by engine, route, goal, place and gearbox;
+  - the logic in `enjoy/goals.ts`.
+- **One change from the proposal (ADR-022):** every par is computed in the browser, at the
+  driver's own air and fuel. A shipped par would be right only at standard air.
+- **Found:**
+  - **FINDING-033** (latent, for the owner): on the fixture's small grid a cold start at
+    Leh drags the automatic to its 60 rpm floor, and it stays there "running", never
+    stalled. No shipped grid reaches it (40 runs, lowest 561 rpm). Recommended: A, stall
+    it so Enjoy offers Restart, after P06.
+  - `--check` crashed on the new `pars` key (`compare_live` read it as a drive). Fixed;
+    nudging a par's fuel by 0.1 % or its hits by one makes it report stale (see the PR).
+  - A par mutant ("the fuel from zero") survived on fresh engines. The tests now use a used
+    trip meter.
+- **Verified (local):**
+  - Python suite **96 passed, 0 failed, 3 known, 4 skipped** (95 + `test_p06_par_run`);
+  - TS live 64/0, three pars equal to Python *(since cut to two: see the entry above)* (the city and the pass to the frame; the
+    stuck Leh par at its 600 s cap);
+  - par mutants 8 of 8 (4 Python, 4 TS); goals mutants 9 of 9;
+  - app units 160/160, also with `physics-version.ts` moved aside;
+  - e2e:enjoy 38/38: the par in 6.2 s in Chrome; a flat-out city lap was 101.0 s with
+    6 breakers on 0.417 L against the par's 0.305 L, so "over the par's fuel";
+  - fixtures current; audit 0 DEAD, 2 FROZEN; check:labels 6 of 10.
+- **#137 (FINDING-032, the place's air density):** CI 10 of 10, every job read (physics
+  99/0/3 on both Pythons, Pyodide 79, units 137, TS live 56, e2e drive 10 and enjoy 29).
+  **Ready to merge**, as is #136.
+
+**Session 10, P06 tier 2 measured (2026-10-20), on `feat/p06-roads`** (docs only):
+`reviews/PROPOSAL-P06-goals.md` and `reviews/FINDING-032.md`. ~~**Questions for the owner.**~~
+**Decided (2026-10-20): every recommendation** (B with C; overheating dropped as a goal;
++5 s a breaker; FINDING-032 A as its own PR). Next: FINDING-032's fix, then the goals.
+- **The goals as ADR-016 named them can't be won and lost on their own.**
+  - "Reach the pass without overheating": four of five engines peak at 90-96 °C against a
+    100 °C warning, flat out, in 42 °C desert, even on a 15 km, 7 % climb. Only single10
+    overheats, and it can't climb the pass.
+  - A time alone is won flat out, and economy alone by going slower.
+  - A time limit plus a fuel budget is a real trade-off, but "beat the par on both" ranges
+    from narrow (hatch15, 1 s and 1.7 %) to near-impossible (truck127).
+- **Recommended:**
+  - B: one score with the par's limit on the other (a time trial on the par's fuel, an
+    economy run in the par's time), with personal bests (C);
+  - overheating dropped as a goal (a stop on overheat fails any run);
+  - +5 s per breaker taken too fast.
+- **Measured on the way:** the TS loop reproduces Python's full laps exactly and runs at
+  23x real time headless. Named routes can ship pars; a random route's par would compute
+  during the first lap.
+- **FINDING-032:** the live loop's radiator and fan use sea-level air density everywhere
+  (`rho_air = 1.20`). The place's density would add at most 3.2 °C, and no run crosses the
+  warning either way. Recommended: A, fix it as its own PR (the live fixtures move at
+  non-standard air; no grid goes stale).
+- **Elsewhere:** #136 (the wax hint in the driver's units) passed CI 10 of 10, every job
+  read (physics 98/0/3 on 3.10 and 3.12, Pyodide 78/0/2/20, units 139, e2e drive 11 and
+  enjoy 29). It is ready to merge.
+
+**Session 10, P06 tier 1 built (2026-10-20), `feat/p06-roads`** (3 commits, pushed;
+branched from #135's `feat/p01-vibration`, so **its PR waits until #135 merges**, which
+avoids a stack). ADR-021, `reviews/PROPOSAL-P06.md`.
+- **The owner's choices (2026-10-19):** Enjoy only; tier 1 first, then goals; everything
+  in PLAN; named routes and random ones shared by their seed.
+- **Built:**
+  - routes in the live loop (`live.py`: `Route`, `random_route` by mulberry32,
+    `ROUTES` pass/city/desert, `route_from`; `set_route`, `_road`), mirrored in
+    `web/physics/src/live/route.ts`;
+  - what the engine feels: grade, surface (rolling resistance x 1.0/0.9/2.0/2.6), wind on
+    air speed, a breaker's 0.15 s pulse (6 % of speed x j, j from 15 to 50 km/h) and its
+    hint, and ISA altitude through the weather table;
+  - Enjoy: a route picker (Open road, three named routes, or Random with a seed and New
+    road). The picker sets `?route=` in the address, which is the link to share; a note
+    gives length, highest point and breakers;
+  - Enjoy: a road-ahead strip (1.5 km of profile, surfaces, breakers, and a line with
+    grade, surface, wind, height and the next breaker);
+  - Enjoy: a two-bump buzz for a breaker taken too fast, and the breaker hint in the
+    driver's units.
+  - **No grid goes stale**: `live.py` is outside the grid hash.
+- **Measured on the way:**
+  1. A climb leaked into the grid's shared spec. Mutants found it; `set_route` now
+     copies `spec` and `spec.thermal`.
+  2. CPython's `**` and V8's differ in the last bit at 1,958 of 20,000 altitudes. The
+     ISA power is now a series on both sides.
+  3. The DCT on random:1234 is knife-edge: a 1e-9 nudge in Python alone moves an event
+     12 frames. That fixture drive uses the converter box.
+  4. A `page.goto` late in the Enjoy e2e lost touch emulation. The link check opens its
+     own tab.
+  5. A strip test passed on all-`NaN` values (its mutant survived). It is fixed.
+  All five are in the proposal; traps 1, 2, 3 and 4 are in CLAUDE.md.
+- **Verified (local):**
+  - Python suite **95 passed, 0 failed, 3 known, 4 skipped** (scipy-gated sound
+    tests; was 93 plus the two P06 tests);
+  - TS physics 5 + 61 + 12 + 11, 0 failed (route drives per step 2.9e-14, every event
+    on the same step);
+  - TS mutants 7 of 7 caught; app units 153/153, also with `physics-version.ts` moved
+    aside; app mutants 10 of 10 non-equivalent caught;
+  - e2e:enjoy 36/36; e2e:drive 10/10; check:labels 6 of 10; audit 0 DEAD, 2 FROZEN
+    (the known h_ring clamp); fixtures current.
+  - **CI not yet run** (no PR).
+- **Next:**
+  - open the P06 PR once #135 merges, read every CI job;
+  - then tier 2 (goals on a route), with its own short proposal;
+  - owner: merge #135; feel P01 and the breaker buzz on the S9+; the Phase 5 phone
+    re-check.
 
 **Session 10, FINDING-032 fixed (2026-10-20), `fix/finding-032-air-density`** (from `main`
 at `4c2a301`; independent of #135, #136 and P06):

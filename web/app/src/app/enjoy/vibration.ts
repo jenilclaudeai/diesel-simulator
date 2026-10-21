@@ -23,8 +23,15 @@ export const STALL = [160, 50, 90, 60, 40];       // dying: strong, then fading
 export const SHIFT = [45];                        // a gear change: one jolt
 export const LIMITER = [30, 30, 30, 30, 30];      // bouncing off the limiter
 
+/** P06: a speed breaker taken too fast -- the front axle, then the rear; longer on-times for a harder jolt (0-1). */
+export function breakerPattern(jolt: number): number[] {
+  const j = Math.min(1, Math.max(0, jolt));
+  return [Math.round(50 + 110 * j), 70, Math.round(30 + 80 * j)];
+}
+
 export interface VibState {
   rpm: number; gear: string; throttle: number; stalled: boolean; engine_stopped: boolean;
+  breaker_hits?: number; jolt?: number;   // P06: absent or 0 without a route
 }
 export interface VibInfo { idle_rpm: number; max_rpm: number; cylinders: number }
 
@@ -35,10 +42,11 @@ export function firingHz(rpm: number, cylinders: number): number {
 
 const running = (s: VibState, i: VibInfo) => !s.stalled && !s.engine_stopped && s.rpm > 0.5 * i.idle_rpm;
 
-/** The event between two frames, if any: start, stall, a gear change, the limiter reached. */
+/** The event between two frames, if any: start, stall, a speed breaker hit, a gear change, the limiter reached. */
 export function eventPattern(prev: VibState | null, now: VibState, info: VibInfo): number[] | null {
   if (!prev) return null;
   if (!prev.stalled && now.stalled) return STALL;
+  if ((now.breaker_hits ?? 0) > (prev.breaker_hits ?? 0)) return breakerPattern(now.jolt ?? 1);
   if (!running(prev, info) && running(now, info)) return START;
   if (running(now, info) && prev.gear !== now.gear) return SHIFT;
   const lim = 0.985 * info.max_rpm;

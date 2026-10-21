@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import {
-  eventPattern, firingHz, LIMITER, shakePattern, SHIFT, STALL, START, testNote, VIBRATION_KEY, VibrationSetting, Vibrator,
+  breakerPattern, eventPattern, firingHz, LIMITER, shakePattern, SHIFT, STALL, START, testNote, VIBRATION_KEY, VibrationSetting, Vibrator,
   type VibInfo, type VibState,
 } from './vibration';
 
@@ -23,6 +23,19 @@ describe('P01 vibration', () => {
     expect(eventPattern(st({ rpm: 4560 }), st({ rpm: 4570 }), I4)).toBeNull();     // only on reaching it
     expect(eventPattern(st(), st(), I4)).toBeNull();
     expect(eventPattern(null, st(), I4)).toBeNull();
+  });
+
+  it('P06: a speed breaker hit too fast buzzes twice (front axle, rear), harder for a harder jolt', () => {
+    const hit = eventPattern(st({ breaker_hits: 2 }), st({ breaker_hits: 3, jolt: 0.5 }), I4)!;
+    expect(hit).toEqual(breakerPattern(0.5));
+    expect(hit).toHaveLength(3);
+    expect(breakerPattern(1)[0]!).toBeGreaterThan(breakerPattern(0.2)[0]!);
+    expect(breakerPattern(1)[2]!).toBeGreaterThan(breakerPattern(0.2)[2]!);
+    expect(breakerPattern(5)).toEqual(breakerPattern(1));                          // clipped
+    expect(eventPattern(st({ breaker_hits: 3 }), st({ breaker_hits: 3, jolt: 0.5 }), I4)).toBeNull();
+    expect(eventPattern(st(), st({ jolt: 0.5 }), I4)).toBeNull();                  // no route: no hits
+    // stalling on the breaker: the stall wins
+    expect(eventPattern(st({ breaker_hits: 0 }), st({ breaker_hits: 1, jolt: 1, stalled: true, rpm: 0 }), I4)).toBe(STALL);
   });
 
   it('the shake: pulsed at the firing rate for the single, a buzz for a four, firmest lugging', () => {
