@@ -38,7 +38,9 @@
     24.15 via `npx -p node@24.15.0`).
   - `perf` at 6×, main thread: synth mean 0.54 ms (main 0.47–0.52), p99 1.8–1.9 of 2.90 ms; worker equal.
   - `tools/p10_ab.py`'s hiss wrapper now passes the level on; it was not run.
-- **CI on #141:** not read yet. Read every job (Pyodide too) before calling it ready.
+- **CI on #141 (`544f10c`, run 39630080216): 10 of 10 passed, every job read.** Physics 3.10 41.4 min and
+  3.12 33.6; Pyodide 43.3 min, **80 passed, 0 failed, 2 known, 20 skipped**, the B-08 test among the passes;
+  golden fixtures + TS ports; SolverPort; web app; the three e2e jobs; claude-review.
 - **Waiting on the owner:** listen to `out/b08/` in the main checkout. Three A (`main`) / B (fix) pairs at
   true level: crdi15 exterior driving, hatch15 cabin driving, the single revving in neutral; pedal off at
   3–6, 9–10 and 13–15 s. Then merge or say what is still wrong. The phone check on the live site comes after.
