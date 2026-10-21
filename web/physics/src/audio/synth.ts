@@ -7,7 +7,7 @@ import type { SourceKey, Sources } from "../live/adr011.js";
 import { SOURCE_KEYS } from "../live/adr011.js";
 import { SLAP_CLR_REF } from "../slap.js";
 import {
-  BLOCK, Biquad, Chain, Comb, Delay, FS, NOISE_N, Norm, NoiseCursor, SRC_TAU,
+  BLOCK, Biquad, Chain, Comb, CycleNorm, Delay, FS, NOISE_N, Norm, NoiseCursor, SRC_TAU,
   butter, noiseTable, peakBa, resonatorBa,
 } from "./dsp.js";
 
@@ -123,6 +123,9 @@ export class LiveSynth {
   private tick!: [Biquad, Biquad]; private injr!: [Biquad, Biquad]; private slapr!: [Biquad, Biquad];
   private whoosh_bp!: Chain; private rumble_bp!: Chain;
   private norm!: Record<string, Norm>;
+  private cnorm!: Record<string, CycleNorm>;      // B-08: the crank-locked sources
+  private amp: Record<string, number> | null = null;
+  private amp_target: Record<string, number> = {};
   mic!: Mic;
   micName!: string;
   private out_lp!: Chain; private out_hp!: Chain;
@@ -174,9 +177,11 @@ export class LiveSynth {
     this.slapr = [new Biquad(resonatorBa(900.0, 9.0)), new Biquad(resonatorBa(1750.0, 12.0))];
     this.whoosh_bp = butter("band", [1200.0, 9000.0], 2);
     this.rumble_bp = butter("band", [40.0, 480.0], 2);
+    // B-08: the crank-locked sources average over a cycle, the noises and tones over NORM_TAU
+    this.cnorm = {};
+    for (const k of ["exh", "int", "exc", "knock", "tick", "inj", "slap"]) this.cnorm[k] = new CycleNorm();
     this.norm = {};
-    for (const k of ["exh", "int", "hiss", "exc", "knock", "tick", "inj", "slap", "whoosh", "turbo", "gear", "rumble"])
-      this.norm[k] = new Norm();
+    for (const k of ["hiss", "whoosh", "turbo", "gear", "rumble"]) this.norm[k] = new Norm();
     this.setMic(mic);
   }
 
@@ -208,7 +213,27 @@ export class LiveSynth {
       return t;
     };
     this.target = copy(this.target);
-    if (this.src === null) this.src = copy(null);
+    this.amps(this.target, this.amp_target);
+    if (this.src === null) {
+      this.src = copy(null);
+      this.amp = { ...this.amp_target };
+    }
+  }
+
+  /** B-08 (livesound._amps): each crank-locked source's level over the cycle,
+   *  ahead of the filters: the port flows' slope per degree, the combustion
+   *  trace, the impulses and the rumble's firing envelope. */
+  private amps(t: Sources, into: Record<string, number>): void {
+    const rms = (x: Arr, f: (v: number, i: number) => number): number => {
+      let s = 0.0;
+      for (let i = 0; i < x.length; i++) { const v = f(x[i]!, i); s += v * v; }
+      return Math.max(Math.sqrt(s / x.length), 1e-30);
+    };
+    const slope = (x: Arr): number => rms(x, (v, i) => (i + 1 < x.length ? x[i + 1]! : x[0]!) - v) / this.dtheta;
+    const id = (v: number): number => v;
+    into["exh"] = slope(t.exh_flow); into["int"] = slope(t.int_flow); into["exc"] = rms(t.dpdth, id);
+    into["tick"] = rms(t.valve, id); into["inj"] = rms(t.inj, id); into["slap"] = rms(t.slap, id);
+    into["rumble"] = rms(t.dpdth, v => 0.6 + 0.4 * Math.abs(v));
   }
 
   private glide(): void {
@@ -219,6 +244,8 @@ export class LiveSynth {
       for (let i = 0; i < x.length; i++) x[i] = x[i]! + a * (y[i]! - x[i]!);
     }
     for (const k in t._meta) s._meta[k] = s._meta[k]! + a * (t._meta[k]! - s._meta[k]!);
+    const A = this.amp!, T = this.amp_target;      // B-08: the levels glide with their waveforms
+    for (const k in T) A[k] = A[k]! + a * (T[k]! - A[k]!);
   }
 
   private sampleInto(name: SourceKey, theta: Arr, out: Arr): void {
@@ -256,7 +283,14 @@ export class LiveSynth {
     const rpmRef = Math.max(meta["rpm"]!, 1.0);
     const spd = sc.get("spd");
     for (let i = 0; i < n; i++) spd[i] = rpm_s[i]! / rpmRef;
-    const N = this.norm, P = this.parts;
+    const N = this.norm, CN = this.cnorm, P = this.parts;
+    // B-08: the levels the shape trackers are told, and the cycle they average over
+    const A = this.amp!;
+    const cyc = 120.0 / mean(rpm_s) * fs / n;                 // blocks per engine cycle
+    let wq = 0.0;
+    for (let i = 0; i < n; i++) wq += rpm_s[i]! * spd[i]!;
+    const w_q = 6.0 * (wq / n);                              // a port flow's slope per degree -> per second
+    const w_p = 6.0 * mean(rpm_s);                           // dp/dtheta -> dp/dt
 
     // ---- exhaust ----
     const c_exh = Math.sqrt(1.4 * 287.0 * Math.max(meta["T_exh"]!, 400.0));
@@ -279,7 +313,7 @@ export class LiveSynth {
     if (this.exh_turb) this.exh_turb.processInto(y, y);
     const kExh = (meta["mdot_air"]! / this.ref_mdot) ** 1.5;
     const exhaust = P.exhaust;
-    N["exh"]!.applyInto(y, exhaust);
+    CN["exh"]!.applyInto(y, exhaust, A["exh"]! * w_q, cyc);
     for (let i = 0; i < n; i++) exhaust[i] = exhaust[i]! * kExh;
 
     // ---- intake ----
@@ -298,8 +332,8 @@ export class LiveSynth {
     const mdot = meta["mdot_air"]!;
     for (let i = 0; i < n; i++) hiss[i] = hiss[i]! * (mdot * spd[i]! ** 1.5) ** 1.5 * 4.0;
     const ni = sc.get("ni"), nh = sc.get("nh");
-    N["int"]!.applyInto(yi, ni);
-    N["hiss"]!.applyInto(hiss, nh);
+    CN["int"]!.applyInto(yi, ni, A["int"]! * w_q, cyc);
+    N["hiss"]!.applyInto(hiss, nh, (mdot * mean(spd) ** 1.5) ** 1.5 * 4.0);     // B-08: the scale above
     const kInt = (mdot / this.ref_mdot) ** 1.5;          // FINDING-022
     const intake = P.intake;
     for (let i = 0; i < n; i++) intake[i] = (ni[i]! + HISS_WEIGHT * nh[i]!) * kInt;
@@ -308,17 +342,19 @@ export class LiveSynth {
     const dp = sc.get("dp"), exc = sc.get("exc"), knock = sc.get("knock"), kr = sc.get("kr");
     this.sampleInto("dpdth", theta, dp);
     for (let i = 0; i < n; i++) exc[i] = dp[i]! * (rpm_s[i]! / 60.0 * 360.0);
-    N["exc"]!.applyInto(exc, exc);
+    CN["exc"]!.applyInto(exc, exc, A["exc"]! * w_p, cyc);
     const sharp = Math.min(3.0, meta["dpdt_max"]! / KNOCK_REF);
     knock.fill(0);
+    let a_knock = 0.0;               // B-08: the bands' weights, as if each band were equally loud
     for (const [bq, f0, gn] of this.knock) {
       bq.processInto(exc, kr);
       const k = gn * (1.0 + sharp * (f0 / 2000.0) ** 1.1);
       for (let i = 0; i < n; i++) knock[i] = knock[i]! + kr[i]! * k;
+      a_knock += k * k;
     }
     const kComb = meta["dpdt_max"]! / this.ref_dpdt;
     const combustion = P.combustion;
-    N["knock"]!.applyInto(knock, combustion);
+    CN["knock"]!.applyInto(knock, combustion, Math.sqrt(a_knock), cyc);
     for (let i = 0; i < n; i++) combustion[i] = combustion[i]! * kComb;
     // P09 (livesound): the live knock against the warm standard air's, played up by KNOCK_GAIN_EXP
     if (meta["dpdt_ref"] !== undefined) {
@@ -339,7 +375,8 @@ export class LiveSynth {
     this.sampleInto("slap", theta, src); pairInto(this.slapr, src, 0.7, sl);
     const a_tick = (Math.max(meta["v_seating"]!, 1e-6) / this.ref_vseat) ** 2;
     const a_slap = (Math.max(meta["skirt_clr"]!, 1e-9) / SLAP_CLR_REF) ** 0.6;
-    N["tick"]!.applyInto(tk, tk); N["inj"]!.applyInto(ij, ij); N["slap"]!.applyInto(sl, sl);
+    CN["tick"]!.applyInto(tk, tk, A["tick"]!, cyc); CN["inj"]!.applyInto(ij, ij, A["inj"]!, cyc);
+    CN["slap"]!.applyInto(sl, sl, A["slap"]!, cyc);
     const ks = 0.9 * a_slap;
     const mech = P.mech;
     for (let i = 0; i < n; i++) mech[i] = a_tick * tk[i]! + 0.75 * ij[i]! + ks * sl[i]!;
@@ -409,7 +446,7 @@ export class LiveSynth {
     const kR = (Math.max(meta["Pb"]!, 1e-9) / this.ref_Pb) ** 0.5;
     for (let i = 0; i < n; i++) rum[i] = rum[i]! * (0.6 + 0.4 * Math.abs(dp[i]!));
     const rumble = P.rumble;
-    N["rumble"]!.applyInto(rum, rumble);
+    N["rumble"]!.applyInto(rum, rumble, A["rumble"]!);
     for (let i = 0; i < n; i++) rumble[i] = rumble[i]! * kR;
 
     // ---- the microphone ----

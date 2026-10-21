@@ -10,8 +10,11 @@ held to this file sample for sample).
 
 What cannot stream is replaced by its causal equivalent, stated here:
   * render() normalises each source's SHAPE by the std of the whole render;
-    here a one-pole mean-square tracker per source (time constant NORM_TAU)
-    does it, seeded from the first block.
+    here a causal mean-square tracker per source does it, seeded from the
+    first block: over the last engine cycle for the crank-locked sources
+    (CycleNorm), a one-pole over NORM_TAU for the noises and tones (Norm).
+    Each is first divided by the level the synth knows ahead of the filters
+    (B-08), so a step in level is not let through while the tracker catches up.
   * render() divides the rumble's firing modulation by its maximum over the
     render; here it is not divided at all: ahead of the shape tracker, a
     constant scale changes nothing (FINDING-021, an equivalent mutant).
@@ -46,7 +49,9 @@ KNOCK_GAIN_EXP = 4.0
 
 FS = 44100
 BLOCK = 128                 # the AudioWorklet render quantum
-NORM_TAU = 0.3              # s, the shape-normalisation trackers
+NORM_TAU = 0.3              # s, the noises' and tones' shape trackers (Norm)
+NORM_CYCLE_MAX = 0.5        # s, the longest cycle CycleNorm averages over (below 240 rpm)
+NORM_RING = 256             # blocks CycleNorm keeps: > NORM_CYCLE_MAX * FS / BLOCK
 SRC_TAU = 0.05              # s, source waveforms glide to a new operating point
 NOISE_N = 1 << 18           # Gaussian table: ~6 s at 44.1 kHz per cursor
 SOURCE_KEYS = ("exh_flow", "int_flow", "dpdth", "inj", "valve", "slap")
@@ -228,16 +233,56 @@ class Comb:
 
 class Norm:
     """Causal shape normalisation: y / rms, with the mean square tracked by a
-    one-pole filter over blocks (seeded from the first block)."""
+    one-pole filter over blocks (seeded from the first block).
+
+    amp (B-08): the input's level where the synth knows it ahead of the
+    filters (a noise's scale, a firing envelope's RMS). The tracker then
+    follows only what the filters do to it. A constant amp changes nothing:
+    y / rms is scale-free."""
 
     def __init__(self, n=BLOCK, fs=FS, tau=NORM_TAU):
         self.beta = min(1.0, n / (tau * fs))
         self.ms = -1.0
 
-    def __call__(self, y):
+    def __call__(self, y, amp=1.0):
+        y = y / amp
         m = float(np.dot(y, y)) / len(y)
         self.ms = m if self.ms < 0.0 else self.ms + self.beta * (m - self.ms)
         return y / (math.sqrt(self.ms) + 1e-12)
+
+
+class CycleNorm:
+    """B-08: a crank-locked source's shape normalisation: y / rms, with the
+    mean square averaged over the last engine cycle (`cycle` blocks, the
+    oldest block weighted by the fraction, at most NORM_CYCLE_MAX; seeded
+    from the first block).
+
+    A one-pole over NORM_TAU (Norm) let a step in a source's level through
+    un-normalised for ~0.3 s while its level law applied it again: on a
+    tip-in +3 to +9 dB over a zero-lag normaliser, and dips of 4-10 dB on
+    the lift. Dividing by amp, the level the synth knows (the source
+    waveform's cycle RMS), leaves the tracker only the filters' colouring,
+    and a cycle's average of a periodic source has no lag beyond a cycle
+    and no ripple. A constant amp changes nothing."""
+
+    def __init__(self, n=BLOCK, fs=FS):
+        self.cap = NORM_CYCLE_MAX * fs / n
+        self.ring = np.zeros(NORM_RING)
+        self.k = 0
+
+    def __call__(self, y, amp, cycle):
+        y = y / amp
+        m = float(np.dot(y, y)) / len(y)
+        self.ring[self.k % NORM_RING] = m
+        self.k += 1
+        L_f = min(max(cycle, 1.0), self.cap, float(self.k))
+        L = int(L_f)
+        s = 0.0
+        for j in range(L):                          # newest first, as the TS port sums
+            s += self.ring[(self.k - 1 - j) % NORM_RING]
+        if L_f > L:
+            s += (L_f - L) * self.ring[(self.k - 1 - L) % NORM_RING]
+        return y / (math.sqrt(s / L_f) + 1e-12)
 
 
 class Delay:
@@ -352,8 +397,9 @@ class LiveSynth:
         self.slapr = (Biquad(*resonator_ba(900.0, 9.0)), Biquad(*resonator_ba(1750.0, 12.0)))
         self.whoosh_bp = butter("band", (1200.0, 9000.0), 2)
         self.rumble_bp = butter("band", (40.0, 480.0), 2)
-        self.norm = {k: Norm() for k in ("exh", "int", "hiss", "exc", "knock", "tick", "inj", "slap",
-                                         "whoosh", "turbo", "gear", "rumble")}
+        # B-08: the crank-locked sources average over a cycle, the noises and tones over NORM_TAU
+        self.norm = {k: CycleNorm() for k in ("exh", "int", "exc", "knock", "tick", "inj", "slap")}
+        self.norm.update({k: Norm() for k in ("hiss", "whoosh", "turbo", "gear", "rumble")})
         self.set_mic(mic)
 
     def set_mic(self, mic):
@@ -373,9 +419,24 @@ class LiveSynth:
             t[k] = smooth_port_flow(t[k], self.dtheta)
         t["_meta"] = dict(src["_meta"])
         self.target = t
+        self.amp_target = self._amps(t)
         if self.src is None:
             self.src = {k: v.copy() for k, v in t.items() if k != "_meta"}
             self.src["_meta"] = dict(t["_meta"])
+            self.amp = dict(self.amp_target)
+
+    def _amps(self, t):
+        """B-08: each crank-locked source's level over the cycle, ahead of the
+        filters (the shape trackers' amp): the port flows' slope per degree,
+        the combustion trace, the impulses and the rumble's firing envelope."""
+        def rms(x):
+            return max(math.sqrt(float(np.dot(x, x)) / len(x)), 1e-30)
+
+        def slope(x):
+            return rms(np.diff(x, append=x[:1])) / self.dtheta
+        return {"exh": slope(t["exh_flow"]), "int": slope(t["int_flow"]), "exc": rms(t["dpdth"]),
+                "tick": rms(t["valve"]), "inj": rms(t["inj"]), "slap": rms(t["slap"]),
+                "rumble": rms(0.6 + 0.4 * np.abs(t["dpdth"]))}
 
     def _glide(self):
         a = min(1.0, BLOCK / (SRC_TAU * self.fs))
@@ -384,6 +445,8 @@ class LiveSynth:
         m, tm = self.src["_meta"], self.target["_meta"]
         for k, v in tm.items():
             m[k] = m[k] + a * (v - m[k])
+        for k, v in self.amp_target.items():        # B-08: the levels glide with their waveforms
+            self.amp[k] = self.amp[k] + a * (v - self.amp[k])
 
     def _sample(self, name, theta):
         s = self.src[name]
@@ -413,6 +476,11 @@ class LiveSynth:
             return np.zeros(n)
         spd = rpm_s / max(meta["rpm"], 1.0)
         out = {}
+        # B-08: the levels the shape trackers are told, and the cycle they average over
+        A = self.amp
+        cyc = 120.0 / float(np.mean(rpm_s)) * fs / n                # blocks per engine cycle
+        w_q = 6.0 * float(np.mean(rpm_s * spd))     # a port flow's slope per degree -> per second
+        w_p = 6.0 * float(np.mean(rpm_s))           # dp/dtheta -> dp/dt
 
         # ---- exhaust ----
         c_exh = math.sqrt(1.4 * 287.0 * max(meta["T_exh"], 400.0))
@@ -432,7 +500,7 @@ class LiveSynth:
         y = self.exh_hp.process(y)
         if self.exh_turb is not None:
             y = self.exh_turb.process(y)
-        out["exhaust"] = self.norm["exh"](y) * (meta["mdot_air"] / self.ref_mdot) ** 1.5
+        out["exhaust"] = self.norm["exh"](y, A["exh"] * w_q, cyc) * (meta["mdot_air"] / self.ref_mdot) ** 1.5
 
         # ---- intake ----
         qi = self._sample("int_flow", theta) * spd
@@ -444,16 +512,20 @@ class LiveSynth:
         hiss = self.hiss_bp.process(self.n_hiss.take(n))
         hiss = hiss * (meta["mdot_air"] * spd ** 1.5) ** 1.5 * 4.0
         # FINDING-022: the exhaust's law, after the normalisation
-        out["intake"] = (self.norm["int"](y) + HISS_WEIGHT * self.norm["hiss"](hiss)) * \
+        a_hiss = (meta["mdot_air"] * float(np.mean(spd)) ** 1.5) ** 1.5 * 4.0     # B-08: the scale above
+        out["intake"] = (self.norm["int"](y, A["int"] * w_q, cyc) + HISS_WEIGHT * self.norm["hiss"](hiss, a_hiss)) * \
             (meta["mdot_air"] / self.ref_mdot) ** 1.5
 
         # ---- combustion ----
-        exc = self.norm["exc"](self._sample("dpdth", theta) * (rpm_s / 60.0 * 360.0))
+        exc = self.norm["exc"](self._sample("dpdth", theta) * (rpm_s / 60.0 * 360.0), A["exc"] * w_p, cyc)
         sharp = min(3.0, meta["dpdt_max"] / KNOCK_REF)
         knock = np.zeros(n)
+        a_knock = 0.0               # B-08: the bands' weights, as if each band were equally loud
         for bq, f0, gn in self.knock:
-            knock = knock + bq.process(exc) * (gn * (1.0 + sharp * (f0 / 2000.0) ** 1.1))
-        out["combustion"] = self.norm["knock"](knock) * (meta["dpdt_max"] / self.ref_dpdt)
+            w_k = gn * (1.0 + sharp * (f0 / 2000.0) ** 1.1)
+            knock = knock + bq.process(exc) * w_k
+            a_knock += w_k * w_k
+        out["combustion"] = self.norm["knock"](knock, math.sqrt(a_knock), cyc) * (meta["dpdt_max"] / self.ref_dpdt)
         if "dpdt_ref" in meta:
             # P09: the live loop's knock against the warm standard air's at this point (a cold
             # start, altitude), played up by KNOCK_GAIN_EXP; 1 at the warm standard air
@@ -468,8 +540,8 @@ class LiveSynth:
         sl = self.slapr[0].process(sl) + 0.7 * self.slapr[1].process(sl)
         a_tick = (max(meta["v_seating"], 1e-6) / self.ref_vseat) ** 2
         a_slap = (max(meta["skirt_clr"], 1e-9) / SLAP_CLR_REF) ** 0.6
-        out["mech"] = (a_tick * self.norm["tick"](tk) + 0.75 * self.norm["inj"](ij)
-                       + 0.9 * a_slap * self.norm["slap"](sl))
+        out["mech"] = (a_tick * self.norm["tick"](tk, A["tick"], cyc) + 0.75 * self.norm["inj"](ij, A["inj"], cyc)
+                       + 0.9 * a_slap * self.norm["slap"](sl, A["slap"], cyc))
 
         # ---- turbocharger ----
         if s.turbo.enabled and meta["turbo_rpm"] > 1000.0:
@@ -509,7 +581,7 @@ class LiveSynth:
         # render() also divides this by its maximum; ahead of a Norm, a
         # constant scale changes nothing (a mutant removing it is equivalent)
         firing = 0.6 + 0.4 * np.abs(self._sample("dpdth", theta))
-        out["rumble"] = self.norm["rumble"](rum * firing) * (max(meta["Pb"], 1e-9) / self.ref_Pb) ** 0.5
+        out["rumble"] = self.norm["rumble"](rum * firing, A["rumble"]) * (max(meta["Pb"], 1e-9) / self.ref_Pb) ** 0.5
 
         # ---- the microphone ----
         m = self.mic

@@ -558,6 +558,9 @@ def sound_inputs():
         # the synth plays the combustion part up by (dpdt_max / dpdt_ref) ** KNOCK_GAIN_EXP
         {"blocks": 30, "rpm": [900.0, 900.0], "mic": "cabin",
          "live": dict(live, turbo_rpm=500.0, boost=1.0, load=0.1, dpdt_max=5.6e9, dpdt_ref=4.0e9), "running": True},
+        # B-08: the shape trackers' edges -- a cycle past NORM_CYCLE_MAX (below 240 rpm) and,
+        # past 256 running blocks, CycleNorm's ring wrapping
+        {"blocks": 100, "rpm": [300.0, 200.0], "blend": [900.0, 0.9, 361.0], "running": True},
     ]
     return {"spec": live_spec, "grid": grid,
             "blend": [[1234.0, 0.55, 320.0], [900.0, 0.9, 361.0], [2500.0, 0.1, 250.0]],
@@ -565,6 +568,8 @@ def sound_inputs():
             # P10 (ADR-018) and FINDING-028
             "balance": dict(SOURCE_BALANCE), "hiss_weight": HISS_WEIGHT, "port_smooth_deg": PORT_SMOOTH_DEG,
             "knock_ref": KNOCK_REF, "knock_gain_exp": LS.KNOCK_GAIN_EXP,
+            # B-08: the shape trackers
+            "norm": {"tau": LS.NORM_TAU, "cycle_max": LS.NORM_CYCLE_MAX, "ring": LS.NORM_RING},
             "butter": [[1, 0.06, "low"], [3, 0.3, "low"], [2, 0.0027, "high"], [1, 0.0016, "high"],
                        [2, [0.0317, 0.295], "band"], [2, [0.0018, 0.0218], "band"]],
             # the synth's outputs are held at their own bound: libm differs by

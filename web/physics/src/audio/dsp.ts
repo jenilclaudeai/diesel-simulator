@@ -6,7 +6,9 @@
 
 export const FS = 44100;
 export const BLOCK = 128;          // the AudioWorklet render quantum
-export const NORM_TAU = 0.3;       // s, the shape-normalisation trackers
+export const NORM_TAU = 0.3;       // s, the noises' and tones' shape trackers (Norm)
+export const NORM_CYCLE_MAX = 0.5; // s, the longest cycle CycleNorm averages over (below 240 rpm)
+export const NORM_RING = 256;      // blocks CycleNorm keeps: > NORM_CYCLE_MAX * FS / BLOCK
 export const SRC_TAU = 0.05;       // s, source waveforms glide to a new operating point
 export const NOISE_N = 1 << 18;    // Gaussian table
 
@@ -211,24 +213,51 @@ export function pyRound(x: number): number {
 }
 
 /** Causal shape normalisation: y / rms, the mean square tracked by a
- *  one-pole filter over blocks, seeded from the first block. */
+ *  one-pole filter over blocks, seeded from the first block. amp (B-08):
+ *  the input's level where the synth knows it ahead of the filters; a
+ *  constant amp changes nothing. */
 export class Norm {
   private readonly beta: number;
   private ms = -1.0;
   constructor(n = BLOCK, fs = FS, tau = NORM_TAU) { this.beta = Math.min(1.0, n / (tau * fs)); }
-  apply(y: Float64Array): Float64Array {
+  apply(y: Float64Array, amp = 1.0): Float64Array {
     const out = new Float64Array(y.length);
-    this.applyInto(y, out);
+    this.applyInto(y, out, amp);
     return out;
   }
   /** Into a caller's buffer; out may be y. */
-  applyInto(y: Float64Array, out: Float64Array): void {
+  applyInto(y: Float64Array, out: Float64Array, amp = 1.0): void {
     let s = 0.0;
-    for (let n = 0; n < y.length; n++) s += y[n]! * y[n]!;
+    for (let n = 0; n < y.length; n++) { out[n] = y[n]! / amp; s += out[n]! * out[n]!; }
     const m = s / y.length;
     this.ms = this.ms < 0.0 ? m : this.ms + this.beta * (m - this.ms);
     const k = Math.sqrt(this.ms) + 1e-12;
-    for (let n = 0; n < y.length; n++) out[n] = y[n]! / k;
+    for (let n = 0; n < y.length; n++) out[n] = out[n]! / k;
+  }
+}
+
+/** B-08: a crank-locked source's shape normalisation (livesound.CycleNorm):
+ *  y / amp / rms, the mean square averaged over the last engine cycle
+ *  (`cycle` blocks, the oldest weighted by the fraction, at most
+ *  NORM_CYCLE_MAX), seeded from the first block. */
+export class CycleNorm {
+  private readonly cap: number;
+  private readonly ring = new Float64Array(NORM_RING);
+  private k = 0;
+  constructor(n = BLOCK, fs = FS) { this.cap = NORM_CYCLE_MAX * fs / n; }
+  /** Into a caller's buffer; out may be y. */
+  applyInto(y: Float64Array, out: Float64Array, amp: number, cycle: number): void {
+    let s = 0.0;
+    for (let n = 0; n < y.length; n++) { out[n] = y[n]! / amp; s += out[n]! * out[n]!; }
+    this.ring[this.k % NORM_RING] = s / y.length;
+    this.k++;
+    const L_f = Math.min(Math.max(cycle, 1.0), this.cap, this.k);
+    const L = Math.trunc(L_f);
+    let t = 0.0;
+    for (let j = 0; j < L; j++) t += this.ring[(this.k - 1 - j) % NORM_RING]!;      // newest first
+    if (L_f > L) t += (L_f - L) * this.ring[(this.k - 1 - L) % NORM_RING]!;
+    const k = Math.sqrt(t / L_f) + 1e-12;
+    for (let n = 0; n < y.length; n++) out[n] = out[n]! / k;
   }
 }
 

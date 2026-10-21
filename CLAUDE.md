@@ -130,6 +130,15 @@ grep its readers and solve with it changed.
   `synth.ts`. The weather table's keys (`bridge.WEATHER_KEYS`) include
   `dpdt_max`: a grid whose table lacks it plays no altitude knock, and
   raises no error.
+- **The synth's shape trackers take the source's level** (B-08):
+  `CycleNorm(y, amp, cycle)` for the crank-locked sources, `Norm(y, amp)`
+  for the noises. `amp` is the level known ahead of the filters (the
+  waveform's cycle RMS from `LiveSynth._amps`, gliding with the waveform).
+  A new source, or a new scale put ahead of a tracker, needs its amp, or
+  each step in it spikes for a cycle to 0.3 s and raises no error. A
+  constant scale needs none, because the trackers are scale-free.
+  `test_livesound_level_step_is_clean` checks it; `tools/b08_tip_in.py
+  table [TREE]` measures it on the live loop.
 - Off the rating's air (101325 Pa / 298 K), a modern ECU (`spec.ecu_modern`,
   ADR-016) targets absolute boost and caps each cycle's fuel at
   trapped air / `afr_limit`. There, **`op.fuel_mg` is the fuel injected,

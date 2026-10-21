@@ -1707,6 +1707,80 @@ def test_livesound_carries_physics():
           ", ".join(f"{k} x2 -> {feeds[k]} {100 * v:+.1f}%" for k, v in moved.items()))
 
 
+def test_livesound_level_step_is_clean():
+    """B-08 ("sudden noise spikes" on throttle close, then open): each source's
+    shape tracker lagged a step in its level by ~0.3 s while the level law
+    applied the step again, so a tip-in overshot (on the live loop, +3 to +9
+    dB over a zero-lag normaliser) and a lift-off dipped (4-10 dB). On
+    hd_i6's 1400 rpm sources: a quiet point (each waveform at 1/4; the port
+    flows and the combustion trace also smoothed over 6 degrees, as a light
+    load's are softer, while the valve, injector and slap events keep their
+    shape; the air flow and the boundary power at 0.3, the knock at 0.1,
+    below the sharpness cap), 0.5 s, then the real point, then the quiet
+    one again. Each is compared with a synth held at the new point from the
+    start: the same noise at the same instants, so a noise's scatter (the
+    rumble's loudest one-cycle window varies by ~3 dB) cancels and only the
+    trackers' response is left. Over one-cycle windows in the 0.4 s after
+    each step, no part of the mix, and no shape tracker's own output, may
+    rise more than LIMIT dB above the held synth on the tip-in or fall more
+    than LIMIT dB below it on the lift-off. (Each step glides over SRC_TAU,
+    so the tip-in starts below its new level and the lift-off above it.)
+    numpy only (Pyodide)."""
+    import numpy as np
+    from dieselsim import livesound as LS
+    LIMIT = 1.0
+    d = _hd_i6_sources()
+    loud = d["src"]
+    n_s = 12                                                   # 6 degrees on the 0.5-degree grid
+
+    def soft(v):            # a circular moving average: less of the high harmonics
+        v = np.asarray(v, dtype=float)
+        c = np.cumsum(np.concatenate([v[-n_s:], v]))
+        return (c[n_s:] - c[:-n_s]) / n_s
+    quiet = {k: 0.25 * (soft(v) if k in ("exh_flow", "int_flow", "dpdth") else np.asarray(v))
+             for k, v in loud.items() if k in LS.SOURCE_KEYS}
+    m0 = loud["_meta"]
+    quiet["_meta"] = dict(m0, mdot_air=0.3 * m0["mdot_air"], Pb=0.3 * m0["Pb"], dpdt_max=0.1 * m0["dpdt_max"])
+    rpm, seg = 1400.0, int(0.5 * LS.FS / LS.BLOCK)
+    parts = ("exhaust", "intake", "combustion", "mech", "rumble")
+
+    def run(plan):
+        """Each part's and each shape tracker's power, block by block."""
+        syn = LS.LiveSynth(d["eng"].spec, "cabin")
+        series = {}
+
+        class Rec:
+            def __init__(self, k, f):
+                self.k, self.f = k, f
+
+            def __call__(self, *a):
+                y = self.f(*a)
+                series.setdefault("tracker " + self.k, []).append(float(np.mean(y ** 2)))
+                return y
+        syn.norm = {k: Rec(k, f) for k, f in syn.norm.items()}
+        for src in plan:
+            syn.set_sources(src)
+            for _ in range(seg):
+                syn.block(rpm)
+                for k in parts:
+                    series.setdefault(k, []).append(float(np.mean(syn.last_parts[k] ** 2)))
+        return {k: np.asarray(v) for k, v in series.items()}
+    step, held_loud, held_quiet = run((quiet, loud, quiet)), run((loud, loud)), run((quiet, quiet, quiet))
+    W = int(round(120.0 / rpm * LS.FS / LS.BLOCK))            # one engine cycle
+    span = int(0.4 * LS.FS / LS.BLOCK)
+
+    def dev(m, ref, s0, pick):
+        return pick(10 * np.log10(np.mean(m[i:i + W]) / np.mean(ref[i:i + W])) for i in range(s0, s0 + span - W))
+    worst, at, msg = 0.0, "", []
+    for k, m in step.items():
+        up, down = dev(m, held_loud[k], seg, max), dev(m, held_quiet[k], 2 * seg, min)
+        if max(up, -down) > worst:
+            worst, at = max(up, -down), k
+        msg.append(f"{k} {up:+.1f}/{down:+.1f}")
+    check("sound: a step in level neither spikes nor dips (B-08)", 1.0 if worst <= LIMIT else 0.0, 1.0, 0.0,
+          f"worst {worst:.2f} dB ({at}; limit {LIMIT}); up on the tip-in / down on the lift-off: " + ", ".join(msg))
+
+
 def test_livesound_matches_render():
     """The streaming synth against acoustics.EngineSound.render, the offline
     reference (ADR-004: spectral): its Butterworth design matches scipy's
@@ -3367,6 +3441,7 @@ def main():
                test_grid_hash_ignores_the_live_loop,
                test_livesound_firing_peaks_and_sources,
                test_livesound_carries_physics,
+               test_livesound_level_step_is_clean,
                test_livesound_matches_render,
                test_port_flow_zigzag_is_not_heard,
                test_port_flow_does_not_overshoot,
