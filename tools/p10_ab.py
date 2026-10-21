@@ -52,7 +52,7 @@ class Variant(LS.LiveSynth):
         super()._build(mic)
         if self._hiss != 1.0:
             n0, f = self.norm["hiss"], self._hiss
-            self.norm["hiss"] = lambda y: f * n0(y)
+            self.norm["hiss"] = lambda y, *a: f * n0(y, *a)      # B-08: the tracker takes the hiss's level
 
     def set_mic(self, mic):
         super().set_mic(mic)

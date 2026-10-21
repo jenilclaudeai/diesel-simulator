@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Adr011Grid, SOURCE_KEYS, type Adr011GridData } from "../src/live/adr011.js";
 import type { LiveSpec } from "../src/live/common.js";
-import { butterSos, noiseTable } from "../src/audio/dsp.js";
+import { NORM_CYCLE_MAX, NORM_RING, NORM_TAU, butterSos, noiseTable } from "../src/audio/dsp.js";
 import { HISS_WEIGHT, KNOCK_GAIN_EXP, KNOCK_REF, LiveSynth, MICS, PORT_SMOOTH_DEG, SOURCE_BALANCE, SPL_CAL, type SoundSpec } from "../src/audio/synth.js";
 
 /** fixtures.test.ts's definition (importing it would run that suite). */
@@ -32,6 +32,7 @@ const fx = JSON.parse(readFileSync(path.resolve(here, "..", "..", "fixtures", "s
     mics: Record<string, unknown>; spl_cal: number;
     balance: Record<string, number>; hiss_weight: number; port_smooth_deg: number;
     knock_ref: number; knock_gain_exp: number;
+    norm: { tau: number; cycle_max: number; ring: number };
     butter: [number, number | [number, number], "low" | "high" | "band"][];
     synth: { mic: string; segments: Segment[]; tolerance_rel: number };
   };
@@ -89,6 +90,8 @@ check("the sources' balance, hiss weight and port smoothing match acoustics (P10
   && PORT_SMOOTH_DEG === fx.inputs.port_smooth_deg);
 check("the knock's reference and live gain match acoustics.KNOCK_REF and livesound.KNOCK_GAIN_EXP (P09)",
   KNOCK_REF === fx.inputs.knock_ref && KNOCK_GAIN_EXP === fx.inputs.knock_gain_exp);
+check("the shape trackers' constants match livesound's (B-08)",
+  NORM_TAU === fx.inputs.norm.tau && NORM_CYCLE_MAX === fx.inputs.norm.cycle_max && NORM_RING === fx.inputs.norm.ring);
 
 let wb = 0;
 fx.inputs.butter.forEach(([order, wn, kind], n) => {
