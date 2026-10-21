@@ -25,7 +25,17 @@
   - e2e: enjoy 38/38 (the goal run; the par in 2.4 s), drive 11/11 (Leh's worker equals
     native Python, worst 0; the US °F check);
   - fixtures current; audit 0 DEAD, 2 FROZEN.
-- **Next:** CI on #138, every job read; then it is ready for the owner.
+- ~~**Next:** CI on #138, every job read; then it is ready for the owner.~~ **CI on #138
+  (`8e631bf`): 10 of 10, every job read.**
+  - physics 102/0/3 on 3.10 and 3.12; Pyodide 81/0/2/21 skipped;
+  - units 162; check:labels 6 of 10;
+  - TS 5 + 68 + 12 + 11; SolverPort 20 + 15 + 30;
+  - e2e enjoy 38, drive 11 (the US wax check); grid 9; custom 7.
+  - The fixtures job took 19 min 17 s: inside the new 25-minute limit, past the old 15.
+  - **Ready to merge.**
+- **Owner, on the S9+:** a route's feel, the breaker buzz, a goal run, and P01's vibration;
+  the Phase 5 phone re-check. **Open for the owner:** FINDING-033 (recommended A, stall
+  an automatic that can't hold its speed, after P06).
 
 **Session 10, #138's fixtures job hit its time limit (2026-10-21):**
 - **What happened:** CI's "golden fixtures + TypeScript ports" job was cancelled at 15:17
