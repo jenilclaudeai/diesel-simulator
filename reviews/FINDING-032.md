@@ -1,10 +1,11 @@
-# FINDING-032 — The live loop's radiator and fan breathe sea-level air everywhere
+# FINDING-032 — The live loop's radiator, fan ~~and~~ and drag breathe sea-level air everywhere
 
 **Opened by:** session 10 (2026-10-20), measuring P06 tier 2's goals (whether
 "reach the pass without overheating" can be lost).
 **Lens:** PHY1, PHY2, QA1
 **Status:** ~~**open, for the owner.** Nothing changed yet.~~ **Decided (the owner,
-2026-10-20): A**, fix it as its own PR (from `main`).
+2026-10-20): A**, fix it as its own PR (from `main`). **Then widened (the owner, the same day):
+the drag too**: it had the same fixed 1.20 (below). **Fixed** on `fix/finding-032-air-density`.
 **Reproduce:** scratch scripts in the session's job directory:
 `p06_density_probe.py` and `p06_longclimb_probe.py`. Both patch
 `LiveEngine._thermal` in memory only; the repo is untouched.
@@ -83,3 +84,52 @@ behaves the same within 3.2 °C.
 
 **Recommendation: A**, small and measured, as its own PR. Nothing in P06's
 goals waits on it.
+
+## The drag too (found while fixing)
+
+`Driveline.resistance` had the same constant: `f_aero = 0.5 · 1.20 · CdA ·
+v²`. The owner widened the fix to it. Measured with the place's density,
+flat out from rest on the open road with the automatic:
+
+| engine, place | ρ 1.20: at 60 s / top in 300 s | the place's ρ | top speed |
+|---|---|---|---|
+| hatch15, Leh (ρ 0.79) | 179.0 / 181.4 km/h | 187.0 / 187.8 km/h | +3.5 % |
+| truck127, Leh | 87.3 / 107.4 km/h | 92.2 / 114.0 km/h | +6 % |
+| hatch15, desert (ρ 1.10) | 182.9 / 183.1 km/h | 184.2 / 184.4 km/h | +1 % |
+| truck127, desert | 88.5 / 107.8 km/h | 89.7 / 109.1 km/h | +1 % |
+
+## Fixed
+
+- **One rule** for the live loop: `live.air_density(thermal)` =
+  `RHO_RATING` (1.20) × (p / 101325) × (298 / T), scaled from the rating's
+  air. That is where the cooling and the drag were set.
+  - At the rating's air every factor is exactly 1.0. The radiator's ram
+    air, the fan's mass flow (a fan moves a volume) and the drag all follow
+    it.
+  - `LiveEngine.step` puts it in `Driveline.rho_air` each frame. A
+    `Driveline` made on its own keeps 1.20.
+  - Mirrored in `web/physics` (`airDensity`, `RHO_RATING` in
+    `driveline.ts`).
+- **Proof that nothing at standard air moved:** the live fixture, drive by
+  drive.
+  - The seven standard-air drives: 0 values changed (about 172,000).
+  - Only `dl.rho_air` was added.
+  - The weather drive changed in 10,710 values, the cold limp drive in
+    11,028, and the waxed drive in 61 (a waxed car doesn't move).
+- **A new fixture drive, `adr011_weather_fan`:** Leh's air with the fan
+  running. No existing drive ran the fan at non-standard air, and the TS
+  mutant "the fan's mass flow unscaled" survived until it was added.
+- **Tests:** `test_finding_032_the_air_density`, 5 parts, on the toy grid
+  (it runs under Pyodide):
+  - exactly 1.20 at the rating's air;
+  - Leh's density from p and T;
+  - the push into the driveline each frame;
+  - the drag difference equals ½·Δρ·CdA·v²;
+  - the radiator's air scales by ρ / 1.20.
+  - Mutants: Python 5 of 5 caught, TS 4 of 4 caught (against passing
+    baselines).
+- **On the way:** a same-length mutant restored within one second left a
+  stale `.pyc`, and one fixture regeneration ran on the mutant. It was
+  caught by the TS port disagreeing, then regenerated with clean caches.
+  Mutant runs now use `PYTHONDONTWRITEBYTECODE=1` (CLAUDE.md).
+- No grid goes stale (`live.py` is outside the hash).

@@ -161,8 +161,20 @@ if (ref) {
     fuel: document.querySelector("dd.fuel-state")?.textContent.replace(/\s+/g, " ").trim() ?? "",
   }));
   check("summer diesel in Rovaniemi (-20 C): the page says it won't start, and the worker's fuel waxes out, saying why",
-    /won't start/.test(fuelNote) && /gels below 18 C/.test(seen.status) && /waxed/.test(seen.fuel) && /-20\.0 °C/.test(seen.fuel),
+    /won't start/.test(fuelNote) && /gels below 18 °C/.test(seen.status) && /waxed/.test(seen.fuel) && /-20\.0 °C/.test(seen.fuel),
     `note "${fuelNote.slice(0, 60)}…"; status "${seen.status.slice(0, 60)}…"; fuel "${seen.fuel}"`);
+  // Phase 8: the loop's hint gave the CFPP in Celsius whatever the units; in US it reads °F, as the fuel note does
+  await page.select("select.drive-units", "us");
+  await page.evaluate(async () => { await globalThis.__drive.load("hatch15", "tc"); globalThis.__drive.run(); });
+  await new Promise(r => setTimeout(r, 2500));
+  const usSeen = await page.evaluate(() => ({
+    status: document.querySelector("p.status[role=status]")?.textContent.replace(/\s+/g, " ").trim() ?? "",
+    note: document.querySelector("p.drive-fuel-note")?.textContent.replace(/\s+/g, " ").trim() ?? "",
+  }));
+  check("in US units the waxed-fuel hint gives the CFPP in °F, the figure the fuel note gives (64 °F)",
+    /gels below 64 °F/.test(usSeen.status) && !/°C|\d C\b/.test(usSeen.status) && /CFPP 64 °F/.test(usSeen.note),
+    `status "${usSeen.status.slice(0, 70)}…"; note "${usSeen.note.slice(0, 60)}…"`);
+  await page.select("select.drive-units", "metric");
   await page.select("select.drive-fuel", "local");
   await page.select("select.drive-env", "standard");
 }

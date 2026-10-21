@@ -1,5 +1,32 @@
 # Status
 
+**Session 10, #138 brought up to `main` (2026-10-21):** #137 merged at 13:40 UTC, after #136.
+- **The conflicts:**
+  - Code, resolved by keeping both:
+    - `live.py` and `driveline.ts`: the driveline keeps P06's road fields and #137's
+      `rho_air`. Drag is `0.5 · rho_air · CdA` times P06's wind-aware air-speed term, so a
+      climb's thinner air now reaches drag and the radiator too;
+    - `hints.ts`: P06's breaker rule, then `TOUCH`, then #136's `hintInUnits`;
+    - both specs.
+  - `FINDING-032.md`: `main`'s (fixed) text.
+  - STATUS: both sides kept.
+  - `live.json`: regenerated from the merged code.
+- **Proof, the fixture against P06's pre-merge one:**
+  - the eight drives with no route at standard air: 0 values changed;
+  - the weather, waxed and limp drives changed by exactly #137's counts (10,710 / 61 /
+    11,028);
+  - the two route drives changed (6,781 / 11,828): a route's altitude moves the air, which
+    now reaches drag and the radiator;
+  - added: `dl.rho_air` and #137's fan drive.
+- **Verified (local):**
+  - suite **97 passed, 0 failed, 3 known, 4 skipped** (96 + #137's test);
+  - TS live 68/0, both pars equal to Python;
+  - units 162 (160 + #136's 2);
+  - e2e: enjoy 38/38 (the goal run; the par in 2.4 s), drive 11/11 (Leh's worker equals
+    native Python, worst 0; the US °F check);
+  - fixtures current; audit 0 DEAD, 2 FROZEN.
+- **Next:** CI on #138, every job read; then it is ready for the owner.
+
 **Session 10, #138's fixtures job hit its time limit (2026-10-21):**
 - **What happened:** CI's "golden fixtures + TypeScript ports" job was cancelled at 15:17
   against `timeout-minutes: 15`, still generating; not a failure of any check. The other 9
@@ -154,6 +181,74 @@ avoids a stack). ADR-021, `reviews/PROPOSAL-P06.md`.
   - owner: merge #135; feel P01 and the breaker buzz on the S9+; the Phase 5 phone
     re-check.
 
+**Session 10, FINDING-032 fixed (2026-10-20), `fix/finding-032-air-density`** (from `main`
+at `4c2a301`; independent of #135, #136 and P06):
+- **The finding:** the live loop's radiator, fan and aerodynamic drag used 1.20 kg/m³
+  everywhere. Found while measuring P06's goals.
+  - The owner chose A (fix it), then widened it to the drag.
+  - Measured: cooling up to +3.2 °C peak, never crossing a warning; top speed at Leh +3.5 %
+    (hatch15) to +6 % (truck127), the desert +1 %.
+- **Fixed:**
+  - `live.air_density(thermal)` = 1.20 × (p / 101325) × (298 / T), exactly 1.20 at the
+    rating's air;
+  - the radiator's ram air, the fan's mass flow and the drag all follow it
+    (`Driveline.rho_air`, pushed each frame);
+  - mirrored in `web/physics`;
+  - a new live fixture drive, `adr011_weather_fan` (Leh with the fan running), because no
+    drive ran the fan at non-standard air.
+- **Proof at standard air:** the live fixture's seven standard-air drives: 0 of about
+  172,000 values changed; only `dl.rho_air` was added. The weather, limp and waxed drives
+  changed (10,710 / 11,028 / 61 values).
+- **Verified (local):**
+  - Python suite **94 passed, 0 failed, 3 known, 4 skipped** (main's 93 + 1);
+  - `test_finding_032_the_air_density` 5 of 5 parts, mutants 5 of 5 caught; TS live 56/0
+    (+ 5, 12, 11), TS mutants 4 of 4 caught. "The fan unscaled" survived until the fan
+    drive was added;
+  - fixtures current; audit 0 DEAD, 2 FROZEN (the known clamp);
+  - e2e:drive 10/10: Leh's worker equals native Python (worst 0), and Leh still ends
+    slower than standard air, 68.0 against 77.0 km/h.
+- **A trap, written into CLAUDE.md and memory:**
+  - A same-length mutant (`(a / b)` to `(b / a)`), restored within a second, left a
+    `.pyc` that Python still trusted. One fixture regeneration ran on the mutant.
+  - The TS port disagreeing caught it. Caches were cleared and every later check redone.
+  - Mutant runs now use `PYTHONDONTWRITEBYTECODE=1`.
+- **When P06 meets this:** `live.py`, `engine.ts`, `driveline.ts`, `gen_fixtures.py` and
+  `live.json` conflict.
+  - Keep both, then regenerate `live.json` with `--only live`.
+  - P06's routes change `spec.thermal` with altitude, and `step()` reads it each frame, so
+    the drag and the radiator then follow a climb too.
+  - `reviews/FINDING-032.md` conflicts as well: keep this branch's (fixed) text.
+
+**Session 10, the units toggle finished (2026-10-20), `fix/units-wax-hint`** (from `main`
+at `4c2a301`; independent of #135 and of `feat/p06-roads`):
+- **The owner: "Go ahead with the units toggle first."** Checked first: the toggle was
+  already merged (#134, 2026-10-19 21:20 UTC) and live. The Pages deploy of `4c2a301`
+  succeeded, and the live bundle has the selector and both mpg labels.
+- **Found one gap the toggle missed:**
+  - The live loop's waxed-fuel hint ("this diesel gels below 18 C") is a string built in
+    `live.py` and the TS port, so it stayed Celsius in US units on both Drive and Enjoy,
+    while the fuel note beside it said "CFPP 64 °F".
+  - No other loop message carries a unit. Checked: every `hint` and `overheat_msg` in
+    `live.py`, and Drive's template. On `feat/p06-roads` the breaker hint does, and
+    Enjoy already converts it.
+- **Fixed:**
+  - `units.hintInUnits` rewrites "N C" in the driver's units. Every fuel's CFPP is a
+    whole °C, so it gives the same °F as the note: 64, 43, −26.
+  - Enjoy's `touchHint` and Drive's status line use it. Metric now reads "18 °C" (was
+    "18 C"). The loop's own string is unchanged, so no fixture moves.
+- **Verified (local):**
+  - app units **139 passed** (137 + 2), mutants **5 of 5** caught;
+  - **e2e:drive 11 passed** (a new US check: "gels below 64 °F", matching the note); its
+    mutant, Drive showing the raw hint, fails 2 checks;
+  - e2e:enjoy 29 passed; check:labels 6 of 10.
+  - ~~CI: the PR's checks, read job by job, are reported in the next entry.~~ **CI on
+    #136 (`ba877b4`): 10 of 10, every job read.** Physics 98/0/3 known on 3.10 and 3.12;
+    Pyodide 78/0/2/20 skipped; units 139 (26 files); check:labels 6 of 10; TS ports
+    5 + 51 + 12 + 11; SolverPort 20 + 15 + 30; e2e drive 11 (the US wax check
+    passes), enjoy 29; grid 9; custom 7. **Ready to merge.**
+- **When `feat/p06-roads` meets this:** `enjoy/hints.ts` conflicts. Keep both: the
+  breaker rule and the `hintInUnits` fallback.
+
 **Session 9, P01 vibration built (2026-10-19), `feat/p01-vibration`** (on top of
 `feat/phase8-units`, #134; its PR waits until #134 merges, to avoid a stack):
 - **The owner's choices:** events (start, stall, gear change, the limiter) plus a shake
@@ -186,6 +281,9 @@ after #133):
   Fuel (`DriveEnvPicker`, both pages), kept per browser (`dieselsim-units`); Enjoy's
   dash (the speedometer gets an mph scale, capped at 150), the strip and the trip
   computer; Drive's readouts; the place and fuel notes. Boost stays a ratio.
+  **Correction (2026-10-20):** not quite every figure. The live loop's waxed-fuel hint
+  stayed "N C" in US units on both pages. It was fixed on `fix/units-wax-hint` (the
+  entry above).
 - **Found and fixed:** `check:labels` lost /enjoy and still passed: it found fuel
   figures by the literal "L/100", now printed from units.ts (5 of 10 at a floor of 5).
   It now knows `U().econ`, and the floor is 6; the mutant (without it) fails.

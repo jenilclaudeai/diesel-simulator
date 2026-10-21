@@ -18,6 +18,19 @@ import numpy as np
 TRANSMISSION = "dct"     # default when a caller names none; play.py passes --transmission
 
 
+# FINDING-032: the air's density, scaled from the rating's air (101325 Pa, 298 K), where the cooling
+# and the drag were set at 1.20 kg/m3. At the rating's air every factor is exactly 1.0, so nothing
+# there changes; elsewhere the radiator's air, the fan's mass flow (a fan moves a volume) and the
+# drag all follow the place (Leh: 0.79).
+RHO_RATING = 1.20
+P_RATING, T_RATING = 101325.0, 298.0
+
+
+def air_density(thermal):
+    """The place's air density [kg/m3]: RHO_RATING x (p / P_RATING) x (T_RATING / T)."""
+    return RHO_RATING * (thermal.ambient_p / P_RATING) * (T_RATING / thermal.ambient_T)
+
+
 class PerfGrid:
     """
     The performance half of a pre-solved grid: axes, per-cell perf dicts and
@@ -977,6 +990,7 @@ class Driveline:
         self.wind = 0.0
         self.pulse_f = 0.0
         self.pulse_t = 0.0
+        self.rho_air = RHO_RATING   # FINDING-032: LiveEngine sets the place's each frame
         self.brake = 0.0
         self.lockup = False
         self.lock_allowed = True
@@ -1019,9 +1033,10 @@ class Driveline:
             (1.0 if self.v > 0.05 else 0.0)
         f_grade = v.mass * 9.81 * math.sin(th)
         # P06: the air the car moves through (a tailwind can push); without
-        # wind the old expression, so every drive without a route is unchanged
+        # wind the old expression, so every drive without a route is unchanged.
+        # FINDING-032: at the place's density (dl.rho_air, set each frame)
         vr = self.v + self.wind
-        f_aero = 0.5 * 1.20 * v.CdA * (self.v ** 2 if self.wind == 0.0 else vr * abs(vr))
+        f_aero = 0.5 * self.rho_air * v.CdA * (self.v ** 2 if self.wind == 0.0 else vr * abs(vr))
         f_brake = self.brake * 0.55 * v.mass * 9.81
         if self.pulse_t > 0.0:                   # P06: a speed breaker's jolt
             f_roll += self.pulse_f
@@ -1704,7 +1719,7 @@ class LiveEngine:
         """
         t = self.spec.thermal
         c = self.spec.cooling
-        cp_air, rho_air = 1005.0, 1.20
+        cp_air, rho_air = 1005.0, air_density(t)   # FINDING-032: was 1.20 everywhere
         T_amb = t.ambient_T
 
         # ---- airflow through the stack ---------------------------------
@@ -1720,7 +1735,7 @@ class LiveEngine:
             want = 1.0
         self.fan_frac += (want - self.fan_frac) * min(1.0, dt / c.fan_ramp_s)
         self.fan_on = self.fan_frac > 0.05
-        mdot_fan = c.fan_max_flow * self.fan_frac
+        mdot_fan = c.fan_max_flow * self.fan_frac * (rho_air / RHO_RATING)   # a fan moves a volume
         mdot_air = max(0.02, mdot_ram + mdot_fan)
         self.rad_air = mdot_air
         # a viscous or belt fan is driven by the engine and costs crank
@@ -1877,6 +1892,7 @@ class LiveEngine:
         The converter couples two inertias stiffly, so integrate it in
         sub-steps -- a single 60 Hz Euler step rings.
         """
+        self.dl.rho_air = air_density(self.spec.thermal)   # FINDING-032: drag breathes the place's air
         if self.hint_t > 0.0:                      # BUG-6 hint decay
             self.hint_t = max(0.0, self.hint_t - dt)
             if self.hint_t == 0.0:

@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { speedScale } from '../enjoy/gauge';
 import { weatherLine } from '../weather/drive-env';
 import {
-  airPressure, distance, economy, economyUnit, elevation, elevationUnit, pressureBar, speed, temperature, Units, UNITS_KEY, volume,
+  airPressure, distance, economy, economyUnit, elevation, elevationUnit, hintInUnits, pressureBar, speed, temperature, Units, UNITS_KEY, volume,
 } from './units';
 
 const near = (a: number, b: number, tol = 1e-9) => Math.abs(a - b) <= tol * Math.max(1, Math.abs(b));
@@ -13,6 +13,19 @@ describe('driver units (Phase 8: Metric, US, UK)', () => {
     expect(elevation(267, 'uk')).toBe(267);
     expect(near(elevation(1000, 'us'), 3280.839895013123)).toBe(true);
     expect([elevationUnit('metric'), elevationUnit('us'), elevationUnit('uk')]).toEqual(['m', 'ft', 'm']);
+  });
+
+  it("the live loop's waxed-fuel hint reads in the driver's units, as the fuel note does", () => {
+    const wax = (c: string) => `fuel waxed: this diesel gels below ${c} C -- it needs winter or arctic diesel here`;
+    expect(hintInUnits(wax('18'), 'metric')).toBe(wax('18').replace('18 C', '18 °C'));
+    expect(hintInUnits(wax('18'), 'uk')).toBe(wax('18').replace('18 C', '18 °C'));
+    expect(hintInUnits(wax('18'), 'us')).toBe(wax('18').replace('18 C', '64 °F'));      // 64.4
+    expect(hintInUnits(wax('6'), 'us')).toContain('gels below 43 °F --');               // 42.8
+    expect(hintInUnits(wax('-32'), 'us')).toContain('gels below -26 °F --');            // -25.6
+    expect(hintInUnits(wax('-32'), 'metric')).toContain('gels below -32 °C --');
+    // every other hint passes through, the partly waxed one (a % , no temperature) included
+    for (const h of ['', 'lockup blocked', 'fuel partly waxed: the filter passes 40% -- not enough to start cold; it needs winter or arctic diesel here'])
+      expect(hintInUnits(h, 'us')).toBe(h);
   });
 
   it('metric passes every figure through unchanged', () => {

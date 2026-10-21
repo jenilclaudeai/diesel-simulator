@@ -5,6 +5,15 @@
 import { clip, copysign, sign, TWO_PI, type LiveSpec } from "./common.js";
 import type { Vehicle } from "./vehicle.js";
 
+/** FINDING-032 (live.RHO_RATING): the air density the cooling and the drag were set at, at the rating's air. */
+export const RHO_RATING = 1.2;
+export const P_RATING = 101325.0, T_RATING = 298.0;
+
+/** The place's air density [kg/m3] (live.air_density): exactly RHO_RATING at the rating's air. */
+export function airDensity(t: { ambient_p: number; ambient_T: number }): number {
+  return RHO_RATING * (t.ambient_p / P_RATING) * (T_RATING / t.ambient_T);
+}
+
 /** The wet clutch a dual-clutch box launches on. */
 export class LaunchClutch {
   cap_max: number;
@@ -368,6 +377,7 @@ export class Driveline {
   wind = 0.0;
   pulse_f = 0.0;
   pulse_t = 0.0;
+  rho_air = RHO_RATING;   // FINDING-032: LiveEngine sets the place's each frame
   brake = 0.0;
   lockup = false;
   lock_allowed = true;
@@ -418,9 +428,10 @@ export class Driveline {
     const th = Math.atan(this.grade);
     let f_roll = v.Crr * this.crr_x * v.mass * 9.81 * Math.cos(th) * (this.v > 0.05 ? 1.0 : 0.0);
     const f_grade = v.mass * 9.81 * Math.sin(th);
-    // P06: the air the car moves through; without wind the old expression (live.py)
+    // P06: the air the car moves through; without wind the old expression (live.py).
+    // FINDING-032: at the place's density (rho_air, set each frame)
     const vr = this.v + this.wind;
-    const f_aero = 0.5 * 1.2 * v.CdA * (this.wind === 0.0 ? this.v ** 2 : vr * Math.abs(vr));
+    const f_aero = 0.5 * this.rho_air * v.CdA * (this.wind === 0.0 ? this.v ** 2 : vr * Math.abs(vr));
     const f_brake = this.brake * 0.55 * v.mass * 9.81;
     if (this.pulse_t > 0.0) f_roll += this.pulse_f;   // P06: a speed breaker's jolt
     return [f_roll + f_grade + f_aero, f_brake];

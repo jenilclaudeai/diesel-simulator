@@ -169,6 +169,14 @@ grep its readers and solve with it changed.
   on its own keeps today's rpm schedule (`_power_schedule`), with no error.
   Changing any `ECO_*` constant changes the live fixtures: regenerate
   (`--only live`) and re-match the TS port.
+- **The live loop breathes the place's air** (FINDING-032): `live.air_density` scales the
+  rating's 1.20 kg/m³ by p and T for the radiator, the fan and the drag, exactly 1.0 at
+  101325 Pa / 298 K. Anything new in the loop that needs the air's density reads
+  `air_density(spec.thermal)` (or `dl.rho_air`), never a constant.
+- **In-place Python mutants:** a mutant of the same byte length, restored within a second,
+  leaves a `.pyc` Python still trusts (it checks size and whole-second mtime), so the
+  'restored' file keeps running the mutant. Run mutant subprocesses with
+  `PYTHONDONTWRITEBYTECODE=1`, and clear `__pycache__` before regenerating anything.
 - WebCrypto needs a secure context: over plain http on a LAN address the
   grid cache switches itself off by design.
 - `npm start` downloads the numpy wheel once (`prepare-assets.mjs`). Behind a
@@ -232,7 +240,10 @@ grep its readers and solve with it changed.
   in Manual.
 - Since Phase 7 step 7, Drive's gearbox is kept per browser
   (`DriveEnv.gearbox`, localStorage), like the place and the fuel, and
-  `/enjoy` starts in Manual when it is `manual`. Since Phase 8 the driver's
+  `/enjoy` starts in Manual when it is `manual`. A live-loop hint with a unit in it
+  stays metric in the loop (the fixtures compare it); the page converts it with
+  `units.hintInUnits` (Drive) or `touchHint` (Enjoy). Phase 8 missed the waxed-fuel
+  one. Since Phase 8 the driver's
   units are kept too (`dieselsim-units`: metric, us, uk; `units/units.ts`), and
   P01's vibration switch (`dieselsim-vibration`: 'off' when off). Under `?e2e`
   `/enjoy` records what it asked the phone to vibrate (`__enjoy.vibes()`).

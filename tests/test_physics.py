@@ -1275,6 +1275,67 @@ def _toy_weather(g, slope):
             "range": {k: list(v) for k, v in bridge.WEATHER_RANGE.items()}, "values": vals}
 
 
+def test_finding_032_the_air_density():
+    """FINDING-032: the live loop's radiator, fan and drag breathe the place's
+    air (they used 1.20 kg/m3 everywhere). On the toy grid (no files: runs
+    under Pyodide too). Parts:
+    - air_density is exactly 1.20 at the rating's air (101325 Pa, 298 K) and
+      scales with p / T elsewhere (Leh 65764 Pa, 293 K: 0.792);
+    - the loop pushes it into the driveline each frame;
+    - drag: the resistance at 30 m/s differs from the rating's by exactly
+      0.5 x (1.20 - rho) x CdA x v^2;
+    - the radiator's air mass flow (ram + a full fan) scales by rho / 1.20;
+    - at the rating's air the factors are exactly 1.0 (the live fixture's
+      standard-air drives: 0 values changed)."""
+    from dieselsim.live import air_density, RHO_RATING
+    name = "FINDING-032: the radiator, fan and drag breathe the place's air"
+    LEH = (65764.1, 293.15)
+    parts, notes = [], []
+
+    def engine(air):
+        e = _toy_live("tc")
+        e.spec.thermal.ambient_p, e.spec.thermal.ambient_T = air
+        e.T_coolant = e.T_oil = 361.0
+        e.throttle = 0.4
+        for _ in range(30):
+            e.step(1 / 60)
+        return e
+
+    class T:
+        ambient_p, ambient_T = 101325.0, 298.0
+    rho_std = air_density(T)
+    T.ambient_p, T.ambient_T = LEH
+    rho_leh = air_density(T)
+    parts.append(("1.20 exactly at the rating's air", rho_std == RHO_RATING == 1.20))
+    want = 1.20 * (65764.1 / 101325.0) * (298.0 / 293.15)
+    parts.append(("Leh's density from p and T", abs(rho_leh - want) < 1e-15 and 0.78 < rho_leh < 0.80))
+
+    std, leh = engine((101325.0, 298.0)), engine(LEH)
+    parts.append(("the loop pushes it into the driveline", std.dl.rho_air == 1.20 and leh.dl.rho_air == rho_leh))
+
+    for e in (std, leh):
+        e.dl.v, e.dl.grade, e.dl.brake = 30.0, 0.0, 0.0
+    d_res = std.dl.resistance()[0] - leh.dl.resistance()[0]
+    d_want = 0.5 * (1.20 - rho_leh) * std.veh.CdA * 30.0 ** 2
+    parts.append(("drag differs by 0.5 x drho x CdA x v^2", abs(d_res - d_want) <= 1e-9 * d_want))
+
+    flows = []
+    for e in (std, leh):
+        e.T_coolant = e.spec.cooling.fan_on_T + 5.0     # the fan wants full
+        e.fan_frac = 1.0
+        e.dl.v = 20.0
+        e._thermal(1 / 60)
+        flows.append(e.rad_air)
+    ratio = flows[1] / flows[0]
+    parts.append(("radiator air (ram + fan) scales by rho / 1.20", abs(ratio - rho_leh / 1.20) < 1e-12))
+    notes.append(f"rho Leh {rho_leh:.4f}; drag at 30 m/s -{d_res:.1f} N; radiator air {flows[0]:.3f} -> {flows[1]:.3f} kg/s")
+
+    ok = all(v for _, v in parts)
+    bad = [k for k, v in parts if not v]
+    check(name, 1.0 if ok else 0.0, 1.0, 0.0,
+          f"{sum(v for _, v in parts)} of {len(parts)} parts; " + "; ".join(notes) + (f"; FAILED: {bad}" if bad else ""))
+
+
 def test_weather_table_in_the_live_loop():
     """Phase 7 step 4 (ADR-016 item 1, shape A3): the live loop adds the
     weather table's difference from the standard air. On the toy grid, with a
@@ -3448,7 +3509,7 @@ def main():
                test_lockup_key_by_transmission,
                test_manual_gearbox,
                test_lockup_and_coast_downshifts,
-               test_adr011_live_friction, test_weather_table_in_the_live_loop, test_cold_flow_in_the_live_loop,
+               test_adr011_live_friction, test_weather_table_in_the_live_loop, test_finding_032_the_air_density, test_cold_flow_in_the_live_loop,
                test_weather_pieces_match_the_grid,
                test_grid_hash_ignores_the_live_loop,
                test_livesound_firing_peaks_and_sources,

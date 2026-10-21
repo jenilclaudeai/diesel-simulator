@@ -76,6 +76,17 @@ export function temperatureUnit(s: UnitSystem): string {
   return s === 'us' ? '°F' : '°C';
 }
 
+/** The live loop's waxed-fuel hint gives the CFPP as "N C" (live.py's string, a whole degree for every fuel the app has). */
+const WAX = /gels below (-?\d+) C /;
+
+/**
+ * A hint from the live loop, in the driver's units. The loop's strings stay as they are
+ * (the Python reference and its fixtures); only the page's copy changes. Others pass through.
+ */
+export function hintInUnits(hint: string, s: UnitSystem): string {
+  return hint.replace(WAX, (_, c: string) => `gels below ${Math.round(temperature(Number(c), s))} ${temperatureUnit(s)} `);
+}
+
 /** A pressure in bar (FMEP on the driver pages): bar, or psi in the US and the UK. */
 export function pressureBar(bar: number, s: UnitSystem): number {
   return s === 'metric' ? bar : bar * 1e5 / PA_PER_PSI;

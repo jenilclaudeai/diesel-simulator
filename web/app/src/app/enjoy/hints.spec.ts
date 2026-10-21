@@ -25,6 +25,12 @@ describe('touchHint', () => {
     expect(touchHint(h, 'uk')).toBe('Speed breaker at 59 mph: take them at 9');
   });
 
+  it("the waxed-fuel hint in the driver's units (Phase 8)", () => {
+    const h = 'fuel waxed: this diesel gels below 18 C -- it needs winter or arctic diesel here';
+    expect(touchHint(h)).toContain('gels below 18 °C');
+    expect(touchHint(h, 'us')).toContain('gels below 64 °F');
+  });
+
   it('passes other hints through unchanged', () => {
     expect(touchHint('started')).toBe('started');
     expect(touchHint('')).toBe('');
