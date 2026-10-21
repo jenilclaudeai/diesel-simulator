@@ -416,6 +416,10 @@ def live_inputs():
                        # Phase 7 step 4: Leh's air, through the weather table
                        {"name": "adr011_weather", "trans": "dct", "grid": "adr011", "air": [65764.1, 293.15],
                         "script": live_script(), "init": {"T_coolant": 361.0, "T_oil": 373.0, "T_chamber": 361.0}},
+                       # FINDING-032: Leh's air with the fan running (coolant above fan_on_T), so the fan's
+                       # mass flow at the place's density is compared too -- adr011_weather never runs it
+                       {"name": "adr011_weather_fan", "trans": "tc", "grid": "adr011", "air": [65764.1, 293.15],
+                        "script": live_script(), "init": {"T_coolant": 370.0, "T_oil": 380.0, "T_chamber": 370.0}},
                        # Phase 7 step 6: at -20 C a fuel whose filter passes 5% (CFPP -14.4 C) is waxed
                        # out -- inside (0, WAX_STALL), so "waxed means no fuel" decides, not the cap
                        # alone (at 0% the two agree, and a mutant there went unseen); a fuel at its own

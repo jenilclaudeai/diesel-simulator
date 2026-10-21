@@ -3,7 +3,7 @@
 // line with the Python; held to it by fixtures/live.json at the ADR-004
 // per-step (1e-12) and terminal (1e-6, event-aligned) bounds.
 import { clip, type LiveSpec, type Perf } from "./common.js";
-import { Driveline, Gearbox, type ManualClutch } from "./driveline.js";
+import { airDensity, Driveline, Gearbox, RHO_RATING, type ManualClutch } from "./driveline.js";
 import type { PerfGrid } from "./grid.js";
 import { Adr011Grid } from "./adr011.js";
 import { FrictionModel, type EngineView, type FrictionSpec, type WearState } from "../friction.js";
@@ -286,7 +286,7 @@ export class LiveEngine {
 
   private thermal(dt: number): void {
     const t = this.spec.thermal, c = this.spec.cooling;
-    const cp_air = 1005.0, rho_air = 1.2;
+    const cp_air = 1005.0, rho_air = airDensity(t);   // FINDING-032: was 1.2 everywhere
     const T_amb = t.ambient_T;
 
     // ---- airflow through the stack ----
@@ -299,7 +299,7 @@ export class LiveEngine {
     if (c.fan_type === "fixed") want = 1.0;
     this.fan_frac += (want - this.fan_frac) * Math.min(1.0, dt / c.fan_ramp_s);
     this.fan_on = this.fan_frac > 0.05;
-    const mdot_fan = c.fan_max_flow * this.fan_frac;
+    const mdot_fan = c.fan_max_flow * this.fan_frac * (rho_air / RHO_RATING);   // a fan moves a volume
     const mdot_air = Math.max(0.02, mdot_ram + mdot_fan);
     this.rad_air = mdot_air;
     this.fan_power = c.fan_power_max * this.fan_frac ** 3;
@@ -429,6 +429,7 @@ export class LiveEngine {
 
   /** One 60 Hz frame, integrated in sub-steps (the converter is stiff). */
   step(dt: number, n_sub = 4): void {
+    this.dl.rho_air = airDensity(this.spec.thermal);   // FINDING-032: drag breathes the place's air
     if (this.hint_t > 0.0) {
       this.hint_t = Math.max(0.0, this.hint_t - dt);
       if (this.hint_t === 0.0) this.hint = "";
