@@ -1,5 +1,50 @@
 # Status
 
+**Session 10, B-08 fixed and waiting for the owner's ear (2026-10-21), `fix/b08-sound-spikes`, draft PR #141**
+(from `main` at `173a65f`; independent of B-07's #140, which another session did):
+- **The bug sheet has two new rows (2026-10-21):**
+  - **B-08**, /enjoy, Sound: "Sudden noise spikes"; open the throttle, close it, open it again; every time.
+  - **B-07**, "Engine doesn't stop even when we stop the engine", sometimes. Not mine; fixed in #140.
+- **B-08 verdict: Confirmed.** It has been there since Phase 4 (`1c11c72`); the tree before P09 measures the
+  same, so it is not a P09 or P10 regression.
+  - Cause: each source's shape tracker (`livesound.Norm`, a one-pole over 0.3 s) lagged a step in the
+    source's level, while the level law applied the step again.
+  - Measured with `tools/b08_tip_in.py` (new): the live loop at 60 Hz, blends every 17 quanta as in the
+    worklet; the synth's output over a zero-lag reference, in 100 ms windows; six cases on crdi15, hatch15
+    and the single.
+  - `main`: tip-in **+3.2 to +9.0 dB**, lift-off **−3.9 to −10.4 dB**.
+- **The fix** (`livesound.py`, unhashed, so no re-stamp; mirrored in `web/physics` dsp.ts and synth.ts):
+  - each tracker is divided by the level the synth knows ahead of its filters (`LiveSynth._amps`, gliding
+    with the waveforms; the hiss's scale; the knock bands' weights);
+  - the crank-locked sources average over the last engine cycle (`CycleNorm`); the noises and tones keep
+    the one-pole.
+  - After: tip-in **+0.8 to +3.5 dB**, lift-off **−0.2 to −0.7 dB**. The rest is the combustion's first
+    ~100 ms: its spectrum changes under load, and a causal tracker needs about a cycle. Removing it would need
+    a spectrum per blend on the audio thread; not done.
+  - Steady sound, 30 cases: output within 0.12 dB of `main`'s; mech +0.32 dB at the single's idle.
+- **Tried and dropped, measured:**
+  - feed-forward alone on the 0.3 s one-pole: tip-in still +1.3 to +7.1 dB;
+  - each block's levels from the gliding waveforms: ±0.5 dB either way, ~25% more synth work;
+  - the rumble's level the same way. *My hypothesis was wrong:* its −1.7 dB in the test was the noise's
+    scatter, not the glide. The test now compares with a synth held at the new point, playing the same noise.
+- **Verified (local):**
+  - Python suite **95 passed, 0 failed, 3 known, 4 skipped** (`main`'s 94 + 1). The scipy-gated sound tests,
+    run in a scratch venv, pass: render third-octave 1.22 dB (main 1.24).
+  - `test_livesound_level_step_is_clean`: worst 0.67 dB (limit 1.0). **Mutants 7 of 7 caught**; `main`'s
+    livesound gives 14.75 dB.
+  - TS **5 + 56 + 13 + 11, 0 failed**. The sound fixture gains a 300→200 rpm segment (the window cap, the
+    ring's wrap) and the trackers' constants. **TS mutants 7 of 7 caught.**
+  - fixtures current; audit 0 DEAD, 2 FROZEN (known); `e2e:sound` 6 passed (on `build:pages` under Node
+    24.15 via `npx -p node@24.15.0`).
+  - `perf` at 6×, main thread: synth mean 0.54 ms (main 0.47–0.52), p99 1.8–1.9 of 2.90 ms; worker equal.
+  - `tools/p10_ab.py`'s hiss wrapper now passes the level on; it was not run.
+- **CI on #141:** not read yet. Read every job (Pyodide too) before calling it ready.
+- **Waiting on the owner:** listen to `out/b08/` in the main checkout. Three A (`main`) / B (fix) pairs at
+  true level: crdi15 exterior driving, hatch15 cabin driving, the single revving in neutral; pedal off at
+  3–6, 9–10 and 13–15 s. Then merge or say what is still wrong. The phone check on the live site comes after.
+- **When #140 (B-07) meets this:** `reviews/ANDROID-BUGS.csv` and this file conflict. Keep both, CSV rows in
+  ID order.
+
 **Session 10, FINDING-032 fixed (2026-10-20), `fix/finding-032-air-density`** (from `main`
 at `4c2a301`; independent of #135, #136 and P06):
 - **The finding:** the live loop's radiator, fan and aerodynamic drag used 1.20 kg/m³
