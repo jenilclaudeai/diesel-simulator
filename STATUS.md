@@ -16,7 +16,13 @@ conflicts to be resolved. Merged `main` (`ac3c15e`) in, no rebase, no force-push
   - units **164** (29 files; main's 162 + #139's 2), also with `physics-version.ts` aside;
   - `build:pages` builds (`enjoy.css` 5.62 kB, over its 4 kB warning, under the 8 kB error);
   - **`e2e:enjoy` 40/0** (main's 38 + #139's 2).
-- **Next:** CI on #139, every job read. Then #140 (B-07) needs the same merge.
+- **CI on #139 at `fb00d89`: 10 of 10, every job read.**
+  - Web e2e: `e2e:enjoy` **40/0** with the four P01 checks (Test tap, events and idle shake,
+    driving on-times 33 and 25 ms); the job's other suites 15, 11, 6, 11, 18, 6, 5, 0 failed.
+  - Units 164 in 29 files. Physics 102/0/3 on 3.10 and 3.12, Pyodide 81/0/2 (21 skipped).
+  - Grid, custom, fixtures and SolverPort passed.
+  - **Ready to merge.**
+- **Next:** #140 (B-07) conflicts with `main` too; it gets the same merge after #139 merges.
 
 **Session 10, P01 widened: vibration while driving (2026-10-21), `fix/p01-driving-vibration`**
 (from `main` at `173a65f`, after #137):
