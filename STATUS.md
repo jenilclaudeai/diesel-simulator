@@ -1,7 +1,26 @@
 # Status
 
-**Session 11, the cold-start ECU proposal being measured (2026-10-22), `worktree-p-cold-start-ecu`**
-(from `main` at `173a65f`; docs only, nothing shipped changes):
+**Session 11, the cold-start ECU measured; four questions for the owner (2026-10-22),
+`docs/cold-start-ecu`** (from `main` at `173a65f`; docs only, nothing shipped changes):
+- **The proposal:** `reviews/PROPOSAL-cold-start-ECU.md`. Recommended: C1 (the pedal's fuel
+  covers the cold friction's excess and the cold walls' indicated deficit, gated 40–70 °C
+  coolant) with C2 (fast idle, pedal up only) at +150 rpm at 0 °C, built after #138.
+  - C1 moves every stuck cold launch (`main`: 7 of 24 in the matrix; 7 of 16 over the
+    roster's eight engines that launch warm). A light-pedal cold launch becomes a warm one's:
+    0.1–0.7 s slower to 10 km/h, 11–51% more fuel.
+  - Warm driving is bit-identical (0 of 259,200 values; idle and launch on all ten engines
+    equal `main` to every digit). `live.py` is unhashed, so no rebuild.
+  - At 30% an automatic still trails warm by up to 9 km/h at 60 s: P08's schedule reads the
+    cold map and upshifts early (question 4).
+  - **Questions:** (1) friction + walls, or friction only; (2) fast idle and its size;
+    (3) when (after #138 recommended); (4) the automatic's schedule when cold.
+- *Process note, owned:* I told the owner "9 of 24" mid-session from reading a table by eye;
+  the data says 7. Every count in the proposal is now recomputed from the runs' JSON.
+- **Next:** the owner's answers; the PR (docs only) once CI is read. Still waiting from
+  before: merging #138–#141, #141's listen, FINDING-033, and P07/P11/P12 (never looked at).
+
+*(Was: "Session 11, the cold-start ECU proposal being measured", the entry below.)*
+- *The in-progress record:*
 - **Start of session:** the four open PRs (#138 P06, #139 P01 driving, #140 B-07, #141 B-08)
   are each CI 10 of 10 and wait on the owner (#141 also on the owner's ear, `out/b08/`). The
   bug sheet has no new rows (B-09 on empty). Its Feat Prop tab has three priority-1 rows never
@@ -32,12 +51,10 @@
     cold engine a warm one's launch for ~45% more fuel. **Fast idle +200 overshoots** (4.3 s,
     quicker than warm), because `main`'s governor acts with the pedal down too (up to 0.75
     load below target). EDC16's idle control acts only with the pedal up; that variant is
-    being measured.
-- **Running:** all ten engines' idle and 20% launch; the 24 cold launches with pedal-up fast
-  idle (labelled "OIL:", but in the first 60 s both gates are fully open, so the gate makes
-  no difference there).
-- **Next:** write `reviews/PROPOSAL-cold-start-ECU.md` (options, lenses, questions for the
-  owner), PLAN's entry, PR.
+    being measured. *(Measured: with the pedal up only, every TC launch equals the cover
+    alone; the ~45% is 11–51% over the 20% cases.)*
+- ~~**Running:** all ten engines' idle and 20% launch; the 24 cold launches with pedal-up fast
+  idle.~~ Done; in the proposal.
 
 **Session 10, FINDING-032 fixed (2026-10-20), `fix/finding-032-air-density`** (from `main`
 at `4c2a301`; independent of #135, #136 and P06):

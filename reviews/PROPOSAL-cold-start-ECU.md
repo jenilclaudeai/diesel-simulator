@@ -10,7 +10,8 @@ comes as its own proposal". PLAN lists it as the next proposal.
 FINDING-031 was measured on P09's grids before R5, so its numbers were re-measured here, by a
 different measure: time to 10 km/h, not "breaks free" (1.3 × idle).
 **Scratch scripts** (the session's job directory): `ecu.py` (the prototype, below),
-`ecu_check.py`, `launch.py`, `table.py`, `idle.py`, `warmup.py`, `excess.py`, `probe.py`.
+`ecu_check.py`, `launch.py`, `table.py`, `idle.py`, `idle_table.py`, `warmup.py`, `excess.py`,
+`probe.py`, `gap30.py`, `claims.py` (the 24-case counts, recomputed from the runs' JSON).
 
 ---
 
@@ -148,15 +149,55 @@ start (coolant 361 K, oil 373 K), FF+WALL+FI 200:
 
 ### Idle, all ten engines
 
-120 s in neutral, `main` against FF+WALL+FI 200 (rpm at 2 s → 120 s; fuel):
+120 s in neutral, `main` against FF+WALL+FI 200 ("ECU"; rpm at 2 s → 120 s; fuel). This run's
+fast idle acts with the pedal down too, which makes no difference in neutral:
 
-PENDING_IDLE
+| engine (spec idle) | warm `main` | 0 °C `main` | 0 °C ECU | fuel 2 min 0 °C, `main` → ECU | 25 °C `main` | 25 °C ECU |
+|---|---|---|---|---|---|---|
+| crdi15 (800) | 786 → 787 | 770 → 779 | 990 → 944 | 31 → 34 mL (+9%) | 781 → 783 | 863 → 836 |
+| crdi22 (760) | 751 → 751 | 732 → 743 | 952 → 900 | 42 → 49 mL (+15%) | 745 → 747 | 826 → 799 |
+| crdi_1p5 (800) | 789 → 789 | 777 → 783 | 990 → 946 | 30 → 34 mL (+13%) | 784 → 786 | 864 → 839 |
+| hatch15 (800) | 787 → 787 | 764 → 779 | 990 → 925 | 37 → 40 mL (+8%) | 780 → 783 | 863 → 825 |
+| hd_i6 (600) | 591 → 591 | 572 → 581 | 794 → 760 | 123 → 151 mL (+23%) | 585 → 587 | 667 → 652 |
+| ld_i4 (800) | 786 → 786 | 766 → 777 | 989 → 938 | 34 → 38 mL (+11%) | 780 → 782 | 862 → 834 |
+| single (1000) | 968 → 967 | 938 → 954 | 1170 → 1148 | 17 → 17 mL (+1%) | 955 → 960 | 1044 → 1022 |
+| single10 (600) | 572 → 572 | 552 → 564 | 778 → 731 | 20 → 20 mL (+0%) | 564 → 567 | 648 → 615 |
+| truck127 (600) | 593 → 593 | 580 → 586 | 796 → 760 | 157 → 194 mL (+24%) | 588 → 590 | 669 → 653 |
+| v8hd (600) | 594 → 594 | 580 → 586 | 796 → 760 | 184 → 227 mL (+23%) | 589 → 591 | 670 → 654 |
 
-Warm, the ECU equals `main` to every digit on every engine (the gates are shut).
+Warm, the ECU equals `main` to every digit on all ten (the gates are shut). `main`'s cold idle
+sits 10–20 rpm under its warm idle, so the fast idle is about the idle's feel and sound, not
+the fix.
 
-### A 20% launch, all ten engines (each on its own box)
+### A 20% launch, all ten engines
 
-PENDING_LAUNCH
+Each engine with its preset's default box (the DCT for all ten); time to 10 km/h / speed at
+60 s / fuel mL; "ECU" as above:
+
+| engine | warm `main` | 25 °C `main` | 25 °C ECU | 0 °C `main` | 0 °C ECU |
+|---|---|---|---|---|---|
+| crdi15 | 7.0 s / 58 / 36 | 14.3 s / 45 / 31 | 6.8 s / 60 / 43 | **never** / 0 / 17 | 6.3 s / 60 / 53 |
+| crdi22 | 5.1 s / 58 / 49 | 9.1 s / 45 / 44 | 5.0 s / 60 / 60 | **never** / 4 / 25 | 4.7 s / 61 / 75 |
+| crdi_1p5 | 23.1 s / 22 / 29 | **never** / 8 / 23 | 23.2 s / 17 / 31 | **never** / 0 / 19 | 21.5 s / 18 / 38 |
+| hatch15 | 5.4 s / 69 / 46 | 14.7 s / 48 / 34 | 5.3 s / 69 / 52 | **never** / 0 / 21 | 4.8 s / 70 / 63 |
+| hd_i6 | 17.3 s / 30 / 149 | 28.4 s / 25 / 144 | 17.0 s / 31 / 182 | **never** / 0 / 67 | 16.2 s / 31 / 230 |
+| ld_i4 | 8.3 s / 92 / 80 | 30.4 s / 52 / 37 | 8.2 s / 91 / 85 | **never** / 0 / 19 | 7.6 s / 87 / 94 |
+| single | **never** / 0 / 5 | **never** / 0 / 7 | **never** / 0 / 7 | **never** / 0 / 9 | **never** / 0 / 9 |
+| single10 | **never** / 0 / 7 | **never** / 0 / 9 | **never** / 0 / 8 | **never** / 0 / 11 | **never** / 0 / 11 |
+| truck127 | 9.7 s / 37 / 231 | 13.8 s / 30 / 216 | 9.4 s / 38 / 260 | 35.4 s / 21 / 203 | 9.0 s / 39 / 319 |
+| v8hd | 8.2 s / 40 / 270 | 11.6 s / 33 / 246 | 8.0 s / 42 / 308 | 28.8 s / 23 / 239 | 7.7 s / 43 / 376 |
+
+- On the eight engines that launch at 20% when warm, `main` is stuck in **7 of 16** cold cases
+  (every 0 °C one except truck127's and v8hd's, plus crdi_1p5 at 25 °C); the ECU in **0**.
+- The two singles don't move at 20% on the DCT even warm: the dev single's known weakness (the
+  suite's KNOWN "dev single sags"), not the cold. The ECU doesn't change that, and isn't meant
+  to.
+- The ECU's cold launches reach 10 km/h up to 1.6 s *quicker* than warm here (crdi_1p5 at
+  0 °C; at 25 °C within −0.3 to +0.1 s). On the DCT that is the harness's 0.5 s at fast idle
+  before the pedal (above): the pedal-up form gave the same DCT numbers in the 24-case run.
+  With a real wait at idle before pulling away, a fast-idling DCT would bite a little harder
+  still. Not measured; question 2 decides the fast idle's size.
+- Warm, the ECU equals `main` to every digit on all ten.
 
 ## What it would touch
 
@@ -173,8 +214,9 @@ PENDING_LAUNCH
   returns first). Holding the cover at the friction's 10 Hz instead would be cheaper; `npm run
   perf` decides.
 - **What the driver sees and hears, when cold:**
-  - more fuel on the trip computer, the real direction (crdi15: +45% over a cold minute against
-    a warm one, +14% over a cold 12 min against `main`'s cold run);
+  - more fuel on the trip computer, the real direction (11–51% more than warm over a cold
+    minute at 20% pedal; crdi15 +14% over a cold 12 min against `main`'s cold run, which
+    covered less road);
   - with fast idle, a faster idle note and P01's idle shake at the higher firing rate;
   - a higher load, so a cold engine sounds as loaded as the warm one at the same pedal.
 - **Not touched:** the warm engine in every respect; the solving pages (Dyno, Sweep and the
@@ -194,8 +236,8 @@ PENDING_LAUNCH
 |---|---|---|
 | **A. Keep today's behaviour** (FINDING-031 A, already stated) | nothing to build or review | 7 of 24 light-pedal cold launches don't move; on an automatic at 25 °C, crdi15 doesn't move at 20% pedal |
 | **C1. The cover: friction + cold walls**, coolant gate | a cold engine launches like a warm one at light pedal, for the fuel a cold engine really burns; warm driving bit-identical; no rebuild; the EDC16 structure | 11–51% more fuel than warm in a cold minute; the cold fixtures move; ~4 more blends per substep while cold; an automatic still shifts as if cold (P08 reads the cold map), so at 30% it is up to 9 km/h behind warm at 60 s |
-| **C1′. The cover, friction only** | the smallest change; ECUs do model friction explicitly | cold launches stay ~1.5–2× slower than warm (crdi15 TC 0 °C 13.0 s against 7.4) |
-| **C2. Fast idle, pedal up** (with C1) | the cold idle and its sound; a real ECU's behaviour; quicker warm-up of the cabin heat (not modelled) | its size is a choice (no published table); +9–23% idle fuel over 2 cold min; changes the idle note and the vibration's rate when cold; does nothing for the launch on a TC |
+| **C1′. The cover, friction only** | the smallest change; ECUs do model friction explicitly | cold launches stay 1.2–1.8× warm's time at 20% pedal, 1.1–1.4× at 30% (crdi15 TC 0 °C 13.0 s against 7.4) |
+| **C2. Fast idle, pedal up** (with C1) | the cold idle and its sound; a real ECU's behaviour; quicker warm-up of the cabin heat (not modelled) | its size is a choice (no published table); 0–24% more idle fuel over 2 cold min; changes the idle note and the vibration's rate when cold; does nothing for the launch on a TC |
 | **B. A faster chamber warm-up** (FINDING-031's B) | one constant | measured not to work: 5 of 24 still stuck |
 
 ## Lens review
