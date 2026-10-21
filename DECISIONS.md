@@ -1002,7 +1002,10 @@ for the Feat Prop priority scale.
 And, for the owner's "Feat Prop" list (the bug sheet, read 2026-10-06):
 
 7. **P01 (vibrations on a phone) is v1**, in `/enjoy`. Android Chrome only:
-   iOS Safari has no Vibration API.
+   iOS Safari has no Vibration API. *(Amended 2026-10-21, the owner's choice
+   after feeling the build: the shake runs whenever the engine does and
+   follows the pedal, not only at idle and lugging; a Test button on the start
+   screen. Was (2026-10-19): events plus a shake while idling or lugging.)*
 8. **P02–P05 are v2, after v1.** That's Google sign-in, free/paid roles,
    grid builds on a backend and on AWS Lambda. v1 stays a static site
    (ADR-003), and PLAN's out-of-scope list stands. **Priority 1 is

@@ -1,12 +1,17 @@
 // P01 (ADR-016 item 7): the phone vibrates in /enjoy. The owner's choices
 // (2026-10-19): events (start, stall, gear change, the limiter) plus a shake
 // while idling or lugging; on by default, with a switch kept per browser.
+// Widened 2026-10-21: the owner expected it while driving too, so the shake
+// now runs whenever the engine does and follows the pedal, and idle is firmer
+// (it was 12 ms of every 50, likely too short for a phone's motor to feel).
 //
 // The Vibration API (Android Chrome; none on iOS Safari) takes on/off
 // durations only, with no strength, and a new call replaces the running
-// pattern. A phone's motor can't follow a 4-cylinder's 27 Hz idle firing, so
-// the shake pulses at the firing rate only up to FIRING_PULSE_HZ (the single
-// at idle, ~5 Hz) and is a light buzz above it; "stronger" is a longer on-time.
+// pattern. Chrome on Android drops every call while the phone is on Mute
+// (VibrationManagerAndroid.java: ringer mode SILENT), with no error. A
+// phone's motor can't follow a 4-cylinder's 27 Hz idle firing, so the shake
+// pulses at the firing rate only up to FIRING_PULSE_HZ (the single at idle,
+// ~5 Hz) and is a buzz above it; "stronger" is a longer on-time.
 import { Injectable, signal } from '@angular/core';
 
 export const VIBRATION_KEY = 'dieselsim-vibration';
@@ -41,29 +46,44 @@ export function eventPattern(prev: VibState | null, now: VibState, info: VibInfo
   return null;
 }
 
+// the buzz's on-time of every BUZZ_MS (the owner's choice, 2026-10-21): idle, lugging, and
+// driving from CRUISE_ON with the pedal up to FULL_ON
+export const BUZZ_MS = 50;
+export const IDLE_ON = 20, LUG_ON = 35, CRUISE_ON = 15, FULL_ON = 35;
+// the same for the firing-rate pulse (the single): its on-time per firing
+const PULSE_IDLE_ON = 35, PULSE_LUG_ON = 55, PULSE_CRUISE_ON = 30, PULSE_FULL_ON = 55;
+
 /**
- * The shake for the next `windowMs`: while idling (near idle rpm, pedal up) or
- * lugging (low rpm, pedal down), else null. Pulsed at the firing rate where a
- * phone can feel it, a buzz above that; lugging is stronger (longer on-time).
+ * The shake for the next `windowMs`, whenever the engine runs (else null): firmer
+ * idling (near idle rpm, pedal up), firmest lugging (low rpm, pedal down), and in
+ * between it follows the pedal. Pulsed at the firing rate where a phone can feel
+ * it, a buzz above that.
  */
 export function shakePattern(s: VibState, info: VibInfo, windowMs = 400): number[] | null {
   if (!running(s, info)) return null;
   const idling = s.rpm < 1.25 * info.idle_rpm && s.throttle < 0.15;
   const lugging = s.rpm < 1.4 * info.idle_rpm && s.throttle > 0.5;
-  if (!idling && !lugging) return null;
+  const pedal = Math.min(1, Math.max(0, s.throttle));
   const f = firingHz(s.rpm, info.cylinders);
   let on: number, off: number;
   if (f <= FIRING_PULSE_HZ) {
     const period = 1000 / f;
-    on = lugging ? 55 : 35;
+    on = lugging ? PULSE_LUG_ON : idling ? PULSE_IDLE_ON : PULSE_CRUISE_ON + (PULSE_FULL_ON - PULSE_CRUISE_ON) * pedal;
     off = Math.max(10, period - on);
   } else {
-    on = lugging ? 25 : 12;                          // of every 50 ms: a light buzz, stronger when lugging
-    off = 50 - on;
+    on = lugging ? LUG_ON : idling ? IDLE_ON : CRUISE_ON + (FULL_ON - CRUISE_ON) * pedal;
+    off = BUZZ_MS - on;
   }
   const out: number[] = [];
   for (let t = 0; t < windowMs; t += on + off) out.push(Math.round(on), Math.round(off));
   return out;
+}
+
+/** What the start screen's Test tap says: whether the browser has vibration, took the call, and what to check if nothing was felt. */
+export function testNote(supported: boolean, accepted: boolean): string {
+  if (!supported) return 'This browser has no vibration (iPhones and iPads have none).';
+  if (!accepted) return 'The browser refused to vibrate: tap the page once, then try again.';
+  return 'Sent: a short buzz. Felt nothing? On Mute, Chrome stays still: switch the phone to Vibrate or Sound, and check its vibration settings.';
 }
 
 const total = (p: number[]) => p.reduce((a, b) => a + b, 0);
@@ -71,7 +91,8 @@ const total = (p: number[]) => p.reduce((a, b) => a + b, 0);
 /**
  * Drives navigator.vibrate from the live frames: an event plays whole (the
  * shake waits for it), the shake is refreshed every `refreshMs` (its pattern
- * overlaps, so the motor never stops between calls) and stopped when it ends.
+ * overlaps, so the motor never stops between calls, and a pedal change is felt
+ * within `refreshMs`) and stopped when the engine stops.
  */
 export class Vibrator {
   private prev: VibState | null = null;

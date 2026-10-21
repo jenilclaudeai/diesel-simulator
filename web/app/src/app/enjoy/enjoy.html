@@ -42,9 +42,14 @@
       @if (importError()) { <p class="err import-err">{{ importError() }}</p> }
       @if (projectNote()) { <p class="project-note">{{ projectNote() }}</p> }
       <app-drive-env class="place" (changed)="stop()" />
-      <!-- P01: the phone vibrates (Android Chrome; iOS has no Vibration API). Kept per browser. -->
-      <label class="vibrate"><input type="checkbox" class="vibration" [checked]="vibration.on()"
-        (change)="vibration.set($any($event.target).checked)" /> Vibration (Android)</label>
+      <!-- P01: the phone vibrates (Android Chrome; iOS has no Vibration API). Kept per browser.
+           Test buzzes once and says what the browser did: a muted phone stays still in Chrome. -->
+      <div class="vibrate">
+        <label><input type="checkbox" class="vibration" [checked]="vibration.on()"
+          (change)="vibration.set($any($event.target).checked)" /> Vibration (Android)</label>
+        <button type="button" class="vib-test" (click)="testVibration()">Test</button>
+      </div>
+      <p class="hint vib-note" role="status">{{ vibTest() ?? '' }}</p>
       <p class="hint">Brake and throttle on the right, the clutch (in Manual) on the left: press harder by sliding up. The paddles beside the brake shift.</p>
     } @else if (v(); as s) {
       <!-- Unlit lamps stay dim (2.16:1), as on a real dash: the owner's choice (2026-10-13). Lit differs from

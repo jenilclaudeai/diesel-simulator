@@ -99,6 +99,14 @@ check("the fuel is picked beside it: sold here first, then summer, winter and ar
 // P01: the vibration switch, on the start screen, on by default (the owner's choice)
 const vibSwitch = await page.evaluate(() => document.querySelector("main.dash input.vibration")?.checked ?? null);
 check("P01: the vibration switch is on the start screen, on by default", vibSwitch === true, String(vibSwitch));
+// P01 (2026-10-21): Test buzzes once and says what the browser did with it
+await tapEl("button.vib-test");
+await sleep(200);
+const vibTest = await page.evaluate(() => ({
+  note: document.querySelector("main.dash .vib-note")?.textContent?.trim() ?? "",
+  sent: globalThis.__enjoy.vibes().some(v => Array.isArray(v) && v.join() === "300"),
+}));
+check("P01: the Test tap buzzes 300 ms and says what the browser did", vibTest.sent && vibTest.note.length > 0, JSON.stringify(vibTest));
 await tapEl("button.start");
 await page.waitForFunction(() => globalThis.__enjoy.view(), { timeout: 60_000 });
 await sleep(1500);
@@ -153,6 +161,11 @@ const vibHas = p => vibes.some(v => Array.isArray(v) && v.join() === p.join());
 const vibShake = vibes.some(v => Array.isArray(v) && v.length >= 8 && v.reduce((a, b) => a + b, 0) >= 400);
 check("P01: the phone vibrates: the start's shudder, the idle shake, the shift's jolt",
   vibHas([60, 40, 60, 40, 140]) && vibShake && vibHas([45]), `${vibes.length} calls, first ${JSON.stringify(vibes.slice(0, 3))}`);
+// driving (2026-10-21): the buzz follows the pedal; an on-time strictly between idle's 20 and
+// lugging's 35 ms comes only from it (the held throttle gives about 33)
+const driveOn = vibes.filter(v => Array.isArray(v) && v.length >= 8 && v[0] > 20 && v[0] < 35).map(v => v[0]);
+check("P01: while driving the phone buzzes with the pedal", driveOn.length > 0,
+  `on-times ${JSON.stringify([...new Set(driveOn)])}`);
 
 await page.screenshot({ path: path.join(here, "out", "enjoy-landscape.png") });
 

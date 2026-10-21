@@ -1,5 +1,34 @@
 # Status
 
+**Session 10, P01 widened: vibration while driving (2026-10-21), `fix/p01-driving-vibration`**
+(from `main` at `173a65f`, after #137):
+- **The owner: "The vibration is not working."** Measured before touching code:
+  - the live site is current (Pages deployed #135-#137; the live `main-RE23DFRX.js` has the
+    switch and the `navigator.vibrate` call);
+  - on `main` the e2e's P01 check passes (13 calls: the start's shudder, the idle shake
+    `12,38`, the shift's jolt);
+  - Chromium's source: Android Chrome drops every call on Mute (`VibrationManagerAndroid.java`,
+    ringer mode SILENT) with no error, and Blink plays each on-time as its own motor call;
+  - 8 of the 10 roster engines idle above 12 Hz firing, so they got 12 ms on / 38 off.
+- **The owner's answers:** not muted, Chrome on the S9+; the events and idle are felt, but they
+  **expected it while driving**. Chose a Test button plus a stronger shake, and "follows load".
+- **Built:**
+  - the shake runs whenever the engine does: on-time per 50 ms 15 + 20 × pedal; idle 20 (was 12);
+    lugging 35 (was 25); the single's firing pulse 30 + 25 × pedal (idle 35, lugging 55 as
+    before);
+  - a **Test** button beside the switch: a 300 ms buzz and a note (no API / refused / sent,
+    "on Mute, Chrome stays still").
+- **Verified (local, Node 24.15 via npx):**
+  - app units **147 passed** (27 files), also with `physics-version.ts` moved aside as CI does;
+  - unit mutants **8 of 8** caught, baseline passing, all compiled;
+  - **e2e:enjoy 33 passed** (31 + 2 new: the Test tap sends `[300]` and shows its note; driving
+    on-times 33 and 25 ms); e2e mutants **2 of 2** caught (button unwired, idle-only shake);
+  - `build:pages` builds (enjoy.css 4.31 kB, over its 4 kB *warning*, was already 4.16; error
+    at 8 kB).
+- **Not verifiable here:** the feel on the S9+, and the battery cost of a continuous buzz.
+  The switch turns it off.
+- **Next:** PR, read every CI job, the owner tries it on the phone after the merge.
+
 **Session 10, FINDING-032 fixed (2026-10-20), `fix/finding-032-air-density`** (from `main`
 at `4c2a301`; independent of #135, #136 and P06):
 - **The finding:** the live loop's radiator, fan and aerodynamic drag used 1.20 kg/m³
