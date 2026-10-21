@@ -30,6 +30,11 @@ class EngineSoundProcessor extends AudioWorkletProcessor {
   private capN = 0;
   private said = false;
   private blend?: Sources;           // reused by every 20 Hz blend: no allocation on this thread
+  // B-07: the loop's current channel. Stop's 'reset' comes on this.port and the
+  // frames on their own channel, unordered between the two, so a stopped
+  // worker's last frame could land after the reset and play until the next
+  // Start. A frame counts only on the current channel; 'reset' closes it.
+  private loop?: MessagePort;
 
   constructor() {
     super();
@@ -52,13 +57,17 @@ class EngineSoundProcessor extends AudioWorkletProcessor {
         this.syn = new LiveSynth(m.spec as SoundSpec, m.mic);
         this.st = undefined;
         break;
-      case 'loop':
-        m.port.onmessage = (e: MessageEvent<LoopSound>) => { this.st = e.data; };
+      case 'loop': {
+        this.loop?.close();
+        const p = m.port;
+        this.loop = p;
+        p.onmessage = (e: MessageEvent<LoopSound>) => { if (this.loop === p) this.st = e.data; };
         break;
+      }
       case 'mic': this.syn?.setMic(m.mic); break;
       case 'volume': this.volume = m.volume; break;
       case 'capture': this.cap = new Float32Array(Math.round(m.seconds * sampleRate)); this.capN = 0; break;
-      case 'reset': this.st = undefined; break;
+      case 'reset': this.loop?.close(); this.loop = undefined; this.st = undefined; break;
     }
   }
 
