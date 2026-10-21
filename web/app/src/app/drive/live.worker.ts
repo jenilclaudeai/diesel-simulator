@@ -4,7 +4,8 @@
 // decoupled from the page's render rate. An accumulator turns wall time
 // into whole 1/60 s frames; if the tab stalls, the backlog is dropped
 // rather than replayed (at most 5 frames catch up per tick).
-import { Adr011Grid, handleKey, LiveEngine, pedalReturn } from '@dieselsim/physics';
+import { handleKey, type LiveEngine, pedalReturn, type Adr011Grid } from '@dieselsim/physics';
+import { makeEngine } from './make-engine';
 import type { DashInfo, FromWorker, LiveView, Pedals, ToWorker } from './protocol';
 import type { LoopSound } from './sound-protocol';
 
@@ -33,6 +34,9 @@ function view(): LiveView {
     fan_on: e.fan_on, T_charge: e.T_charge, derate: e.derate, engine_stopped: e.engine_stopped,
     derate_heat: e.derate_heat,
     T_fuel: e.T_fuel, wax_frac: e.wax_frac, fuel_waxed: e.fuel_waxed,
+    // P06: the road (zeros without a route)
+    route_s: e.route_s, route_alt: e.route_alt, wind: d.wind, crr_x: d.crr_x,
+    breaker_hits: e.breaker_hits, jolt: e.jolt,
   };
 }
 
@@ -114,14 +118,8 @@ addEventListener('message', (ev: MessageEvent<ToWorker>) => {
   const m = ev.data;
   switch (m.type) {
     case 'load': {
-      // Phase 7 step 4: the place's air, set before the engine is made (its coolant
-      // starts at the ambient); the grid carries its weather table, if it has one
-      const spec = structuredClone(m.grid.spec);
-      if (m.air) { spec.thermal.ambient_p = m.air.p; spec.thermal.ambient_T = m.air.T; }
-      const grid = new Adr011Grid(spec, m.grid);
-      // a custom engine names its vehicle (ADR-014); a roster grid's preset picks its own
-      live = new LiveEngine(grid, m.grid.vehicle ?? m.grid.preset, m.trans, m.grid.engine_view);
-      if (m.cfpp !== undefined) live.fuel_cfpp = m.cfpp;   // Phase 7 step 6: the fuel picked
+      // the grid, the place's air, the fuel and the road (make-engine.ts, shared with the par worker)
+      live = makeEngine(m);
       frames = 0; held.clear();
       post({ type: 'info', info: info() });
       post({ type: 'state', view: view() });

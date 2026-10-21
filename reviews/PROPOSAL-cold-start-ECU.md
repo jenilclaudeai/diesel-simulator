@@ -7,11 +7,16 @@ stated (A), and "C (a cold-start ECU: fast idle, the pedal's fuel covering the e
 comes as its own proposal". PLAN lists it as the next proposal.
 **Lenses:** PHY1, PHY2, SW1, QA1, QA2, USR1, PM
 **Measured on** `main` at `173a65f` (after #137), with today's grids (P13's rule R5, #133).
+*#138 (P06) merged during the measuring (2026-10-21 21:34 UTC). It doesn't touch what was
+measured: `LiveEngine._sub` is byte-identical before and after (`sub_same.py`, 84 lines), and
+without a route its driveline and `step()` are unchanged (#138's own check: 0 values changed
+in the fixture's no-route drives).*
 FINDING-031 was measured on P09's grids before R5, so its numbers were re-measured here, by a
 different measure: time to 10 km/h, not "breaks free" (1.3 × idle).
 **Scratch scripts** (the session's job directory): `ecu.py` (the prototype, below),
 `ecu_check.py`, `launch.py`, `table.py`, `idle.py`, `idle_table.py`, `warmup.py`, `excess.py`,
-`probe.py`, `gap30.py`, `claims.py` (the 24-case counts, recomputed from the runs' JSON).
+`probe.py`, `gap30.py`, `claims.py` (the 24-case counts, recomputed from the runs' JSON),
+`sub_same.py`.
 
 ---
 
@@ -206,10 +211,11 @@ Each engine with its preset's default box (the DCT for all ten); time to 10 km/h
 - **`web/physics/src/live/engine.ts`**: the same; `Adr011Grid.blendPerfT` already exists.
 - **The live fixture:** the drives that start at the ambient change (`tc`, `dct`, `manual`,
   `tc_kickdown` through fast idle only, since they run the plain grid with no live friction;
-  `adr011_cold`, `adr011_waxed`, `adr011_limp`; P06's route drives once #138 merges).
+  `adr011_cold`, `adr011_waxed`, `adr011_limp`; ~~P06's route drives once #138 merges~~
+  P06's two pars, which start at the ambient; its route drives start warm).
   **The warm drives must not move** (`dct_hot`, `adr011_warm`, `adr011_weather`,
-  `adr011_weather_fan`): a test that asserts it, with a mutant (the gate opened) that it
-  catches.
+  `adr011_weather_fan`, `route_city`, `adr011_route`): a test that asserts it, with a mutant
+  (the gate opened) that it catches.
 - **Cost:** up to four extra bilinear blends per substep while cold, none when warm (the gate
   returns first). Holding the cover at the friction's 10 Hz instead would be cheaper; `npm run
   perf` decides.
@@ -227,8 +233,16 @@ Each engine with its preset's default box (the DCT for all ten); time to 10 km/h
   - **FINDING-033** (an automatic held at its 60 rpm floor): the cover makes a weak engine
     stronger only when cold. It does not fix FINDING-033, and doesn't conflict with its
     option A.
-  - **#138 (P06)** changes `live.py` and `engine.ts` too. Building after it merges avoids a
-    second fixture regeneration.
+  - ~~**#138 (P06)** changes `live.py` and `engine.ts` too. Building after it merges avoids a
+    second fixture regeneration.~~ #138 is merged, so the build can start now. Its two route
+    drives start warm (coolant 361 K, oil 373 K) and must not move. Its two **pars** start at
+    the ambient and will: `par_city` (25 °C) and `par_random_leh` (Leh, 20 °C).
+    `par_random_leh` is FINDING-033's reproduction (the cold Leh start that sinks to the 60
+    rpm floor). The cover may lift it off the floor, which would leave FINDING-033 without
+    its fixture case. Not measured.
+  - At altitude the cover is the sea-level one: it reads the grid's cells on both sides of its
+    difference (`blend_perf_T`, no weather table), so it covers the same cold losses at Leh as
+    at sea level. Not measured at altitude.
 
 ## Options
 
@@ -257,12 +271,13 @@ Each engine with its preset's default box (the DCT for all ten); time to 10 km/h
   missing.
 - **USR1:** a car that won't pull away at light pedal on a 25 °C day reads as broken; with C1
   it pulls away. Whether a fast cold idle *sounds* right is the owner's ear. Advisory.
-- **PM:** a day's build after #138 merges; no rebuild. No blocking findings.
+- **PM:** a day's build (#138, which touched the same files, is merged); no rebuild. No
+  blocking findings.
 
 ## Recommendation
 
 **C1 (friction + walls, coolant gate 40–70 °C), with C2 (fast idle, pedal up) at +150 rpm at
-0 °C**, built after #138 merges. C1 is the fix. C2 is cheap and real, but its size is a guess,
+0 °C**. ~~built after #138 merges~~ (#138 merged; buildable now). C1 is the fix. C2 is cheap and real, but its size is a guess,
 so I'd keep it modest and let the ear decide.
 
 ## Questions for the owner
@@ -271,7 +286,8 @@ so I'd keep it modest and let the ear decide.
    like a warm one, burning more fuel), or friction only (C1′, still slower than warm)?
 2. **Fast idle:** yes or no, and how much at 0 °C (+100, +150 or +200 rpm; it fades out by
    40 °C)? It changes the cold idle's sound and the phone's idle shake.
-3. **When:** after #138 merges (recommended, one fixture regeneration), or now?
+3. ~~**When:** after #138 merges (recommended, one fixture regeneration), or now?~~
+   Answered by events: #138 merged during the measuring, so whenever you say go.
 4. **The automatic's schedule when cold:** P08 reads the engine's map at the live chamber
    temperature, so with the cover it still upshifts as if the engine were weak (hatch15 at 30%:
    gear index 5 at ~2,100 rpm, against warm's 4 at ~2,800). Keep that, which is P08 as decided and

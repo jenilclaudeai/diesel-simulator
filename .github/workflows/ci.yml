@@ -88,7 +88,9 @@ jobs:
   fixtures:
     name: golden fixtures + TypeScript ports (ADR-004)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # was 15: #137's run took 12.4 min, and P06's pars (live.par_run laps, ADR-022)
+    # pushed #138's first run to the limit (cancelled at 15:17, 2026-10-20)
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7

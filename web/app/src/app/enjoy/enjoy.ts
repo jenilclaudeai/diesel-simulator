@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, HostListener, inject, OnDestroy, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import type { Transmission } from '@dieselsim/physics';
 import { releaseFocus } from '../drive/drive';
 import { controlKey, MIC_KEYS, MICS } from '../drive/drive-keys';
@@ -18,8 +18,10 @@ import { derateLit } from './lamps';
 import { Pedal } from './pedal';
 import { ROSTER } from './roster';
 import { VibrationSetting, Vibrator } from './vibration';
+import { bestKey, GoalBests, GOALS, judge, LapRun, lapTime, parseGoal, type GoalKind } from './goals';
+import { newSeed, parseRouteParam, roadAhead, ROUTE_CHOICES, routeKey, routeOf, routeSummary, SURFACE_FILL } from './road';
 import {
-  distance, distanceUnit, economy, economyUnit, pressureBar, pressureUnit, speed, speedUnit,
+  distance, distanceUnit, economy, economyUnit, elevation, elevationUnit, pressureBar, pressureUnit, speed, speedUnit,
   temperature, temperatureUnit, Units, volume, volumeUnit,
 } from '../units/units';
 
@@ -129,11 +131,121 @@ export class EnjoyPage implements OnDestroy {
   }
   private readonly e2e = typeof location !== 'undefined' && location.search.includes('e2e');
 
+  /** P06 (ADR-021): the road. `?route=city` or `?route=random:1234` opens on it: the address is the link to share. */
+  protected readonly ROUTE_CHOICES = ROUTE_CHOICES;
+  protected readonly SURFACE_FILL = SURFACE_FILL;
+  private readonly router = inject(Router);
+  private readonly initialRoute = parseRouteParam(
+    typeof location !== 'undefined' ? new URLSearchParams(location.search).get('route') : null);
+  protected readonly routeChoice = signal(this.initialRoute.choice);
+  protected readonly seed = signal<number | null>(this.initialRoute.seed);
+  protected readonly routeKey = computed(() => routeKey(this.routeChoice(), this.seed()));
+  /** The picker's note: length, highest point, breakers */
+  protected readonly routeNote = computed(() => {
+    const r = routeOf(this.routeKey());
+    if (!r) return null;
+    const m = routeSummary(r), u = this.u();
+    const b = m.breakers ? `${m.breakers} speed breaker${m.breakers > 1 ? 's' : ''} (take them at ${fmt0.format(speed(15, u))} ${speedUnit(u)})` : 'no speed breakers';
+    return `${distance(m.km, u).toFixed(1)} ${distanceUnit(u)} a lap, up to ${fmt0.format(elevation(m.top, u))} ${elevationUnit(u)} above the start, ${b}. To share it, copy this page's address.`;
+  });
+  /** The route the engine is driving (set at Start; the picker stops the engine) */
+  private readonly driven = signal<string | undefined>(undefined);
+  private readonly drivenRoute = computed(() => routeOf(this.driven()));
+  protected readonly road = computed(() => {
+    const r = this.drivenRoute(), s = this.v();
+    return r && s ? roadAhead(r, s.route_s) : null;
+  });
+  /** The strip's words (and its screen-reader label): grade, surface, wind, height, the next breaker */
+  protected readonly roadText = computed(() => {
+    const r = this.road(), s = this.v(), u = this.u();
+    if (!r || !s) return '';
+    const kmh = Math.abs(s.wind) * 3.6;
+    const wind = kmh < 1 ? 'calm' : `${s.wind > 0 ? 'headwind' : 'tailwind'} ${fmt0.format(speed(kmh, u))} ${speedUnit(u)}`;
+    const up = elevation(s.route_alt, u);
+    const parts = [`grade ${(r.grade * 100).toFixed(1)} %`, r.surface, wind,
+      `${up >= 0 ? '+' : '−'}${fmt0.format(Math.abs(up))} ${elevationUnit(u)}`];
+    if (r.nextBreakerM !== null) parts.push(`breaker in ${fmt0.format(elevation(r.nextBreakerM, u))} ${elevationUnit(u)}`);
+    return parts.join(' · ');
+  });
+
+  /** P06 tier 2: a goal on the route (`?goal=time`); free driving otherwise */
+  protected readonly GOALS = GOALS;
+  protected readonly goal = signal<GoalKind>(parseGoal(
+    typeof location !== 'undefined' ? new URLSearchParams(location.search).get('goal') : null));
+  private readonly bests = inject(GoalBests);
+  protected readonly par = this.s.par;
+  /** The lap being timed (set at Start when there is a goal and a route) and what it shows */
+  private lap?: LapRun;
+  private lapGoal: GoalKind = 'free';
+  private lapKey = '';
+  private offered = false;
+  protected readonly lapView = signal<{ phase: string; time_s: number; fuel_L: number; hits: number; failure: string } | null>(null);
+  protected readonly lapBest = signal<{ best?: number; newBest: boolean }>({ newBest: false });
+  protected readonly verdict = computed(() => {
+    const l = this.lapView(), p = this.par();
+    if (!l || l.phase !== 'finished' || !p || typeof p === 'string' || this.lapGoal === 'free') return null;
+    return judge(this.lapGoal, l, p);
+  });
+  /** The goal's line on the dash */
+  protected readonly goalText = computed(() => {
+    const l = this.lapView(), p = this.par(), g = this.lapGoal, u = this.u();
+    if (!l || g === 'free') return '';
+    const name = GOALS.find(x => x.key === g)!.name;
+    const fuel = (L: number) => `${this.vol(L).toFixed(u === 'us' ? 4 : 3)} ${volumeUnit(u)}`;
+    const pen = l.hits ? ` (+${5 * l.hits} s, ${l.hits} breaker${l.hits > 1 ? 's' : ''})` : '';
+    const parTxt = p === 'working' ? 'par: working it out…' : p === 'failed' || p === undefined ? 'no par'
+      : !p.finished ? 'no par: its lap did not finish' : g === 'time' ? `par fuel ${fuel(p.fuel_L)}` : `par time ${lapTime(p.time_s)}`;
+    if (l.phase === 'waiting') return `${name}: the clock starts with the throttle · ${parTxt}`;
+    if (l.phase === 'failed') return `${name} over: ${l.failure}`;
+    const now = `${lapTime(l.time_s)}${pen} on ${fuel(l.fuel_L)}`;
+    if (l.phase === 'running') return `${name} · ${now} · ${parTxt}`;
+    const v = this.verdict(), b = this.lapBest();
+    if (!v) return `${name} lap: ${now} -- waiting for the par`;
+    const best = b.newBest ? ' · a new best!' : b.best !== undefined ? ` · best ${g === 'time' ? lapTime(b.best) : fuel(b.best)}` : '';
+    return `${name} lap: ${now} -- ${v.why} ${v.ok ? '✓' : '✗'}${best}`;
+  });
+
+  protected selectGoal(g: string): void {
+    this.goal.set(parseGoal(g));
+    this.routeChanged();
+  }
+
+  protected selectRoute(choice: string): void {
+    this.routeChoice.set(choice);
+    if (choice === 'random' && this.seed() === null) this.seed.set(newSeed());
+    this.routeChanged();
+  }
+  protected setSeed(raw: string): void {
+    const n = Math.floor(Number(raw));
+    this.seed.set(Number.isFinite(n) && n >= 1 ? Math.min(n, 999_999) : null);
+    this.routeChanged();
+  }
+  protected rollSeed(): void { this.seed.set(newSeed()); this.routeChanged(); }
+  private routeChanged(): void {
+    this.s.stop();
+    void this.router.navigate([], { queryParams: { route: this.routeKey() ?? null,
+      goal: this.routeKey() && this.goal() !== 'free' ? this.goal() : null }, queryParamsHandling: 'merge', replaceUrl: true });
+  }
+
   constructor() {
     effect(() => {
       const s = this.v(), i = this.info();
       if (!this.vibration.on() || this.status() !== 'driving' || !s || !i) { this.vib.stop(); return; }
       this.vib.frame(s, { idle_rpm: i.idle_rpm, max_rpm: i.max_rpm, cylinders: i.cylinders }, performance.now());
+    });
+    effect(() => {
+      const s = this.v(), lap = this.lap;
+      if (!s || !lap || this.status() !== 'driving') return;
+      lap.feed(s);
+      this.lapView.set({ phase: lap.phase, time_s: lap.time_s, fuel_L: lap.fuel_L, hits: lap.hits, failure: lap.failure });
+    });
+    effect(() => {                       // a finished, valid lap is offered as a best once
+      const v = this.verdict();
+      if (!v || this.offered) return;
+      this.offered = true;
+      const best = this.bests.get(this.lapKey);
+      const newBest = v.ok && this.bests.offer(this.lapKey, v.score);
+      this.lapBest.set({ best: newBest ? v.score : best, newBest });
     });
     void engineLibrary().list().then(list => {
       this.mine.set(list);
@@ -143,7 +255,9 @@ export class EnjoyPage implements OnDestroy {
     if (typeof location !== 'undefined' && location.search.includes('e2e')) {
       (globalThis as Record<string, unknown>)['__enjoy'] = {
         view: () => this.v(), level: () => this.s.levelDb(), soundError: () => this.soundError(),
-        info: () => this.s.info(), vibes: () => this.vibes.slice(),
+        info: () => this.s.info(), vibes: () => this.vibes.slice(), road: () => this.road(), routeKey: () => this.routeKey(),
+        par: () => this.par(), parMs: () => this.s.parMs(), lap: () => this.lapView(), goalText: () => this.goalText(),
+        verdict: () => this.verdict(),
       };
     }
   }
@@ -161,12 +275,21 @@ export class EnjoyPage implements OnDestroy {
     if (!this.soundOn()) await this.s.soundStart();
     const g = this.imported();
     const p = this.preset();
-    if (p === IMPORTED && g) await this.s.loadGrid(g, this.trans(), true, this.env.air(), this.env.cfpp());
+    const route = this.routeKey();
+    this.driven.set(route);
+    const r = routeOf(route);
+    this.lapGoal = r ? this.goal() : 'free';
+    this.lap = r && this.lapGoal !== 'free' ? new LapRun(r.length) : undefined;
+    this.lapKey = route ? bestKey(this.preset(), route, this.lapGoal, this.env.current(), this.trans()) : '';
+    this.offered = false;
+    this.lapBest.set({ newBest: false });
+    this.lapView.set(null);
+    if (p === IMPORTED && g) await this.s.loadGrid(g, this.trans(), true, this.env.air(), this.env.cfpp(), route);
     else if (p.startsWith(MY)) {
       const saved = await engineLibrary().grid(p.slice(MY.length)).catch(() => undefined);
-      if (saved) await this.s.loadGrid(saved, this.trans(), true, this.env.air(), this.env.cfpp());
+      if (saved) await this.s.loadGrid(saved, this.trans(), true, this.env.air(), this.env.cfpp(), route);
       else this.s.error.set('that engine is no longer saved in this browser');
-    } else await this.s.load(p, this.trans(), true, this.env.air(), this.env.cfpp());
+    } else await this.s.load(p, this.trans(), true, this.env.air(), this.env.cfpp(), route);
   }
 
   /** "Open project" (Phase 7 step 7): as on /drive; a dual clutch drives as Auto here. */
