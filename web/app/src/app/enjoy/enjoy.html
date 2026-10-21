@@ -42,6 +42,28 @@
       @if (importError()) { <p class="err import-err">{{ importError() }}</p> }
       @if (projectNote()) { <p class="project-note">{{ projectNote() }}</p> }
       <app-drive-env class="place" (changed)="stop()" />
+      <!-- P06 (ADR-021): the road. A random road is its seed: the same seed is the same road, anywhere -->
+      <div class="route-pick">
+        <select class="route" aria-label="Route" [disabled]="status() === 'loading'" (change)="selectRoute($any($event.target).value)">
+          @for (c of ROUTE_CHOICES; track c.key) { <option [value]="c.key" [selected]="c.key === routeChoice()">{{ c.name }}</option> }
+        </select>
+        @if (routeChoice() === 'random') {
+          <label class="seed-l">Seed <input type="number" class="seed" min="1" max="999999" inputmode="numeric"
+            [value]="seed() ?? ''" [disabled]="status() === 'loading'" (change)="setSeed($any($event.target).value)" /></label>
+          <button type="button" class="reroll" [disabled]="status() === 'loading'" (click)="rollSeed()">New road</button>
+        }
+        @if (routeKey()) {
+          <!-- P06 tier 2: a goal against the par (a ghost lap at a steady 70 %, worked out when you start) -->
+          <select class="goal" aria-label="Goal" [disabled]="status() === 'loading'" (change)="selectGoal($any($event.target).value)">
+            @for (g of GOALS; track g.key) { <option [value]="g.key" [selected]="g.key === goal()">{{ g.name }}</option> }
+          </select>
+        }
+      </div>
+      @if (routeKey() && goal() !== 'free') {
+        <p class="goal-note">{{ goal() === 'time' ? 'Time trial: the fastest lap on no more fuel than the par.' : 'Economy run: the least fuel within the par\'s time.' }}
+          The par is a lap at a steady 70 % throttle in Auto, at this place's air; each speed breaker taken too fast adds 5 s. Steady-state fuel figures (FINDING-009).</p>
+      }
+      @if (routeNote(); as n) { <p class="route-note">{{ n }}</p> }
       <!-- P01: the phone vibrates (Android Chrome; iOS has no Vibration API). Kept per browser. -->
       <label class="vibrate"><input type="checkbox" class="vibration" [checked]="vibration.on()"
         (change)="vibration.set($any($event.target).checked)" /> Vibration (Android)</label>
@@ -76,6 +98,20 @@
         <app-gauge class="speedo" label="Speed" [unit]="speed().unit" [value]="sp(s.kmh)" [max]="speed().max"
                    [step]="speed().step" [labelEvery]="speed().labelEvery" [labelScale]="speed().labelScale" />
       </div>
+      @if (road(); as r) {
+        <!-- P06: the road ahead, the next 1.5 km, height exaggerated to fit; the car is at the left edge -->
+        <div class="road">
+          <svg viewBox="0 0 300 40" preserveAspectRatio="none" role="img" [attr.aria-label]="'Road ahead: ' + roadText()">
+            <path class="area" [attr.d]="r.area" />
+            @for (b of r.bands; track $index) { <rect [attr.x]="b.x0" y="37" [attr.width]="b.x1 - b.x0" height="3" [attr.fill]="SURFACE_FILL[b.surface]" /> }
+            <path class="line" [attr.d]="r.line" vector-effect="non-scaling-stroke" />
+            @for (x of r.breakers; track $index) { <line class="breaker" [attr.x1]="x" [attr.x2]="x" y1="4" y2="40" vector-effect="non-scaling-stroke" /> }
+            <line class="car" x1="1" x2="1" y1="0" y2="40" vector-effect="non-scaling-stroke" />
+          </svg>
+          <span class="road-kv">{{ roadText() }}</span>
+          @if (goalText()) { <span class="goal-kv" role="status" [class.ok]="verdict()?.ok === true" [class.bad]="verdict()?.ok === false">{{ goalText() }}</span> }
+        </div>
+      }
       <div class="strip">
         <div class="thermal" aria-label="Temperatures">
           <div class="temp coolant"><span class="k">Coolant</span>

@@ -453,6 +453,18 @@ rolling resistance, headwind, altitude through Phase 7's weather table), a
 suspension, stated), and goals on a route. One PRNG in Python and TS, so
 the live fixture holds. Its own proposal comes after Phase 7 step 4, and
 places the build in the order.
+**Tier 1 built (2026-10-20, `feat/p06-roads`, ADR-021, `reviews/PROPOSAL-P06.md`):**
+everything above except goals, in /enjoy only (the owner's choice). It has
+three named routes and random ones shared by `?route=random:<seed>`, and a
+breaker buzzes the phone (P01). ~~**Tier 2, goals on a route, is next**, with
+its own short proposal (what a goal is: reach the top, a fuel budget, a
+time).~~ **Tier 2 built (2026-10-21, ADR-022, `reviews/PROPOSAL-P06-goals.md`):**
+a time trial on the par's fuel, and an economy run in the par's time. The par is
+a ghost lap at a steady 70 %, computed in the browser. Each breaker taken too
+fast adds 5 s, and personal bests are kept per browser. "Without overheating"
+was measured unlosable for four of five engines, so it was dropped as a goal; a
+stop on overheat fails a run. P06's tiers 1–2 (v1) are done; tier 3 stays in
+v2.
 
 ---
 
