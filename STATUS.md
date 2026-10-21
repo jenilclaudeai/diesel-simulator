@@ -12,7 +12,8 @@
 - **Measured so far** (scratch `ecu.py`, a `LiveEngine` subclass with three hooks; with them
   off it equals `LiveEngine` on 0 of 24,000 values, three engines and boxes):
   - 24 cold launches (crdi15/crdi22/hatch15, TC/DCT, 25/0 °C, 20/30%) × 9 variants, on
-    today's (R5) grids. `main`: 9 of 24 never reach 10 km/h in 60 s. Every variant with the
+    today's (R5) grids. `main`: ~~9~~ **7** of 24 never reach 10 km/h in 60 s (*corrected
+    the same day: I miscounted from the table; `claims.py` counts it from the data*). Every variant with the
     friction cover (the pedal's fuel raised by live friction minus the warm cells') moves
     all 24 (crdi15 TC 0 °C 20%: never → 13.0 s; with the cold walls' deficit too 7.9 s).
     Fast idle alone, or a 15 s chamber constant (option B), leaves most 0 °C / 20% stuck.
