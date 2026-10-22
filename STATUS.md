@@ -23,7 +23,13 @@
     warm (I first wrote cold), and the cover reads no weather table (I first wrote it did).
 - *Process note, owned:* I told the owner "9 of 24" mid-session from reading a table by eye;
   the data says 7. Every count in the proposal is now recomputed from the runs' JSON.
-- **Next:** the owner's answers; the PR (docs only) once CI is read. Still waiting from
+- **PR #142** (draft, docs only, `docs/cold-start-ecu` → `main`). The first push got no CI:
+  #138 merged and it conflicted. After merging `main` in, **CI at `d7ea5ef`: 10 of 10, every
+  job read.** Physics 102 / 0 / 3 known on 3.10 and 3.12; Pyodide 81 / 0 / 2 known / 21
+  skipped; units 162 (29 files) and prepare-assets offline 4 / 0; golden fixtures + TS ports,
+  SolverPort, the three e2e jobs and claude-review pass. The counts equal #138's, as a docs
+  change should.
+- **Next:** the owner's three answers, then the build. Still waiting from
   before: merging #139–#141 (#138 merged), #141's listen, FINDING-033, and P07/P11/P12 (never looked at).
 
 *(Was: "Session 11, the cold-start ECU proposal being measured", the entry below.)*
