@@ -17,7 +17,7 @@ import { touchHint } from './hints';
 import { derateLit } from './lamps';
 import { Pedal } from './pedal';
 import { ROSTER } from './roster';
-import { VibrationSetting, Vibrator } from './vibration';
+import { testNote, VibrationSetting, Vibrator } from './vibration';
 import { bestKey, GoalBests, GOALS, judge, LapRun, lapTime, parseGoal, type GoalKind } from './goals';
 import { newSeed, parseRouteParam, roadAhead, ROUTE_CHOICES, routeKey, routeOf, routeSummary, SURFACE_FILL } from './road';
 import {
@@ -127,7 +127,14 @@ export class EnjoyPage implements OnDestroy {
   private readonly vib = new Vibrator(p => this.buzz(p));
   private buzz(p: number[] | number): boolean {
     if (this.e2e) this.vibes.push(p);
-    return typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function' ? navigator.vibrate(p) : false;
+    return this.canVibrate() ? navigator.vibrate(p) : false;
+  }
+  private canVibrate(): boolean { return typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function'; }
+  /** The start screen's Test tap: a 300 ms buzz, and a note on what the browser did with it. */
+  protected readonly vibTest = signal<string | null>(null);
+  protected testVibration(): void {
+    const accepted = this.buzz([300]);
+    this.vibTest.set(testNote(this.canVibrate(), accepted));
   }
   private readonly e2e = typeof location !== 'undefined' && location.search.includes('e2e');
 

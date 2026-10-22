@@ -234,6 +234,12 @@ grep its readers and solve with it changed.
   mic's loudness are `SOURCE_BALANCE` and `MIC_TRIM` (ADR-018) in hashed
   `acoustics.py`: mirror them in `web/physics/src/audio/synth.ts`,
   regenerate `--only sound`, and re-stamp the grids.
+- **Chrome on Android drops every `navigator.vibrate` call while the phone
+  is on Mute** (`VibrationManagerAndroid.java`: ringer mode SILENT), and
+  `vibrate()` still returns true. The e2e records the patterns the page
+  asked for, never what a motor did: the feel is checked only on a phone.
+  A pulse's on-time is a separate motor call; P01's first 12 ms idle buzz
+  was likely too short to feel (2026-10-21).
 - e2e touch via CDP: a `touchMove` that leaves a finger out does **not**
   lift it, and `touchEnd` lifts every finger. `at(sel, h)` is the fraction
   *up* the pedal, so 0.95 is full throttle. The stall test leaves `/enjoy`

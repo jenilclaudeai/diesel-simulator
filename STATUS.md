@@ -1,5 +1,63 @@
 # Status
 
+**Session 10, #139 brought up to `main` after #138 (2026-10-22):** the owner asked for the
+conflicts to be resolved. Merged `main` (`ac3c15e`) in, no rebase, no force-push.
+- **Conflicts, each kept both sides:**
+  - `enjoy.html`: P06's route and goal pickers, then P01's switch with its Test button and
+    note;
+  - `enjoy.ts` and `vibration.spec.ts`: both imports. The spec keeps P06's breaker test, and
+    the shake test takes #139's title (its body was already #139's driving shake);
+  - STATUS.md: both entries.
+- **One check broke after the merge, not the app:** `e2e:enjoy`'s Test tap. P06's pickers make
+  the start screen scroll (481 px in 342 at 412 px high), and Test sat below the fold at
+  y 410, so the touch landed off screen. The check now scrolls to Test and back up to Start.
+  Mutant (Test unwired): caught, 39/1.
+- **Verified (local, Node 24.15):**
+  - units **164** (29 files; main's 162 + #139's 2), also with `physics-version.ts` aside;
+  - `build:pages` builds (`enjoy.css` 5.62 kB, over its 4 kB warning, under the 8 kB error);
+  - **`e2e:enjoy` 40/0** (main's 38 + #139's 2).
+- **CI on #139 at `fb00d89`: 10 of 10, every job read.**
+  - Web e2e: `e2e:enjoy` **40/0** with the four P01 checks (Test tap, events and idle shake,
+    driving on-times 33 and 25 ms); the job's other suites 15, 11, 6, 11, 18, 6, 5, 0 failed.
+  - Units 164 in 29 files. Physics 102/0/3 on 3.10 and 3.12, Pyodide 81/0/2 (21 skipped).
+  - Grid, custom, fixtures and SolverPort passed.
+  - **Ready to merge.**
+- **Next:** #140 (B-07) conflicts with `main` too; it gets the same merge after #139 merges.
+
+**Session 10, P01 widened: vibration while driving (2026-10-21), `fix/p01-driving-vibration`**
+(from `main` at `173a65f`, after #137):
+- **The owner: "The vibration is not working."** Measured before touching code:
+  - the live site is current (Pages deployed #135-#137; the live `main-RE23DFRX.js` has the
+    switch and the `navigator.vibrate` call);
+  - on `main` the e2e's P01 check passes (13 calls: the start's shudder, the idle shake
+    `12,38`, the shift's jolt);
+  - Chromium's source: Android Chrome drops every call on Mute (`VibrationManagerAndroid.java`,
+    ringer mode SILENT) with no error, and Blink plays each on-time as its own motor call;
+  - 8 of the 10 roster engines idle above 12 Hz firing, so they got 12 ms on / 38 off.
+- **The owner's answers:** not muted, Chrome on the S9+; the events and idle are felt, but they
+  **expected it while driving**. Chose a Test button plus a stronger shake, and "follows load".
+- **Built:**
+  - the shake runs whenever the engine does: on-time per 50 ms 15 + 20 × pedal; idle 20 (was 12);
+    lugging 35 (was 25); the single's firing pulse 30 + 25 × pedal (idle 35, lugging 55 as
+    before);
+  - a **Test** button beside the switch: a 300 ms buzz and a note (no API / refused / sent,
+    "on Mute, Chrome stays still").
+- **Verified (local, Node 24.15 via npx):**
+  - app units **147 passed** (27 files), also with `physics-version.ts` moved aside as CI does;
+  - unit mutants **8 of 8** caught, baseline passing, all compiled;
+  - **e2e:enjoy 33 passed** (31 + 2 new: the Test tap sends `[300]` and shows its note; driving
+    on-times 33 and 25 ms); e2e mutants **2 of 2** caught (button unwired, idle-only shake);
+  - `build:pages` builds (enjoy.css 4.31 kB, over its 4 kB *warning*, was already 4.16; error
+    at 8 kB).
+- **Not verifiable here:** the feel on the S9+, and the battery cost of a continuous buzz.
+  The switch turns it off.
+- ~~**Next:** PR, read every CI job, the owner tries it on the phone after the merge.~~
+  **PR #139; CI at `a901895`: 10 of 10, every job read.** Units 147 (27 files); check:labels
+  6 of 10; e2e enjoy **33/0** (36 vibrate calls; the Test tap and driving on-times 33, 25 ms),
+  drive 11, sound 6, dyno 15, cycle 11, spec 18, sweep 6, durability 5; physics 3.10, 3.12,
+  Pyodide, fixtures + TS ports, SolverPort, grid and custom e2e pass (no physics changed).
+  **Next:** the owner merges, then tries it on the S9+ (tap Test first, then drive).
+
 **Session 10, #138 brought up to `main` (2026-10-21):** #137 merged at 13:40 UTC, after #136.
 - **The conflicts:**
   - Code, resolved by keeping both:
