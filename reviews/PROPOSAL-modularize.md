@@ -2,7 +2,8 @@
 
 **Asked by:** the owner, 2026-10-27: "the codebase and context has grown too big… you're
 hallucinating… modularize the code as well as context. Start with the plan first."
-**Status:** **plan only, for the owner.** Nothing moved yet.
+**Status:** ~~**plan only, for the owner.** Nothing moved yet.~~ **Answered 2026-10-27: all five as
+recommended** (see the answers under the questions). Nothing moved yet.
 **Measured on:** `main` at `e4e7428` (after #139). Open: #140 (B-07), #141 (B-08), #142
 (cold-start ECU proposal).
 **Lens:** PM (sequencing), LEAD (seams), SW2 (build, hash), QA1 (proof that nothing changed).
@@ -95,6 +96,14 @@ it is cleanest **after they merge**, or with their entries carried over.
 4. **Nested CLAUDE.md files (A5):** yes (recommended), or one shorter root file?
 5. **Order:** merge #140–#142 first (recommended), or start A now and carry their entries over?
 
+**The owner's answers (2026-10-27, a new session):**
+1. Option **1**: A then B.
+2. **Read STATUS plus the indexes**, and open the rest on demand. (Takes effect with A6;
+   until then, the handoff below still says what to read.)
+3. **Move history verbatim** into `history/` and `decisions/`.
+4. **Nested CLAUDE.md files.**
+5. **Merge #140–#142 first.** The owner also flagged the conflicts on #140 and #141.
+
 ---
 
 ## Continue in a new session (handoff, 2026-10-27)
@@ -113,7 +122,8 @@ STATUS.md, and nothing else unless a step needs it.
 | #142 | proposal: a cold-start ECU (FINDING-031 C) | open, conflicts | the cold-start session | same |
 
 **Next steps, in order:**
-1. Get the owner's answers to the five questions above (ask them if they haven't been given).
+1. ~~Get the owner's answers to the five questions above (ask them if they haven't been given).~~
+   **Done 2026-10-27: all five as recommended.**
 2. If the order is "merge #140–#142 first": bring #140 up to `main` (the row above) and tell
    the owner it is ready.
 3. Then Part A, one PR per step, in the order A1 → A7. Each moved line is checked verbatim by

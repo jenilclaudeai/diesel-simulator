@@ -8,7 +8,9 @@
 - **Found:** three readers list `dieselsim/` at the top level only (`grid_hash`, the Pyodide
   copy, `prepare-assets`), so a subfolder would silently leave the grid hash. And the suite
   runs a hand-kept list of tests.
-- **Five questions for the owner.** Nothing moved yet. #140, #141 and #142 are open, and all
+- ~~**Five questions for the owner.**~~ **Answered 2026-10-27: all five as recommended** (A then
+  B; STATUS plus indexes at session start; history moved verbatim; nested CLAUDE.md files;
+  merge #140–#142 first). Nothing moved yet. #140, #141 and #142 are open, and all
   three conflict with `main` since #139 merged.
 - **Handoff:** the plan's last section ("Continue in a new session") holds the PR table, the
   next steps and this Mac's working notes. A new session starts from that file alone.
