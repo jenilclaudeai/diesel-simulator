@@ -15,7 +15,11 @@ conflicts on #140 and #141. Merged `main` (`e4e7428`) in, no rebase, no force-pu
   - **`e2e:enjoy` 45/0** (main's 40 + B-07's 5), counted from the run;
   - mutant (`stop()` without `this.gen++`): caught, 44/1 (the fetch-held check drives on;
     the 'ready'-held check is covered by the `worker !== w` guard too).
-- **Next:** read every CI job on #140; then #141 (B-08), the same merge.
+- ~~**Next:** read every CI job on #140; then #141 (B-08), the same merge.~~
+  **CI on #140 at `fe0efcc`: 10 of 10, every job read.** Units 164 (29 files); e2e enjoy
+  **45/0**, dyno 15, drive 11, sound 6, cycle 11, spec 18, sweep 6, durability 5; physics
+  102/0/3 on 3.10 and 3.12, Pyodide 81/0/2 (21 skipped); TS ports 5/68/12/11; SolverPort
+  20/15/30; grid 9, custom 7. **Ready to merge.** #141 got the same merge (its own entry).
 
 **Session 10, #139 brought up to `main` after #138 (2026-10-22):** the owner asked for the
 conflicts to be resolved. Merged `main` (`ac3c15e`) in, no rebase, no force-push.
