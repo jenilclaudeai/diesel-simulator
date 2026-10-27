@@ -1,19 +1,25 @@
 # Status
 
-**Session 10, a plan to modularize the context and the code (2026-10-27),
-`docs/modularize-plan`** (docs only): the owner asked for a plan first.
-`reviews/PROPOSAL-modularize.md`.
-- **Measured:** the session-start read is 14,546 lines / 768 KB (about 190k tokens). The
-  current part of STATUS.md is 27 of its 3,714 lines.
-- **Found:** three readers list `dieselsim/` at the top level only (`grid_hash`, the Pyodide
-  copy, `prepare-assets`), so a subfolder would silently leave the grid hash. And the suite
-  runs a hand-kept list of tests.
-- ~~**Five questions for the owner.**~~ **Answered 2026-10-27: all five as recommended** (A then
-  B; STATUS plus indexes at session start; history moved verbatim; nested CLAUDE.md files;
-  merge #140–#142 first). Nothing moved yet. #140, #141 and #142 are open, and all
-  three conflict with `main` since #139 merged.
-- **Handoff:** the plan's last section ("Continue in a new session") holds the PR table, the
-  next steps and this Mac's working notes. A new session starts from that file alone.
+**Session 11, #140 (B-07) brought up to `main` (2026-10-27):** the owner answered the
+modularize plan's five questions (all as recommended; recorded on #143) and flagged the
+conflicts on #140 and #141. Merged `main` (`e4e7428`) in, no rebase, no force-push.
+- **Conflicts, each kept both sides:**
+  - `live-session.ts`: B-07's `gen` guard and P06's `route` argument
+    (`loadGrid(grid, trans, run, air, cfpp, route)` after the "stopped while fetching" return);
+  - `enjoy.e2e.mjs`: P06's road and time-trial checks, then B-07's block (its own page, as
+    before, just ahead of portrait);
+  - STATUS.md: both entries (main's #139 entry above B-07's).
+- **Verified (local, Node 24.15, fresh worktree):**
+  - units **164** (29 files), `physics-version.ts` absent as in CI;
+  - `build:pages` builds (`enjoy.css` 5.62 kB, warning only, as on `main`);
+  - **`e2e:enjoy` 45/0** (main's 40 + B-07's 5), counted from the run;
+  - mutant (`stop()` without `this.gen++`): caught, 44/1 (the fetch-held check drives on;
+    the 'ready'-held check is covered by the `worker !== w` guard too).
+- ~~**Next:** read every CI job on #140; then #141 (B-08), the same merge.~~
+  **CI on #140 at `fe0efcc`: 10 of 10, every job read.** Units 164 (29 files); e2e enjoy
+  **45/0**, dyno 15, drive 11, sound 6, cycle 11, spec 18, sweep 6, durability 5; physics
+  102/0/3 on 3.10 and 3.12, Pyodide 81/0/2 (21 skipped); TS ports 5/68/12/11; SolverPort
+  20/15/30; grid 9, custom 7. **Ready to merge.** #141 got the same merge (its own entry).
 
 **Session 10, #139 brought up to `main` after #138 (2026-10-22):** the owner asked for the
 conflicts to be resolved. Merged `main` (`ac3c15e`) in, no rebase, no force-push.
@@ -263,6 +269,43 @@ avoids a stack). ADR-021, `reviews/PROPOSAL-P06.md`.
   - then tier 2 (goals on a route), with its own short proposal;
   - owner: merge #135; feel P01 and the breaker buzz on the S9+; the Phase 5 phone
     re-check.
+
+**Session 10, B-07 fixed (2026-10-21), `fix/b07-engine-stop`, PR #140** (from `main` at
+`173a65f`; independent of #138 and #139):
+- **The sheet's B-07** (/enjoy, all engines): "Engine doesn't stop even when we stop the
+  engine", sometimes, no steps. Taken by this session; the B-08 session (the sound's spikes,
+  synth only) found it in the sheet.
+- **Measured before the fix** (headless Chrome, the built app, scratch `b07_repro.mjs`):
+  - **The sound outlived Stop:** 1 of 40 Start/Stop tries unthrottled, 2 of 40 at a 4× CPU
+    throttle. It was still playing 6 s later at rms ~0.027 (an idle's level), until the next
+    Start.
+  - **Manual tapped while "Starting…":** at 4×, 6 of 6 stuck there for good; unthrottled,
+    1 of 6 drove anyway, in Auto with Manual shown.
+  - A double tap on the first Start: 0 of 16. Not fixed; a MINOR note (SR1): it could make a
+    second AudioContext.
+- **Causes:**
+  - the worklet plays its last frame until a `'reset'`. The reset (node port) and the frames
+    (their own channel) travel unordered, so a stopping worker's late frame set the sound again;
+  - `stop()` did nothing to a load in progress.
+- **Fixed** (app only):
+  - the worklet takes frames only from its current loop channel, and `'reset'` closes it;
+  - `LiveSession.stop()` ends earlier loads (a generation after the fetch), returns `'loading'`
+    to `'idle'`, and ignores a stopped worker's messages.
+- **Tests:** `e2e:enjoy` +5 on a fresh page, each race forced: `terminate` held back 150 ms;
+  the grid's fetch or the worker's `'ready'` held 1.5 s.
+  - **Mutants 6 of 6 caught**, baseline 36/0, every run to its totals.
+  - The first version's two survivors (rejecting the wait on Stop, a catch-side check) had no
+    visible effect and were removed.
+- **Verified (local, Node 24.15):** units 145 (also with `physics-version.ts` aside);
+  `e2e:enjoy` 36/0; `e2e:drive` 11/0; `build:pages` builds.
+- **CI on #140 at `feb0606`: 10 of 10, every job read.** Web e2e: `e2e:enjoy` 36/0, the five
+  B-07 checks among them; the job's other suites 15, 11, 6, 18, 6, 5, 0 failed. Units 27 of 27
+  files. Physics 99/0/3 on 3.10 and 3.12, Pyodide 79/0/2 (20 skipped); grid, custom, fixtures
+  and SolverPort passed. **Ready to merge**, in any order with #138 and #139 (keep both sides
+  of STATUS.md's top, and the CSV's rows in ID order).
+- **Next:** the owner tries Stop on the phone after the merge. Then, the owner's pick: the
+  cold-start ECU proposal (FINDING-031 C, PLAN's "next proposal", docs only) or FINDING-033 A
+  (stall an automatic held at its 60 rpm floor; after #138, which changes `live.py` too).
 
 **Session 10, FINDING-032 fixed (2026-10-20), `fix/finding-032-air-density`** (from `main`
 at `4c2a301`; independent of #135, #136 and P06):

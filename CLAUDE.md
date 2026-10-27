@@ -10,8 +10,16 @@ Read, in order, before doing anything: `STATUS.md` → `PLAN.md` →
 `DECISIONS.md` → `TEAM.md` → `reviews/*.md`. Don't ask me to re-explain
 what's in them. Then tell me what you'd do first.
 
-At the end of a session, update `STATUS.md` so the next one starts from the
-truth. A stale STATUS.md is the failure this setup exists to prevent.
+At the end of a session, update the status so the next one starts from the
+truth. A stale status is the failure this setup exists to prevent.
+
+**Where status goes (A0, 2026-10-28): a PR branch never edits `STATUS.md`.**
+Each branch writes its status to its own file, `status/<branch>.md` (slashes
+as dashes), and only that file. Every PR used to add an entry at the top of
+`STATUS.md`, so each merge put every other open PR in conflict (#140, #141,
+#143 in one day). A new file per branch cannot conflict. Read `STATUS.md`
+plus every file in `status/`. Only the modularize plan's steps
+(`reviews/PROPOSAL-modularize.md`) edit `STATUS.md` itself.
 
 ## How I work — as important as the code
 
@@ -32,7 +40,7 @@ truth. A stale STATUS.md is the failure this setup exists to prevent.
   at decision points, not agents in every reply.
 - Commit and push early; end each chunk of work with a written status.
 - **At the end of every response, update the context files that went
-  stale**: `STATUS.md` always, and `PLAN.md`, `CLAUDE.md`, `DECISIONS.md`
+  stale**: the branch's `status/<branch>.md` always (A0), and `PLAN.md`, `CLAUDE.md`, `DECISIONS.md`
   or `reviews/` when the response changed what they say (owner's
   instruction, 2026-10-05). Not only at the end of a session.
 
@@ -177,6 +185,12 @@ grep its readers and solve with it changed.
   leaves a `.pyc` Python still trusts (it checks size and whole-second mtime), so the
   'restored' file keeps running the mutant. Run mutant subprocesses with
   `PYTHONDONTWRITEBYTECODE=1`, and clear `__pycache__` before regenerating anything.
+- **Stopping a drive** (B-07): the sound worklet plays its last frame until a
+  `'reset'`. The reset (the node's port) and the frames (their own channel)
+  arrive unordered, so the worklet takes frames only from its current loop
+  channel, and `'reset'` closes it. `LiveSession.stop()` also ends any load in
+  progress (`gen`). A new message path between worker, page and worklet needs
+  the same care.
 - WebCrypto needs a secure context: over plain http on a LAN address the
   grid cache switches itself off by design.
 - `npm start` downloads the numpy wheel once (`prepare-assets.mjs`). Behind a

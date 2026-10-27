@@ -54,6 +54,7 @@ moderately sized. Two files are big enough to hurt: `live.py` and `test_physics.
 
 | step | change | result (target, measured after) |
 |---|---|---|
+| A0 | **Added 2026-10-28, after the owner hit conflicts on #140, #141 and #143 in one day.** A PR branch never edits `STATUS.md`: it writes `status/<branch>.md`, a file of its own. Cause, measured: every PR added an entry at the top of `STATUS.md`, so every merge put each other open PR in conflict; resolving one PR could never stop the next. In CLAUDE.md with this PR. A1 then folds `status/` into the history | no PR conflicts on status again |
 | A1 | **STATUS.md holds only the present**: open PRs, open questions for the owner, the last verified counts, next steps, "where things are" (the live URL, the bug sheet, the machine's Node). **Capped at 150 lines.** The 35 dated sections move **verbatim** to `history/status-<session>.md`, one file per session | 223 KB → ~10 KB |
 | A2 | **`reviews/INDEX.md`**: one line per finding and proposal (id, title, status, its ADR, its PR). The files stay where they are, since code comments cite them by id | read the index (~6 KB), open a file only when the work touches it |
 | A3 | **DECISIONS.md becomes an index plus summaries**: per ADR, status (accepted, superseded by…), the decision in 2–4 lines, and "easily undone by accident" where it applies. Full texts move verbatim to `decisions/ADR-0NN.md` | 71 KB → ~12 KB |
