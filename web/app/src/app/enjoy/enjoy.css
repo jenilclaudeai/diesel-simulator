@@ -40,6 +40,9 @@ button:disabled { opacity: 0.45; }
 /* P01: the vibration switch, under the place and the fuel */
 .dash > .vibrate { align-self: center; display: flex; gap: 0.45rem; align-items: center; font-size: 0.95rem; opacity: 0.9; }
 .vibrate input { width: 1.15rem; height: 1.15rem; accent-color: var(--amber); }
+.vibrate label { display: flex; gap: 0.45rem; align-items: center; }
+.dash > .vib-note { align-self: center; text-align: center; margin: 0; }
+.vib-note:empty { display: none; }
 .err { color: #ffb4a6; }
 /* P06: the route picker, under the place; the road-ahead strip, between the dials and the strip */
 .dash > .route-pick { align-self: center; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; }

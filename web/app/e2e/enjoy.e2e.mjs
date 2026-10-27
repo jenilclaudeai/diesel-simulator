@@ -99,6 +99,18 @@ check("the fuel is picked beside it: sold here first, then summer, winter and ar
 // P01: the vibration switch, on the start screen, on by default (the owner's choice)
 const vibSwitch = await page.evaluate(() => document.querySelector("main.dash input.vibration")?.checked ?? null);
 check("P01: the vibration switch is on the start screen, on by default", vibSwitch === true, String(vibSwitch));
+// P01 (2026-10-21): Test buzzes once and says what the browser did with it. Since P06's
+// route and goal pickers the start screen scrolls, and Test sits below the fold at 412 px:
+// scrolled to, as a thumb would
+await page.$eval("button.vib-test", e => e.scrollIntoView({ block: "center" }));
+await tapEl("button.vib-test");
+await sleep(200);
+const vibTest = await page.evaluate(() => ({
+  note: document.querySelector("main.dash .vib-note")?.textContent?.trim() ?? "",
+  sent: globalThis.__enjoy.vibes().some(v => Array.isArray(v) && v.join() === "300"),
+}));
+check("P01: the Test tap buzzes 300 ms and says what the browser did", vibTest.sent && vibTest.note.length > 0, JSON.stringify(vibTest));
+await page.$eval("main.dash", e => { e.scrollTop = 0; });        // back up to Start
 await tapEl("button.start");
 await page.waitForFunction(() => globalThis.__enjoy.view(), { timeout: 60_000 });
 await sleep(1500);
@@ -153,6 +165,11 @@ const vibHas = p => vibes.some(v => Array.isArray(v) && v.join() === p.join());
 const vibShake = vibes.some(v => Array.isArray(v) && v.length >= 8 && v.reduce((a, b) => a + b, 0) >= 400);
 check("P01: the phone vibrates: the start's shudder, the idle shake, the shift's jolt",
   vibHas([60, 40, 60, 40, 140]) && vibShake && vibHas([45]), `${vibes.length} calls, first ${JSON.stringify(vibes.slice(0, 3))}`);
+// driving (2026-10-21): the buzz follows the pedal; an on-time strictly between idle's 20 and
+// lugging's 35 ms comes only from it (the held throttle gives about 33)
+const driveOn = vibes.filter(v => Array.isArray(v) && v.length >= 8 && v[0] > 20 && v[0] < 35).map(v => v[0]);
+check("P01: while driving the phone buzzes with the pedal", driveOn.length > 0,
+  `on-times ${JSON.stringify([...new Set(driveOn)])}`);
 
 await page.screenshot({ path: path.join(here, "out", "enjoy-landscape.png") });
 
@@ -553,6 +570,113 @@ if (await page.$("button.stop")) await tapEl("button.stop");
 await page.waitForSelector("select.route");
 await page.select("select.goal", "free");
 await page.select("select.route", "");                    // the open road again for anything after
+
+// ---- B-07 (the owner's sheet): "Engine doesn't stop even when we stop the engine" ----
+// A fresh page, so its wrappers touch nothing above. Measured before the fix (4x CPU
+// throttle): the sound outlived Stop in 2 of 40 tries, and a gearbox tapped while
+// "Starting…" left the page there for good in 6 of 6. Each check here forces its race:
+// - Worker.terminate is held back 150 ms, as a busy phone's worker can still post a
+//   frame after Stop's reset reaches the audio thread (the synth then held that frame
+//   and played it until the next Start). The worklet's level reports count the sound:
+//   it sends none while silent.
+// - something held back 1.5 s keeps the page "Starting…" while Manual is tapped: the
+//   grid's fetch (the load went on and drove in Auto), then the drive worker's 'ready'
+//   (stopped there, the page sat on "Starting…" for good; a stopped worker's 'ready'
+//   must not carry the load on either).
+{
+  const p2 = await browser.newPage();
+  await p2.emulate({ viewport: { width: 915, height: 412, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true, isLandscape: true },
+    userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 7a) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36" });
+  await p2.evaluateOnNewDocument(() => {
+    const Node = globalThis.AudioWorkletNode;
+    globalThis.__levels = [];
+    globalThis.AudioWorkletNode = class extends Node {
+      constructor(...a) {
+        super(...a);
+        this.port.addEventListener("message", ev => {
+          if (ev.data?.type === "level") globalThis.__levels.push([performance.now(), ev.data.rms]);
+        });
+      }
+    };
+    const terminate = Worker.prototype.terminate;
+    Worker.prototype.terminate = function () { setTimeout(() => terminate.call(this), 150); };
+    const add = Worker.prototype.addEventListener;
+    Worker.prototype.addEventListener = function (type, fn, ...rest) {
+      if (type !== "message") return add.call(this, type, fn, ...rest);
+      return add.call(this, type, ev => {
+        if (globalThis.__holdReady && ev.data?.type === "ready") {
+          globalThis.__readyHeld = true;
+          setTimeout(() => fn.call(this, ev), 1500);
+        }
+        else fn.call(this, ev);
+      }, ...rest);
+    };
+  });
+  const p2problems = [];
+  p2.on("pageerror", e => p2problems.push(`pageerror: ${e.message}`));
+  p2.on("console", m => { if (m.type() === "error") p2problems.push(`console: ${m.text()}`); });
+  let hold = null;                                       // a request to hold back 1.5 s
+  await p2.setRequestInterception(true);
+  p2.on("request", r => { if (hold?.test(r.url())) setTimeout(() => r.continue(), 1500); else r.continue(); });
+  const cdp2 = await p2.createCDPSession();
+  const tap2 = async sel => {
+    const b = await p2.$eval(sel, e => { const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+    await cdp2.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: b.x, y: b.y, id: 1 }] });
+    await sleep(40);
+    await cdp2.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  };
+  const box = m => p2.evaluate(m => [...document.querySelectorAll(".seg button")].find(b => b.textContent.trim() === m).click(), m);
+  await p2.goto(`http://localhost:${port}${BASE}enjoy?e2e`, { waitUntil: "load" });
+  await p2.evaluate(() => localStorage.clear());
+  await p2.reload({ waitUntil: "load" });
+
+  await p2.waitForSelector("button.start");
+  await tap2("button.start");
+  await p2.waitForSelector("button.stop", { timeout: 60_000 });
+  await sleep(1500);
+  const before = await p2.evaluate(() => globalThis.__levels.filter(([, rms]) => rms > 1e-6).length);
+  const t0 = await p2.evaluate(() => performance.now());
+  await tap2("button.stop");
+  await sleep(1800);
+  const after = await p2.evaluate(t0 => globalThis.__levels.filter(([t, rms]) => t > t0 + 600 && rms > 1e-6).length, t0);
+  check("B-07: Stop silences the engine, even when the stopped worker posts after Stop's reset",
+    before > 0 && after === 0, `sound reports: ${before} while driving, ${after} from 0.6 to 1.8 s after Stop`);
+
+  // a page left driving or stuck by a failed check is recovered where it can be, so each
+  // check runs and fails on its own rather than the run stopping at a timeout
+  const ready = async () => {
+    if (await p2.$("button.stop")) await tap2("button.stop");
+    return p2.waitForSelector("button.start:not([disabled])", { timeout: 5000 }).then(() => true, () => false);
+  };
+  const starting = async () => {
+    if (!(await ready())) return { ready: false };
+    await box("Auto");
+    await tap2("button.start");
+    await p2.waitForFunction(() => document.querySelector("button.start")?.disabled === true, { timeout: 5000 }).catch(() => {});
+    const loading = await p2.evaluate(() => document.querySelector("button.start")?.disabled === true);
+    // held 'ready': tap once it is in hand, so the stopped worker's 'ready' does arrive
+    await p2.waitForFunction(() => !globalThis.__holdReady || globalThis.__readyHeld, { timeout: 5000 }).catch(() => {});
+    await box("Manual");
+    hold = null;
+    await sleep(2500);
+    await p2.evaluate(() => { globalThis.__holdReady = false; });
+    return { loading, ...(await p2.evaluate(() => ({ driving: !!document.querySelector("button.stop"),
+      start: document.querySelector("button.start")?.textContent.trim(), disabled: document.querySelector("button.start")?.disabled }))) };
+  };
+  for (const what of ["the grid's fetch", "the drive worker's 'ready'"]) {
+    if (what.includes("fetch")) hold = /grids\/[^/]+\.json$/;
+    else await p2.evaluate(() => { globalThis.__holdReady = true; });
+    const s = await starting();
+    check(`B-07: a gearbox tapped while "Starting…" (held in ${what}) stops the start, and the page can start again`,
+      s.loading && !s.driving && s.start === "Start engine" && s.disabled === false, JSON.stringify(s));
+  }
+  if (await ready()) await tap2("button.start");
+  await p2.waitForFunction(() => globalThis.__enjoy.view(), { timeout: 60_000 }).catch(() => {});
+  const v2 = await p2.evaluate(() => globalThis.__enjoy.view());
+  check("B-07: the next Start drives in the gearbox now chosen", v2?.trans === "manual", `trans ${v2?.trans}`);
+  check("B-07: no page errors on its page", p2problems.length === 0, p2problems.slice(0, 3).join(" | "));
+  await p2.close();
+}
 
 // ---- portrait ----
 await page.setViewport({ width: 412, height: 915, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true, isLandscape: false });

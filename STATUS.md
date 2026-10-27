@@ -1,73 +1,83 @@
 # Status
 
-**Session 11, the cold-start ECU measured; four questions for the owner (2026-10-22),
-`docs/cold-start-ecu`** (from `main` at `173a65f`; docs only, nothing shipped changes):
-- **The proposal:** `reviews/PROPOSAL-cold-start-ECU.md`. Recommended: C1 (the pedal's fuel
-  covers the cold friction's excess and the cold walls' indicated deficit, gated 40–70 °C
-  coolant) with C2 (fast idle, pedal up only) at +150 rpm at 0 °C. ~~built after #138~~
-  #138 merged mid-session (2026-10-21 21:34 UTC); `main` is merged into this branch (one
-  conflict, this file's top, both kept). `LiveEngine._sub` is byte-identical across #138,
-  so the measurements stand; buildable now.
-  - C1 moves every stuck cold launch (`main`: 7 of 24 in the matrix; 7 of 16 over the
-    roster's eight engines that launch warm). A light-pedal cold launch becomes a warm one's:
-    0.1–0.7 s slower to 10 km/h, 11–51% more fuel.
-  - Warm driving is bit-identical (0 of 259,200 values; idle and launch on all ten engines
-    equal `main` to every digit). `live.py` is unhashed, so no rebuild.
-  - At 30% an automatic still trails warm by up to 9 km/h at 60 s: P08's schedule reads the
-    cold map and upshifts early (question 4).
-  - **Questions:** (1) friction + walls, or friction only; (2) fast idle and its size;
-    ~~(3) when (after #138 recommended);~~ (answered by #138's merge) (4) the automatic's
-    schedule when cold. New in the merge: P06's `par_random_leh` (FINDING-033's reproduction)
-    starts cold, so the cover may lift it off the 60 rpm floor; not measured.
-  - *Two more of my claims corrected the same day, in the proposal:* the route drives start
-    warm (I first wrote cold), and the cover reads no weather table (I first wrote it did).
-- *Process note, owned:* I told the owner "9 of 24" mid-session from reading a table by eye;
-  the data says 7. Every count in the proposal is now recomputed from the runs' JSON.
-- **PR #142** (draft, docs only, `docs/cold-start-ecu` → `main`). The first push got no CI:
-  #138 merged and it conflicted. After merging `main` in, **CI at `d7ea5ef`: 10 of 10, every
-  job read.** Physics 102 / 0 / 3 known on 3.10 and 3.12; Pyodide 81 / 0 / 2 known / 21
-  skipped; units 162 (29 files) and prepare-assets offline 4 / 0; golden fixtures + TS ports,
-  SolverPort, the three e2e jobs and claude-review pass. The counts equal #138's, as a docs
-  change should.
-- **Next:** the owner's three answers, then the build. Still waiting from
-  before: merging #139–#141 (#138 merged), #141's listen, FINDING-033, and P07/P11/P12 (never looked at).
+**Session 11, #140 (B-07) brought up to `main` (2026-10-27):** the owner answered the
+modularize plan's five questions (all as recommended; recorded on #143) and flagged the
+conflicts on #140 and #141. Merged `main` (`e4e7428`) in, no rebase, no force-push.
+- **Conflicts, each kept both sides:**
+  - `live-session.ts`: B-07's `gen` guard and P06's `route` argument
+    (`loadGrid(grid, trans, run, air, cfpp, route)` after the "stopped while fetching" return);
+  - `enjoy.e2e.mjs`: P06's road and time-trial checks, then B-07's block (its own page, as
+    before, just ahead of portrait);
+  - STATUS.md: both entries (main's #139 entry above B-07's).
+- **Verified (local, Node 24.15, fresh worktree):**
+  - units **164** (29 files), `physics-version.ts` absent as in CI;
+  - `build:pages` builds (`enjoy.css` 5.62 kB, warning only, as on `main`);
+  - **`e2e:enjoy` 45/0** (main's 40 + B-07's 5), counted from the run;
+  - mutant (`stop()` without `this.gen++`): caught, 44/1 (the fetch-held check drives on;
+    the 'ready'-held check is covered by the `worker !== w` guard too).
+- ~~**Next:** read every CI job on #140; then #141 (B-08), the same merge.~~
+  **CI on #140 at `fe0efcc`: 10 of 10, every job read.** Units 164 (29 files); e2e enjoy
+  **45/0**, dyno 15, drive 11, sound 6, cycle 11, spec 18, sweep 6, durability 5; physics
+  102/0/3 on 3.10 and 3.12, Pyodide 81/0/2 (21 skipped); TS ports 5/68/12/11; SolverPort
+  20/15/30; grid 9, custom 7. **Ready to merge.** #141 got the same merge (its own entry).
 
-*(Was: "Session 11, the cold-start ECU proposal being measured", the entry below.)*
-- *The in-progress record:*
-- **Start of session:** the four open PRs (#138 P06, #139 P01 driving, #140 B-07, #141 B-08)
-  are each CI 10 of 10 and wait on the owner (#141 also on the owner's ear, `out/b08/`). The
-  bug sheet has no new rows (B-09 on empty). Its Feat Prop tab has three priority-1 rows never
-  looked at: **P07** (multi-parameter sweep), **P11** (number of gears), **P12** (vehicle
-  weight).
-- **Taken:** PLAN's "next proposal", FINDING-031 C (the owner, 2026-10-16), a cold-start ECU.
-  FINDING-033 A waits for #138 (both touch `live.py`).
-- **Measured so far** (scratch `ecu.py`, a `LiveEngine` subclass with three hooks; with them
-  off it equals `LiveEngine` on 0 of 24,000 values, three engines and boxes):
-  - 24 cold launches (crdi15/crdi22/hatch15, TC/DCT, 25/0 °C, 20/30%) × 9 variants, on
-    today's (R5) grids. `main`: ~~9~~ **7** of 24 never reach 10 km/h in 60 s (*corrected
-    the same day: I miscounted from the table; `claims.py` counts it from the data*). Every variant with the
-    friction cover (the pedal's fuel raised by live friction minus the warm cells') moves
-    all 24 (crdi15 TC 0 °C 20%: never → 13.0 s; with the cold walls' deficit too 7.9 s).
-    Fast idle alone, or a 15 s chamber constant (option B), leaves most 0 °C / 20% stuck.
-    Fuel over the minute: ~2.5–3× the stuck baseline.
-  - The friction excess at coolant 70 °C with the oil lagging (42 °C) is still 6–54 N·m
-    across the roster; at a warm engine (88 / 100 °C) it is −0.02 to −0.27 on all ten. ~~So
-    the gate should read **oil**, not coolant (being measured).~~ *Corrected the same day
-    (my hypothesis was wrong):* in the live loop the oil does not lag; it runs ~2 K ahead of
-    the coolant (crdi15 TC, 0 °C start, 30% / lift for 12 min). A warm engine's oil cools to
-    ~85 °C on that drive, so an oil gate (60–90 °C) wakes in warm driving: 234,600 of
-    259,200 warm values change (ungated: 248,328, +0.4% fuel). **The coolant gate (40–70 °C)
-    keeps warm driving bit-identical (0 of 259,200)** and drops at most ~0.008 load of cover
-    by minute 7. 12 min from 0 °C: 0.508 L covered, 0.447 `main`, 0.479 warm.
-  - **The warm reference** (same harness): crdi15 TC 20% warm 7.4 s / 57 km/h at 60 s /
-    36 mL; at 0 °C with the cover (friction + walls) 7.9 s / 58 / 53 mL. The cover gives a
-    cold engine a warm one's launch for ~45% more fuel. **Fast idle +200 overshoots** (4.3 s,
-    quicker than warm), because `main`'s governor acts with the pedal down too (up to 0.75
-    load below target). EDC16's idle control acts only with the pedal up; that variant is
-    being measured. *(Measured: with the pedal up only, every TC launch equals the cover
-    alone; the ~45% is 11–51% over the 20% cases.)*
-- ~~**Running:** all ten engines' idle and 20% launch; the 24 cold launches with pedal-up fast
-  idle.~~ Done; in the proposal.
+**Session 10, #139 brought up to `main` after #138 (2026-10-22):** the owner asked for the
+conflicts to be resolved. Merged `main` (`ac3c15e`) in, no rebase, no force-push.
+- **Conflicts, each kept both sides:**
+  - `enjoy.html`: P06's route and goal pickers, then P01's switch with its Test button and
+    note;
+  - `enjoy.ts` and `vibration.spec.ts`: both imports. The spec keeps P06's breaker test, and
+    the shake test takes #139's title (its body was already #139's driving shake);
+  - STATUS.md: both entries.
+- **One check broke after the merge, not the app:** `e2e:enjoy`'s Test tap. P06's pickers make
+  the start screen scroll (481 px in 342 at 412 px high), and Test sat below the fold at
+  y 410, so the touch landed off screen. The check now scrolls to Test and back up to Start.
+  Mutant (Test unwired): caught, 39/1.
+- **Verified (local, Node 24.15):**
+  - units **164** (29 files; main's 162 + #139's 2), also with `physics-version.ts` aside;
+  - `build:pages` builds (`enjoy.css` 5.62 kB, over its 4 kB warning, under the 8 kB error);
+  - **`e2e:enjoy` 40/0** (main's 38 + #139's 2).
+- **CI on #139 at `fb00d89`: 10 of 10, every job read.**
+  - Web e2e: `e2e:enjoy` **40/0** with the four P01 checks (Test tap, events and idle shake,
+    driving on-times 33 and 25 ms); the job's other suites 15, 11, 6, 11, 18, 6, 5, 0 failed.
+  - Units 164 in 29 files. Physics 102/0/3 on 3.10 and 3.12, Pyodide 81/0/2 (21 skipped).
+  - Grid, custom, fixtures and SolverPort passed.
+  - **Ready to merge.**
+- **Next:** #140 (B-07) conflicts with `main` too; it gets the same merge after #139 merges.
+
+**Session 10, P01 widened: vibration while driving (2026-10-21), `fix/p01-driving-vibration`**
+(from `main` at `173a65f`, after #137):
+- **The owner: "The vibration is not working."** Measured before touching code:
+  - the live site is current (Pages deployed #135-#137; the live `main-RE23DFRX.js` has the
+    switch and the `navigator.vibrate` call);
+  - on `main` the e2e's P01 check passes (13 calls: the start's shudder, the idle shake
+    `12,38`, the shift's jolt);
+  - Chromium's source: Android Chrome drops every call on Mute (`VibrationManagerAndroid.java`,
+    ringer mode SILENT) with no error, and Blink plays each on-time as its own motor call;
+  - 8 of the 10 roster engines idle above 12 Hz firing, so they got 12 ms on / 38 off.
+- **The owner's answers:** not muted, Chrome on the S9+; the events and idle are felt, but they
+  **expected it while driving**. Chose a Test button plus a stronger shake, and "follows load".
+- **Built:**
+  - the shake runs whenever the engine does: on-time per 50 ms 15 + 20 × pedal; idle 20 (was 12);
+    lugging 35 (was 25); the single's firing pulse 30 + 25 × pedal (idle 35, lugging 55 as
+    before);
+  - a **Test** button beside the switch: a 300 ms buzz and a note (no API / refused / sent,
+    "on Mute, Chrome stays still").
+- **Verified (local, Node 24.15 via npx):**
+  - app units **147 passed** (27 files), also with `physics-version.ts` moved aside as CI does;
+  - unit mutants **8 of 8** caught, baseline passing, all compiled;
+  - **e2e:enjoy 33 passed** (31 + 2 new: the Test tap sends `[300]` and shows its note; driving
+    on-times 33 and 25 ms); e2e mutants **2 of 2** caught (button unwired, idle-only shake);
+  - `build:pages` builds (enjoy.css 4.31 kB, over its 4 kB *warning*, was already 4.16; error
+    at 8 kB).
+- **Not verifiable here:** the feel on the S9+, and the battery cost of a continuous buzz.
+  The switch turns it off.
+- ~~**Next:** PR, read every CI job, the owner tries it on the phone after the merge.~~
+  **PR #139; CI at `a901895`: 10 of 10, every job read.** Units 147 (27 files); check:labels
+  6 of 10; e2e enjoy **33/0** (36 vibrate calls; the Test tap and driving on-times 33, 25 ms),
+  drive 11, sound 6, dyno 15, cycle 11, spec 18, sweep 6, durability 5; physics 3.10, 3.12,
+  Pyodide, fixtures + TS ports, SolverPort, grid and custom e2e pass (no physics changed).
+  **Next:** the owner merges, then tries it on the S9+ (tap Test first, then drive).
 
 **Session 10, #138 brought up to `main` (2026-10-21):** #137 merged at 13:40 UTC, after #136.
 - **The conflicts:**
@@ -259,6 +269,43 @@ avoids a stack). ADR-021, `reviews/PROPOSAL-P06.md`.
   - then tier 2 (goals on a route), with its own short proposal;
   - owner: merge #135; feel P01 and the breaker buzz on the S9+; the Phase 5 phone
     re-check.
+
+**Session 10, B-07 fixed (2026-10-21), `fix/b07-engine-stop`, PR #140** (from `main` at
+`173a65f`; independent of #138 and #139):
+- **The sheet's B-07** (/enjoy, all engines): "Engine doesn't stop even when we stop the
+  engine", sometimes, no steps. Taken by this session; the B-08 session (the sound's spikes,
+  synth only) found it in the sheet.
+- **Measured before the fix** (headless Chrome, the built app, scratch `b07_repro.mjs`):
+  - **The sound outlived Stop:** 1 of 40 Start/Stop tries unthrottled, 2 of 40 at a 4× CPU
+    throttle. It was still playing 6 s later at rms ~0.027 (an idle's level), until the next
+    Start.
+  - **Manual tapped while "Starting…":** at 4×, 6 of 6 stuck there for good; unthrottled,
+    1 of 6 drove anyway, in Auto with Manual shown.
+  - A double tap on the first Start: 0 of 16. Not fixed; a MINOR note (SR1): it could make a
+    second AudioContext.
+- **Causes:**
+  - the worklet plays its last frame until a `'reset'`. The reset (node port) and the frames
+    (their own channel) travel unordered, so a stopping worker's late frame set the sound again;
+  - `stop()` did nothing to a load in progress.
+- **Fixed** (app only):
+  - the worklet takes frames only from its current loop channel, and `'reset'` closes it;
+  - `LiveSession.stop()` ends earlier loads (a generation after the fetch), returns `'loading'`
+    to `'idle'`, and ignores a stopped worker's messages.
+- **Tests:** `e2e:enjoy` +5 on a fresh page, each race forced: `terminate` held back 150 ms;
+  the grid's fetch or the worker's `'ready'` held 1.5 s.
+  - **Mutants 6 of 6 caught**, baseline 36/0, every run to its totals.
+  - The first version's two survivors (rejecting the wait on Stop, a catch-side check) had no
+    visible effect and were removed.
+- **Verified (local, Node 24.15):** units 145 (also with `physics-version.ts` aside);
+  `e2e:enjoy` 36/0; `e2e:drive` 11/0; `build:pages` builds.
+- **CI on #140 at `feb0606`: 10 of 10, every job read.** Web e2e: `e2e:enjoy` 36/0, the five
+  B-07 checks among them; the job's other suites 15, 11, 6, 18, 6, 5, 0 failed. Units 27 of 27
+  files. Physics 99/0/3 on 3.10 and 3.12, Pyodide 79/0/2 (20 skipped); grid, custom, fixtures
+  and SolverPort passed. **Ready to merge**, in any order with #138 and #139 (keep both sides
+  of STATUS.md's top, and the CSV's rows in ID order).
+- **Next:** the owner tries Stop on the phone after the merge. Then, the owner's pick: the
+  cold-start ECU proposal (FINDING-031 C, PLAN's "next proposal", docs only) or FINDING-033 A
+  (stall an automatic held at its 60 rpm floor; after #138, which changes `live.py` too).
 
 **Session 10, FINDING-032 fixed (2026-10-20), `fix/finding-032-air-density`** (from `main`
 at `4c2a301`; independent of #135, #136 and P06):

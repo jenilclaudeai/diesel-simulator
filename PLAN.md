@@ -451,7 +451,11 @@ gear change, the limiter) plus a shake while idling or lugging, on by default wi
 switch. The Vibration API has no strength and a phone's motor can't follow a
 4-cylinder's 27 Hz idle firing, so the shake pulses at the firing rate only up to
 12 Hz (the single) and is a light buzz above it. **The feel is the owner's to judge on
-the phone.**
+the phone.** **Widened 2026-10-21** (`fix/p01-driving-vibration`): the owner, on the
+S9+, felt the events and the idle but expected it while driving. The owner's choice
+"follows load": the shake runs whenever the engine does, its on-time per 50 ms 15 + 20
+× pedal (idle 20, was 12; lugging 35, was 25), and a Test button with a note on the
+start screen (Chrome on Android stays still on Mute, with no error).
 
 **Random roads (the owner's P06, tiers 1–2, ADR-016 addendum,
 2026-10-08):** a seeded random route the engine feels (hills, surfaces as

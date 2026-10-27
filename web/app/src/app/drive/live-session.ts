@@ -35,6 +35,10 @@ export class LiveSession {
   private node?: AudioWorkletNode;
   private captureWaiter?: (m: Extract<FromWorklet, { type: 'capture' }>) => void;
   private scriptWaiter?: (r: Extract<FromWorker, { type: 'scriptResult' }>) => void;
+  // B-07: each stop() ends every load begun before it. Without this a stop
+  // while loading did nothing: the load went on and drove (in the gearbox it
+  // started with), or, stopped while its worker started, sat on "Starting…".
+  private gen = 0;
 
   get running(): boolean { return !!this.worker && this.status() === 'driving'; }
 
@@ -42,6 +46,7 @@ export class LiveSession {
   async load(preset: string, trans: Transmission, run: boolean, air?: { p: number; T: number },
              cfpp?: number, route?: string): Promise<void> {
     this.stop();
+    const gen = this.gen;
     this.status.set('loading');
     this.error.set(undefined);
     let grid: GridFile;
@@ -51,10 +56,12 @@ export class LiveSession {
       if (!r.ok) throw new Error(`no prebuilt grid for ${preset} (HTTP ${r.status})`);
       grid = (await r.json()) as GridFile;
     } catch (e) {
+      if (gen !== this.gen) return;
       this.error.set(e instanceof Error ? e.message : String(e));
       this.status.set('error');
       return;
     }
+    if (gen !== this.gen) return;                 // stopped while fetching
     await this.loadGrid(grid, trans, run, air, cfpp, route);
   }
 
@@ -69,9 +76,12 @@ export class LiveSession {
         stale: grid.grid_hash !== GRID_VERSION, cells: 2 * grid.rpms.length * grid.loads.length });
       const w = new Worker(new URL('./live.worker', import.meta.url), { type: 'module' });
       this.worker = w;
+      // a worker stop() ended may still deliver what it sent: its 'ready' must
+      // not carry the load on (it then waits for good, unreferenced)
       await new Promise<void>((resolve, reject) => {
         w.addEventListener('error', e => reject(new Error(`the drive worker failed: ${e.message || 'script error'}`)));
         w.addEventListener('message', (ev: MessageEvent<FromWorker>) => {
+          if (this.worker !== w) return;
           const m = ev.data;
           if (m.type === 'ready') { w.postMessage({ type: 'load', grid, trans, air, cfpp, route }); resolve(); }
           else if (m.type === 'state') this.v.set(m.view);
@@ -99,6 +109,7 @@ export class LiveSession {
   }
 
   stop(): void {
+    this.gen++;
     this.post({ type: 'reset' });
     this.worker?.terminate();
     this.worker = undefined;
@@ -109,7 +120,7 @@ export class LiveSession {
     // the next engine's info replaces it; until then the last engine's must
     // not stand in for it (the dials' scales, the vehicle)
     this.info.set(undefined);
-    if (this.status() === 'driving') this.status.set('idle');
+    if (this.status() === 'driving' || this.status() === 'loading') this.status.set('idle');
   }
 
   run(): void { this.worker?.postMessage({ type: 'run' }); }
