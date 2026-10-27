@@ -10,14 +10,27 @@
 - **`main` is `a57a6fd`.** The owner merged #141 (B-08), #143 (the modularize plan) and
   #142 (the cold-start ECU proposal) on 2026-10-27, 20:36 UTC, after #140 (B-07).
   Pages deployed `a57a6fd`, so the live site is current.
-- **Open PR:** A1, this file (`docs/a1-status-history`). Docs only: no grid, fixture or
-  code under `dieselsim/` or `web/` changes.
-- **In progress:** the modularize plan's Part A. A0 is done (#143). A1 is this PR.
+- **Open PRs, both docs only (no grid, fixture or code under `dieselsim/` or `web/`
+  changes), not stacked; they merge onto `main` in either order to the same tree:**
+  - **#144**, A1, this file (`docs/a1-status-history`);
+  - **#145**, A2, `reviews/INDEX.md` (`docs/a2-reviews-index`; its status is
+    `status/docs-a2-reviews-index.md`). It flags 15 files whose own status line is stale,
+    FINDING-008 among them (fixed in #30, reads "not fixed").
+- **In progress:** the modularize plan's Part A. A0 is done (#143); A1 and A2 are open.
 
 ## Last verified counts
 
-CI on `main` at `a57a6fd` (run 40579632693): **running at the time of writing**; this
-section is filled in from the finished run, every job read.
+CI on `main` at `a57a6fd` (run 40579632693): **9 of 9 passed**, every job read from its log:
+- physics **103 passed, 0 failed, 3 known** on Python 3.10 and 3.12;
+- Pyodide **82 passed, 0 failed, 2 known, 21 skipped**;
+- golden fixtures + TS ports 5 / 68 / 13 / 11; SolverPort 20 / 15 / 30;
+- web app: units **164** (29 files), prepare-assets offline 4;
+- e2e: dyno 15, drive 11, sound 6, **enjoy 45**, cycle 11, spec 18, sweep 6,
+  durability 5; grid 9 (Chrome against native); custom engine 7. All 0 failed.
+
+CI's physics jobs have scipy; this Mac's system Python doesn't, so a local run SKIPs the
+scipy-gated sound tests (#141's local run: 98 passed, 3 known, 4 skipped; 103 with scipy).
+Not rerun locally for A1 (docs only).
 
 ## Waiting on the owner
 
@@ -32,7 +45,7 @@ section is filled in from the finished run, every job read.
    shipped grid reaches it): recommended A, stall it so /enjoy offers Restart.
 3. **FINDING-027** (single10's all-or-nothing ignition in cold, thin air): on 2026-10-16
    the owner chose to ship "with single10's 36% Leh check stated", which is option A. The
-   finding still reads "open, for the owner". Confirm A, and A2 records it.
+   finding still reads "open, for the owner". Confirm A (#145 asks too).
 4. **The Feat Prop rows never looked at:** P07 (multi-parameter sweep), P11 (number of
    gears), P12 (vehicle weight), each priority 1.
 5. **Still open when last listed (2026-10-12), not mentioned since:** copy the Features tab
@@ -41,12 +54,14 @@ section is filled in from the finished run, every job read.
    (`out/listen/review003m5_*.wav`).
 6. **Order:** the cold-start ECU build (next steps, 3) against the rest of Part A. The
    owner's 2026-10-27 order covers A and B only.
+7. **#145's question:** correct the 15 stale status lines in place, or leave the index as
+   the one place that says it.
 
 ## Next steps
 
 1. **Part A, one PR per step, not stacked**, each proven by
    `tools/check_verbatim_move.py`:
-   - A2 `reviews/INDEX.md`, one line per finding and proposal;
+   - A2 `reviews/INDEX.md`, one line per finding and proposal (#145, open);
    - A3 DECISIONS.md as an index plus summaries, full texts to `decisions/`;
    - A4 PLAN.md, done phases one line each;
    - A5 nested CLAUDE.md files by area;
