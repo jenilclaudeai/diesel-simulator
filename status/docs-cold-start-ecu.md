@@ -2,8 +2,11 @@
 
 **2026-10-28:** brought up to `main` (STATUS.md was the only conflict) and, under A0
 (CLAUDE.md, landing with #143), this branch's STATUS.md entries moved here verbatim.
-STATUS.md is `main`'s byte for byte. **Next:** the owner answers the proposal's
-questions (`reviews/PROPOSAL-cold-start-ECU.md`).
+STATUS.md is `main`'s byte for byte. ~~**Next:** the owner answers the proposal's
+questions (`reviews/PROPOSAL-cold-start-ECU.md`).~~
+**2026-10-28: answered** (recorded in the proposal): C1; no fast idle, extra fuel and glow
+plugs when cold instead (glow plugs are new physics, measured before they are built);
+keep P08. **Next:** the owner merges this proposal; the build is its own PR.
 
 ## Moved verbatim from STATUS.md (A0, 2026-10-28)
 

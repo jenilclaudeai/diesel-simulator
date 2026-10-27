@@ -293,3 +293,15 @@ so I'd keep it modest and let the ear decide.
    gear index 5 at ~2,100 rpm, against warm's 4 at ~2,800). Keep that, which is P08 as decided and
    reads like a "cold economy" mode, or let the schedule read the covered (warm) map, which
    moves P08's cold fixtures too? Not measured yet; I'd measure it in the build.
+
+**The owner's answers (2026-10-28):** "1- C1, 2 - Instead of fast idealing use extra fuel and
+flow plug when cold, 3 - Keep P08."
+1. **C1**: the cover for friction and the cold walls.
+2. **No fast idle (C2 dropped).** Instead, extra fuel and **glow plugs** when cold ("flow plug"
+   read as glow plug; to be confirmed with the owner). **Not in this proposal and not measured:**
+   no file in `dieselsim/` or `web/physics/` models a glow plug today. It gets its own short
+   measurement before it is built (what it changes: the cold ignition delay and so the cold
+   knock P09 made audible, the start, the white smoke not modelled; whether the live loop's
+   warm/cold blend can carry it without a grid rebuild).
+3. ~~When~~ (answered by events).
+4. **Keep P08**: the automatic reads the live (cold) map, a "cold economy" mode.
