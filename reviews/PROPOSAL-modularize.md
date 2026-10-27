@@ -94,3 +94,42 @@ it is cleanest **after they merge**, or with their entries carried over.
    in the repo and searchable), or rely on git history alone (smaller, but harder to find)?
 4. **Nested CLAUDE.md files (A5):** yes (recommended), or one shorter root file?
 5. **Order:** merge #140–#142 first (recommended), or start A now and carry their entries over?
+
+---
+
+## Continue in a new session (handoff, 2026-10-27)
+
+A fresh session continues from **this file alone**. Until question 2 is answered, it should
+**not** do CLAUDE.md's full session-start read (768 KB). Read this file, the top entry of
+STATUS.md, and nothing else unless a step needs it.
+
+**State of the PRs (2026-10-27):**
+
+| PR | what | state | who | to do |
+|---|---|---|---|---|
+| #143 | this plan | open, mergeable, docs only | this session | the owner merges it, or answers on it |
+| #140 | B-07: Stop stops the sound; a stop while starting ends the start | open, **conflicts** since #139 merged | this session | merge `main` in, keep both sides. Expected: STATUS.md's top and maybe `web/app/e2e/enjoy.e2e.mjs`. Rerun units and `e2e:enjoy` (36 + #139's 2 = 40 + 5 B-07 = about 45 checks, **counted from the run, not assumed**); read every CI job |
+| #141 | B-08: no sound spikes on a tip-in | open, conflicts | the B-08 session | leave it to that session unless the owner asks |
+| #142 | proposal: a cold-start ECU (FINDING-031 C) | open, conflicts | the cold-start session | same |
+
+**Next steps, in order:**
+1. Get the owner's answers to the five questions above (ask them if they haven't been given).
+2. If the order is "merge #140–#142 first": bring #140 up to `main` (the row above) and tell
+   the owner it is ready.
+3. Then Part A, one PR per step, in the order A1 → A7. Each moved line is checked verbatim by
+   a script before the PR. Read every CI job.
+4. Part B only after A has merged. B1, then B2, then B3. Each proof is in the table above.
+
+**Working notes for this Mac (each cost time to find):**
+- **Node:** the system has 20.19, and Angular needs 24.15. Prefix commands with
+  `PATH=$(dirname $(npx -y -p node@24.15.0 -- which node)):$PATH`, or run
+  `npx -y -p node@24.15.0 -- <cmd>`.
+- **Worktrees:** a worktree-isolated session refuses compound shell commands that mention
+  `git`. Put multi-step git work in a script file and run `sh script.sh`.
+- **A fresh worktree:** `npm ci` in `web/physics`, `web/solver` and `web/app`, then
+  `mkdir -p web/app/e2e/out` before any e2e. The first screenshot is taken before the script
+  creates that folder.
+- **e2e:** `CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" npm run e2e:enjoy`
+  after `npm run build:pages`.
+- **A cheaper session-start read already exists:** `gh pr list --state open` and the top entry
+  of STATUS.md give the present. The rest is history.
