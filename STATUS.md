@@ -1,20 +1,25 @@
 # Status
 
-**Session 11, #141 (B-08) brought up to `main` (2026-10-27):** the owner flagged the
-conflicts on #140 and #141 (#140's merge is its own entry on that branch). Merged `main`
-(`e4e7428`) in, no rebase, no force-push. **Only STATUS.md conflicted**: both kept, main's
-entries above B-08's. `test_physics.py`, `gen_fixtures.py` and the rest merged cleanly; the
-checks below look for what a clean merge can still break (main changed `live.py` and the
-live fixture, B-08 the sound and its fixture).
-- **Verified (local):**
-  - `gen_fixtures.py --check`: all 7 ok, worst diff 0 (live and sound included);
-  - suite **98 passed, 0 failed, 3 known, 4 skipped** (main's 97 + B-08's 1), and with scipy
-    (`.venv`, 3.12) **103 passed, 0 failed, 3 known**: the 4 skips pass, one of them as
-    2 checks (diffed by name). B-08's check: worst 0.67 dB;
-  - `web/physics` npm test: exit 0, 5 / 68 / 13 / 11 passed, 0 failed;
-  - `audit_dead_signals.py` runs; no hashed file changed, so no grid goes stale.
-- **Still the owner's:** B-08 is a draft waiting for the owner's ear (its entry below).
-- **Next:** read every CI job on #141.
+**Session 11, #140 (B-07) brought up to `main` (2026-10-27):** the owner answered the
+modularize plan's five questions (all as recommended; recorded on #143) and flagged the
+conflicts on #140 and #141. Merged `main` (`e4e7428`) in, no rebase, no force-push.
+- **Conflicts, each kept both sides:**
+  - `live-session.ts`: B-07's `gen` guard and P06's `route` argument
+    (`loadGrid(grid, trans, run, air, cfpp, route)` after the "stopped while fetching" return);
+  - `enjoy.e2e.mjs`: P06's road and time-trial checks, then B-07's block (its own page, as
+    before, just ahead of portrait);
+  - STATUS.md: both entries (main's #139 entry above B-07's).
+- **Verified (local, Node 24.15, fresh worktree):**
+  - units **164** (29 files), `physics-version.ts` absent as in CI;
+  - `build:pages` builds (`enjoy.css` 5.62 kB, warning only, as on `main`);
+  - **`e2e:enjoy` 45/0** (main's 40 + B-07's 5), counted from the run;
+  - mutant (`stop()` without `this.gen++`): caught, 44/1 (the fetch-held check drives on;
+    the 'ready'-held check is covered by the `worker !== w` guard too).
+- ~~**Next:** read every CI job on #140; then #141 (B-08), the same merge.~~
+  **CI on #140 at `fe0efcc`: 10 of 10, every job read.** Units 164 (29 files); e2e enjoy
+  **45/0**, dyno 15, drive 11, sound 6, cycle 11, spec 18, sweep 6, durability 5; physics
+  102/0/3 on 3.10 and 3.12, Pyodide 81/0/2 (21 skipped); TS ports 5/68/12/11; SolverPort
+  20/15/30; grid 9, custom 7. **Ready to merge.** #141 got the same merge (its own entry).
 
 **Session 10, #139 brought up to `main` after #138 (2026-10-22):** the owner asked for the
 conflicts to be resolved. Merged `main` (`ac3c15e`) in, no rebase, no force-push.
@@ -265,52 +270,42 @@ avoids a stack). ADR-021, `reviews/PROPOSAL-P06.md`.
   - owner: merge #135; feel P01 and the breaker buzz on the S9+; the Phase 5 phone
     re-check.
 
-**Session 10, B-08 fixed and waiting for the owner's ear (2026-10-21), `fix/b08-sound-spikes`, draft PR #141**
-(from `main` at `173a65f`; independent of B-07's #140, which another session did):
-- **The bug sheet has two new rows (2026-10-21):**
-  - **B-08**, /enjoy, Sound: "Sudden noise spikes"; open the throttle, close it, open it again; every time.
-  - **B-07**, "Engine doesn't stop even when we stop the engine", sometimes. Not mine; fixed in #140.
-- **B-08 verdict: Confirmed.** It has been there since Phase 4 (`1c11c72`); the tree before P09 measures the
-  same, so it is not a P09 or P10 regression.
-  - Cause: each source's shape tracker (`livesound.Norm`, a one-pole over 0.3 s) lagged a step in the
-    source's level, while the level law applied the step again.
-  - Measured with `tools/b08_tip_in.py` (new): the live loop at 60 Hz, blends every 17 quanta as in the
-    worklet; the synth's output over a zero-lag reference, in 100 ms windows; six cases on crdi15, hatch15
-    and the single.
-  - `main`: tip-in **+3.2 to +9.0 dB**, lift-off **−3.9 to −10.4 dB**.
-- **The fix** (`livesound.py`, unhashed, so no re-stamp; mirrored in `web/physics` dsp.ts and synth.ts):
-  - each tracker is divided by the level the synth knows ahead of its filters (`LiveSynth._amps`, gliding
-    with the waveforms; the hiss's scale; the knock bands' weights);
-  - the crank-locked sources average over the last engine cycle (`CycleNorm`); the noises and tones keep
-    the one-pole.
-  - After: tip-in **+0.8 to +3.5 dB**, lift-off **−0.2 to −0.7 dB**. The rest is the combustion's first
-    ~100 ms: its spectrum changes under load, and a causal tracker needs about a cycle. Removing it would need
-    a spectrum per blend on the audio thread; not done.
-  - Steady sound, 30 cases: output within 0.12 dB of `main`'s; mech +0.32 dB at the single's idle.
-- **Tried and dropped, measured:**
-  - feed-forward alone on the 0.3 s one-pole: tip-in still +1.3 to +7.1 dB;
-  - each block's levels from the gliding waveforms: ±0.5 dB either way, ~25% more synth work;
-  - the rumble's level the same way. *My hypothesis was wrong:* its −1.7 dB in the test was the noise's
-    scatter, not the glide. The test now compares with a synth held at the new point, playing the same noise.
-- **Verified (local):**
-  - Python suite **95 passed, 0 failed, 3 known, 4 skipped** (`main`'s 94 + 1). The scipy-gated sound tests,
-    run in a scratch venv, pass: render third-octave 1.22 dB (main 1.24).
-  - `test_livesound_level_step_is_clean`: worst 0.67 dB (limit 1.0). **Mutants 7 of 7 caught**; `main`'s
-    livesound gives 14.75 dB.
-  - TS **5 + 56 + 13 + 11, 0 failed**. The sound fixture gains a 300→200 rpm segment (the window cap, the
-    ring's wrap) and the trackers' constants. **TS mutants 7 of 7 caught.**
-  - fixtures current; audit 0 DEAD, 2 FROZEN (known); `e2e:sound` 6 passed (on `build:pages` under Node
-    24.15 via `npx -p node@24.15.0`).
-  - `perf` at 6×, main thread: synth mean 0.54 ms (main 0.47–0.52), p99 1.8–1.9 of 2.90 ms; worker equal.
-  - `tools/p10_ab.py`'s hiss wrapper now passes the level on; it was not run.
-- **CI on #141 (`544f10c`, run 39630080216): 10 of 10 passed, every job read.** Physics 3.10 41.4 min and
-  3.12 33.6; Pyodide 43.3 min, **80 passed, 0 failed, 2 known, 20 skipped**, the B-08 test among the passes;
-  golden fixtures + TS ports; SolverPort; web app; the three e2e jobs; claude-review.
-- **Waiting on the owner:** listen to `out/b08/` in the main checkout. Three A (`main`) / B (fix) pairs at
-  true level: crdi15 exterior driving, hatch15 cabin driving, the single revving in neutral; pedal off at
-  3–6, 9–10 and 13–15 s. Then merge or say what is still wrong. The phone check on the live site comes after.
-- **When #140 (B-07) meets this:** `reviews/ANDROID-BUGS.csv` and this file conflict. Keep both, CSV rows in
-  ID order.
+**Session 10, B-07 fixed (2026-10-21), `fix/b07-engine-stop`, PR #140** (from `main` at
+`173a65f`; independent of #138 and #139):
+- **The sheet's B-07** (/enjoy, all engines): "Engine doesn't stop even when we stop the
+  engine", sometimes, no steps. Taken by this session; the B-08 session (the sound's spikes,
+  synth only) found it in the sheet.
+- **Measured before the fix** (headless Chrome, the built app, scratch `b07_repro.mjs`):
+  - **The sound outlived Stop:** 1 of 40 Start/Stop tries unthrottled, 2 of 40 at a 4× CPU
+    throttle. It was still playing 6 s later at rms ~0.027 (an idle's level), until the next
+    Start.
+  - **Manual tapped while "Starting…":** at 4×, 6 of 6 stuck there for good; unthrottled,
+    1 of 6 drove anyway, in Auto with Manual shown.
+  - A double tap on the first Start: 0 of 16. Not fixed; a MINOR note (SR1): it could make a
+    second AudioContext.
+- **Causes:**
+  - the worklet plays its last frame until a `'reset'`. The reset (node port) and the frames
+    (their own channel) travel unordered, so a stopping worker's late frame set the sound again;
+  - `stop()` did nothing to a load in progress.
+- **Fixed** (app only):
+  - the worklet takes frames only from its current loop channel, and `'reset'` closes it;
+  - `LiveSession.stop()` ends earlier loads (a generation after the fetch), returns `'loading'`
+    to `'idle'`, and ignores a stopped worker's messages.
+- **Tests:** `e2e:enjoy` +5 on a fresh page, each race forced: `terminate` held back 150 ms;
+  the grid's fetch or the worker's `'ready'` held 1.5 s.
+  - **Mutants 6 of 6 caught**, baseline 36/0, every run to its totals.
+  - The first version's two survivors (rejecting the wait on Stop, a catch-side check) had no
+    visible effect and were removed.
+- **Verified (local, Node 24.15):** units 145 (also with `physics-version.ts` aside);
+  `e2e:enjoy` 36/0; `e2e:drive` 11/0; `build:pages` builds.
+- **CI on #140 at `feb0606`: 10 of 10, every job read.** Web e2e: `e2e:enjoy` 36/0, the five
+  B-07 checks among them; the job's other suites 15, 11, 6, 18, 6, 5, 0 failed. Units 27 of 27
+  files. Physics 99/0/3 on 3.10 and 3.12, Pyodide 79/0/2 (20 skipped); grid, custom, fixtures
+  and SolverPort passed. **Ready to merge**, in any order with #138 and #139 (keep both sides
+  of STATUS.md's top, and the CSV's rows in ID order).
+- **Next:** the owner tries Stop on the phone after the merge. Then, the owner's pick: the
+  cold-start ECU proposal (FINDING-031 C, PLAN's "next proposal", docs only) or FINDING-033 A
+  (stall an automatic held at its 60 rpm floor; after #138, which changes `live.py` too).
 
 **Session 10, FINDING-032 fixed (2026-10-20), `fix/finding-032-air-density`** (from `main`
 at `4c2a301`; independent of #135, #136 and P06):

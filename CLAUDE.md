@@ -186,6 +186,12 @@ grep its readers and solve with it changed.
   leaves a `.pyc` Python still trusts (it checks size and whole-second mtime), so the
   'restored' file keeps running the mutant. Run mutant subprocesses with
   `PYTHONDONTWRITEBYTECODE=1`, and clear `__pycache__` before regenerating anything.
+- **Stopping a drive** (B-07): the sound worklet plays its last frame until a
+  `'reset'`. The reset (the node's port) and the frames (their own channel)
+  arrive unordered, so the worklet takes frames only from its current loop
+  channel, and `'reset'` closes it. `LiveSession.stop()` also ends any load in
+  progress (`gen`). A new message path between worker, page and worklet needs
+  the same care.
 - WebCrypto needs a secure context: over plain http on a LAN address the
   grid cache switches itself off by design.
 - `npm start` downloads the numpy wheel once (`prepare-assets.mjs`). Behind a
