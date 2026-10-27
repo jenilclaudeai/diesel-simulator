@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import {
-  eventPattern, firingHz, LIMITER, shakePattern, SHIFT, STALL, START, VIBRATION_KEY, VibrationSetting, Vibrator,
+  breakerPattern, eventPattern, firingHz, LIMITER, shakePattern, SHIFT, STALL, START, testNote, VIBRATION_KEY, VibrationSetting, Vibrator,
   type VibInfo, type VibState,
 } from './vibration';
 
@@ -25,19 +25,48 @@ describe('P01 vibration', () => {
     expect(eventPattern(null, st(), I4)).toBeNull();
   });
 
-  it('the shake: pulsed at the firing rate for the single, a light buzz for a four, stronger when lugging, none cruising', () => {
+  it('P06: a speed breaker hit too fast buzzes twice (front axle, rear), harder for a harder jolt', () => {
+    const hit = eventPattern(st({ breaker_hits: 2 }), st({ breaker_hits: 3, jolt: 0.5 }), I4)!;
+    expect(hit).toEqual(breakerPattern(0.5));
+    expect(hit).toHaveLength(3);
+    expect(breakerPattern(1)[0]!).toBeGreaterThan(breakerPattern(0.2)[0]!);
+    expect(breakerPattern(1)[2]!).toBeGreaterThan(breakerPattern(0.2)[2]!);
+    expect(breakerPattern(5)).toEqual(breakerPattern(1));                          // clipped
+    expect(eventPattern(st({ breaker_hits: 3 }), st({ breaker_hits: 3, jolt: 0.5 }), I4)).toBeNull();
+    expect(eventPattern(st(), st({ jolt: 0.5 }), I4)).toBeNull();                  // no route: no hits
+    // stalling on the breaker: the stall wins
+    expect(eventPattern(st({ breaker_hits: 0 }), st({ breaker_hits: 1, jolt: 1, stalled: true, rpm: 0 }), I4)).toBe(STALL);
+  });
+
+  it('the shake: pulsed at the firing rate for the single, a buzz for a four, firmest lugging', () => {
     const single = shakePattern(st({ rpm: 600 }), SINGLE)!;
     expect(single.slice(0, 2)).toEqual([35, 165]);                     // 5 Hz: 200 ms a firing
     const four = shakePattern(st({ rpm: 800 }), I4)!;
-    expect(four.slice(0, 2)).toEqual([12, 38]);                        // 27 Hz is too fast: a 24% buzz
+    expect(four.slice(0, 2)).toEqual([20, 30]);                        // 27 Hz is too fast: a 40% buzz (was 12 of 50)
     const lug = shakePattern(st({ rpm: 1000, throttle: 0.9 }), I4)!;
-    expect(lug.slice(0, 2)).toEqual([25, 25]);                         // 50%: stronger
+    expect(lug.slice(0, 2)).toEqual([35, 15]);                         // 70%: firmest
     expect(four.reduce((a, b) => a + b, 0)).toBeGreaterThanOrEqual(400);
-    expect(shakePattern(st({ rpm: 2500, throttle: 0.3 }), I4)).toBeNull();
     expect(shakePattern(st({ rpm: 0, stalled: true }), I4)).toBeNull();
+    expect(shakePattern(st({ rpm: 2000, engine_stopped: true }), I4)).toBeNull();
   });
 
-  it('the controller: an event plays whole, the shake is refreshed every 300 ms and stopped when idling ends', () => {
+  it('driving (2026-10-21): the shake runs whenever the engine does and follows the pedal', () => {
+    const on = (rpm: number, throttle: number, i = I4) => shakePattern(st({ rpm, throttle }), i)!.slice(0, 2);
+    expect(on(2000, 0)).toEqual([15, 35]);                             // coasting: the lightest
+    expect(on(2500, 0.3)).toEqual([21, 29]);
+    expect(on(3000, 1)).toEqual([35, 15]);                             // full throttle
+    expect(on(3000, 1.4)).toEqual([35, 15]);                           // the pedal clamped
+    expect(on(1000, 0.4, SINGLE)).toEqual([40, 80]);                   // the single at 8.3 Hz: 30 + 25 * 0.4 per firing
+    expect(on(1000, 0, SINGLE)).toEqual([30, 90]);
+  });
+
+  it("the Test tap's note: no API, refused, or sent with what to check", () => {
+    expect(testNote(false, false)).toContain('no vibration');
+    expect(testNote(true, false)).toContain('refused');
+    expect(testNote(true, true)).toContain('Mute');
+  });
+
+  it('the controller: an event plays whole, the shake is refreshed every 300 ms, follows the pedal and stops with the engine', () => {
     const calls: (number[] | number)[] = [];
     const v = new Vibrator(p => { calls.push(p); return true; });
     v.started();
@@ -51,10 +80,16 @@ describe('P01 vibration', () => {
     expect(calls.length).toBe(2);
     v.frame(st(), I4, 710);                                            // refreshed
     expect(calls.length).toBe(3);
-    v.frame(st({ rpm: 2500, throttle: 0.4 }), I4, 800);                // driving off: the motor stops
-    expect(calls.at(-1)).toBe(0);
-    v.frame(st({ rpm: 2600, gear: '2', throttle: 0.4 }), I4, 900);     // a shift: one jolt
+    v.frame(st({ rpm: 2500, throttle: 0.4 }), I4, 800);                // driving off: the idle buzz runs on
+    expect(calls.length).toBe(3);
+    v.frame(st({ rpm: 2500, throttle: 0.4 }), I4, 1010);               // refreshed with the pedal's buzz
+    expect((calls.at(-1) as number[]).slice(0, 2)).toEqual([23, 27]);
+    v.frame(st({ rpm: 2600, gear: '2', throttle: 0.4 }), I4, 1100);    // a shift: one jolt
     expect(calls.at(-1)).toBe(SHIFT);
+    v.frame(st({ rpm: 2600, gear: '2', throttle: 0.4 }), I4, 1200);    // the buzz back after the jolt
+    expect((calls.at(-1) as number[]).slice(0, 2)).toEqual([23, 27]);
+    v.frame(st({ rpm: 2600, gear: '2', engine_stopped: true }), I4, 1300); // the engine stopped: the motor stops
+    expect(calls.at(-1)).toBe(0);
     v.stop();
     expect(calls.at(-1)).toBe(0);
   });

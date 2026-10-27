@@ -2,9 +2,9 @@
 // engine-sound AudioWorklet fed by it. Shared by /drive (the engineering
 // page) and /enjoy (Phase 5), so the two cannot drift apart.
 import { signal } from '@angular/core';
-import { FS, type Transmission } from '@dieselsim/physics';
+import { FS, type ParResult, type Transmission } from '@dieselsim/physics';
 import { GRID_VERSION, SOUND_WORKLET } from '../solver/physics-version';
-import type { DashInfo, DriveScript, FromWorker, GridFile, LiveView, Pedals } from './protocol';
+import type { DashInfo, DriveScript, FromParWorker, FromWorker, GridFile, LiveView, Pedals, ToParWorker } from './protocol';
 import type { FromWorklet, ToWorklet } from './sound-protocol';
 import { wavBytes } from './wav';
 
@@ -23,8 +23,12 @@ export class LiveSession {
   readonly levelDb = signal(-Infinity);
   readonly soundError = signal<string | undefined>(undefined);
   readonly recording = signal(false);
+  /** P06 tier 2: the route's par (a ghost lap in its own worker): 'working' until it comes back */
+  readonly par = signal<ParResult | 'working' | 'failed' | undefined>(undefined);
+  readonly parMs = signal<number | undefined>(undefined);
 
   private worker?: Worker;
+  private parWorker?: Worker;
   private grid?: GridFile;
   private preset = '';
   private ctx?: AudioContext;
@@ -40,7 +44,7 @@ export class LiveSession {
 
   /** Load a preset's prebuilt grid into a fresh worker; `run` starts the loop. */
   async load(preset: string, trans: Transmission, run: boolean, air?: { p: number; T: number },
-             cfpp?: number): Promise<void> {
+             cfpp?: number, route?: string): Promise<void> {
     this.stop();
     const gen = this.gen;
     this.status.set('loading');
@@ -58,12 +62,12 @@ export class LiveSession {
       return;
     }
     if (gen !== this.gen) return;                 // stopped while fetching
-    await this.loadGrid(grid, trans, run, air, cfpp);
+    await this.loadGrid(grid, trans, run, air, cfpp, route);
   }
 
-  /** Load a grid already in hand (an imported custom engine, ADR-014). */
+  /** Load a grid already in hand (an imported custom engine, ADR-014). `route`: P06, a route key (Enjoy). */
   async loadGrid(grid: GridFile, trans: Transmission, run: boolean, air?: { p: number; T: number },
-                 cfpp?: number): Promise<void> {
+                 cfpp?: number, route?: string): Promise<void> {
     this.stop();
     this.status.set('loading');
     this.error.set(undefined);
@@ -79,7 +83,7 @@ export class LiveSession {
         w.addEventListener('message', (ev: MessageEvent<FromWorker>) => {
           if (this.worker !== w) return;
           const m = ev.data;
-          if (m.type === 'ready') { w.postMessage({ type: 'load', grid, trans, air, cfpp }); resolve(); }
+          if (m.type === 'ready') { w.postMessage({ type: 'load', grid, trans, air, cfpp, route }); resolve(); }
           else if (m.type === 'state') this.v.set(m.view);
           else if (m.type === 'info') this.info.set(m.info);
           else if (m.type === 'scriptResult') this.scriptWaiter?.(m);
@@ -87,6 +91,7 @@ export class LiveSession {
       });
       this.grid = grid;
       this.preset = grid.preset;
+      if (route) this.startPar({ grid, air, cfpp, route });
       this.wireSound();
       if (run) w.postMessage({ type: 'run' });
       this.status.set('driving');
@@ -108,6 +113,9 @@ export class LiveSession {
     this.post({ type: 'reset' });
     this.worker?.terminate();
     this.worker = undefined;
+    this.parWorker?.terminate();
+    this.parWorker = undefined;
+    this.par.set(undefined);
     this.v.set(undefined);
     // the next engine's info replaces it; until then the last engine's must
     // not stand in for it (the dials' scales, the vehicle)
@@ -203,4 +211,22 @@ export class LiveSession {
   }
 
   dispose(): void { this.stop(); this.soundStop(); }
+
+  /** P06 tier 2: the par for this drive, at its air and fuel, on a thread of its own. */
+  private startPar(req: ToParWorker): void {
+    this.par.set('working');
+    this.parMs.set(undefined);
+    const w = new Worker(new URL('./par.worker', import.meta.url), { type: 'module' });
+    this.parWorker = w;
+    w.addEventListener('message', (ev: MessageEvent<FromParWorker>) => {
+      if (this.parWorker !== w) return;                 // a stopped drive's par
+      const m = ev.data;
+      if (m.type === 'par') { this.par.set(m.result); this.parMs.set(m.ms); }
+      else this.par.set('failed');
+      w.terminate();
+      this.parWorker = undefined;
+    });
+    w.addEventListener('error', () => { if (this.parWorker === w) { this.par.set('failed'); this.parWorker = undefined; } });
+    w.postMessage(req);
+  }
 }

@@ -240,6 +240,12 @@ grep its readers and solve with it changed.
   mic's loudness are `SOURCE_BALANCE` and `MIC_TRIM` (ADR-018) in hashed
   `acoustics.py`: mirror them in `web/physics/src/audio/synth.ts`,
   regenerate `--only sound`, and re-stamp the grids.
+- **Chrome on Android drops every `navigator.vibrate` call while the phone
+  is on Mute** (`VibrationManagerAndroid.java`: ringer mode SILENT), and
+  `vibrate()` still returns true. The e2e records the patterns the page
+  asked for, never what a motor did: the feel is checked only on a phone.
+  A pulse's on-time is a separate motor call; P01's first 12 ms idle buzz
+  was likely too short to feel (2026-10-21).
 - e2e touch via CDP: a `touchMove` that leaves a finger out does **not**
   lift it, and `touchEnd` lifts every finger. `at(sel, h)` is the fraction
   *up* the pedal, so 0.95 is full throttle. The stall test leaves `/enjoy`
@@ -256,15 +262,37 @@ grep its readers and solve with it changed.
   Opening a project also
   sets `/spec`'s edits. One e2e browser carries all of it from page to
   page; clear `localStorage` before a check that assumes the defaults.
+- **Routes (P06, ADR-021) live in `live.py`, not the solver**: no grid goes
+  stale. `set_route` copies `spec` and `spec.thermal`, because the grid's
+  spec is shared and a climb once leaked into the next drive. The ISA power
+  is a series (`_ln`, `_exp`, `LiveEngine._isa`): CPython's `**` and V8's
+  differ in the last bit. A state snapshot doesn't carry the air, so
+  `setState` re-derives it from `route_alt`. Changing a route constant
+  changes the live fixture (`--only live`).
+- **P06 goals (ADR-022):** the par is `live.par_run` / `parRun`, run in `par.worker.ts` from
+  `make-engine.ts`, the same start the drive worker uses. Change how a drive's engine is
+  made there, not in one worker. The live fixture's `pars` hold the port, including one that
+  never finishes (FINDING-033's 60 rpm floor on the fixture grid). The goals' logic is
+  `enjoy/goals.ts`, which is pure and unit-tested.
+- A live-fixture drive that splits between Python and TS *after* matching
+  for a thousand frames may be knife-edge, not a port bug. Nudge an initial
+  value by 1e-9 **in Python alone** and see whether the event moves
+  (FINDING in PROPOSAL-P06: the DCT on random:1234).
+- In `e2e/enjoy.e2e.mjs`, a `page.goto` late in the run (after the viewport
+  changes) left Chrome turning CDP touches into clicks. Buttons work and
+  pedals hear nothing; `Emulation.setTouchEmulationEnabled` doesn't fix it.
+  Open a new page for a URL check instead of reloading the main one.
 
 ## Decisions
 
-`DECISIONS.md` holds ADR-001 to ADR-020 (ADR-013: the personas are review
+`DECISIONS.md` holds ADR-001 to ADR-022 (ADR-013: the personas are review
 lenses; ADR-014: custom engines, drivable; ADR-015: Phase 6's scope, staged;
 ADR-016: Phase 7's six decisions, and v2 as a separate list; ADR-017: P08, the automatic shifts by the fuel map; ADR-018: P10, the sound's
 balance and loudness, and FINDING-028 hidden in the synth; ADR-019: P09, the
 port flow and the knock fixed, the knock at altitude and on a cold start; ADR-020: P13, a
-native build in one command and converged solves that stop once settled). Don't reopen one without a
+native build in one command and converged solves that stop once settled; ADR-021: P06, random roads in
+/enjoy, the route in the live loop, shared by its seed; ADR-022: P06 tier 2, goals against a
+par computed in the browser). Don't reopen one without a
 measured reason. The ones most easily undone by accident: the Python solver
 runs **unmodified** under Pyodide (ADR-001); audio is a TypeScript
 AudioWorklet with no `SharedArrayBuffer`, so no COOP/COEP headers, so GitHub

@@ -1002,7 +1002,10 @@ for the Feat Prop priority scale.
 And, for the owner's "Feat Prop" list (the bug sheet, read 2026-10-06):
 
 7. **P01 (vibrations on a phone) is v1**, in `/enjoy`. Android Chrome only:
-   iOS Safari has no Vibration API.
+   iOS Safari has no Vibration API. *(Amended 2026-10-21, the owner's choice
+   after feeling the build: the shake runs whenever the engine does and
+   follows the pedal, not only at idle and lugging; a Test button on the start
+   screen. Was (2026-10-19): events plus a shake while idling or lugging.)*
 8. **P02–P05 are v2, after v1.** That's Google sign-in, free/paid roles,
    grid builds on a backend and on AWS Lambda. v1 stays a static site
    (ADR-003), and PLAN's out-of-scope list stands. **Priority 1 is
@@ -1454,3 +1457,121 @@ rebuild showed it stopping on slow creeps (below). Details:
   convergence).
 - Measured not worth it: chaining weather solves (×1.26, path dependence),
   rewriting the loop (ADR-001).
+
+
+---
+
+## ADR-021 — P06 tier 1: random roads in /enjoy (a route the live loop drives)
+
+**Status:** Accepted (2026-10-19, built 2026-10-20). The owner's answers:
+Enjoy only; tier 1 first, then goals; everything in PLAN; named and random
+routes, the random ones shared by their seed. Details:
+`reviews/PROPOSAL-P06.md`.
+
+### Decision
+
+1. **The route lives in the live loop** (`dieselsim/live.py`: `Route`,
+   `random_route`, `ROUTES`, `route_from`; `LiveEngine.set_route` and
+   `_road`), mirrored line for line in `web/physics/src/live/route.ts`. It
+   is **not** in the solver: no grid goes stale. `live.py` is outside the
+   grid hash.
+2. **One generator, mulberry32, on both sides**, and arithmetic that IEEE
+   makes bit-identical. Where libm differs (CPython's `**` against V8's,
+   1,958 of 20,000 altitudes in the last bit), the code uses series (`_ln`,
+   `_exp`). A route is computed from its key (`'city'`, `'random:1234'`),
+   never sent as data.
+3. **What the engine feels:**
+   - the grade, through the driveline's existing input;
+   - the surface, as rolling resistance × `SURFACES`;
+   - the wind, as aero on the air speed;
+   - a speed breaker, as a 0.15 s resistive pulse worth `BREAKER_LOSS`
+     (6 %) of speed × j, where j rises from 0 at 15 km/h to 1 at 50 km/h,
+     plus a hint;
+   - the altitude, as ISA air relative to the start's place, which the
+     grid's weather table turns into the cells' correction.
+
+   The breaker's 6 % is a tuning constant, not a measurement.
+4. **No suspension** (ADR-002's out-of-scope list stands). A breaker is a
+   speed loss and a buzz.
+5. **The share is the address:** `/enjoy?route=random:4242`. There is no
+   server and no storage, so ADR-003 is untouched.
+6. **The live fixture holds the port** (ADR-004). It has two route drives:
+   the city on the plain grid, and random:1234 on the weather grid, which
+   drives on the **converter box**, because there the dual clutch's sync
+   threshold turns a 1e-9 nudge into a 12-frame event shift in Python
+   alone.
+
+### Why
+
+- Only the live loop's code changes, so the cells, the grids and their
+  stamps stay as they are.
+- A seed is a few bytes, and both sides build the identical road from it.
+  The fixture proves that frame by frame: worst 2.9e-14 per step.
+
+### Consequences
+
+- Changing a route constant (`SURFACES`, `BREAKER_*`, `ROUTES`, the
+  generator's draws) changes the live fixture: regenerate it with
+  `--only live` and re-match `route.ts`.
+- Anything new that sets the air from a height uses `LiveEngine._isa`
+  (series), not `**`.
+- `set_route` copies the spec and its thermal block: the grid's spec is
+  shared between drives (a mutant found a climb leaking into the next
+  drive).
+- Tier 2 (goals on a route) builds on `route_s`, `route_alt` and
+  `breaker_hits`, which `LiveView` already carries.
+
+
+---
+
+## ADR-022 — P06 tier 2: goals on a route, against a par
+
+**Status:** Accepted (the owner, 2026-10-20: every recommendation in
+`reviews/PROPOSAL-P06-goals.md`). Built 2026-10-21 on `feat/p06-roads`.
+
+### Decision
+
+1. **Two goals, each one score with one limit:**
+   - **time trial:** the fastest lap on at most the par's fuel;
+   - **economy run:** the least fuel within the par's time.
+
+   Personal bests are kept per browser (`dieselsim-goal-bests`), keyed by
+   engine, route, goal, place and gearbox.
+2. **The par** is a ghost lap of the same route at a steady 70 %
+   (`live.PAR_THROTTLE`) with the automatic, from the start the driver gets:
+   the same grid, place air and fuel (`make-engine.ts`, shared with the
+   drive worker). It runs in a worker of its own (`par.worker.ts`), so the
+   60 Hz loop never waits. `live.par_run` is the reference; the live
+   fixture holds `parRun` to it with ~~three~~ two pars:
+   - the city, with breakers, finishing;
+   - ~~the pass, with hills, finishing;~~ *(dropped 2026-10-21: Python
+     runs a par at about real time, so this one cost 243 s, and with a
+     600 s Leh cap it pushed CI's fixtures job past its 15-minute limit on
+     #138. The route drives check the hills frame by frame.)*
+   - a cold start at Leh on the fixture grid that never finishes
+     (FINDING-033), capped at 90 s *(was 600 s; it is at 60 rpm by 30 s)*.
+3. **A breaker taken too fast adds 5 s** (`BREAKER_PENALTY_S`) to a lap's
+   time, the par's included.
+4. **Overheating is not a goal.** A stop on overheat, or running dry,
+   fails any run. Measured: four of five roster engines can't overheat
+   even on a 1,050 m climb at 42 °C.
+5. **A par that never finishes sets no limit**, and the dash says so.
+6. **The clock starts** at the first throttle above 5 %, or at the car's
+   first metre; the lap ends at the route's length. The fuel burnt idling
+   before the start isn't counted.
+
+### One change from the proposal, and why
+
+The proposal said named routes would ship precomputed pars. They don't:
+**every par is computed in the browser**, at the driver's own place and
+fuel. A shipped par would be right only at standard air, and at Leh it
+would set the wrong fuel limit. Measured cost: 6.2 s for the city on this
+Mac (Chrome). On a phone it is several times longer, and it runs while
+the driver drives.
+
+### Consequences
+
+- Changing `PAR_THROTTLE`, `BREAKER_PENALTY_S` or the start rule changes
+  the goals' meaning: regenerate the live fixture (`--only live`), and
+  personal bests made under the old rule stay in browsers.
+- A goal can be shared: `/enjoy?route=city&goal=time`.

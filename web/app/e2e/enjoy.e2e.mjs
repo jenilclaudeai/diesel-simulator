@@ -99,6 +99,18 @@ check("the fuel is picked beside it: sold here first, then summer, winter and ar
 // P01: the vibration switch, on the start screen, on by default (the owner's choice)
 const vibSwitch = await page.evaluate(() => document.querySelector("main.dash input.vibration")?.checked ?? null);
 check("P01: the vibration switch is on the start screen, on by default", vibSwitch === true, String(vibSwitch));
+// P01 (2026-10-21): Test buzzes once and says what the browser did with it. Since P06's
+// route and goal pickers the start screen scrolls, and Test sits below the fold at 412 px:
+// scrolled to, as a thumb would
+await page.$eval("button.vib-test", e => e.scrollIntoView({ block: "center" }));
+await tapEl("button.vib-test");
+await sleep(200);
+const vibTest = await page.evaluate(() => ({
+  note: document.querySelector("main.dash .vib-note")?.textContent?.trim() ?? "",
+  sent: globalThis.__enjoy.vibes().some(v => Array.isArray(v) && v.join() === "300"),
+}));
+check("P01: the Test tap buzzes 300 ms and says what the browser did", vibTest.sent && vibTest.note.length > 0, JSON.stringify(vibTest));
+await page.$eval("main.dash", e => { e.scrollTop = 0; });        // back up to Start
 await tapEl("button.start");
 await page.waitForFunction(() => globalThis.__enjoy.view(), { timeout: 60_000 });
 await sleep(1500);
@@ -153,6 +165,11 @@ const vibHas = p => vibes.some(v => Array.isArray(v) && v.join() === p.join());
 const vibShake = vibes.some(v => Array.isArray(v) && v.length >= 8 && v.reduce((a, b) => a + b, 0) >= 400);
 check("P01: the phone vibrates: the start's shudder, the idle shake, the shift's jolt",
   vibHas([60, 40, 60, 40, 140]) && vibShake && vibHas([45]), `${vibes.length} calls, first ${JSON.stringify(vibes.slice(0, 3))}`);
+// driving (2026-10-21): the buzz follows the pedal; an on-time strictly between idle's 20 and
+// lugging's 35 ms comes only from it (the held throttle gives about 33)
+const driveOn = vibes.filter(v => Array.isArray(v) && v.length >= 8 && v[0] > 20 && v[0] < 35).map(v => v[0]);
+check("P01: while driving the phone buzzes with the pedal", driveOn.length > 0,
+  `on-times ${JSON.stringify([...new Set(driveOn)])}`);
 
 await page.screenshot({ path: path.join(here, "out", "enjoy-landscape.png") });
 
@@ -462,6 +479,97 @@ if (unitOpts.length) {
   await page.waitForSelector("select.drive-units", { timeout: 10_000 });
   await page.select("select.drive-units", "metric");
 }
+
+// ---- P06 (ADR-021): the road -- a shared link, the picker, the road ahead, a breaker taken too fast ----
+// The link is opened in a tab of its own. Measured (2026-10-20): reloading this tab this late in the run
+// left Chrome without touch emulation -- the page saw CDP touches as clicks only (no touchstart, no
+// pointerdown), so buttons worked and the pedals heard nothing, and Emulation.setTouchEmulationEnabled
+// did not bring them back; in a fresh browser the same reload kept touch (3 of 3). This tab drives on.
+const linkTab = await browser.newPage();
+linkTab.on("pageerror", e => problems.push(`pageerror (link tab): ${e.message}`));
+await linkTab.goto(`http://localhost:${port}${BASE}enjoy?e2e&route=random:4242`, { waitUntil: "load" });
+await linkTab.waitForSelector("select.route");
+const linked = await linkTab.evaluate(() => ({ route: document.querySelector("select.route").value,
+  seed: document.querySelector("input.seed")?.value, note: document.querySelector(".route-note")?.textContent ?? "" }));
+await linkTab.close();
+await page.bringToFront();
+if (await page.$("button.stop")) await tapEl("button.stop");
+await page.waitForSelector("select.route");
+check("P06: a ?route=random:<seed> link opens on that random road, its seed shown, with a note on its length and climb",
+  linked.route === "random" && linked.seed === "4242" && /km a lap, up to \d+ m above the start/.test(linked.note), JSON.stringify(linked));
+await page.select("select.route", "city");
+await page.waitForFunction(() => location.search.includes("route=city"), { timeout: 5000 }).catch(() => {});
+const addr = await page.evaluate(() => location.search);
+check("P06: picking a route rewrites the address, so it is the link to share (and keeps the others)",
+  /route=city/.test(addr) && /e2e/.test(addr) && !/random/.test(addr), addr);
+await page.select('select[aria-label="Engine"]', "hatch15");
+await tapEl(".seg button:nth-child(1)");                 // Auto
+await page.waitForSelector("button.start");
+await tapEl("button.start");
+await page.waitForFunction(() => globalThis.__enjoy.view() && document.querySelector(".road svg path.line"), { timeout: 60_000 }).catch(() => {});
+await sleep(800);
+const road0 = await page.evaluate(() => ({ key: globalThis.__enjoy.routeKey(), s: globalThis.__enjoy.view().route_s,
+  breakers: document.querySelectorAll(".road line.breaker").length, text: document.querySelector(".road-kv")?.textContent ?? "",
+  label: document.querySelector(".road svg")?.getAttribute("aria-label") ?? "" }));
+check("P06: the road ahead: the city's four breakers in the next 1.5 km, the grade, the surface, the next breaker",
+  road0.key === "city" && road0.breakers === 4 && /grade 0\.0 %/.test(road0.text) && /asphalt/.test(road0.text)
+  && /breaker in \d+ m/.test(road0.text) && road0.label === "Road ahead: " + road0.text, JSON.stringify(road0));
+await touch("touchStart", [await at(".throttle .pedal", 0.95)]);
+await page.waitForFunction(() => globalThis.__enjoy.view()?.breaker_hits >= 1, { timeout: 45_000, polling: 50 }).catch(() => {});
+const hit = await page.evaluate(() => ({ v: globalThis.__enjoy.view(), toast: document.querySelector(".toast")?.textContent ?? "",
+  vibes: globalThis.__enjoy.vibes() }));
+await touch("touchEnd", []);
+const bump = hit.vibes.find(p => Array.isArray(p) && p.length === 3 && p[1] === 70);
+check("P06: the first breaker taken flat out jolts: counted, the phone bumps twice, the hint says take them at 15",
+  hit.v.breaker_hits === 1 && hit.v.jolt > 0 && !!bump && /Speed breaker at \d+ km\/h: take them at 15/.test(hit.toast)
+  && hit.v.route_s > 250, `hits ${hit.v.breaker_hits}, jolt ${hit.v.jolt.toFixed(2)} at ${hit.v.route_s.toFixed(0)} m, `
+  + `${hit.v.kmh.toFixed(0)} km/h; buzz ${JSON.stringify(bump)}; toast "${hit.toast.trim()}"; `
+  + `throttle ${hit.v.throttle.toFixed(2)}`);
+await page.screenshot({ path: path.join(here, "out", "enjoy-road.png") });
+// B-02 with the road on screen: at 846 x 300 the strip sits between the dials and the panel below, overlapping neither
+await page.setViewport({ width: 846, height: 300, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true, isLandscape: true });
+await sleep(400);
+const roadBox = await page.evaluate(() => {
+  const r = sel => { const b = document.querySelector(sel)?.getBoundingClientRect(); return b ? { top: b.top, bottom: b.bottom, h: b.height } : null; };
+  return { gauges: r(".gauges"), road: r(".road"), strip: r(".strip"), svg: r(".road svg") };
+});
+await page.screenshot({ path: path.join(here, "out", "enjoy-road-300.png") });
+await page.setViewport({ width: 915, height: 412, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true, isLandscape: true });
+const rb = roadBox;
+check("P06: 846 x 300: the road strip between the dials and the panel, overlapping neither, still drawn",
+  !!rb.gauges && !!rb.road && !!rb.strip && rb.road.top >= rb.gauges.bottom - 0.5 && rb.strip.top >= rb.road.bottom - 0.5
+  && rb.svg.h >= 27, JSON.stringify(rb));
+if (await page.$("button.stop")) await tapEl("button.stop");
+await page.waitForSelector("select.route");
+
+// ---- P06 tier 2: a time trial on the city, against the par (a ghost lap at a steady 70 %, its own worker) ----
+await page.select("select.goal", "time");
+await page.waitForFunction(() => location.search.includes("goal=time"), { timeout: 5000 }).catch(() => {});
+const goalAddr = await page.evaluate(() => location.search);
+await tapEl("button.start");
+await page.waitForFunction(() => globalThis.__enjoy.view() && globalThis.__enjoy.lap(), { timeout: 60_000 }).catch(() => {});
+await page.waitForFunction(() => { const p = globalThis.__enjoy.par(); return p && p !== "working"; }, { timeout: 120_000, polling: 250 }).catch(() => {});
+const parNow = await page.evaluate(() => ({ par: globalThis.__enjoy.par(), ms: globalThis.__enjoy.parMs(), text: globalThis.__enjoy.goalText() }));
+await touch("touchStart", [await at(".throttle .pedal", 0.95)]);
+await page.waitForFunction(() => ["finished", "failed"].includes(globalThis.__enjoy.lap()?.phase), { timeout: 240_000, polling: 100 }).catch(() => {});
+await touch("touchEnd", []);
+await page.waitForFunction(() => globalThis.__enjoy.verdict(), { timeout: 10_000 }).catch(() => {});
+const tt = await page.evaluate(() => ({ lap: globalThis.__enjoy.lap(), verdict: globalThis.__enjoy.verdict(),
+  text: globalThis.__enjoy.goalText(), shown: document.querySelector(".goal-kv")?.textContent ?? "" }));
+const p = parNow.par, l = tt.lap, vd = tt.verdict;
+check("P06 tier 2: Time trial on the city: the address carries the goal; the par comes back from its worker, a finished lap",
+  /goal=time/.test(goalAddr) && /route=city/.test(goalAddr) && !!p && typeof p === "object" && p.finished && p.t_s > 30 && p.fuel_L > 0
+  && /par fuel/.test(parNow.text),
+  `${goalAddr}; par ${p && typeof p === "object" ? `${p.t_s.toFixed(1)} s (+${5 * p.hits} s), ${p.fuel_L.toFixed(3)} L, in ${Math.round(parNow.ms)} ms` : JSON.stringify(p)}`);
+check("P06 tier 2: flat out to the line: the lap finishes, the breakers cost 5 s each, the par's fuel is the limit, the dash says so",
+  !!l && l.phase === "finished" && l.hits >= 1 && !!vd && vd.limit === p.fuel_L && vd.score === l.time_s
+  && vd.ok === (l.fuel_L <= p.fuel_L) && /Time trial lap: \d+:\d\d\.\d \(\+\d+ s, \d+ breakers?\) on [\d.]+ L -- /.test(tt.shown)
+  && tt.shown === tt.text,
+  `lap ${l ? `${l.time_s.toFixed(1)} s with ${l.hits} hits, ${l.fuel_L.toFixed(3)} L` : "none"}; verdict ${JSON.stringify(vd)}; "${tt.shown}"`);
+if (await page.$("button.stop")) await tapEl("button.stop");
+await page.waitForSelector("select.route");
+await page.select("select.goal", "free");
+await page.select("select.route", "");                    // the open road again for anything after
 
 // ---- B-07 (the owner's sheet): "Engine doesn't stop even when we stop the engine" ----
 // A fresh page, so its wrappers touch nothing above. Measured before the fix (4x CPU

@@ -444,7 +444,11 @@ gear change, the limiter) plus a shake while idling or lugging, on by default wi
 switch. The Vibration API has no strength and a phone's motor can't follow a
 4-cylinder's 27 Hz idle firing, so the shake pulses at the firing rate only up to
 12 Hz (the single) and is a light buzz above it. **The feel is the owner's to judge on
-the phone.**
+the phone.** **Widened 2026-10-21** (`fix/p01-driving-vibration`): the owner, on the
+S9+, felt the events and the idle but expected it while driving. The owner's choice
+"follows load": the shake runs whenever the engine does, its on-time per 50 ms 15 + 20
+× pedal (idle 20, was 12; lugging 35, was 25), and a Test button with a note on the
+start screen (Chrome on Android stays still on Mute, with no error).
 
 **Random roads (the owner's P06, tiers 1–2, ADR-016 addendum,
 2026-10-08):** a seeded random route the engine feels (hills, surfaces as
@@ -453,6 +457,18 @@ rolling resistance, headwind, altitude through Phase 7's weather table), a
 suspension, stated), and goals on a route. One PRNG in Python and TS, so
 the live fixture holds. Its own proposal comes after Phase 7 step 4, and
 places the build in the order.
+**Tier 1 built (2026-10-20, `feat/p06-roads`, ADR-021, `reviews/PROPOSAL-P06.md`):**
+everything above except goals, in /enjoy only (the owner's choice). It has
+three named routes and random ones shared by `?route=random:<seed>`, and a
+breaker buzzes the phone (P01). ~~**Tier 2, goals on a route, is next**, with
+its own short proposal (what a goal is: reach the top, a fuel budget, a
+time).~~ **Tier 2 built (2026-10-21, ADR-022, `reviews/PROPOSAL-P06-goals.md`):**
+a time trial on the par's fuel, and an economy run in the par's time. The par is
+a ghost lap at a steady 70 %, computed in the browser. Each breaker taken too
+fast adds 5 s, and personal bests are kept per browser. "Without overheating"
+was measured unlosable for four of five engines, so it was dropped as a goal; a
+stop on overheat fails a run. P06's tiers 1–2 (v1) are done; tier 3 stays in
+v2.
 
 ---
 

@@ -40,7 +40,32 @@ button:disabled { opacity: 0.45; }
 /* P01: the vibration switch, under the place and the fuel */
 .dash > .vibrate { align-self: center; display: flex; gap: 0.45rem; align-items: center; font-size: 0.95rem; opacity: 0.9; }
 .vibrate input { width: 1.15rem; height: 1.15rem; accent-color: var(--amber); }
+.vibrate label { display: flex; gap: 0.45rem; align-items: center; }
+.dash > .vib-note { align-self: center; text-align: center; margin: 0; }
+.vib-note:empty { display: none; }
 .err { color: #ffb4a6; }
+/* P06: the route picker, under the place; the road-ahead strip, between the dials and the strip */
+.dash > .route-pick { align-self: center; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; }
+.route-pick select, .route-pick input { font: inherit; font-size: 0.95rem; color: var(--grey); background: rgba(223, 227, 220, 0.12);
+  border: 1px solid rgba(223, 227, 220, 0.35); border-radius: 8px; padding: 6px 10px; min-height: 40px; }
+.route-pick select option { color: var(--slate); }
+.route-pick .seed { width: 6.5em; }
+.dash > .route-note { align-self: center; text-align: center; margin: 0; max-width: 34em; font-size: 0.85rem; opacity: 0.85; }
+.road { display: grid; grid-template-columns: 1fr; gap: 2px; }
+.road svg { width: 100%; height: clamp(28px, 7vh, 48px); display: block; }
+.road .area { fill: rgba(223, 227, 220, 0.10); }
+.road .line { fill: none; stroke: var(--grey); stroke-width: 1.5; }
+.road .breaker { stroke: var(--amber); stroke-width: 2; stroke-dasharray: 3 2; }
+.road .car { stroke: var(--amber); stroke-width: 3; }
+.road-kv { font-size: 0.78rem; opacity: 0.9; text-align: center; }
+/* P06 tier 2: the goal's line under the road */
+.route-pick .goal { font: inherit; font-size: 0.95rem; color: var(--grey); background: rgba(223, 227, 220, 0.12);
+  border: 1px solid rgba(223, 227, 220, 0.35); border-radius: 8px; padding: 6px 10px; min-height: 40px; }
+.route-pick .goal option { color: var(--slate); }
+.dash > .goal-note { align-self: center; text-align: center; margin: 0; max-width: 34em; font-size: 0.8rem; opacity: 0.8; }
+.goal-kv { font-size: 0.8rem; text-align: center; color: var(--amber); }
+.goal-kv.ok { color: #8fc7a4; }
+.goal-kv.bad { color: #ffb4a6; }
 
 .lamps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; }
 .lamp { font-size: 0.72rem; padding: 2px 7px; border-radius: 5px; border: 1px solid rgba(223, 227, 220, 0.2); color: rgba(223, 227, 220, 0.28); }
