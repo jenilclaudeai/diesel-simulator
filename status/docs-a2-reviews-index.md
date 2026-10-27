@@ -18,5 +18,12 @@ carries its status until A1 merges.
 - **For the owner:** (1) FINDING-027 looks answered as A (shipped stated, 2026-10-16):
   confirm; (2) correct the 15 stale lines in place (struck through, the index's status
   after), or leave the index as the one place that says it.
+- **PR #145. CI at `6948baf` (run 40581587689): 10 of 10, every job read**, the counts equal
+  `main`'s at `a57a6fd` exactly, as a docs change should: physics 103/0/3 on 3.10 and 3.12;
+  Pyodide 82/0/2, 21 skipped; TS ports 5/68/13/11; SolverPort 20/15/30; units 164 (29
+  files); e2e dyno 15, drive 11, sound 6, enjoy 45, cycle 11, spec 18, sweep 6,
+  durability 5; grid 9; custom 7; claude-review: no issues. This commit is this file only.
+  #144 and #145 merge onto `main` in either order to the same tree (rechecked after
+  #144's `82e0b0d`).
 - **Next:** the owner merges #144 (A1) and this; then this file folds into `history/` and
   STATUS.md gets A2's line. Then A3 (DECISIONS.md).
