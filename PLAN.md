@@ -423,7 +423,14 @@ ADR-020).
 **Next proposal, from FINDING-031 (the owner, 2026-10-16):** a cold-start ECU in the
 live loop (fast idle when cold, the pedal's fuel raised to cover the extra
 friction), so light pedal moves the car from a cold start. At 0 °C, 20% pedal
-doesn't move it today, on `main` too.
+doesn't move it today, on `main` too. **Measured 2026-10-22** in
+`reviews/PROPOSAL-cold-start-ECU.md`: a torque-based cover (the pedal's fuel raised by
+the live friction's excess over the warm cells' and the cold walls' indicated deficit,
+gated 40–70 °C coolant) moves every stuck case (7 of 24 on `main`; 7 of 16 over the
+roster) and gives a light-pedal cold launch a warm one's, for 11–51% more fuel; warm
+driving bit-identical; `live.py` only, no rebuild. Fast idle (pedal up) is the idle's feel,
+not the fix. **Not decided; nothing built.** Three questions for the owner (a fourth,
+"when", was answered by #138 merging); buildable now.
 
 ---
 
