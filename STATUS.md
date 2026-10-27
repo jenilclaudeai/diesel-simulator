@@ -1,5 +1,15 @@
 # Status
 
+**Session 10, a plan to modularize the context and the code (2026-10-27),
+`docs/modularize-plan`** (docs only): the owner asked for a plan first.
+`reviews/PROPOSAL-modularize.md`.
+- **Measured:** the session-start read is 14,546 lines / 768 KB (about 190k tokens). The
+  current part of STATUS.md is 27 of its 3,714 lines.
+- **Found:** three readers list `dieselsim/` at the top level only (`grid_hash`, the Pyodide
+  copy, `prepare-assets`), so a subfolder would silently leave the grid hash. And the suite
+  runs a hand-kept list of tests.
+- **Five questions for the owner.** Nothing moved yet. #140, #141 and #142 are open.
+
 **Session 10, #139 brought up to `main` after #138 (2026-10-22):** the owner asked for the
 conflicts to be resolved. Merged `main` (`ac3c15e`) in, no rebase, no force-push.
 - **Conflicts, each kept both sides:**
