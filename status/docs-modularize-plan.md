@@ -8,9 +8,15 @@ in, both entries kept. **Added step A0**: a PR branch never edits `STATUS.md` ag
 writes `status/<branch>.md` (this file is the first). CLAUDE.md says so.
 - #143 itself follows A0: its STATUS.md entry moved here verbatim (below), and STATUS.md is
   `main`'s byte for byte, so #143 can no longer conflict on it. #141 got the same move.
-- **Next:** the owner merges #143. Then #141 (B-08) after the owner listens. #142 (the
+- ~~**Next:** the owner merges #143. Then #141 (B-08) after the owner listens. #142 (the
   cold-start session's) still conflicts; its next edit should move its STATUS entry into
-  `status/docs-cold-start-ecu.md`. Then A1.
+  `status/docs-cold-start-ecu.md`. Then A1.~~
+  **Done the same day:** #142 (idle 6 days, worktree clean) brought up to `main` and its
+  entry moved to `status/docs-cold-start-ecu.md`. **Proof:** none of #141, #142, #143
+  edits STATUS.md; all six merge orders of the three onto `main` are clean (a scratch
+  branch, merged in each order); GitHub reports all three MERGEABLE.
+- **Next:** the owner merges #143 (any order with #141, #142). #141 waits for the owner's
+  ear, #142 for the owner's answers. Then A1.
 
 ## Moved verbatim from STATUS.md (A0, 2026-10-28)
 
