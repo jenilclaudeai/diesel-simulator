@@ -17,6 +17,14 @@ describe('touchHint', () => {
     expect(touchHint('stalled -- clutch down (z) and press i to restart')).toMatch(/Restart/);
   });
 
+  it("P06: says the loop's breaker hint in the driver's units", () => {
+    const h = 'speed breaker at 95 km/h -- take them at 15';
+    expect(touchHint(h)).toBe('Speed breaker at 95 km/h: take them at 15');
+    expect(touchHint(h, 'metric')).toBe('Speed breaker at 95 km/h: take them at 15');
+    expect(touchHint(h, 'us')).toBe('Speed breaker at 59 mph: take them at 9');
+    expect(touchHint(h, 'uk')).toBe('Speed breaker at 59 mph: take them at 9');
+  });
+
   it("the waxed-fuel hint in the driver's units (Phase 8)", () => {
     const h = 'fuel waxed: this diesel gels below 18 C -- it needs winter or arctic diesel here';
     expect(touchHint(h)).toContain('gels below 18 °C');

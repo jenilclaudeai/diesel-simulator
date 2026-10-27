@@ -2158,6 +2158,153 @@ def test_cold_start_friction_sees_the_running_walls():
           f"{start[2][0]:.0f}/{start[2][1]:.0f} K (273/273); re-warmed == warm: {rewarmed == warm}")
 
 
+def test_p06_routes():
+    """P06 (ADR-021): routes are made the same way every time, within their
+    bounds, and looked up across laps. Parts:
+    - a seed gives the same route twice, another seed another route; seed
+      1234's first segments (TS's anchor: web/physics mirrors this);
+    - every segment 200-800 m (10 m steps), |grade| <= 8 % (0.5 % steps), wind
+      within +-8 m/s (0.5 steps), altitude within 0-2500 m; breakers only on
+      asphalt or concrete; over 20 seeds 2-10 breakers a route on average;
+    - the named routes exist; at(), altitude() and breakers_between() over two laps."""
+    from dieselsim import live as L
+    a, b, c = L.random_route(1234), L.random_route(1234), L.random_route(1235)
+    seg_ok = all(200 <= x[1] <= 800 and x[1] % 10 == 0 and abs(x[2]) <= 0.08 + 1e-12
+                 and abs(x[2] / 0.005 - round(x[2] / 0.005)) < 1e-9 and abs(x[4]) <= 8 and (x[4] * 2) % 1 == 0
+                 for s in range(1, 21) for x in L.random_route(s).segments)
+    alt_ok = all(-1e-9 <= h <= 2500 + 1e-9 for s in range(1, 21) for h in L.random_route(s).alts)
+    paved = all(L.random_route(s).segments[L.random_route(s).at(bk)][3] in ("asphalt", "concrete")
+                for s in range(1, 21) for bk in L.random_route(s).breakers)
+    mean_b = sum(len(L.random_route(s).breakers) for s in range(1, 21)) / 20
+    r = L.ROUTES["pass"]
+    laps = (r.at(r.length + 1.0) == 0 and abs(r.altitude(2 * r.length) - 2 * r.climb) < 1e-9
+            and L.ROUTES["city"].breakers_between(0.0, 2 * L.ROUTES["city"].length) == 12)
+    parts = {
+        "same seed, same route": a.segments == b.segments and a.breakers == b.breakers,
+        "another seed, another route": a.segments != c.segments,
+        "seed 1234's first segments": a.segments[:3] == [(0.0, 240.0, 0.025, "gravel", 7.5),
+                                                        (240.0, 220.0, 0.035, "asphalt", 5.0),
+                                                        (460.0, 280.0, 0.025, "asphalt", 8.0)],
+        "segments within bounds": seg_ok,
+        "altitude within 0-2500 m": alt_ok,
+        "breakers on paved segments only": paved,
+        "2-10 breakers a route on average": 2 <= mean_b <= 10,
+        "named routes": set(L.ROUTES) == {"pass", "city", "desert"} and L.route_from("random:7").seed == 7,
+        "laps": laps,
+    }
+    bad = [k for k, ok in parts.items() if not ok]
+    check("P06: routes are made the same every time, within bounds (ADR-021)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ")
+          + f"20 seeds: {mean_b:.2f} breakers a route on average")
+
+
+def test_p06_par_run():
+    """P06 tier 2 (PROPOSAL-P06-goals): live.par_run, the par a goal is set
+    against. On the toy grid (no files: runs under Pyodide too). Parts:
+    - the owner's numbers: a steady 70 % throttle, 5 s a breaker;
+    - a short route with two breakers: the lap finishes, the time is the
+      elapsed time plus 5 s for each breaker hit, the fuel is the lap's;
+    - a lap that can't be finished in the cap reports so (a par then sets no
+      limit, goals.ts judge);
+    - an engine that has stopped (overheat) reports stopped, without a lap.
+    The TS port (parRun) is held to it by the live fixture's pars."""
+    from dieselsim import live as L
+    name = "P06 tier 2: the par (a steady-throttle lap) and its 5 s breakers"
+    parts, notes = [], []
+    parts.append(("70 % and 5 s", L.PAR_THROTTLE == 0.7 and L.BREAKER_PENALTY_S == 5.0))
+
+    e = _toy_live("tc")
+    e.set_route(L.Route("t", [(400.0, 0.0, "asphalt", 0.0)], [150.0, 300.0]))
+    e.trip_L = 0.5                # a used trip meter: the par's fuel is the lap's, not the trip's
+    L0 = e.trip_L
+    r = L.par_run(e)
+    parts.append(("a short lap finishes", r["finished"] and not r["stopped"] and e.route_s >= 400.0))
+    parts.append(("time = elapsed + 5 s a breaker", r["hits"] == 2 and r["time_s"] == r["t_s"] + 10.0))
+    parts.append(("the lap's fuel, not the trip's", r["fuel_L"] == e.trip_L - 0.5 and 0.0 < r["fuel_L"] < 0.5))
+    notes.append(f"lap {r['t_s']:.2f} s + {5 * r['hits']} s, {r['fuel_L'] * 1000:.1f} mL")
+
+    e = _toy_live("tc")
+    e.set_route(L.Route("t", [(50000.0, 0.0, "asphalt", 0.0)], []))
+    r = L.par_run(e, cap_s=5.0)
+    parts.append(("a lap past the cap doesn't finish", not r["finished"] and abs(r["t_s"] - 5.0) < 1e-9
+                  and r["time_s"] == r["t_s"]))
+
+    e = _toy_live("tc")
+    e.set_route(L.Route("t", [(400.0, 0.0, "asphalt", 0.0)], []))
+    e.engine_stopped = True
+    r = L.par_run(e)
+    parts.append(("a stopped engine reports it", r["stopped"] and not r["finished"] and r["t_s"] == 0.0))
+
+    ok = all(v for _, v in parts)
+    bad = [k for k, v in parts if not v]
+    check(name, 1.0 if ok else 0.0, 1.0, 0.0,
+          f"{sum(v for _, v in parts)} of {len(parts)} parts; " + "; ".join(notes) + (f"; FAILED: {bad}" if bad else ""))
+
+
+def test_p06_the_engine_feels_the_road():
+    """P06 (ADR-021): on the shipped crdi15 grid, warm, full throttle from rest
+    for 25 s. Parts:
+    - a flat asphalt route without wind changes nothing: the same state as no
+      route, bit for bit;
+    - a 6 % climb, gravel and a 10 m/s headwind each end slower than flat;
+    - a speed breaker taken fast sheds speed and counts a jolt; taken under
+      15 km/h it costs nothing;
+    - the air follows the altitude: at 160 m up the pressure is the ISA ratio
+      times the start's (1e-12) and the air 1.04 K cooler.
+    SKIPs where the grids are absent (Pyodide)."""
+    if _no_prebuilt_grids("P06: the engine feels the road"):
+        return
+    from dieselsim import live as L
+
+    def drive(route, secs=25.0, throttle=1.0):
+        e = L.LiveEngine(_prebuilt_grid("crdi15"), "crdi15", "tc")
+        e.T_coolant, e.T_oil, e.T_chamber = 361.0, 373.0, 361.0
+        e.FRICTION_EVERY = 60
+        if route is not None:
+            e.set_route(route)
+        for _ in range(int(secs * 60)):
+            e.throttle = throttle
+            e.step(1 / 60)
+        return e
+    one = lambda grade=0.0, surface="asphalt", wind=0.0, breakers=(): L.Route("t", [(50000, grade, surface, wind)], breakers)
+    none, flat = drive(None), drive(one())
+    same = (none.dl.v == flat.dl.v and none.rpm == flat.rpm and none.T_coolant == flat.T_coolant
+            and none.trip_m == flat.trip_m)
+    climb, gravel, head = drive(one(0.06)), drive(one(surface="gravel")), drive(one(wind=10.0))
+    gt = _prebuilt_grid("crdi15").spec.thermal
+    no_leak = (gt.ambient_p, gt.ambient_T) == (101325.0, 298.0) and climb.spec.thermal.ambient_p < 101325.0
+    # a breaker at 200 m: taken fast (full throttle reaches it well above 15 km/h), and taken slowly
+    fast = drive(one(breakers=[200.0]), secs=20.0)
+    fast_ref = drive(one(), secs=20.0)
+    slow = drive(one(breakers=[3.0]), secs=6.0, throttle=0.05)
+    hill = L.LiveEngine(_prebuilt_grid("crdi15"), "crdi15", "tc")
+    p0, T0 = hill.spec.thermal.ambient_p, hill.spec.thermal.ambient_T
+    hill.set_route(L.Route("climb", [(2000, 0.08, "asphalt", 0.0)], []))
+    hill.route_s = 1999.0
+    hill.dl.v = 1.0
+    hill._road(1.0)                        # to 2000 m: 160 m up
+    h0 = (1.0 - (p0 / 101325.0) ** (1.0 / hill.ISA_N)) / hill.ISA_K
+    f = lambda h: (1.0 - hill.ISA_K * h) ** hill.ISA_N
+    want_p = p0 * f(h0 + 160.0) / f(h0)
+    parts = {
+        "a flat route changes nothing": same,
+        "a climb's thinner air stays in its engine, not the grid": no_leak,
+        "a 6 % climb ends slower": climb.dl.v < 0.9 * flat.dl.v,
+        "gravel ends slower": gravel.dl.v < flat.dl.v,
+        "a headwind ends slower": head.dl.v < flat.dl.v,
+        "a fast breaker jolts and sheds speed": fast.breaker_hits == 1 and fast.jolt > 0.0 and fast.trip_m < fast_ref.trip_m,
+        "a slow breaker costs nothing": slow.breaker_hits == 0 and slow.jolt == 0.0,
+        "the air follows the altitude (ISA)": abs(hill.spec.thermal.ambient_p / want_p - 1.0) < 1e-12
+        and abs(hill.spec.thermal.ambient_T - (T0 - 0.0065 * 160.0)) < 1e-9,
+    }
+    bad = [k for k, ok in parts.items() if not ok]
+    kmh = lambda e: e.dl.v * 3.6
+    check("P06: the engine feels the road (grade, surface, wind, breakers, altitude)", float(len(bad)), 0.0, 0.0,
+          (f"failed: {', '.join(bad)}; " if bad else f"{len(parts)} of {len(parts)} parts; ")
+          + f"after 25 s: flat {kmh(flat):.1f}, 6 % {kmh(climb):.1f}, gravel {kmh(gravel):.1f}, "
+          f"headwind {kmh(head):.1f} km/h; breaker jolt {fast.jolt:.2f}, {fast_ref.trip_m - fast.trip_m:.1f} m behind")
+
+
 def test_p09_chamber_walls_warm_and_the_synth_hears_the_knock():
     """P09: the live loop's chamber-wall temperature (live.LiveEngine._chamber)
     starts at the air's, warms within about a minute running (CHAMBER_TAU_RUN,
@@ -3448,7 +3595,8 @@ def main():
                test_knock_from_the_burn_law,
                test_p09_knock_at_altitude_and_a_cold_start,
                test_p13_early_stop, test_cold_start_friction_sees_the_running_walls,
-               test_p09_chamber_walls_warm_and_the_synth_hears_the_knock,
+               test_p09_chamber_walls_warm_and_the_synth_hears_the_knock, test_p06_routes,
+               test_p06_the_engine_feels_the_road, test_p06_par_run,
                test_p10_deeper_sound,
                test_intake_and_boost_levels_carry_physics,
                test_shipped_grids_cold_friction,

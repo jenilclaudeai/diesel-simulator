@@ -10,9 +10,10 @@ import { FrictionModel, type EngineView, type FrictionSpec, type WearState } fro
 import { Oil } from "../lubrication.js";
 import { running_skirt_clearance, T_COOLANT_REF, WALL_FOLLOW } from "../slap.js";
 import { finishVehicle, vehicleFor, type Transmission, type Vehicle } from "./vehicle.js";
+import { BREAKER_FULL_KMH, BREAKER_LOSS, BREAKER_PULSE_S, BREAKER_SAFE_KMH, expSeries, lnSeries, SURFACES, type Route } from "./route.js";
 
 export class LiveEngine {
-  readonly spec: LiveSpec;
+  spec: LiveSpec;                 // P06: setRoute gives the engine its own (the route moves its air)
   readonly veh: Vehicle;
   readonly dl: Driveline;
   rpm: number;
@@ -61,6 +62,16 @@ export class LiveEngine {
   wax_frac = 1.0;     // the share of full-load fuel the filter passes
   fuel_waxed = false; // too little to keep the engine running
   starve_t = 0.0;     // s a part-waxed engine hasn't run (its message waits 3 s)
+  // P06 (ADR-021): the road (live.py); null: no route, every drive as before
+  route: Route | null = null;
+  route_s = 0.0;
+  route_air0: [number, number, number] | null = null;
+  route_alt = 0.0;
+  breaker_hits = 0;
+  jolt = 0.0;
+  static readonly ISA_K = 2.25577e-5;
+  static readonly ISA_N = 5.25588;
+  static readonly LAPSE = 0.0065;
   perf: Perf;
   // ADR-011: friction live, from the cells' pressure traces
   adr011: boolean;
@@ -444,10 +455,68 @@ export class LiveEngine {
       this._frame += 1;
     }
     for (let k = 0; k < n_sub; k++) this.sub(dt / n_sub);
+    this.road(dt);
     this.totals(dt);
     this.thermal(dt);
     this.knock();
     this.coldFlow(dt);
+  }
+
+  /** P06 (live.py set_route): drive a Route from its start, from the air the engine has now. */
+  setRoute(route: Route): void {
+    this.route = route;
+    this.route_s = 0.0;
+    this.route_alt = 0.0;
+    this.breaker_hits = 0;
+    this.jolt = 0.0;
+    // its own spec and thermal: the route moves this engine's air, not the grid's
+    this.spec = { ...this.spec, thermal: { ...this.spec.thermal } };
+    const t = this.spec.thermal;
+    const h0 = (1.0 - expSeries(lnSeries(t.ambient_p / 101325.0) / LiveEngine.ISA_N)) / LiveEngine.ISA_K;
+    this.route_air0 = [t.ambient_p, t.ambient_T, h0];
+    this.road(0.0);
+  }
+
+  /** P06 (live.py _road): along the route -- grade, surface, wind, breakers, and the air by altitude. */
+  road(dt: number): void {
+    const dl = this.dl;
+    if (dl.pulse_t > 0.0) dl.pulse_t = Math.max(0.0, dl.pulse_t - dt);
+    if (this.route === null) return;
+    const r = this.route;
+    const s0 = this.route_s, s1 = this.route_s + dl.v * dt;
+    this.route_s = s1;
+    const seg = r.segments[r.at(s1)]!;
+    dl.grade = seg[2];
+    dl.crr_x = SURFACES[seg[3]]!;
+    dl.wind = seg[4];
+    const n = r.breakersBetween(s0, s1);
+    if (n) {
+      const kmh = dl.v * 3.6;
+      const j = Math.min(1.0, Math.max(0.0, (kmh - BREAKER_SAFE_KMH) / (BREAKER_FULL_KMH - BREAKER_SAFE_KMH)));
+      if (j > 0.0) {
+        dl.pulse_f = (this.veh.mass * BREAKER_LOSS * j * dl.v) / BREAKER_PULSE_S;
+        dl.pulse_t = BREAKER_PULSE_S;
+        this.breaker_hits += n;
+        this.jolt = j;
+        this.hint = `speed breaker at ${Math.trunc(kmh)} km/h -- take them at ${Math.trunc(BREAKER_SAFE_KMH)}`;
+        this.hint_t = 3.0;
+      }
+    }
+    const alt = r.altitude(s1);
+    if (alt !== this.route_alt) {
+      this.route_alt = alt;
+      this.applyAir(alt);
+    }
+  }
+
+  /** The air at `alt` m above the route's start (ISA from the start's air; live.py _road's arithmetic). */
+  private applyAir(alt: number): void {
+    const [p0, T0, h0] = this.route_air0!;
+    // (1 - k h) ** n without libm (live._isa): V8's ** and CPython's differ in the last bit
+    const f = (h: number) => expSeries(LiveEngine.ISA_N * lnSeries(1.0 - LiveEngine.ISA_K * h));
+    const t = this.spec.thermal;
+    t.ambient_p = (p0 * f(h0 + alt)) / f(h0);
+    t.ambient_T = T0 - LiveEngine.LAPSE * alt;
   }
 
   /** Phase 7 step 6 (live.py _cold_flow): the fuel's temperature and the waxing filter's share. */
@@ -585,6 +654,8 @@ export class LiveEngine {
     put(this.dl, s.dl);
     put(this.dl.gb, s.gb);
     put(this.dl.tc, s.tc);
+    // P06: the route's air lives in spec.thermal, which a state doesn't carry: re-derive it
+    if (this.route !== null && this.route_air0 !== null && this.route_alt !== 0.0) this.applyAir(this.route_alt);
   }
 }
 
@@ -689,6 +760,28 @@ export function handleKey(live: LiveEngine, c: string): void {
 export function pedalReturn(live: LiveEngine, dt: number): void {
   live.dl.brake = Math.max(0.0, live.dl.brake - dt / 0.45);
   live.dl.clutch_pedal = Math.max(0.0, live.dl.clutch_pedal - dt / 1.4);
+}
+
+/** P06 tier 2 (live.PAR_THROTTLE, BREAKER_PENALTY_S): the par's constant throttle; seconds a breaker hit costs. */
+export const PAR_THROTTLE = 0.7;
+export const BREAKER_PENALTY_S = 5.0;
+
+export interface ParResult { t_s: number; time_s: number; fuel_L: number; hits: number; finished: boolean; stopped: boolean }
+
+/** One lap of `live`'s route at a constant throttle (live.par_run): the par a goal is set against. */
+export function parRun(live: LiveEngine, throttle = PAR_THROTTLE, dt = 1.0 / 60.0, capS = 3600.0): ParResult {
+  const r = live.route!;
+  const L0 = live.trip_L;
+  let n = 0;
+  while (live.route_s < r.length && n * dt < capS && !live.engine_stopped) {
+    live.throttle = throttle;
+    pedalReturn(live, dt);
+    live.step(dt);
+    n++;
+  }
+  const t = n * dt;
+  return { t_s: t, time_s: t + BREAKER_PENALTY_S * live.breaker_hits, fuel_L: live.trip_L - L0,
+           hits: live.breaker_hits, finished: live.route_s >= r.length, stopped: live.engine_stopped };
 }
 
 export { Gearbox };
