@@ -2,7 +2,10 @@
 
 **2026-10-28:** A0 (see CLAUDE.md, landing with #143): this branch's STATUS.md entries moved
 here verbatim, and STATUS.md is `main`'s byte for byte, so #141 cannot conflict on it again.
-**Next:** the owner listens to B-08, takes it out of draft, and merges.
+~~**Next:** the owner listens to B-08, takes it out of draft, and merges.~~
+**2026-10-28: the owner listened to the A/B pairs in `out/b08/`: "Reviewed the 141. Seems
+fine."** Next: the owner marks it ready and merges (a session may not change a PR's draft
+state unasked); then the phone check on the live site.
 
 ## Moved verbatim from STATUS.md (A0, 2026-10-28)
 
