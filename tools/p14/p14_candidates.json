@@ -1,0 +1,16 @@
+[
+ {"key": "vw19tdi", "name": "VW 1.9 TDI (ALH), 90 ps", "displacement": 1.896, "n_cyl": 4, "rated_rpm": 3750, "peak_torque": 210, "peak_power": 66, "plateau": [1900, 2500], "pilot": false},
+ {"key": "ddis13", "name": "Fiat 1.3 Multijet / Maruti DDiS 190, 75 ps", "displacement": 1.248, "n_cyl": 4, "rated_rpm": 4000, "peak_torque": 190, "peak_power": 55, "plateau": [1750, 2500], "vgt": false},
+ {"key": "mhawk75", "name": "Mahindra mHawk75 1.5 three, 75 bhp", "displacement": 1.493, "n_cyl": 3, "rated_rpm": 3600, "peak_torque": 210, "peak_power": 56, "plateau": [1600, 2200], "vgt": false},
+ {"key": "revotorq105", "name": "Tata 1.05 Revotorq three, 70 ps", "displacement": 1.047, "n_cyl": 3, "rated_rpm": 4000, "peak_torque": 140, "peak_power": 51.5, "plateau": [1800, 3000], "vgt": false},
+ {"key": "mhawk22", "name": "Mahindra mHawk 2.2 (Scorpio-N), 175 ps", "displacement": 2.184, "n_cyl": 4, "rated_rpm": 3500, "peak_torque": 400, "peak_power": 129, "plateau": [1750, 2750]},
+ {"key": "gd28", "name": "Toyota 1GD-FTV 2.8, 204 ps", "displacement": 2.755, "n_cyl": 4, "rated_rpm": 3400, "peak_torque": 500, "peak_power": 150, "plateau": [1600, 2800]},
+ {"key": "duratorq32", "name": "Ford 3.2 Duratorq five, 200 ps", "displacement": 3.198, "n_cyl": 5, "rated_rpm": 3000, "peak_torque": 470, "peak_power": 147, "plateau": [1750, 2500]},
+ {"key": "b57", "name": "BMW B57 3.0 six, 265 ps", "displacement": 2.993, "n_cyl": 6, "rated_rpm": 4000, "peak_torque": 620, "peak_power": 195, "plateau": [2000, 2500]},
+ {"key": "om642", "name": "Mercedes OM642 3.0 V6, 258 ps", "displacement": 2.987, "n_cyl": 6, "rated_rpm": 3600, "peak_torque": 620, "peak_power": 190, "plateau": [1600, 2400], "firing_order": [1, 4, 3, 6, 2, 5]},
+ {"key": "cummins59", "name": "Cummins 5.9 12-valve (6BT), 215 hp", "displacement": 5.9, "n_cyl": 6, "rated_rpm": 2600, "peak_torque": 597, "peak_power": 160, "plateau": [1500, 1800], "vgt": false, "pilot": false},
+ {"key": "cummins67", "name": "Cummins 6.7, 370 hp", "displacement": 6.7, "n_cyl": 6, "rated_rpm": 2800, "peak_torque": 1152, "peak_power": 276, "plateau": [1700, 2200]},
+ {"key": "duramax66", "name": "Duramax 6.6 L5P V8, 445 hp", "displacement": 6.6, "n_cyl": 8, "rated_rpm": 2800, "peak_torque": 1234, "peak_power": 332, "plateau": [1600, 2400]},
+ {"key": "powerstroke73", "name": "Power Stroke 7.3 V8, 275 hp", "displacement": 7.3, "n_cyl": 8, "rated_rpm": 2800, "peak_torque": 712, "peak_power": 205, "plateau": [1600, 2000], "vgt": false, "pilot": false},
+ {"key": "bullet325", "name": "Royal Enfield Bullet Diesel 325 cc single, 6.5 bhp", "displacement": 0.325, "n_cyl": 1, "rated_rpm": 3600, "peak_torque": 15, "peak_power": 4.8, "plateau": [2000, 2400], "turbocharged": false, "mechanical_lash": true, "pilot": false, "rail_bar": 400}
+]

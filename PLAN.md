@@ -432,6 +432,22 @@ driving bit-identical; `live.py` only, no rebuild. Fast idle (pedal up) is the i
 not the fix. **Not decided; nothing built.** Three questions for the owner (a fourth,
 "when", was answered by #138 merging); buildable now.
 
+## P14 — add at least ten popular diesel engines (the owner's request, 2026-10-28, priority 1)
+
+Measured in `reviews/PROPOSAL-P14.md` on `main` at `df36a05`; scripts in `tools/p14/`.
+The roster test's own check, against the five shipped engines as controls (5 of 5 pass):
+**13 of 14 real engines make their numbers** with the roster's knobs only. These are I3,
+I4, I5, I6, V6 and V8 engines, common rail and pump, from the Bolero's mHawk75 to the
+Cummins 6.7. The 1.3 DDiS can't: at 2,000 rpm the builder's turbo gives boost 1.40–1.48,
+so it reaches 88.7% at best, and fixing that is a hashed `builder.py` change. Approximate
+real bore/stroke/CR keeps every pass (moves ≤ 0.9 points). No solver change, so no grid
+goes stale. Costs: ~8.8 h of building for the recommended ten; **every later full rebuild
+~16 h instead of 7.2 h**; CI physics +~2.5 min, Pyodide +0; a user still downloads only
+the engine they drive. A silent trap found: a roster key the vehicle switch doesn't know
+drives the 3 t tractor. **Not decided; nothing built.** Four questions for the owner (which
+ten, names, fidelity, vehicles); recommended: the listed ten, descriptive names "modelled
+on" the real engine, published hardware, one new pickup vehicle, two unstacked PRs.
+
 ---
 
 ## Phase 8 — Polish and host

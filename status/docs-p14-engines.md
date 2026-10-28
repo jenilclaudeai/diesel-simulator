@@ -1,0 +1,40 @@
+# docs/p14-engines (P14 feasibility)
+
+**2026-10-28:** the owner said "Start with P14". P14 is a new row on the sheet's Feat Prop
+tab ("Add few more engines: add atleast 10 popular diesel engines", priority 1), and it
+isn't in the repo anywhere else. Measured first, as for P08, P09, P10 and P13:
+`reviews/PROPOSAL-P14.md`. From `main` at `df36a05`, not stacked. Docs and `tools/p14/`
+only: no file under `engines/`, `dieselsim/` or `web/` changes, so no grid, fixture or
+hash moves.
+
+- **13 of 14 real engines make their numbers** by the roster test's check (plateau
+  start ≥ 95% of cap, rated within 3%). The five shipped engines ran alongside as controls,
+  5 of 5, and hatch15 / crdi22 match ROSTER.md within 0.1 points. Six pass untuned, five
+  with the roster's tuning, and the B57 and the OM642 with v8hd's harder knobs.
+- **The 1.3 DDiS fails:** 88.7% at best. Its fuel swept directly shows the cause is the
+  air (boost 1.40–1.48 at 2,000 rpm). That is the builder's turbo sizing, the wall hatch15
+  hit, and fixing it is a hashed change.
+- **Approximate real geometry keeps every pass** (10 of 10, ≤ 0.9 points).
+- **3- and 5-cylinder and V6 engines sound right** through the live synth: finite, and
+  each peak sits on a whole firing harmonic.
+- **Costs:** ~8.8 h of building for the recommended ten. Every later full rebuild takes
+  ~16 h instead of 7.2. CI physics +~2.5 min (only `test_roster_engines_make_their_numbers`
+  grows, 72.3 s for five); Pyodide +0 (it SKIPs). Users download only the engine they
+  drive.
+- **A silent trap:** a roster key that the vehicle switch doesn't know drives the 3 t
+  tractor (`Vehicle("gd28")` checked), with no error. The build adds a test for it.
+- **Corrected before commit:** the geometry effect was first written as "within 1.6 points"
+  by eye; the script says 0.9.
+- **The candidates' figures are from memory, not sourced.** Kept out of `engines/`, which
+  is auto-registered.
+
+**Not run:** the suites. Nothing they test changed: docs, plus new scripts in
+`tools/p14/` that no test imports.
+
+**For the owner, four questions** (end of the proposal): which ten; names (N2
+recommended: descriptive plus "modelled on …"); fidelity (F2: published bore, stroke, CR
+and hardware); vehicles (V2: one new pickup vehicle). Legal advice on naming makers is
+needed before an app-store release.
+
+**Housekeeping noticed, not done here:** `status/docs-a2-reviews-index.md` is still in
+`status/` although #145 merged; A0 moves it to `history/` in the next modularize step.
