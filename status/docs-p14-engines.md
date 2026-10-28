@@ -3,7 +3,7 @@
 **2026-10-28:** the owner said "Start with P14". P14 is a new row on the sheet's Feat Prop
 tab ("Add few more engines: add atleast 10 popular diesel engines", priority 1), and it
 isn't in the repo anywhere else. Measured first, as for P08, P09, P10 and P13:
-`reviews/PROPOSAL-P14.md`. From `main` at `df36a05`, not stacked. Docs and `tools/p14/`
+`reviews/PROPOSAL-P14.md`. PR #146 (draft), from `main` at `df36a05`, not stacked. Docs and `tools/p14/`
 only: no file under `engines/`, `dieselsim/` or `web/` changes, so no grid, fixture or
 hash moves.
 
@@ -27,6 +27,9 @@ hash moves.
   by eye; the script says 0.9.
 - **The candidates' figures are from memory, not sourced.** Kept out of `engines/`, which
   is auto-registered.
+
+**CI on #146:** not yet read (opened 2026-10-28; Pyodide takes ~57 min). The next session
+reads every job (`gh pr checks 146`) before calling it verified.
 
 **Not run:** the suites. Nothing they test changed: docs, plus new scripts in
 `tools/p14/` that no test imports.
