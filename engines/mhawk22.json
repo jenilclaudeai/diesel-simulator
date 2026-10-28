@@ -1,0 +1,16 @@
+{
+  "key": "mhawk22",
+  "name": "2.2 L four, 175 ps",
+  "displacement": 2.198,
+  "n_cyl": 4,
+  "rated_rpm": 3500,
+  "peak_torque": 400,
+  "peak_power": 128.6,
+  "plateau": [
+    1750,
+    2750
+  ],
+  "boost_map_rise": 0.12,
+  "afr_limit": 16.0,
+  "vehicle": "crdi22"
+}

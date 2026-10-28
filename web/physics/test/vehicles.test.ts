@@ -4,12 +4,12 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { finishVehicle, vehicleFor, VEHICLE_KEYS, type Transmission } from "../src/live/vehicle.js";
+import { finishVehicle, ROSTER_VEHICLES, vehicleFor, VEHICLE_KEYS, type Transmission } from "../src/live/vehicle.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fx = JSON.parse(readFileSync(path.resolve(here, "..", "..", "fixtures", "vehicles.json"), "utf8")) as {
   meta: { physics_hash: string };
-  inputs: { keys: string[]; trans: Transmission[]; vehicle_keys: string[] };
+  inputs: { keys: string[]; trans: Transmission[]; vehicle_keys: string[]; roster_vehicles: Record<string, string> };
   outputs: Record<string, Record<string, Record<string, unknown>>>;
 };
 let failed = 0, passed = 0;
@@ -32,5 +32,9 @@ for (const key of fx.inputs.keys) {
 check("the vehicles a custom engine may name match Python's (ADR-014)",
   JSON.stringify([...VEHICLE_KEYS]) === JSON.stringify(fx.inputs.vehicle_keys),
   `${VEHICLE_KEYS.join(", ")} vs ${fx.inputs.vehicle_keys.join(", ")}`);
+const sorted = (m: Readonly<Record<string, string>>) => JSON.stringify(Object.entries(m).sort());
+check("the roster keys' vehicles match Python's (ADR-023)",
+  sorted(ROSTER_VEHICLES) === sorted(fx.inputs.roster_vehicles),
+  `${Object.keys(ROSTER_VEHICLES).length} keys vs ${Object.keys(fx.inputs.roster_vehicles).length}`);
 console.log(`\n${passed} passed, ${failed} failed  (physics ${fx.meta.physics_hash.slice(0, 12)})`);
 process.exit(failed ? 1 : 0);

@@ -16,7 +16,7 @@ import { Gauge, speedScale, tachScale } from './gauge';
 import { touchHint } from './hints';
 import { derateLit } from './lamps';
 import { Pedal } from './pedal';
-import { ROSTER } from './roster';
+import { ROSTER, rosterGroups } from './roster';
 import { testNote, VibrationSetting, Vibrator } from './vibration';
 import { bestKey, GoalBests, GOALS, judge, LapRun, lapTime, parseGoal, type GoalKind } from './goals';
 import { newSeed, parseRouteParam, roadAhead, ROUTE_CHOICES, routeKey, routeOf, routeSummary, SURFACE_FILL } from './road';
@@ -45,7 +45,10 @@ export class EnjoyPage implements OnDestroy {
   protected readonly fmt0 = fmt0;
   protected readonly touchHint = touchHint;
   protected readonly presets = ROSTER;
+  protected readonly presetGroups = rosterGroups();
   protected readonly preset = signal(ROSTER[0]!.key);
+  /** ADR-023 (N2): the real engine a P14 roster engine follows, named by reference */
+  protected readonly modelledOn = computed(() => ROSTER.find(p => p.key === this.preset())?.modelledOn);
   /** A custom engine's grid, imported from a file (ADR-014). */
   protected readonly imported = signal<GridFile | undefined>(undefined);
   protected readonly importError = signal<string | undefined>(undefined);

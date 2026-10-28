@@ -28,9 +28,15 @@ export interface Vehicle {
  *  other key gets the "tractor" fallback. */
 export const VEHICLE_KEYS = ["hatch15", "crdi15", "ld_i4", "crdi22", "hd_i6", "tractor"] as const;
 
+/** P14 (ADR-023): roster engines that drive one of those vehicles (live.ROSTER_VEHICLES).
+ *  A roster grid records no vehicle, so a key missing here drives the tractor. */
+export const ROSTER_VEHICLES: Readonly<Record<string, string>> = {
+  vw19tdi: "hatch15", mhawk75: "ld_i4", mhawk22: "crdi22", gd28: "crdi22", duratorq32: "crdi22", b57: "ld_i4",
+};
+
 export function vehicleFor(preset: string, trans: Transmission = "dct"): Vehicle {
   const base = { trans, launch_rpm: 2000.0, fuel_tank_L: 60.0, clutch_cap_max: 0.0 };
-  switch (preset) {
+  switch (ROSTER_VEHICLES[preset] ?? preset) {
     case "hd_i6": // tractor unit, laden
     case "truck127": // the same, for the Enjoy roster's 12.7 L six (ADR-012)
     case "v8hd": // and its 15 L V8 (roster B)

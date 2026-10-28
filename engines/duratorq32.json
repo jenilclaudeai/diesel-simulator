@@ -1,0 +1,16 @@
+{
+  "key": "duratorq32",
+  "name": "3.2 L five, 200 ps",
+  "displacement": 3.198,
+  "n_cyl": 5,
+  "rated_rpm": 3000,
+  "peak_torque": 470,
+  "peak_power": 147,
+  "plateau": [
+    1750,
+    2500
+  ],
+  "stroke_bore": 1.121,
+  "compression_ratio": 15.8,
+  "vehicle": "crdi22"
+}

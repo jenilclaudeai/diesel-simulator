@@ -16,7 +16,9 @@
   <header class="top">
     <a routerLink="/" class="home">Diesel Sim</a>
     <select aria-label="Engine" [disabled]="status() === 'loading'" (change)="selectPreset($any($event.target).value)">
-      @for (p of presets; track p.key) { <option [value]="p.key" [selected]="p.key === preset()">{{ p.name }}</option> }
+      @for (g of presetGroups; track g.label) { <optgroup [label]="g.label">
+        @for (p of g.engines; track p.key) { <option [value]="p.key" [selected]="p.key === preset()">{{ p.name }}</option> }
+      </optgroup> }
       @if (imported(); as g) { <option [value]="IMPORTED" [selected]="preset() === IMPORTED">{{ g.name }} (imported)</option> }
         @if (mine().length) { <optgroup label="Your engines">
           @for (m of mine(); track m.key) { <option [value]="MY + m.key" [selected]="preset() === MY + m.key">{{ m.name }}</option> }
@@ -34,6 +36,7 @@
       <button type="button" class="start" (click)="start()" [disabled]="status() === 'loading'">
         {{ status() === 'loading' ? 'Starting…' : 'Start engine' }}
       </button>
+      @if (modelledOn(); as m) { <p class="modelled">Modelled on the published figures of {{ m }}.</p> }
       @if (error()) { <p class="err">{{ error() }}</p> }
       <label class="import">Your own engine: <input type="file" accept=".json,application/json"
         [disabled]="status() === 'loading'" (change)="importGrid($any($event.target))" aria-label="Import grid file"></label>

@@ -169,3 +169,161 @@ at 11 kW is a low-BMEP engine (~6 bar), as old ones were.
 **Not modelled:** the V8 fires evenly every 90°, but the model has no
 separate cylinder banks, so a cross-plane V8's per-bank exhaust "burble" is
 absent.
+
+---
+
+## P14 batch 1 (2026-10-28, ADR-023)
+
+Six popular engines, each **modelled on the published figures** of a real one. The maker
+is named here and in `/enjoy`'s "modelled on" line only, never as the engine's name
+(ADR-023, N2). Measured as above: fresh engine per point, 9 cycles. The screen behind the
+choice is `reviews/PROPOSAL-P14.md`.
+
+| key | label in /enjoy | modelled on | vehicle (`live.ROSTER_VEHICLES`) |
+|---|---|---|---|
+| `vw19tdi` | Hatchback · 1.9 L four, 90 ps | Volkswagen 1.9 TDI (ALH) | `hatch15`, 1.3 t hatchback |
+| `mhawk75` | Car · 1.5 L three, 75 bhp | Mahindra mHawk75 (Bolero) | `ld_i4`, 1.75 t passenger car |
+| `mhawk22` | SUV · 2.2 L four, 175 ps | Mahindra mHawk 2.2 (Scorpio-N) | `crdi22`, 1.9 t SUV |
+| `gd28` | SUV · 2.8 L four, 204 ps | Toyota 1GD-FTV (Fortuner, Hilux) | `crdi22` |
+| `duratorq32` | SUV · 3.2 L five, 200 ps | Ford 3.2 Duratorq (Endeavour, Ranger) | `crdi22` |
+| `b57` | Car · 3.0 L six, 265 ps | BMW B57D30O0 (330d, 530d) | `ld_i4` |
+
+The first three-cylinder and the first five-cylinder on the roster. These six name their
+vehicle in their file (`"vehicle"`, which `builder.from_dict` drops). A roster grid records
+none, so `live.ROSTER_VEHICLES` maps each key, and
+`test_roster_engines_drive_their_vehicles` holds the two together. Without the map, a new
+key silently drives the 3 t tractor.
+
+### Sources (F2: brochure plus published hardware)
+
+Where nothing published was found, the builder's default stands and is marked *default*.
+
+- **`vw19tdi`:** 1,896 cc, 79.5 × 95.5 mm; 66 kW (90 PS) at 3,750 rpm, 210 N·m at
+  1,900 rpm (a single speed, so `plateau` [1900, 1900]); CR 19.5 (sources say 19.0–19.5);
+  a distributor pump, so `pilot: false`. Turbo type *default* (VGT; the ALH's VNT-15 wasn't
+  confirmed by any source found).
+  [kfz-tech.de](https://kfz-tech.de/Engl/Herstellerdaten/VW/VW_1997_Vento_1.9_TDI_.htm),
+  [encycarpedia](https://www.encycarpedia.com/us/volkswagen/98-golf-1-9-tdi-4motion-hatch),
+  [luna.ac](https://luna.ac/ficha-tecnica/carros/Volkswagen/Golf%204%20TDI%2090/1997).
+- **`mhawk75`:** 1,493 cc, three cylinders inline; 74.96 bhp (56 kW) at 3,600 rpm, 210 N·m
+  at 1,600–2,200 rpm. Bore/stroke, CR and turbo type *default*. (Two listings say four
+  cylinders; the cylinder-level listings and the 2020 BS6 coverage say three.)
+  [cardekho](https://www.cardekho.com/mahindra/bolero/specs),
+  [carwale](https://www.carwale.com/news/2020-mahindra-bolero-top-5-features/).
+- **`mhawk22`:** 2,198 cc; 128.6 kW (175 PS) at 3,500 rpm, 400 N·m at 1,750–2,750 rpm (the
+  automatic; the manual is 370 N·m); a VGT. Bore/stroke and CR *default* (the older
+  2,179 cc mHawk's 85 × 96 mm doesn't give 2,198 cc).
+  [cardekho](https://www.cardekho.com/mahindra/scorpio-n/specs),
+  [Mahindra SA](https://cmhmahindra.co.za/?p=20790),
+  [Autocar India](https://www.autocarindia.com/cars/mahindra/scorpio-n/specifications).
+- **`gd28`:** 2,755 cc, 92.0 × 103.6 mm, CR 15.6; 150 kW (204 PS) at 3,400 rpm, 500 N·m at
+  1,600–2,800 rpm (the high-output version); a VGT.
+  [Toyota-Club GD FAQ](https://toyota-club.net/files/faq/15-10-20_faq_gd-engine_eng.htm),
+  [Wikipedia](https://en.wikipedia.org/wiki/Toyota_GD_engine),
+  [Toyota UK](https://mag.toyota.co.uk/toyota-turbodiesel-engines-cleaner-and-more-efficient/).
+- **`duratorq32`:** 3,198 cc inline five, 89.9 × 100.8 mm (the pair that gives 3,198 cc;
+  another listing's 89.0 × 100.7 gives 3,132), CR 15.8 (listings say 15.8–16.0); 147 kW at
+  3,000 rpm, 470 N·m at 1,750–2,500 rpm.
+  [Wikipedia](https://en.wikipedia.org/wiki/Ford_Duratorq_engine),
+  [mymotorlist](https://mymotorlist.com/engines/ford/duratorq-3-2/),
+  [Everest spec](https://itunesystem.file-service.com/tuning-specs/ford/everest/2015-2018/32-tdci-195hp).
+- **`b57`:** 2,993 cc inline six, 84 × 90 mm, CR 16.5; 195 kW (265 PS) at 4,000 rpm, 620 N·m
+  at 2,000–2,500 rpm (B57D30O0, single turbo).
+  [Wikipedia](https://en.wikipedia.org/wiki/BMW_B57),
+  [mymotorlist](https://mymotorlist.com/engines/bmw/b57d30/).
+
+### Tuning
+
+The rule: **the least tuning that holds the plateau start at 96% or more**, one point over
+`test_roster_engines_make_their_numbers`' 95%.
+
+| key | `boost_map_rise` | `afr_limit` | plateau start, untuned → chosen | why |
+|---|---|---|---|---|
+| `vw19tdi` | (default) | (default) | 99.8% | holds untuned |
+| `duratorq32` | (default) | (default) | 99.9% | holds untuned |
+| `mhawk75` | 0.12 | 16.0 | 95.4 → 100.6% | untuned is 0.4 points from the test's bar |
+| `mhawk22` | 0.12 | 16.0 | 89.6 → 100.4% | air-limited low down, as roster A was |
+| `gd28` | 0.12 | 16.0 | 85.7 → 100.1% | the same |
+| `b57` | **0.08** | **15.5** | 81.7 → 98.5% | at 0.12 / 16: 94.7%; at 0.08 / 16: 95.7% |
+
+### verify() after tuning
+
+At exactly rated speed: vw19tdi 99.7%, mhawk75 99.8%, mhawk22 100.1%, gd28 100.8%,
+duratorq32 99.4% and b57 100.2% of the brochure power. verify()'s speeds miss rated by up
+to 100 rpm, so their peaks below read a little lower.
+
+**vw19tdi:** achieved 207.1 N·m (98.6%; its single-speed peak falls between verify()'s
+speeds), 64.0 kW (96.9%). Max soot 0.178 g/kWh, peak pressure 138 bar.
+
+| rpm | 850 | 1350 | 1850 | 2350 | 2850 | 3350 | 3850 |
+|---|---|---|---|---|---|---|---|
+| N·m | 145.2 | 180.3 | 207.1 | 198.3 | 190.3 | 175.9 | 158.6 |
+| kW | 12.9 | 25.5 | 40.1 | 48.8 | 56.8 | 61.7 | 64.0 |
+| boost | 1.27 | 1.36 | 1.64 | 1.91 | 1.87 | 1.78 | 1.70 |
+| BSFC g/kWh | 370 | 274 | 234 | 222 | 235 | 256 | 285 |
+
+**mhawk75:** achieved 210.0 N·m (100.0%), 55.6 kW (99.4%). Max soot 0.184 g/kWh, peak
+pressure 134 bar.
+
+| rpm | 820 | 1300 | 1780 | 2260 | 2740 | 3220 | 3700 |
+|---|---|---|---|---|---|---|---|
+| N·m | 135.9 | 190.1 | 210.0 | 207.3 | 186.2 | 165.0 | 140.0 |
+| kW | 11.7 | 25.9 | 39.1 | 49.1 | 53.4 | 55.6 | 54.3 |
+| boost | 1.37 | 1.54 | 1.74 | 1.80 | 1.76 | 1.71 | 1.67 |
+| BSFC g/kWh | 376 | 281 | 257 | 260 | 264 | 272 | 279 |
+
+**mhawk22:** achieved 399.7 N·m (99.9%), 125.6 kW (97.7%). Max soot 0.271 g/kWh, peak
+pressure 169 bar.
+
+| rpm | 800 | 1267 | 1733 | 2200 | 2667 | 3133 | 3600 |
+|---|---|---|---|---|---|---|---|
+| N·m | 195.2 | 322.0 | 399.5 | 399.7 | 398.6 | 375.8 | 333.2 |
+| kW | 16.4 | 42.7 | 72.5 | 92.1 | 111.3 | 123.3 | 125.6 |
+| boost | 1.32 | 1.99 | 2.13 | 2.29 | 2.67 | 2.84 | 2.77 |
+| BSFC g/kWh | 394 | 285 | 258 | 238 | 219 | 217 | 219 |
+
+**gd28:** achieved 498.8 N·m (99.8%), 148.6 kW (99.1%). Max soot 0.239 g/kWh, peak
+pressure 164 bar.
+
+| rpm | 780 | 1233 | 1687 | 2140 | 2593 | 3047 | 3500 |
+|---|---|---|---|---|---|---|---|
+| N·m | 257.0 | 445.0 | 495.6 | 496.2 | 498.8 | 465.8 | 394.8 |
+| kW | 21.0 | 57.5 | 87.5 | 111.2 | 135.5 | 148.6 | 144.7 |
+| boost | 1.37 | 1.98 | 2.05 | 2.32 | 2.72 | 2.79 | 2.66 |
+| BSFC g/kWh | 362 | 274 | 254 | 232 | 219 | 220 | 222 |
+
+**duratorq32:** achieved 469.3 N·m (99.9%), 142.5 kW (97.0%). Max soot 0.183 g/kWh, peak
+pressure 155 bar.
+
+| rpm | 700 | 1100 | 1500 | 1900 | 2300 | 2700 | 3100 |
+|---|---|---|---|---|---|---|---|
+| N·m | 238.1 | 382.1 | 437.4 | 469.0 | 469.3 | 465.4 | 439.1 |
+| kW | 17.5 | 44.0 | 68.7 | 93.3 | 113.0 | 131.6 | 142.5 |
+| boost | 1.30 | 1.65 | 1.78 | 1.96 | 2.33 | 2.56 | 2.48 |
+| BSFC g/kWh | 377 | 282 | 247 | 226 | 210 | 211 | 219 |
+
+**b57:** achieved 617.5 N·m (99.6%), 190.6 kW (97.7%). Max soot 0.242 g/kWh, peak pressure
+183 bar.
+
+| rpm | 900 | 1433 | 1967 | 2500 | 3033 | 3567 | 4100 |
+|---|---|---|---|---|---|---|---|
+| N·m | 297.2 | 525.7 | 603.7 | 617.5 | 560.3 | 510.3 | 438.0 |
+| kW | 28.0 | 78.9 | 124.3 | 161.7 | 178.0 | 190.6 | 188.1 |
+| boost | 1.38 | 2.09 | 2.16 | 2.59 | 2.77 | 2.78 | 2.65 |
+| BSFC g/kWh | 370 | 278 | 256 | 230 | 215 | 217 | 222 |
+
+**Rich when lugged.** At verify()'s lowest speed, full load, mhawk22 (800 rpm) and b57
+(900 rpm) run AFR 14.4 and 14.5, under their 16.0 / 15.5 limits, with the most soot of the
+six (0.271, 0.242 g/kWh). hatch15 and crdi22 stay at AFR 16.1–17.1 there (soot
+0.17–0.19), and both new engines are back over their limits by 1,267 / 1,433 rpm. The cause
+is the calibration: `fuel_for_torque` scales the measured air headroom up, never down
+(clipped at 1), so where the turbo gives less boost than the open-loop schedule assumes,
+the fuel isn't pulled back. Changing that is hashed `engine.py` and every grid, so it is
+stated, not fixed. A diesel lugged at 800 rpm smoking a little is not unrealistic.
+
+**The old engine runs lean.** vw19tdi sits at AFR 24.7 at its peak (real ones ~18–22),
+because its brochure caps the fuel well under the smoke limit, as with single10.
+
+### The grids
+
+*(filled in when the build finishes)*
