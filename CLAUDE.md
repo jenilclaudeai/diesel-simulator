@@ -20,6 +20,9 @@ as dashes), and only that file. Every PR used to add an entry at the top of
 #143 in one day). A new file per branch cannot conflict. Read `STATUS.md`
 plus every file in `status/`. Only the modularize plan's steps
 (`reviews/PROPOSAL-modularize.md`) edit `STATUS.md` itself.
+Since A1 (2026-10-28) `STATUS.md` holds only the present, at most 150 lines.
+Old status is in `history/`, moved verbatim: read it when a task needs it,
+not at session start. A merged branch's `status/` file moves there unchanged.
 
 ## How I work — as important as the code
 

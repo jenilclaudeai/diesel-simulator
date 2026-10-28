@@ -55,7 +55,7 @@ moderately sized. Two files are big enough to hurt: `live.py` and `test_physics.
 | step | change | result (target, measured after) |
 |---|---|---|
 | A0 | **Added 2026-10-28, after the owner hit conflicts on #140, #141 and #143 in one day.** A PR branch never edits `STATUS.md`: it writes `status/<branch>.md`, a file of its own. Cause, measured: every PR added an entry at the top of `STATUS.md`, so every merge put each other open PR in conflict; resolving one PR could never stop the next. In CLAUDE.md with this PR. A1 then folds `status/` into the history | no PR conflicts on status again |
-| A1 | **STATUS.md holds only the present**: open PRs, open questions for the owner, the last verified counts, next steps, "where things are" (the live URL, the bug sheet, the machine's Node). **Capped at 150 lines.** The 35 dated sections move **verbatim** to `history/status-<session>.md`, one file per session | 223 KB → ~10 KB |
+| A1 | **STATUS.md holds only the present**: open PRs, open questions for the owner, the last verified counts, next steps, "where things are" (the live URL, the bug sheet, the machine's Node). **Capped at 150 lines.** The 35 dated sections move **verbatim** to `history/status-<session>.md`, one file per session | 223 KB → ~10 KB. **Done 2026-10-28 (#144):** 3,772 lines / 233,491 bytes (it had grown since `e4e7428`) → 97 lines / 5,757 bytes. 3,770 lines moved in 10 ranges to 10 files (8 sessions, the old "Start here" and the standing sections), 0 differ, 0 missing (`tools/check_verbatim_move.py`, mutants 7 of 7). `status/`'s three merged files moved unchanged (`git mv`, R100) |
 | A2 | **`reviews/INDEX.md`**: one line per finding and proposal (id, title, status, its ADR, its PR). The files stay where they are, since code comments cite them by id | read the index (~6 KB), open a file only when the work touches it |
 | A3 | **DECISIONS.md becomes an index plus summaries**: per ADR, status (accepted, superseded by…), the decision in 2–4 lines, and "easily undone by accident" where it applies. Full texts move verbatim to `decisions/ADR-0NN.md` | 71 KB → ~12 KB |
 | A4 | **PLAN.md**: done phases collapse to one line each, with a pointer; open work goes on top | 24 KB → ~8 KB |
@@ -113,7 +113,8 @@ A fresh session continues from **this file alone**. Until question 2 is answered
 **not** do CLAUDE.md's full session-start read (768 KB). Read this file, the top entry of
 STATUS.md, and nothing else unless a step needs it.
 
-**State of the PRs (2026-10-27):**
+**State of the PRs (2026-10-27):** *(Superseded 2026-10-28: #140-#143 are all merged.
+`STATUS.md` holds the present since A1; the table below is kept as it was.)*
 
 | PR | what | state | who | to do |
 |---|---|---|---|---|
@@ -128,7 +129,8 @@ STATUS.md, and nothing else unless a step needs it.
 2. If the order is "merge #140–#142 first": bring #140 up to `main` (the row above) and tell
    the owner it is ready.
 3. Then Part A, one PR per step, in the order A1 → A7. Each moved line is checked verbatim by
-   a script before the PR. Read every CI job.
+   a script before the PR. Read every CI job. **A1 done 2026-10-28** (the row above); the
+   script is `tools/check_verbatim_move.py`, reusable for A3 and A4. Next: A2.
 4. Part B only after A has merged. B1, then B2, then B3. Each proof is in the table above.
 
 **Working notes for this Mac (each cost time to find):**

@@ -61,7 +61,7 @@ sys.path.insert(0, REPO)
 
 N_RPM, N_LOAD = 8, 6                    # bridge.LIVE_N_RPM, LIVE_N_LOAD
 # the browser against native, whole builds on one 8-core Mac, both on 6 workers: Chrome 21.5 and
-# 27.5 min (STATUS, session 5 parts 17 and 18) against native 14.8 min (crdi15's shipped grid)
+# 27.5 min (history/status-session-05.md, parts 17 and 18) against native 14.8 min (crdi15's shipped grid)
 BROWSER_RATIO = (21.5 / 14.8, 27.5 / 14.8)
 
 
