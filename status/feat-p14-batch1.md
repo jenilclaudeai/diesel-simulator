@@ -51,8 +51,8 @@ Table in ROSTER.md.
   ok, worst difference 0.
 - **TS:** `web/physics` 5 / 68 / 13 / 18 (`main` 5 / 68 / 13 / 11). `web/solver` fast tests
   20 + 15. App units 167.
-- **e2e** (`build:pages`, Chrome): enjoy **51** (`main` 45), custom 7, drive 11, all 0
-  failed. spec: see below.
+- **e2e** (`build:pages`, Chrome): enjoy **51** (`main` 45), custom 7, drive 11, spec 18, all 0
+  failed.
 - **Layout** at the S9+'s 846 × 411 / 340 / 300 with a P14 engine picked: the header stays
   one row (40 px), the line doesn't overlap Start, and nothing scrolls sideways.
   **Noticed, not fixed (not P14):** at 846 × 300 the Start button is squashed to 40 px,
