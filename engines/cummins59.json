@@ -1,0 +1,18 @@
+{
+  "key": "cummins59",
+  "name": "5.9 L six, 215 hp",
+  "displacement": 5.883,
+  "n_cyl": 6,
+  "rated_rpm": 2600,
+  "peak_torque": 597,
+  "peak_power": 160,
+  "plateau": [
+    1500,
+    1500
+  ],
+  "stroke_bore": 1.176,
+  "compression_ratio": 17.5,
+  "vgt": false,
+  "pilot": false,
+  "vehicle": "pickup"
+}

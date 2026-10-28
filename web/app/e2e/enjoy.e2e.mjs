@@ -428,11 +428,14 @@ for (const [key, vehicle] of [["v8hd", /40 t tractor-trailer/], ["single10", /3 
     `${r.info?.vehicle}, idling at ${Math.round(r.rpm)} rpm, tach to ${r.info?.max_rpm} rpm`);
 }
 
-// ---- P14 batch 1 (ADR-023): each engine says what it is modelled on, idles in the vehicle
+// ---- P14 (ADR-023): each engine says what it is modelled on, idles in the vehicle
 // its file names (a key the live loop doesn't know would drive the tractor), and drives off ----
 for (const [key, vehicle, maker] of [["vw19tdi", /1\.3 t hatchback/, /Volkswagen/], ["mhawk75", /1\.75 t passenger car/, /Mahindra/],
   ["mhawk22", /1\.9 t SUV/, /Mahindra/], ["gd28", /1\.9 t SUV/, /Toyota/], ["duratorq32", /1\.9 t SUV/, /Ford/],
-  ["b57", /1\.75 t passenger car/, /BMW/]]) {
+  ["b57", /1\.75 t passenger car/, /BMW/],
+  // batch 2: the pickups (V2)
+  ["cummins59", /3\.2 t pickup/, /Cummins/], ["cummins67", /3\.2 t pickup/, /Cummins/],
+  ["duramax66", /3\.2 t pickup/, /Duramax/], ["powerstroke73", /3\.2 t pickup/, /Power Stroke/]]) {
   if (await page.$("button.stop")) await tapEl("button.stop");
   await page.select('select[aria-label="Engine"]', key);
   await page.waitForSelector("button.start");
