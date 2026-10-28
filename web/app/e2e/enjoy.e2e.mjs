@@ -428,6 +428,29 @@ for (const [key, vehicle] of [["v8hd", /40 t tractor-trailer/], ["single10", /3 
     `${r.info?.vehicle}, idling at ${Math.round(r.rpm)} rpm, tach to ${r.info?.max_rpm} rpm`);
 }
 
+// ---- P14 batch 1 (ADR-023): each engine says what it is modelled on, idles in the vehicle
+// its file names (a key the live loop doesn't know would drive the tractor), and drives off ----
+for (const [key, vehicle, maker] of [["vw19tdi", /1\.3 t hatchback/, /Volkswagen/], ["mhawk75", /1\.75 t passenger car/, /Mahindra/],
+  ["mhawk22", /1\.9 t SUV/, /Mahindra/], ["gd28", /1\.9 t SUV/, /Toyota/], ["duratorq32", /1\.9 t SUV/, /Ford/],
+  ["b57", /1\.75 t passenger car/, /BMW/]]) {
+  if (await page.$("button.stop")) await tapEl("button.stop");
+  await page.select('select[aria-label="Engine"]', key);
+  await page.waitForSelector("button.start");
+  const said = await page.$eval("main.dash .modelled", e => e.textContent.trim()).catch(() => "");
+  await tapEl("button.start");
+  await page.waitForFunction(() => globalThis.__enjoy.info()?.vehicle && globalThis.__enjoy.view()?.rpm > 0,
+    { timeout: 60_000 }).catch(() => {});
+  await sleep(1500);
+  const r = await page.evaluate(() => ({ info: globalThis.__enjoy.info(), rpm: globalThis.__enjoy.view()?.rpm ?? 0 }));
+  await touch("touchStart", [await at(".throttle .pedal", 0.85)]);
+  await sleep(3000);
+  const go = await view();
+  await touch("touchEnd", []);
+  check(`P14: ${key} is modelled on its engine, idles in its vehicle, and drives off`,
+    maker.test(said) && vehicle.test(r.info?.vehicle ?? "") && r.rpm > 400 && go.kmh > 5 && go.rpm > r.rpm,
+    `"${said}"; ${r.info?.vehicle}, idle ${Math.round(r.rpm)} rpm; at 85%: ${Math.round(go.rpm)} rpm, ${go.kmh.toFixed(1)} km/h`);
+}
+
 // ---- a custom engine's grid file (ADR-014) ----
 // the hatchback's grid, relabelled as a custom engine that drives the SUV: if
 // the worker honours the file's "vehicle", the dash reports the SUV

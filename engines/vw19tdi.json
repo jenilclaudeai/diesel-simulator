@@ -1,0 +1,17 @@
+{
+  "key": "vw19tdi",
+  "name": "1.9 L four, 90 ps",
+  "displacement": 1.896,
+  "n_cyl": 4,
+  "rated_rpm": 3750,
+  "peak_torque": 210,
+  "peak_power": 66,
+  "plateau": [
+    1900,
+    1900
+  ],
+  "stroke_bore": 1.201,
+  "compression_ratio": 19.5,
+  "pilot": false,
+  "vehicle": "hatch15"
+}

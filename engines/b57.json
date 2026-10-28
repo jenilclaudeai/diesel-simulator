@@ -1,0 +1,18 @@
+{
+  "key": "b57",
+  "name": "3.0 L six, 265 ps",
+  "displacement": 2.993,
+  "n_cyl": 6,
+  "rated_rpm": 4000,
+  "peak_torque": 620,
+  "peak_power": 195,
+  "plateau": [
+    2000,
+    2500
+  ],
+  "stroke_bore": 1.071,
+  "compression_ratio": 16.5,
+  "boost_map_rise": 0.08,
+  "afr_limit": 15.5,
+  "vehicle": "ld_i4"
+}

@@ -1,0 +1,16 @@
+{
+  "key": "mhawk75",
+  "name": "1.5 L three, 75 bhp",
+  "displacement": 1.493,
+  "n_cyl": 3,
+  "rated_rpm": 3600,
+  "peak_torque": 210,
+  "peak_power": 56,
+  "plateau": [
+    1600,
+    2200
+  ],
+  "boost_map_rise": 0.12,
+  "afr_limit": 16.0,
+  "vehicle": "ld_i4"
+}

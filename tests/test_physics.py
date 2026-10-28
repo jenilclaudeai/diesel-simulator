@@ -2571,7 +2571,8 @@ def test_live_sound_follows_the_engine():
 
 
 ENGINES_DIR = os.path.join(os.path.dirname(__file__), "..", "engines")
-ROSTER = ("hatch15", "crdi22", "truck127", "v8hd", "single10")   # Enjoy mode, roster B (ADR-012)
+ROSTER = ("hatch15", "crdi22", "truck127", "v8hd", "single10",   # Enjoy mode, roster B (ADR-012)
+          "vw19tdi", "mhawk75", "mhawk22", "gd28", "duratorq32", "b57")   # P14 batch 1 (ADR-023)
 
 
 def test_custom_engine_json():
@@ -3536,6 +3537,55 @@ def test_roster_grids_match_their_engine_files():
           f"stale: {', '.join(bad)}" if bad else f"{len(ROSTER)} of {len(ROSTER)} match")
 
 
+def test_roster_engines_drive_their_vehicles():
+    """ADR-023: a roster grid records no vehicle; the live loop takes it from the
+    key (live.Vehicle), and a key it doesn't know drives the 3 t tractor, with no
+    error. Each engines/<key>.json that names a "vehicle" must drive that one, and
+    every key in live.ROSTER_VEHICLES must be a roster engine naming the same. The
+    first five roster engines name none: each has its own vehicle (ADR-012). SKIP
+    where engines/ is absent (Pyodide)."""
+    import json
+    from dieselsim.live import ROSTER_VEHICLES, Vehicle
+    if not os.path.isdir(ENGINES_DIR):
+        RESULTS.append(("SKIP", "roster engines drive their vehicles", None, None, "engines/ not present"))
+        return
+    bad, named = [], {}
+    for key in ROSTER:
+        with open(os.path.join(ENGINES_DIR, f"{key}.json")) as fh:
+            want = json.load(fh).get("vehicle")
+        if want is None:
+            continue
+        named[key] = want
+        got, ref = Vehicle(key).name, Vehicle(want).name
+        if got != ref or vars(Vehicle(key)) != vars(Vehicle(want)):
+            bad.append(f"{key} drives the {got}, its file names {want} ({ref})")
+    for key, v in ROSTER_VEHICLES.items():
+        if named.get(key) != v:
+            bad.append(f"ROSTER_VEHICLES[{key}] = {v}, its roster file names {named.get(key)}")
+    check("roster engines drive the vehicles their files name (ADR-023)", float(len(bad)), 0.0, 0.0,
+          "; ".join(bad) or f"{len(named)} of {len(named)}: " + ", ".join(f"{k} {v}" for k, v in named.items()))
+
+
+def test_enjoy_lists_the_roster():
+    """ADR-023: /enjoy's engine list (web/app/src/app/enjoy/roster.ts) and this
+    file's ROSTER (whose engines are checked and whose grids are matched) name the
+    same engines, so none ships without its checks or without a way to pick it.
+    SKIP where web/app is absent (Pyodide)."""
+    import re
+    path = os.path.join(os.path.dirname(ENGINES_DIR), "web", "app", "src", "app", "enjoy", "roster.ts")
+    if not os.path.exists(path):
+        RESULTS.append(("SKIP", "/enjoy lists the roster", None, None, "web/app not present"))
+        return
+    with open(path) as fh:
+        src = re.sub(r"//[^\n]*", "", fh.read())         # a commented-out engine isn't listed
+    listed = re.findall(r"\{ key: '(\w+)'", src)
+    extra, missing = sorted(set(listed) - set(ROSTER)), sorted(set(ROSTER) - set(listed))
+    dup = sorted(k for k in set(listed) if listed.count(k) > 1)
+    check("/enjoy lists exactly the roster engines (ADR-023)", float(len(extra) + len(missing) + len(dup)), 0.0, 0.0,
+          f"only in roster.ts: {extra}; only in ROSTER: {missing}; twice: {dup}" if extra or missing or dup
+          else f"{len(listed)} engines, each once")
+
+
 def main():
     for fn in (test_accuracy_table_is_for_this_build, test_compressor_map,
                test_golden_points, test_n_cycles_convergence,
@@ -3603,7 +3653,9 @@ def main():
                test_grid_sources_warm_and_cold,
                test_live_sound_follows_the_engine,
                test_roster_engines_make_their_numbers,
-               test_roster_grids_match_their_engine_files):
+               test_roster_grids_match_their_engine_files,
+               test_roster_engines_drive_their_vehicles,
+               test_enjoy_lists_the_roster):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001

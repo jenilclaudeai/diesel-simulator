@@ -262,12 +262,18 @@ class Adr011Grid(PerfGrid):
 # are keyed by the engine each was first made for; "tractor" is the
 # fallback every other key gets.
 VEHICLE_KEYS = ("hatch15", "crdi15", "ld_i4", "crdi22", "hd_i6", "tractor")
+# P14 (ADR-023): roster engines that drive one of those vehicles, as the "vehicle"
+# in their engines/<key>.json says (a test holds the two together). A roster grid
+# records no vehicle, so a key missing here drives the tractor, with no error.
+ROSTER_VEHICLES = {"vw19tdi": "hatch15", "mhawk75": "ld_i4", "mhawk22": "crdi22",
+                   "gd28": "crdi22", "duratorq32": "crdi22", "b57": "ld_i4"}
 
 
 class Vehicle:
     """Everything downstream of the flywheel."""
 
     def __init__(self, preset: str, trans: str = None):
+        preset = ROSTER_VEHICLES.get(preset, preset)
         self.trans = (trans or TRANSMISSION).lower()
         # A dual clutch has no fluid coupling to waste energy in, so it is
         # a couple of points more efficient, and it launches on a clamping

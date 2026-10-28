@@ -1,0 +1,18 @@
+{
+  "key": "gd28",
+  "name": "2.8 L four, 204 ps",
+  "displacement": 2.755,
+  "n_cyl": 4,
+  "rated_rpm": 3400,
+  "peak_torque": 500,
+  "peak_power": 150,
+  "plateau": [
+    1600,
+    2800
+  ],
+  "stroke_bore": 1.126,
+  "compression_ratio": 15.6,
+  "boost_map_rise": 0.12,
+  "afr_limit": 16.0,
+  "vehicle": "crdi22"
+}

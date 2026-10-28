@@ -656,12 +656,14 @@ def vehicles_inputs():
     """Every vehicle the live loop knows, under every gearbox (Phase 5: the
     Enjoy roster added three). Plain data, duplicated in TypeScript, so the
     two copies are held together here."""
-    from dieselsim.live import VEHICLE_KEYS
+    from dieselsim.live import ROSTER_VEHICLES, VEHICLE_KEYS
     return {"keys": ["hd_i6", "ld_i4", "crdi15", "crdi_1p5", "single", "hatch15", "crdi22", "truck127",
-                     "v8hd", "single10"],
+                     "v8hd", "single10"] + sorted(ROSTER_VEHICLES),
             "trans": ["tc", "dct", "manual"],
             # the vehicles a custom engine may name (ADR-014), held in both languages
-            "vehicle_keys": list(VEHICLE_KEYS)}
+            "vehicle_keys": list(VEHICLE_KEYS),
+            # P14 (ADR-023): roster keys that drive one of them
+            "roster_vehicles": dict(ROSTER_VEHICLES)}
 
 
 def vehicles_outputs(inp):
