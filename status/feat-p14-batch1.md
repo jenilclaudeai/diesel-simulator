@@ -31,17 +31,37 @@ there in different paragraphs.
 - **e2e:** `enjoy.e2e.mjs` opens each of the six, checks the "modelled on" line, the
   vehicle and the idle, and drives off at 85%. **Not run yet** (needs the grids).
 
-## Running
+## The grids (done)
 
-- **The six grids** (`build_live_grids.py`, then `--weather`): cells started 2026-10-28,
-  log `out/p14_b1_cells.log`. vw19tdi 261 s, mhawk75 233 s, mhawk22 555 s so far (faster
-  than the 42-min-per-grid estimate's cell share).
+~~**Running:** the six grids, cells started 2026-10-28.~~ Built: cells 3,044 s plus weather
+11,315 s, **4.0 h** (the estimate was 4.4).
+- Unsettled cells 0 / 0 / 1 / 1 / 4 / 10; weather pieces 0–65.
+- Leh checks 0.41–3.42%: within the shipped grids' ranges, and no new misfire cliff.
+- Cold / warm FMEP is at most 3.00× (vw19tdi, under the 4× bar; the shipped grids are at
+  1.78–2.84×; the cause is not investigated).
+
+Table in ROSTER.md.
+
+## Verified locally (2026-10-28, on the final grids)
+
+- **Python suite: 100 passed, 0 failed, 3 known, 4 skipped.** The skips are the scipy-gated
+  sound tests (no scipy on this Mac); CI runs them, and nothing sound- or solver-side
+  changed.
+- **Audit:** 0 dead, 2 frozen (known), 0 tiny. **`gen_fixtures --check`:** every module
+  ok, worst difference 0.
+- **TS:** `web/physics` 5 / 68 / 13 / 18 (`main` 5 / 68 / 13 / 11). `web/solver` fast tests
+  20 + 15. App units 167.
+- **e2e** (`build:pages`, Chrome): enjoy **51** (`main` 45), custom 7, drive 11, all 0
+  failed. spec: see below.
+- **Layout** at the S9+'s 846 × 411 / 340 / 300 with a P14 engine picked: the header stays
+  one row (40 px), the line doesn't overlap Start, and nothing scrolls sideways.
+  **Noticed, not fixed (not P14):** at 846 × 300 the Start button is squashed to 40 px,
+  with its label at the bottom edge. It happens with hatch15 too, so on `main` as well.
+  `flex-shrink: 0` on `.start` would likely fix it.
 
 ## Next
 
-1. The weather pass on the six; record the unsettled cells and the Leh checks in
-   ROSTER.md ("The grids").
-2. Full Python suite, audit, `gen_fixtures --check`, `web/physics` and `web/solver` tests,
-   `build:pages`, and `e2e:enjoy` (plus the rest of the e2e).
-3. Commit the grids and open the PR; read every CI job.
-4. The owner listens on the phone.
+1. Open the PR; read every CI job.
+2. The owner listens on the phone: six engines, the first three and the first five.
+3. Batch 2 once this merges: the pickup vehicle, then `cummins59`, `cummins67`, `duramax66`
+   and `powerstroke73`.

@@ -326,4 +326,21 @@ because its brochure caps the fuel well under the smoke limit, as with single10.
 
 ### The grids
 
-*(filled in when the build finishes)*
+Built 2026-10-28 on the owner's M2 (6 workers): `build_live_grids.py` with the six keys,
+then `--weather`. Cells 3,044 s plus weather 11,315 s, **4.0 h** in all (the proposal
+estimated 4.4).
+
+| key | cells | unsettled cells | weather | unsettled weather pieces | Leh check, worst | cold / warm FMEP, worst |
+|---|---|---|---|---|---|---|
+| `vw19tdi` | 261 s | 0 | 1,292 s | 0 | 3.42% | 3.00× |
+| `mhawk75` | 233 s | 0 | 952 s | 0 | 2.27% | |
+| `mhawk22` | 555 s | 1 | 1,969 s | 28 | 0.41% | |
+| `gd28` | 627 s | 1 | 2,014 s | 29 | 1.37% | |
+| `duratorq32` | 570 s | 4 | 2,161 s | 34 | 2.33% | |
+| `b57` | 798 s | 10 | 2,927 s | 65 | 1.47% | |
+
+All are within the shipped grids' ranges: unsettled cells 0–22, weather pieces 0–68, and
+Leh checks 0.28–4.72% (single10's misfire cliff aside, 36%, FINDING-027). No new cliff.
+`test_shipped_grids_cold_friction` reports only the worst grid: vw19tdi at 3.00×, under
+its 4× bar but above the ten shipped grids' 1.78–2.84×. Why is not investigated. The
+engine's CR (19.5, the roster's highest) is the obvious difference, but that is unmeasured.
