@@ -28,8 +28,13 @@ hash moves.
 - **The candidates' figures are from memory, not sourced.** Kept out of `engines/`, which
   is auto-registered.
 
-**CI on #146:** not yet read (opened 2026-10-28; Pyodide takes ~57 min). The next session
-reads every job (`gh pr checks 146`) before calling it verified.
+**CI on #146:** ~~not yet read~~ **at `665f14b` (run 40625704242): 10 of 10 passed, every
+job's log read**, and every count is `main`'s: physics 103 / 103, Pyodide 82 (21 skipped),
+fixtures + TS 5 / 68 / 13 / 11, SolverPort 20 / 15 / 30, app units 164, e2e 15 / 11 / 6 / 45 /
+11 / 18 / 6 / 5, grid 9, custom 7.
+
+**Batch 1 is #147** (`feat/p14-batch1`, from `main`, not stacked), with its own status
+file. CI 10 of 10, every job read.
 
 **Not run:** the suites. Nothing they test changed: docs, plus new scripts in
 `tools/p14/` that no test imports.
