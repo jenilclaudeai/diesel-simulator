@@ -59,9 +59,19 @@ Table in ROSTER.md.
   with its label at the bottom edge. It happens with hatch15 too, so on `main` as well.
   `flex-shrink: 0` on `.start` would likely fix it.
 
+## PR #147, CI at `5c46660` (run 40653316335): 10 of 10 passed, every job's log read
+
+- physics 3.10 and 3.12: **105 passed**, 0 failed, 3 known (`main` 103: plus the two new
+  tests).
+- Pyodide: 82 passed, 0 failed, 2 known, **23 skipped** (`main` 21: the two new tests SKIP
+  there, as designed); 55m57s of its 60.
+- SolverPort 20 / 15 / 30. Fixtures + TS 5 / 68 / 13 / 18. App units 167, prepare-assets 4.
+- e2e: dyno 15, drive 11, sound 6, enjoy **51**, cycle 11, spec 18, sweep 6, durability 5;
+  grid 9; custom engine 7. claude-review passed.
+
 ## Next
 
-1. Open the PR; read every CI job.
+1. ~~Open the PR; read every CI job.~~ Done (#147, above). It waits for the owner.
 2. The owner listens on the phone: six engines, the first three and the first five.
 3. Batch 2 once this merges: the pickup vehicle, then `cummins59`, `cummins67`, `duramax66`
    and `powerstroke73`.
