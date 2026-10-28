@@ -342,8 +342,10 @@ estimated 4.4).
 All are within the shipped grids' ranges: unsettled cells 0–22, weather pieces 0–68, and
 Leh checks 0.28–4.72% (single10's misfire cliff aside, 36%, FINDING-027). No new cliff.
 `test_shipped_grids_cold_friction` reports only the worst grid: vw19tdi at 3.00×, under
-its 4× bar but above the ten shipped grids' 1.78–2.84×. Why is not investigated. The
-engine's CR (19.5, the roster's highest) is the obvious difference, but that is unmeasured.
+its 4× bar but above the ten shipped grids' 1.78–2.84×. Why is not investigated. ~~The
+engine's CR (19.5, the roster's highest) is the obvious difference, but that is unmeasured.~~
+*(Batch 2: cummins59, at CR 17.5, reads 3.12×, higher than vw19tdi. So CR alone doesn't
+explain it. Still not investigated.)*
 
 ---
 
@@ -470,4 +472,15 @@ as vw19tdi and single10 do: their brochures cap the fuel well under the smoke li
 
 ### The grids
 
-*(filled in when the build finishes)*
+Built 2026-10-28 on the owner's M2 (6 workers): cells 2,246 s plus weather 8,873 s,
+**3.1 h** (the proposal's estimate was 4.4).
+
+| key | cells | unsettled cells | weather | unsettled weather pieces | Leh check, worst |
+|---|---|---|---|---|---|
+| `cummins59` | 323 s | 0 | 1,240 s | 0 | 3.44% |
+| `cummins67` | 703 s | 7 | 2,740 s | 55 | 2.36% |
+| `duramax66` | 846 s | 7 | 3,249 s | 39 | 1.33% |
+| `powerstroke73` | 374 s | 0 | 1,644 s | 0 | 1.26% |
+
+All within the shipped grids' ranges; no new cliff. The worst cold / warm FMEP over all
+twenty grids is now cummins59's, at 3.12× (bar 4×; see batch 1's note above).
