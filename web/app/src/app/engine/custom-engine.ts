@@ -24,7 +24,7 @@ export interface CustomEngine {
 
 export const VEHICLE_NAMES: Record<VehicleKey, string> = {
   hatch15: '1.3 t hatchback', crdi15: '1.5 t compact', ld_i4: '1.75 t car',
-  crdi22: '1.9 t SUV', hd_i6: '40 t truck', tractor: '3 t utility tractor',
+  crdi22: '1.9 t SUV', pickup: '3.2 t pickup', hd_i6: '40 t truck', tractor: '3 t utility tractor',
 };
 
 export const EXAMPLE_ENGINE: CustomEngine = {

@@ -261,12 +261,14 @@ class Adr011Grid(PerfGrid):
 # The vehicles a grid can name (ADR-014: a custom engine's "vehicle"). They
 # are keyed by the engine each was first made for; "tractor" is the
 # fallback every other key gets.
-VEHICLE_KEYS = ("hatch15", "crdi15", "ld_i4", "crdi22", "hd_i6", "tractor")
+VEHICLE_KEYS = ("hatch15", "crdi15", "ld_i4", "crdi22", "pickup", "hd_i6", "tractor")
 # P14 (ADR-023): roster engines that drive one of those vehicles, as the "vehicle"
 # in their engines/<key>.json says (a test holds the two together). A roster grid
 # records no vehicle, so a key missing here drives the tractor, with no error.
 ROSTER_VEHICLES = {"vw19tdi": "hatch15", "mhawk75": "ld_i4", "mhawk22": "crdi22",
-                   "gd28": "crdi22", "duratorq32": "crdi22", "b57": "ld_i4"}
+                   "gd28": "crdi22", "duratorq32": "crdi22", "b57": "ld_i4",
+                   "cummins59": "pickup", "cummins67": "pickup", "duramax66": "pickup",
+                   "powerstroke73": "pickup"}
 
 
 class Vehicle:
@@ -365,6 +367,25 @@ class Vehicle:
             self.J_wheel = 6.5
             self.TR_stall = 2.00
             self.stall_rpm = 2000.0
+            self.tc_diameter_gain = 1.00
+            self.v_lock_min = 9.0
+        elif preset == "pickup":                  # P14 (ADR-023, V2): a 2500-class pickup, for its four
+            # The gearbox, axle, tyres and curb weight are a 2023 Ram 2500 6.7 Cummins'
+            # (engines/ROSTER.md); the drag, rolling, inertias, efficiency and tank are
+            # estimates, scaled from the SUV above.
+            self.name = "3.2 t pickup, 6-speed auto"
+            self.fuel_tank_L = 117.0              # estimate
+            self.mass = 3200.0                    # 7,045 lb curb
+            self.r_wheel = 0.405                  # LT275/70 R18, loaded
+            self.gears = [3.23, 1.84, 1.41, 1.00, 0.82, 0.62]
+            self.final = 3.73
+            self.CdA = 1.75
+            self.Crr = 0.0100
+            self.eta = 0.92
+            self.J_trans = 0.16
+            self.J_wheel = 14.0
+            self.TR_stall = 2.00
+            self.stall_rpm = 1900.0
             self.tc_diameter_gain = 1.00
             self.v_lock_min = 9.0
         else:                                     # small utility tractor

@@ -344,3 +344,130 @@ Leh checks 0.28–4.72% (single10's misfire cliff aside, 36%, FINDING-027). No n
 `test_shipped_grids_cold_friction` reports only the worst grid: vw19tdi at 3.00×, under
 its 4× bar but above the ten shipped grids' 1.78–2.84×. Why is not investigated. The
 engine's CR (19.5, the roster's highest) is the obvious difference, but that is unmeasured.
+
+---
+
+## P14 batch 2 (2026-10-28, ADR-023): the pickups
+
+Four pickup engines and **one new vehicle** for them, `pickup` (V2). Each is **modelled on
+the published figures** of a real engine, as in batch 1. The owner answered "Most popular
+onces / N2 / F2 / V2".
+
+| key | label in /enjoy | modelled on | vehicle |
+|---|---|---|---|
+| `cummins59` | Pickup · 5.9 L six, 215 hp | Cummins 5.9 12-valve (Ram 2500, 1996–98, manual) | `pickup` |
+| `cummins67` | Pickup · 6.7 L six, 370 hp | Cummins 6.7 (Ram 2500, standard output) | `pickup` |
+| `duramax66` | Pickup · 6.6 L V8, 445 hp | GM Duramax L5P (Silverado / Sierra HD, 2017–23) | `pickup` |
+| `powerstroke73` | Pickup · 7.3 L V8, 275 hp | Ford 7.3 Power Stroke (Super Duty, 1999–2003, manual) | `pickup` |
+
+### The vehicle: `pickup`, "3.2 t pickup, 6-speed auto"
+
+Sourced from a 2023 Ram 2500 6.7 Cummins (4×4 crew cab): the 6-speed's ratios 3.23 / 1.84 /
+1.41 / 1.00 / 0.82 / 0.62; a 3.73 axle; LT275/70 R18 tyres (0.405 m loaded); 7,045 lb
+(3,196 kg) curb, so 3,200 kg.
+[auto123 Limited](https://www.auto123.com/en/specs/ram/2500/ram-2500-2023-limited-4x4-crew-cab-64%22-box-433610/),
+[auto123 Big Horn](https://www.auto123.com/en/specs/ram/2500/ram-2500-2023-big-horn-4x4-crew-cab-64%22-box-433607/).
+**Estimates**, scaled from the SUV: the drag area 1.75 m² (Cd ~0.48 × ~3.6 m²), the rolling
+resistance 0.0100, the efficiency 0.92, the inertias (gearbox 0.16, wheels 14 kg·m²), the
+converter's stall 1,900 rpm, and the 117 L tank (no source found). It is in
+`live.VEHICLE_KEYS`, so a custom engine can name it too. One vehicle for four eras of truck
+is ADR-023's V2: the 12-valve and the 7.3 had 4- and 5-speed boxes in their day.
+
+### Sources (F2)
+
+The peak torque of all four is published at one speed, so each `plateau` is a single point
+(as vw19tdi's is).
+- **`cummins59`:** 5,883 cc (359 cu in) inline six, 102 × 120 mm, CR 17.5 (one source says
+  17.0); 215 hp (160 kW) at 2,600 rpm and 440 lb-ft (597 N·m) at 1,500 rpm, the manual's
+  rating (the automatic's is 180 hp / 420 lb-ft). A mechanical Bosch P7100 pump, so
+  `pilot: false`; a wastegated turbo, so `vgt: false`.
+  [DieselHub](https://dieselhub.com/cummins/cummins-timeline.html),
+  [Wikipedia](https://en.wikipedia.org/wiki/Cummins_B_Series_engine),
+  [Maxiforce](https://maxiforce.com/engine-kit/cummins-6bt-5-9-piston-m-7163).
+- **`cummins67`:** 6,690 cc, 107 × 124 mm; 370 hp (276 kW) at 2,800 rpm, 850 lb-ft
+  (1,152 N·m) at 1,700 rpm (the standard output; the high output is 400+ hp). **CR 17.3**,
+  Wikipedia's B6.7 figure, with listings that also say 19, 16.2 and 16.0 by year and
+  output. A VGT (the default).
+  [auto-data](https://www.auto-data.net/en/ram-2500-3500-regular-cab-ii-dt-2500-6.7-cummins-td-370hp-4x4-automatic-35533),
+  [Wikipedia](https://en.wikipedia.org/wiki/Cummins_B_Series_engine),
+  [Cummins spec sheet](https://mart.cummins.com/imagelibrary/data/assetfiles/0070408.pdf).
+- **`duramax66`:** 6,604 cc (403 cu in) V8, 103 × 99 mm, CR 16.0; 445 hp (332 kW) at
+  2,800 rpm, 910 lb-ft (1,234 N·m) at 1,600 rpm (2017–23; 2024 on is 470 hp / 975 lb-ft).
+  GM's own figures. A VGT.
+  [GM Powered Solutions](https://poweredsolutions.gm.com/products/l5p-engine/),
+  [DieselHub](https://www.dieselhub.com/duramax/6.6-duramax-l5p.html).
+- **`powerstroke73`:** 7,275 cc (444 cu in) V8, 4.11 × 4.18 in (104.4 × 106.2 mm), CR 17.5;
+  275 hp (205 kW) at 2,800 rpm and 525 lb-ft (712 N·m) at 1,600 rpm, the manual's rating
+  (the automatic's 250 hp / 505 lb-ft). HEUI injection, modelled as a pump without pilot
+  (`pilot: false`); a wastegated turbo (`vgt: false`).
+  [Wikipedia](https://en.wikipedia.org/wiki/Ford_Power_Stroke_engine),
+  [BD Diesel](https://ca.bddiesel.com/blogs/r-d-blog/ford-7-3l-power-stroke-diesel-engine),
+  [TractorByNet](https://tractorbynet.com/forums/threads/whats-the-difference.208063/).
+- **Not set:** the firing orders (the builder's even 90° V8 order is used; the model has
+  no banks, as with v8hd).
+
+### Tuning (the same rule: the least that holds the plateau start at 96% or more)
+
+| key | `boost_map_rise` | `afr_limit` | plateau start, untuned → chosen |
+|---|---|---|---|
+| `cummins59` | (default) | (default) | 99.8% |
+| `powerstroke73` | (default) | (default) | 99.6% |
+| `cummins67` | 0.12 | 16.0 | 89.6 → 99.1% |
+| `duramax66` | 0.12 | 16.0 | 85.8 → 102.0% |
+
+At exactly rated speed: 99.6, 99.8, 99.6 and 99.7% of the brochure power.
+
+### verify() after tuning
+
+verify()'s last speed is past rated, in the governor's droop, and its speeds skip the
+single-speed torque peaks, so the peaks below read a little low.
+
+**cummins59:** 596.7 N·m (100.0%), 152.3 kW (95.2%). Max soot 0.189 g/kWh, peak pressure
+120 bar.
+
+| rpm | 700 | 1033 | 1367 | 1700 | 2033 | 2367 | 2700 |
+|---|---|---|---|---|---|---|---|
+| N·m | 451.9 | 507.4 | 568.3 | 596.7 | 595.1 | 586.4 | 538.7 |
+| kW | 33.1 | 54.9 | 81.3 | 106.2 | 126.7 | 145.3 | 152.3 |
+| boost | 1.16 | 1.27 | 1.48 | 1.63 | 1.74 | 1.79 | 1.73 |
+| BSFC g/kWh | 328 | 253 | 222 | 214 | 215 | 224 | 239 |
+
+**cummins67:** 1,132.5 N·m (98.3%), 267.6 kW (96.9%). Max soot 0.193 g/kWh, peak pressure
+169 bar.
+
+| rpm | 700 | 1067 | 1433 | 1800 | 2167 | 2533 | 2900 |
+|---|---|---|---|---|---|---|---|
+| N·m | 699.3 | 946.7 | 1066.4 | 1132.5 | 1054.6 | 988.3 | 881.1 |
+| kW | 51.3 | 105.7 | 160.1 | 213.5 | 239.3 | 262.2 | 267.6 |
+| boost | 1.63 | 1.88 | 1.92 | 2.24 | 2.43 | 2.45 | 2.35 |
+| BSFC g/kWh | 342 | 269 | 248 | 228 | 215 | 219 | 225 |
+
+**duramax66:** 1,198.6 N·m (97.1%; at its 1,600 rpm peak, 102.0% of the cap), 319.6 kW
+(96.3%). Max soot 0.329 g/kWh, peak pressure 172 bar.
+
+| rpm | 700 | 1067 | 1433 | 1800 | 2167 | 2533 | 2900 |
+|---|---|---|---|---|---|---|---|
+| N·m | 617.3 | 1069.5 | 1129.7 | 1198.6 | 1180.5 | 1162.1 | 1052.4 |
+| kW | 45.3 | 119.5 | 169.6 | 225.9 | 267.8 | 308.3 | 319.6 |
+| boost | 1.34 | 1.89 | 2.18 | 2.27 | 2.51 | 2.75 | 2.75 |
+| BSFC g/kWh | 402 | 293 | 255 | 241 | 224 | 218 | 217 |
+
+**powerstroke73:** 707.7 N·m (99.4%), 196.2 kW (95.7%). Max soot 0.180 g/kWh, peak pressure
+115 bar.
+
+| rpm | 700 | 1067 | 1433 | 1800 | 2167 | 2533 | 2900 |
+|---|---|---|---|---|---|---|---|
+| N·m | 438.5 | 596.4 | 671.6 | 707.7 | 700.5 | 695.1 | 646.0 |
+| kW | 32.1 | 66.6 | 100.8 | 133.4 | 158.9 | 184.4 | 196.2 |
+| boost | 1.08 | 1.21 | 1.46 | 1.64 | 1.76 | 1.76 | 1.69 |
+| BSFC g/kWh | 371 | 277 | 231 | 220 | 221 | 233 | 253 |
+
+**Rich when lugged**, as mhawk22 and b57 are: duramax66 at 700 rpm, full load, runs AFR 13.8
+with the roster's most soot (0.329 g/kWh), for the same reason (batch 1, above).
+**The two old engines run lean** (cummins59 and powerstroke73, AFR 26.8 and 27.2 at their
+torque peaks),
+as vw19tdi and single10 do: their brochures cap the fuel well under the smoke limit.
+
+### The grids
+
+*(filled in when the build finishes)*

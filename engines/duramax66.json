@@ -1,0 +1,18 @@
+{
+  "key": "duramax66",
+  "name": "6.6 L V8, 445 hp",
+  "displacement": 6.604,
+  "n_cyl": 8,
+  "rated_rpm": 2800,
+  "peak_torque": 1234,
+  "peak_power": 332,
+  "plateau": [
+    1600,
+    1600
+  ],
+  "stroke_bore": 0.961,
+  "compression_ratio": 16.0,
+  "boost_map_rise": 0.12,
+  "afr_limit": 16.0,
+  "vehicle": "pickup"
+}
