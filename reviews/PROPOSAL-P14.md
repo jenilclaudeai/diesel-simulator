@@ -1,6 +1,6 @@
 # PROPOSAL — P14: add at least ten popular diesel engines
 
-**Date:** 2026-10-28. **Status:** ~~measured; **four questions for the owner** (end).~~ **Decided (the owner, 2026-10-28): "Go with all your recommendations"** (ADR-023): the listed ten, N2, F2, V2, two unstacked PRs. Building.
+**Date:** 2026-10-28. **Status:** ~~measured; **four questions for the owner** (end).~~ **Decided (the owner, 2026-10-28): "Go with all your recommendations"** (ADR-023): the listed ten, N2, F2, V2, two unstacked PRs. Question by question, the same day: "Most popular onces / N2 / F2 / V2"; V2 is the pickup vehicle, which only the listed ten's pickups need, so that is read as the listed ten. Batch 1 merged (#147); batch 2 being built.
 Nothing built in this proposal's PR: no file in `engines/`, `dieselsim/` or `web/` changes.
 **The sheet's P14** (priority 1, no status yet): "Add few more engines: add atleast 10
 popular diesel engines."

@@ -446,7 +446,7 @@ goes stale. Costs: ~8.8 h of building for the recommended ten; **every later ful
 the engine they drive. A silent trap found: a roster key the vehicle switch doesn't know
 drives the 3 t tractor. ~~**Not decided; nothing built.** Four questions for the owner (which
 ten, names, fidelity, vehicles); recommended: the listed ten, descriptive names "modelled
-on" the real engine, published hardware, one new pickup vehicle, two unstacked PRs.~~ **Decided 2026-10-28: every recommendation (ADR-023).** Batch 1 (the six on today's vehicles) is being built.
+on" the real engine, published hardware, one new pickup vehicle, two unstacked PRs.~~ **Decided 2026-10-28: every recommendation (ADR-023).** Batch 1 (the six on today's vehicles) merged (#147, live); batch 2 (the pickup vehicle and four engines) being built.
 
 ---
 

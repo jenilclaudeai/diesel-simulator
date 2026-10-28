@@ -1581,7 +1581,8 @@ the driver drives.
 ## ADR-023 — P14: ten popular diesel engines join the roster
 
 **Status:** Accepted (the owner, 2026-10-28: "Go with all your recommendations" in
-`reviews/PROPOSAL-P14.md`). Building.
+`reviews/PROPOSAL-P14.md`; and, question by question, "Most popular onces / N2 / F2 / V2").
+Batch 1 merged (#147, 2026-10-28); batch 2 being built.
 
 ### Decision
 

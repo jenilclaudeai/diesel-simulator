@@ -46,3 +46,5 @@ needed before an app-store release.~~ **Answered 2026-10-28: "Go with all your r
 
 **Housekeeping noticed, not done here:** `status/docs-a2-reviews-index.md` is still in
 `status/` although #145 merged; A0 moves it to `history/` in the next modularize step.
+
+**2026-10-28, later:** the owner answered question by question, "Most popular onces / N2 / F2 / V2". That is the same as ADR-023: V2 (the pickup vehicle) is needed only by the listed ten's pickups, so "most popular" is read as the listed ten. Recorded in ADR-023 and the proposal. **#147 (batch 1) merged** 14:47 UTC, Pages deployed `2aa1710`. Batch 2 is next, on its own branch from `main`.
