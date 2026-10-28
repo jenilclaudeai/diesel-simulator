@@ -34,10 +34,10 @@ reads every job (`gh pr checks 146`) before calling it verified.
 **Not run:** the suites. Nothing they test changed: docs, plus new scripts in
 `tools/p14/` that no test imports.
 
-**For the owner, four questions** (end of the proposal): which ten; names (N2
+~~**For the owner, four questions** (end of the proposal): which ten; names (N2
 recommended: descriptive plus "modelled on …"); fidelity (F2: published bore, stroke, CR
 and hardware); vehicles (V2: one new pickup vehicle). Legal advice on naming makers is
-needed before an app-store release.
+needed before an app-store release.~~ **Answered 2026-10-28: "Go with all your recommendations"** (ADR-023, on this PR). Batch 1 is built on its own branch from `main`, `feat/p14-batch1`, not stacked on this one.
 
 **Housekeeping noticed, not done here:** `status/docs-a2-reviews-index.md` is still in
 `status/` although #145 merged; A0 moves it to `history/` in the next modularize step.

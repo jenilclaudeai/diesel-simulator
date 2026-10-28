@@ -1,7 +1,7 @@
 # PROPOSAL — P14: add at least ten popular diesel engines
 
-**Date:** 2026-10-28. **Status:** measured; **four questions for the owner** (end).
-Nothing built: no file in `engines/`, `dieselsim/` or `web/` changes.
+**Date:** 2026-10-28. **Status:** ~~measured; **four questions for the owner** (end).~~ **Decided (the owner, 2026-10-28): "Go with all your recommendations"** (ADR-023): the listed ten, N2, F2, V2, two unstacked PRs. Building.
+Nothing built in this proposal's PR: no file in `engines/`, `dieselsim/` or `web/` changes.
 **The sheet's P14** (priority 1, no status yet): "Add few more engines: add atleast 10
 popular diesel engines."
 **Lenses:** PM, LEAD, PHY1, SW1, SW2, QA1, QA2, USR1

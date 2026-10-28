@@ -444,9 +444,9 @@ real bore/stroke/CR keeps every pass (moves ≤ 0.9 points). No solver change, s
 goes stale. Costs: ~8.8 h of building for the recommended ten; **every later full rebuild
 ~16 h instead of 7.2 h**; CI physics +~2.5 min, Pyodide +0; a user still downloads only
 the engine they drive. A silent trap found: a roster key the vehicle switch doesn't know
-drives the 3 t tractor. **Not decided; nothing built.** Four questions for the owner (which
+drives the 3 t tractor. ~~**Not decided; nothing built.** Four questions for the owner (which
 ten, names, fidelity, vehicles); recommended: the listed ten, descriptive names "modelled
-on" the real engine, published hardware, one new pickup vehicle, two unstacked PRs.
+on" the real engine, published hardware, one new pickup vehicle, two unstacked PRs.~~ **Decided 2026-10-28: every recommendation (ADR-023).** Batch 1 (the six on today's vehicles) is being built.
 
 ---
 
