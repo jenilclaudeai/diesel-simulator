@@ -52,7 +52,21 @@ table in ROSTER.md.
 - The pickups idle at 563–574 rpm in drive (the builder's 600 rpm idle at these rated
   speeds); real ones idle ~650–750. Noted, not changed.
 
+spec e2e 18, 0 failed (finished after the PR opened).
+
+## PR #148, CI at `605e4a7` (run 40746197405): 10 of 10 passed, every job's log read
+
+- physics 3.10 and 3.12: 105 passed, 0 failed, 3 known. Pyodide: 82 passed, 0 failed,
+  2 known, 23 skipped, 40m37s of its 60.
+- SolverPort 20 / 15 / 30. Fixtures + TS 5 / 68 / 13 / **22**. App units 167,
+  prepare-assets 4.
+- e2e: dyno 15, drive 11, sound 6, **enjoy 55**, cycle 11, spec 18, sweep 6, durability 5;
+  grid 9; custom engine 7. claude-review passed.
+- This status commit, pushed after that read, re-runs CI on a status-only change.
+
 ## Next
 
-1. The PR; read every CI job.
+1. ~~The PR; read every CI job.~~ Done. #148 waits for the owner.
 2. The owner listens: the pickups.
+3. After #148 merges, P14 is complete (ten engines). Still to do in a docs step: move
+   `status/feat-p14-batch1.md` and this file to `history/` (A0), and STATUS.md's present.
