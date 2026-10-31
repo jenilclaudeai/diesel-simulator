@@ -63,6 +63,7 @@ Those lines are left as written. A finding's or proposal's status changes here f
 | `PROPOSAL-P10.md` | a deeper, bassier sound | decided B; merged; the owner's listen accepted it (2026-10-14) | 018 | #128 |
 | `PROPOSAL-P13.md` | a drivable grid built faster | decided ("both, N first") and built: N (#132), B + C (#133). **line stale**: "being revised" | 020 | #132, #133 |
 | `PROPOSAL-cold-start-ECU.md` | a cold-start ECU in the live loop (FINDING-031 C) | answered 2026-10-28 (C1; no fast idle; extra fuel and glow plugs when cold, glow plugs measured first; keep P08); **build not started**. **line stale**: "questions for the owner" | | #142 |
+| `PROPOSAL-P14.md` | at least ten popular diesel engines in the roster | decided 2026-10-28, every recommendation; batch 1 merged (#147), ~~batch 2 being built~~ batch 2 built, #148 open | 023 | #146, #147, #148 |
 | `PROPOSAL-modularize.md` | modularize the context, then the code | answered 2026-10-27 (A then B); A0 done (#143), A1 #144, A2 this index | | #143 |
 
 ## Reviews
