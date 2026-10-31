@@ -48,3 +48,9 @@ needed before an app-store release.~~ **Answered 2026-10-28: "Go with all your r
 `status/` although #145 merged; A0 moves it to `history/` in the next modularize step.
 
 **2026-10-28, later:** the owner answered question by question, "Most popular onces / N2 / F2 / V2". That is the same as ADR-023: V2 (the pickup vehicle) is needed only by the listed ten's pickups, so "most popular" is read as the listed ten. Recorded in ADR-023 and the proposal. **#147 (batch 1) merged** 14:47 UTC, Pages deployed `2aa1710`. Batch 2 is next, on its own branch from `main`.
+
+**2026-10-31:** batch 2 is built and open as **#148** (`feat/p14-batch2`, from `main`, not
+stacked). Four lines here said "batch 2 being built" (ADR-023's status, the proposal's
+status, PLAN.md's P14, `reviews/INDEX.md`'s P14 row); each is struck through and now reads
+"built, #148 open". This PR is taken out of draft: ADR-023, which #148 cites, exists only
+here, so it should merge with or before #148. The two touch no file in common.
