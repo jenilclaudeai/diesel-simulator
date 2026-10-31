@@ -53,4 +53,17 @@ needed before an app-store release.~~ **Answered 2026-10-28: "Go with all your r
 stacked). Four lines here said "batch 2 being built" (ADR-023's status, the proposal's
 status, PLAN.md's P14, `reviews/INDEX.md`'s P14 row); each is struck through and now reads
 "built, #148 open". This PR is taken out of draft: ADR-023, which #148 cites, exists only
-here, so it should merge with or before #148. The two touch no file in common.
+here, so it should merge with or before #148. The two touch no file in common. Both merge
+orders onto `main` give the same tree (`f12258e`), by `git merge-tree`, with no conflict.
+
+**CI at `bb2afd0` (run 41181742671): 10 of 10 passed, every job's log read**:
+- physics 3.10 and 3.12: 105 passed, 0 failed, 3 known;
+- Pyodide: 82 passed, 0 failed, 2 known, 23 skipped, 43.9 min of its 60;
+- fixtures + TS 5 / 68 / 13 / 18; SolverPort 20 / 15 / 30;
+- app units 167 (30 files), prepare-assets 4;
+- e2e: dyno 15, drive 11, sound 6, enjoy 51, cycle 11, spec 18, sweep 6, durability 5;
+  grid 9; custom 7;
+- claude-review passed.
+
+These are `main`'s counts with batch 1 (docs only here). This status commit re-runs CI on a
+status-only change.
