@@ -20,9 +20,23 @@
 
 ## CI
 
-Not yet read.
+~~Not yet read.~~ **#149 at `d9d3278` (run 41185300147): 10 of 10 passed, every job's log
+read.**
+- physics 3.10 and 3.12: 105 passed, 0 failed, 3 known (3.10 in 24.6 min);
+- Pyodide: 82, 2 known, 23 skipped, 40.1 min;
+- fixtures + TS 5 / 68 / 13 / 18; SolverPort 20 / 15 / 30; app units 167, prepare-assets 4;
+- e2e 15 / 11 / 6 / 51 / 11 / 18 / 6 / 5; grid 9; custom 7; claude-review passed.
+
+**#148, for the record** (its own status file is left alone so as not to re-run its CI
+under the old limit): the second rerun of `physics (Python 3.10)` at `d13294d` passed in
+26.9 min. So run 40790346840 is **10 of 10, every job's log read**:
+- physics 3.10 and 3.12: 105 passed, 0 failed, 3 known;
+- Pyodide: 82, 2 known, 23 skipped, 58.5 min;
+- fixtures + TS 5 / 68 / 13 / 22; SolverPort 20 / 15 / 30; app units 167, prepare-assets 4;
+- e2e 15 / 11 / 6 / 55 / 11 / 18 / 6 / 5; grid 9; custom 7.
 
 ## Next
 
 After this merges, #148 needs `main` merged in (or a new push) to pick up the limits: a
-rerun reuses the old merge commit's workflow.
+rerun reuses the old merge commit's workflow. That push is the place for #148's status
+line above.
