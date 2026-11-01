@@ -89,7 +89,8 @@ sh bench/run_bench.sh [--full]                  # hardware benchmark: a drivable
 ```
 The app is live at https://jenilclaudeai.github.io/diesel-simulator/,
 published from `main` by `.github/workflows/pages.yml` on every merge.
-Angular needs Node ≥ 22.22.3. If npm 10 crashes resolving Angular's peer
+Angular needs Node 22.22.3+ on 22, or 24.15+ (24.2, this Mac's Homebrew one, is refused);
+a checksum-verified 22.23.3 is in `~/.cache/dieselsim`. If npm 10 crashes resolving Angular's peer
 deps, use `npx -y npm@11 install`. The project supports Python 3.10 —
 3.12-only syntax has slipped in before.
 

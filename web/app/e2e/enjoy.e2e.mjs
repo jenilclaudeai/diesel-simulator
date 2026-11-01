@@ -218,6 +218,17 @@ check("the trip computer counts the drive, labelled steady-state (FINDING-009)",
 // a manual, stalled: clutch down, 1st gear, clutch up with no throttle
 await tapEl(".seg button:nth-child(2)");                 // Manual (stops the engine)
 await page.waitForSelector("button.start");              // re-rendered: tapping before it raced once
+// ENJ-02: the choice is kept per browser. A tab of its own, not a reload (see the link tab below)
+{
+  const keptTab = await browser.newPage();
+  await keptTab.goto(`http://localhost:${port}${BASE}enjoy?e2e`, { waitUntil: "load" });
+  await keptTab.waitForSelector(".seg button");
+  const kept = await keptTab.evaluate(() => ({ manual: document.querySelector(".seg button:nth-child(2)").getAttribute("aria-pressed"),
+    stored: localStorage.getItem("dieselsim-drive-gearbox") }));
+  await keptTab.close();
+  await page.bringToFront();
+  check("Manual is kept: a fresh /enjoy starts in Manual (ENJ-02)", kept.manual === "true" && kept.stored === "manual", JSON.stringify(kept));
+}
 await tapEl("button.start");
 await page.waitForFunction(() => globalThis.__enjoy.view()?.trans === "manual", { timeout: 30_000 });
 await sleep(800);
@@ -664,6 +675,11 @@ await page.select("select.route", "");                    // the open road again
   const after = await p2.evaluate(t0 => globalThis.__levels.filter(([t, rms]) => t > t0 + 600 && rms > 1e-6).length, t0);
   check("B-07: Stop silences the engine, even when the stopped worker posts after Stop's reset",
     before > 0 && after === 0, `sound reports: ${before} while driving, ${after} from 0.6 to 1.8 s after Stop`);
+  // ENJ-09: and the level says so -- the worklet sent nothing while silent, so the last engine's level stood
+  const quiet = await p2.evaluate(t0 => ({ reports: globalThis.__levels.filter(([t]) => t > t0 + 600).length,
+    level: globalThis.__enjoy.level() }), t0);
+  check("ENJ-09: after Stop the level reads silent, not the last engine's", quiet.reports > 0 && quiet.level < -120,
+    `${quiet.reports} reports from 0.6 to 1.8 s after Stop; level ${quiet.level.toFixed(1)} dBFS`);
 
   // a page left driving or stuck by a failed check is recovered where it can be, so each
   // check runs and fails on its own rather than the run stopping at a timeout
