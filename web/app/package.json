@@ -20,6 +20,7 @@
     "e2e:drive": "node e2e/drive.e2e.mjs",
     "e2e:sound": "node e2e/sound.e2e.mjs",
     "e2e:enjoy": "node e2e/enjoy.e2e.mjs",
+    "e2e:offline": "node e2e/offline.e2e.mjs",
     "e2e:custom": "node e2e/custom.e2e.mjs",
     "e2e:cycle": "node e2e/cycle.e2e.mjs",
     "e2e:spec": "node e2e/spec.e2e.mjs",
@@ -36,6 +37,7 @@
     "@angular/forms": "^22.1.0",
     "@angular/platform-browser": "^22.1.0",
     "@angular/router": "^22.1.0",
+    "@angular/service-worker": "^22.1.7",
     "pyodide": "314.0.7",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"

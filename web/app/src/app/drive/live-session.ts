@@ -4,6 +4,7 @@
 import { signal } from '@angular/core';
 import { FS, type ParResult, type Transmission } from '@dieselsim/physics';
 import { GRID_VERSION, SOUND_WORKLET } from '../solver/physics-version';
+import { gridFetchError } from './offline';
 import type { DashInfo, DriveScript, FromParWorker, FromWorker, GridFile, LiveView, Pedals, ToParWorker } from './protocol';
 import type { FromWorklet, ToWorklet } from './sound-protocol';
 import { wavBytes } from './wav';
@@ -52,8 +53,10 @@ export class LiveSession {
     let grid: GridFile;
     try {
       const url = new URL(`grids/${preset}.json`, document.baseURI).href;
-      const r = await fetch(url);
-      if (!r.ok) throw new Error(`no prebuilt grid for ${preset} (HTTP ${r.status})`);
+      let r: Response;
+      try { r = await fetch(url); }
+      catch { throw new Error(gridFetchError(preset, undefined, navigator.onLine)); }
+      if (!r.ok) throw new Error(gridFetchError(preset, r.status, navigator.onLine));
       grid = (await r.json()) as GridFile;
     } catch (e) {
       if (gen !== this.gen) return;

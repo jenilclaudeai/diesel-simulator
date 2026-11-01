@@ -12,6 +12,8 @@ out/
 # ...except the Android bug tracker, which the bug sheet imports (STATUS.md)
 !reviews/ANDROID-BUGS.csv
 !reviews/FEATURES.csv
+# ...and the app's icons (ADR-024; rendered by web/app/scripts/make-icons.mjs, shipped)
+!web/app/public/icons/*.png
 
 # environments
 .venv/
