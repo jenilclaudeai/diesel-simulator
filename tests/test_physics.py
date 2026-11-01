@@ -2572,7 +2572,8 @@ def test_live_sound_follows_the_engine():
 
 ENGINES_DIR = os.path.join(os.path.dirname(__file__), "..", "engines")
 ROSTER = ("hatch15", "crdi22", "truck127", "v8hd", "single10",   # Enjoy mode, roster B (ADR-012)
-          "vw19tdi", "mhawk75", "mhawk22", "gd28", "duratorq32", "b57")   # P14 batch 1 (ADR-023)
+          "vw19tdi", "mhawk75", "mhawk22", "gd28", "duratorq32", "b57",   # P14 batch 1 (ADR-023)
+          "cummins59", "cummins67", "duramax66", "powerstroke73")         # P14 batch 2, the pickups
 
 
 def test_custom_engine_json():

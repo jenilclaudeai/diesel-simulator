@@ -13,7 +13,7 @@ export interface RosterEngine {
   readonly modelledOn?: string;
 }
 
-const CARS = 'Cars and SUVs', TRUCKS = 'Trucks', TRACTORS = 'Tractors';
+const CARS = 'Cars and SUVs', PICKUPS = 'Pickups', TRUCKS = 'Trucks', TRACTORS = 'Tractors';
 
 /** The first is the page's default engine. */
 export const ROSTER: readonly RosterEngine[] = [
@@ -25,6 +25,10 @@ export const ROSTER: readonly RosterEngine[] = [
   { key: 'gd28', name: 'SUV · 2.8 L four, 204 ps', group: CARS, modelledOn: "Toyota's 1GD-FTV (Fortuner, Hilux)" },
   { key: 'duratorq32', name: 'SUV · 3.2 L five, 200 ps', group: CARS, modelledOn: "Ford's 3.2 Duratorq (Endeavour, Ranger)" },
   { key: 'b57', name: 'Car · 3.0 L six, 265 ps', group: CARS, modelledOn: "BMW's B57 3.0 (330d, 530d)" },
+  { key: 'cummins59', name: 'Pickup · 5.9 L six, 215 hp', group: PICKUPS, modelledOn: "Cummins' 5.9 12-valve (Ram 2500, 1996-98)" },
+  { key: 'cummins67', name: 'Pickup · 6.7 L six, 370 hp', group: PICKUPS, modelledOn: "Cummins' 6.7 (Ram 2500)" },
+  { key: 'duramax66', name: 'Pickup · 6.6 L V8, 445 hp', group: PICKUPS, modelledOn: "GM's Duramax L5P 6.6 (Silverado HD)" },
+  { key: 'powerstroke73', name: 'Pickup · 7.3 L V8, 275 hp', group: PICKUPS, modelledOn: "Ford's 7.3 Power Stroke (Super Duty, 1999-2003)" },
   { key: 'truck127', name: 'Truck · 12.7 L, 530 hp', group: TRUCKS },
   { key: 'v8hd', name: 'Truck · 15 L V8, 600 ps', group: TRUCKS },
   { key: 'single10', name: 'Tractor · 1.0 L single, 15 hp', group: TRACTORS },

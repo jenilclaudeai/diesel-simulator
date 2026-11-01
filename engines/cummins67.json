@@ -1,0 +1,18 @@
+{
+  "key": "cummins67",
+  "name": "6.7 L six, 370 hp",
+  "displacement": 6.69,
+  "n_cyl": 6,
+  "rated_rpm": 2800,
+  "peak_torque": 1152,
+  "peak_power": 276,
+  "plateau": [
+    1700,
+    1700
+  ],
+  "stroke_bore": 1.159,
+  "compression_ratio": 17.3,
+  "boost_map_rise": 0.12,
+  "afr_limit": 16.0,
+  "vehicle": "pickup"
+}

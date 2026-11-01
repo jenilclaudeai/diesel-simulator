@@ -1,0 +1,18 @@
+{
+  "key": "powerstroke73",
+  "name": "7.3 L V8, 275 hp",
+  "displacement": 7.275,
+  "n_cyl": 8,
+  "rated_rpm": 2800,
+  "peak_torque": 712,
+  "peak_power": 205,
+  "plateau": [
+    1600,
+    1600
+  ],
+  "stroke_bore": 1.017,
+  "compression_ratio": 17.5,
+  "vgt": false,
+  "pilot": false,
+  "vehicle": "pickup"
+}

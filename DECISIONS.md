@@ -1575,3 +1575,50 @@ the driver drives.
   the goals' meaning: regenerate the live fixture (`--only live`), and
   personal bests made under the old rule stay in browsers.
 - A goal can be shared: `/enjoy?route=city&goal=time`.
+
+---
+
+## ADR-023 — P14: ten popular diesel engines join the roster
+
+**Status:** Accepted (the owner, 2026-10-28: "Go with all your recommendations" in
+`reviews/PROPOSAL-P14.md`; and, question by question, "Most popular onces / N2 / F2 / V2").
+Batch 1 merged (#147, 2026-10-28); ~~batch 2 being built~~ batch 2 built, #148 open (2026-10-31).
+
+### Decision
+
+1. **The ten:** `vw19tdi` (VW 1.9 TDI), `mhawk75` (Mahindra mHawk75, the first three),
+   `mhawk22` (Mahindra mHawk 2.2), `gd28` (Toyota 1GD-FTV), `duratorq32` (Ford 3.2, the
+   first five), `b57` (BMW B57 3.0), `cummins59` (Cummins 5.9 12-valve), `cummins67`
+   (Cummins 6.7), `duramax66` (Duramax 6.6 L5P), `powerstroke73` (Power Stroke 7.3).
+2. **Names, N2:** a descriptive label in `/enjoy`'s list ("SUV · 2.8 L four, 204 ps"), with
+   "modelled on the published figures of …" for the real engine beside it. The maker is
+   named by reference, never as the product's name.
+3. **Fidelity, F2:** the brochure numbers plus published hardware (bore × stroke, CR, VGT
+   or wastegate, pump or common rail, pilot), each sourced and cited in
+   `engines/ROSTER.md`. These are all `build_engine` parameters already.
+4. **Vehicles, V2:** one new vehicle, a full-size pickup, for the four pickup engines. The
+   other six reuse today's vehicles (`hatch15`, `ld_i4`, `crdi22`). This is a smaller step
+   than ADR-012's one vehicle per engine.
+5. **Delivery:** two PRs, not stacked. Batch 1 is the six on today's vehicles; batch 2, the
+   pickup vehicle and its four, follows once batch 1 has merged.
+
+### Why
+
+13 of 14 candidates hold the roster test's bar with the roster's knobs, measured against
+the five shipped engines as controls. Approximate real geometry moves them by 0.9 points at
+most. No solver change is needed, so no grid goes stale. Details and the costs:
+`reviews/PROPOSAL-P14.md`.
+
+### Consequences
+
+- **Twenty grids from now on:** a full rebuild after a solver change takes ~16 h on the
+  owner's M2 (7.2 h today). Prefer `rebuild_cold_cells.py` / `restamp_grids.py` where a
+  change allows it.
+- **Every roster key needs its vehicle `case`** in `live.Vehicle` and `vehicle.ts`. An
+  unknown key silently drives the 3 t tractor, so a test holds each key to the vehicle
+  its JSON names (`"vehicle"`, which `from_dict` ignores).
+- The 1.3 DDiS is not in: the builder's turbo gives it too little boost at 2,000 rpm. That
+  is a hashed `builder.py` change, and its own decision.
+- Naming makers by reference in a paid app wants legal advice before an app-store release.
+
+---
