@@ -29,6 +29,16 @@
 - Nothing under `dieselsim/` changed: grids and fixtures stay current. The Python suite and
   the Pyodide job were not rerun locally (no Python changed). CI is the check for them.
 
+## CI on #151 at `0e85ace` (run 41287259563): 10 of 10 pass, every job's log read
+
+- physics **105 passed, 0 failed, 3 known** on Python 3.10 and on 3.12;
+- Pyodide **82 passed, 0 failed, 2 known, 23 skipped** (the repo-file tests SKIP there);
+- web app units **170**;
+- e2e: dyno 15, drive 11, sound 6, **enjoy 53** (both ENJ checks pass), cycle 11, spec 18,
+  sweep 6, durability 5, all 0 failed;
+- golden fixtures + TS ports, SolverPort, grid in Chrome, custom engine, claude-review:
+  pass.
+
 ## Waiting on the owner
 
 The eight questions in `reviews/ENJOY-TEST-2026-10-31.md`, each with options and a
