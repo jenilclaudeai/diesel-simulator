@@ -78,7 +78,7 @@ Those lines are left as written. A finding's or proposal's status changes here f
 | `REVIEW-006.md` | Phase 4 exit (audio) | passed; signed off by ear 2026-09-30 |
 | `REVIEW-007.md` | Phase 5 exit (Enjoy) | exit-ready; M-1, the owner's phone re-check, still open |
 | `REVIEW-008.md` | Phase 6 exit (Expert) | passed |
-| `ENJOY-TEST-2026-10-31.md` | the owner's Claude in Chrome test of /enjoy, ENJ-01 to ENJ-18, triaged (report in `enjoy-test-2026-10-31/`) | 3 fixed (ENJ-01, -02, -09) on `fix/enjoy-test-findings`; 8 for the owner; 7 not bugs |
+| `ENJOY-TEST-2026-10-31.md` | the owner's Claude in Chrome test of /enjoy, ENJ-01 to ENJ-18, triaged (report in `enjoy-test-2026-10-31/`) | 3 fixed (ENJ-01, -02, -09) on `fix/enjoy-test-findings`; 8 for the owner; 7 not bugs. Mobile run (MOB-01 to -10): 3 fixed (MOB-05, -08, -10), 5 for the owner, 2 not bugs |
 
 ## Sheets
 

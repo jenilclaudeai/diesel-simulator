@@ -3,7 +3,8 @@
 **Opened by:** session 11 (2026-10-31 to 2026-11-01), from the owner's test report.
 **Lens:** the driver's view (lead), PHY1, A11Y, QA
 **Status:** **3 fixed on `fix/enjoy-test-findings`** (ENJ-01, -02, -09); 8 for the owner
-(questions below); 7 not bugs, by design or already known.
+(questions below); 7 not bugs, by design or already known. **The mobile run (MOB-01 to
+MOB-10, 2026-11-01):** 3 more fixed (MOB-05, -08, -10), 5 for the owner, 2 not bugs.
 **Input:** `reviews/enjoy-test-2026-10-31/report.md`, the report as received (18 findings,
 ENJ-01 to ENJ-18). Run on the live site, `main` at `2aa1710` (#147).
 **Reproduce:** the scripts beside the report. `harness.py` builds a `LiveEngine` as
@@ -94,6 +95,33 @@ e2e enjoy **53**, sound **6**, drive **11** (`main` 51, 6, 11), all 0 failed;
 `check:labels` passes. No file under `dieselsim/` changed: no grid goes stale and no fixture
 changes.
 
+## The mobile run (2026-11-01)
+
+The owner reran the plan in Chrome's iPhone emulation, 852×393 landscape:
+`reviews/enjoy-test-2026-10-31/report-mobile.md`, as received. It ran on the live site,
+which is `main` without this branch. So its repeats of ENJ-01, ENJ-02 and the level after
+Stop are this branch's three fixes, not yet live. The rest was checked with
+`enjoy-test-2026-10-31/mob.mjs`: headless Chrome at 852×393 with an iPhone UA and
+**real CDP touches**, not page-made events.
+
+| id | what the report said | verdict | evidence |
+|---|---|---|---|
+| MOB-01 | with a route and a goal the dash falls off the screen; Sound can't be tapped | **real**, for the owner (with ENJ-03) | Reproduced to the pixel: road 260–330 (goal line 311–330), strip 336–413 of a 393 px screen, the dash scrolls (353 of 323), and `elementFromPoint` at Sound's centre is not Sound. Free drive: strip 306–383, Sound hit. |
+| MOB-02 | with a route the toasts cover Restart | **real**, for the owner (ENJ-03's first part) | Route: toast 221–250 over Restart 196–228. Free drive at this size: clear (267 vs 251). The toast sits over the dials by design (B-02); over Restart it is not. |
+| MOB-03 | cruise, Neutral and the rest are keyboard-only | **real** (a scope question), for the owner | ADR-012 gave touch the pedals and paddles only. `Driveline._select` clamps at 1st, so "−" never reaches neutral: only `n` does. |
+| MOB-04 | one paddle tap shifts two gears | **not a bug** (the tool's events) | Real touches: 1→2, 2→3, 3→4, one gear a tap, 3 of 3. A tap's click arrives with `detail: 1`, which `keyTap` ignores by design (it acts only for a keyboard's `detail: 0`). The agent's page-made click had `detail: 0`, so it counted twice. `e2e:enjoy` checks the same with CDP touches ("gear 1 -> 2"). |
+| MOB-05 | Place, Fuel and Units labels invisible | **real, fixed here** | 1.00:1, all three: the picker's `--slate-muted` was made for /drive's grey (5:1 there), and /enjoy is slate. Now 7.26:1. |
+| MOB-06 | the start screen's settings sit below the fold | **real**, for the owner | 481 px of content in a 323 px panel; Vibration starts at 410. |
+| MOB-07 | tap targets under 44 px, small text | **real**, for the owner | Apple's 44 pt and Android's 48 dp are guidelines; Phase 8's accessibility pass did not set one. |
+| MOB-08 | the breaker hint's second speed has no unit | **real, fixed here** | `touchHint` dropped it; its test pinned the old string ("take them at 9"). |
+| MOB-09 | the vibration Test note doesn't suit an iPhone | **not a bug** (emulation) | A real iPhone has no `navigator.vibrate`, and `testNote` then says "This browser has no vibration (iPhones and iPads have none)". Desktop Chrome's iPhone emulation keeps the function. |
+| MOB-10 | Start flush with the top bar, its label low | **real, fixed here** | Squashed to 40 px against the 49 its padding and type need (P14's status noted it at 846×300). `flex-shrink: 0`: now 61 px. |
+
+**The fixes' tests** (mutation-tested; every mutant failed by an assertion): `hints.spec.ts`
+for MOB-08 (the old string put back: caught); `e2e:enjoy` for MOB-05 (labels ≥ 4.5:1) and
+MOB-10 (Start's height ≥ its padding and type, on a start screen that overflows): with
+both CSS rules taken out, both fail (1.00:1; 40 px of 49), 53 of 55 pass.
+
 ## Questions for the owner
 
 1. **ENJ-08, the limiter buzz.** It needs a threshold the engines reach.
@@ -106,7 +134,9 @@ changes.
      exactly when the governor bites. *Trade-off:* worker and protocol changes.
    - **C:** drop the limiter event. *Positive:* less code. *Trade-off:* loses one of the
      four events you chose for P01.
-2. **ENJ-03, a short phone.** Two parts.
+2. **ENJ-03 with MOB-01 and MOB-02, a short phone.** Two parts. On an iPhone in landscape
+   (852×393) both happen only on a route, and with a goal the Sound button is off the
+   screen too, so this matters on a common phone, not only at 300 px.
    - The toast over Restart. **A (recommended):** while stalled, show the hint as the Restart
      button's own second line ("Hold the clutch"), and no toast. *Positive:* the instruction
      sits on the thing to tap; nothing overlaps at any height. *Trade-off:* a taller button,
@@ -139,6 +169,23 @@ changes.
    arrow keys press. *Positive:* matches their role. *Trade-off:* a held key and a slider
    overlap; the keys already work. **B:** take the slider role off and name the keys in the
    start screen's hint. *Positive:* no new input path.
+9. **MOB-03, controls a phone can't reach.** ADR-012 gave touch the pedals and paddles; on a
+   phone there is no Neutral (once in gear), cruise, lock-up, engine brake, refuel or resets.
+   **A (recommended):** an N button beside the paddles and a Cruise button with +/−, sending
+   the keys the loop already has (`n`, `c`, `+`, `-`). *Positives:* page only, no fixture
+   changes; covers what a driver needs while driving. *Trade-off:* two more controls on a
+   crowded dash (to be fitted with question 2). **B:** "−" from 1st selects neutral.
+   *Positive:* no new button. *Trade-off:* changes `live.py`'s manual box for /drive and
+   play.py too, and the live fixtures. **C:** leave it: Enjoy stays the simple page ADR-012
+   chose.
+10. **MOB-06, the start screen below the fold.** **A (recommended):** below 420 px of height,
+    put the pickers in two columns beside Start. *Positive:* Start and the settings in one
+    view. *Trade-off:* a second layout to keep. **B:** a fade at the panel's bottom edge
+    that says it scrolls. *Positive:* small. *Trade-off:* still a scroll.
+11. **MOB-07, tap targets.** **A (recommended):** a 44 px floor for every button and the
+    vibration switch on /enjoy, set with question 2's layout. *Positive:* fewer missed taps.
+    *Trade-off:* about 12 px more per row on a dash that is already short. **B:** only the
+    controls used while driving (Mic, Sound, Restart, back to auto).
 
 Also stale, not changed here: `ANDROID-BUGS.csv` still says B-07 "Fixed in PR (not yet
 merged)" and B-08 "Fix in PR #141 (draft)"; `main` merged both (#140, #141). The CSV is
