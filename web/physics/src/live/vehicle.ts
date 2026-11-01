@@ -26,12 +26,13 @@ export interface Vehicle {
 
 /** The vehicles a custom engine may name (ADR-014; live.VEHICLE_KEYS). Every
  *  other key gets the "tractor" fallback. */
-export const VEHICLE_KEYS = ["hatch15", "crdi15", "ld_i4", "crdi22", "hd_i6", "tractor"] as const;
+export const VEHICLE_KEYS = ["hatch15", "crdi15", "ld_i4", "crdi22", "pickup", "hd_i6", "tractor"] as const;
 
 /** P14 (ADR-023): roster engines that drive one of those vehicles (live.ROSTER_VEHICLES).
  *  A roster grid records no vehicle, so a key missing here drives the tractor. */
 export const ROSTER_VEHICLES: Readonly<Record<string, string>> = {
   vw19tdi: "hatch15", mhawk75: "ld_i4", mhawk22: "crdi22", gd28: "crdi22", duratorq32: "crdi22", b57: "ld_i4",
+  cummins59: "pickup", cummins67: "pickup", duramax66: "pickup", powerstroke73: "pickup",
 };
 
 export function vehicleFor(preset: string, trans: Transmission = "dct"): Vehicle {
@@ -61,6 +62,10 @@ export function vehicleFor(preset: string, trans: Transmission = "dct"): Vehicle
       return { ...base, name: "1.9 t SUV, 8-speed auto", fuel_tank_L: 65.0, mass: 1900.0, r_wheel: 0.355,
         gears: [4.71, 3.14, 2.11, 1.67, 1.29, 1.0, 0.84, 0.67], final: 3.2, CdA: 0.95, Crr: 0.011, eta: 0.93,
         J_trans: 0.11, J_wheel: 6.5, TR_stall: 2.0, stall_rpm: 2000.0, tc_diameter_gain: 1.0, v_lock_min: 9.0 };
+    case "pickup": // P14 (ADR-023, V2): a 2500-class pickup, for its four
+      return { ...base, name: "3.2 t pickup, 6-speed auto", fuel_tank_L: 117.0, mass: 3200.0, r_wheel: 0.405,
+        gears: [3.23, 1.84, 1.41, 1.0, 0.82, 0.62], final: 3.73, CdA: 1.75, Crr: 0.01, eta: 0.92,
+        J_trans: 0.16, J_wheel: 14.0, TR_stall: 2.0, stall_rpm: 1900.0, tc_diameter_gain: 1.0, v_lock_min: 9.0 };
     default: // small utility tractor
       return { ...base, name: "3 t utility tractor", fuel_tank_L: 60.0, stall_rpm: 1800.0, mass: 3000.0,
         r_wheel: 0.42, gears: [4.5, 2.2, 1.3, 0.9], final: 4.1, CdA: 2.4, Crr: 0.018, eta: 0.88,
