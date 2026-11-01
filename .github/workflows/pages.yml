@@ -45,6 +45,14 @@ jobs:
       - run: npm run build:pages
       - name: the deep-link fallback is in place
         run: cmp dist/app/browser/index.html dist/app/browser/404.html
+      # ADR-024: the offline copy. A deploy without these would leave installed
+      # apps on the last good version (no ngsw.json) or uninstallable (no icons).
+      - name: the service worker and the install files are in place
+        run: |
+          test -s dist/app/browser/ngsw-worker.js
+          test -s dist/app/browser/manifest.webmanifest
+          test -s dist/app/browser/icons/maskable-512.png
+          node -e 'const m=require("./dist/app/browser/ngsw.json"); const g=m.assetGroups.map(x=>x.name).join(); if (g!=="app,grids") throw new Error("asset groups: "+g); if (Object.keys(m.hashTable).some(u=>/pyodide|\/physics\//.test(u))) throw new Error("Pyodide in the offline copy")'
       - uses: actions/upload-pages-artifact@v5
         with:
           path: web/app/dist/app/browser

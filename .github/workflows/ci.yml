@@ -207,6 +207,11 @@ jobs:
         run: npm run e2e:enjoy
         env:
           CHROME_PATH: /usr/bin/google-chrome
+      # ADR-024: installable, and Enjoy drives with the server shut down
+      - name: enjoy offline (service worker, manifest) e2e in headless Chrome
+        run: npm run e2e:offline
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
       - name: cycle page e2e in headless Chrome (Phase 6, against native Python)
         run: npm run e2e:cycle
         env:

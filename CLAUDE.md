@@ -83,7 +83,8 @@ cd web/app     && npm run check:assets          # prepare-assets on a network wi
 cd web/app     && npm run check:labels          # every fuel figure labelled steady-state (FINDING-009)
 cd web/app     && npm run perf                  # synth/loop/friction cost under Chrome CPU throttling (reports only)
 cd web/app     && npm run e2e                   # browser checks (also e2e:grid, e2e:drive, e2e:sound, e2e:enjoy, e2e:custom,
-                                                # e2e:cycle, e2e:spec, e2e:sweep, e2e:durability)
+                                                # e2e:cycle, e2e:spec, e2e:sweep, e2e:durability, e2e:offline)
+cd web/app     && CHROME_PATH=... node scripts/make-icons.mjs   # after editing scripts/icon.svg (ADR-024)
 sh bench/run_bench.sh [--full]                  # hardware benchmark: a drivable grid's build time (bench/README.md;
                                                 # Windows: bench\run_bench.bat). Quick reads low on a laptop that throttles
 ```
@@ -205,6 +206,13 @@ grep its readers and solve with it changed.
   the same care.
 - WebCrypto needs a secure context: over plain http on a LAN address the
   grid cache switches itself off by design.
+- **The live site runs under a service worker** (ADR-024, `decisions/`). After a
+  merge, a phone or browser that has opened the site before may show the **old**
+  version until its "A new version is ready" bar is tapped (Reload). Judge a change
+  only after that, and say so in a phone check. Pages' `max-age=600` no longer
+  decides it: the worker fetches `ngsw.json` uncached. Locally, `npm start` runs
+  without the worker; a `build:pages` served by hand runs with it (clear site data
+  between builds). `@angular/service-worker` must stay at core's exact version.
 - `npm start` downloads the numpy wheel once (`prepare-assets.mjs`). Behind a
   proxy, Node's fetch ignores `HTTPS_PROXY` unless `NODE_USE_ENV_PROXY=1`;
   offline, use `PYODIDE_WHEEL_DIR`. Without the wheel `npm start` carries on
