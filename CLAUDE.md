@@ -314,14 +314,14 @@ grep its readers and solve with it changed.
 
 ## Decisions
 
-`DECISIONS.md` holds ADR-001 to ADR-022 (ADR-013: the personas are review
+`DECISIONS.md` holds ADR-001 to ADR-023 (ADR-013: the personas are review
 lenses; ADR-014: custom engines, drivable; ADR-015: Phase 6's scope, staged;
 ADR-016: Phase 7's six decisions, and v2 as a separate list; ADR-017: P08, the automatic shifts by the fuel map; ADR-018: P10, the sound's
 balance and loudness, and FINDING-028 hidden in the synth; ADR-019: P09, the
 port flow and the knock fixed, the knock at altitude and on a cold start; ADR-020: P13, a
 native build in one command and converged solves that stop once settled; ADR-021: P06, random roads in
 /enjoy, the route in the live loop, shared by its seed; ADR-022: P06 tier 2, goals against a
-par computed in the browser). Don't reopen one without a
+par computed in the browser; ADR-023: P14, ten popular engines in the roster, one new pickup vehicle). Don't reopen one without a
 measured reason. The ones most easily undone by accident: the Python solver
 runs **unmodified** under Pyodide (ADR-001); audio is a TypeScript
 AudioWorklet with no `SharedArrayBuffer`, so no COOP/COEP headers, so GitHub
