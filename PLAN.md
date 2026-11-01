@@ -454,6 +454,11 @@ on" the real engine, published hardware, one new pickup vehicle, two unstacked P
 
 ~~GitHub Pages.~~ Done early, 2026-10-04 (#85), for the Phase 5 phone check:
 https://jenilclaudeai.github.io/diesel-simulator/, published from `main`.
+**Enjoy installable and offline (the owner's choice, 2026-11-01; ADR-024, in
+`decisions/`):** a service worker and a manifest. Installing opens /enjoy; the app's
+shell is kept up front and each engine's grid once it has been started, so it then
+drives with no network. The engineering pages stay online-only (Pyodide isn't kept). A
+new version is offered with a Reload bar. Built on `feat/enjoy-pwa`.
 ~~Metric/imperial toggle.~~ **Built 2026-10-19** (`feat/phase8-units`): the owner's choice, Metric / US / UK on the driver pages only (Enjoy, Drive and their place notes; the engineering pages stay SI), kept per browser beside the place and the fuel. Accessibility: gauges need text
 alternatives, and warnings must not be encoded in colour alone.
 **Accessibility built 2026-10-13** (`feat/phase8-a11y`): measured with

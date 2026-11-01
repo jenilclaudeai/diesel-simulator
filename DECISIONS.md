@@ -6,6 +6,10 @@ supersede them with a new one.
 
 Status values: `Proposed` · `Accepted` · `Superseded by ADR-NNN` · `Open`
 
+**ADR-024** (Enjoy installs as an app and drives offline, 2026-11-01) is in
+`decisions/ADR-024.md`: written there so it merges in any order with ADR-023's appends
+(#146, #148). Step A3 of `reviews/PROPOSAL-modularize.md` moves every full text there.
+
 ---
 
 ## ADR-001 — Run the Python physics under Pyodide, do not rewrite it
