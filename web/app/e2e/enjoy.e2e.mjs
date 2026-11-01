@@ -485,31 +485,33 @@ for (const [key, vehicle, maker] of [["vw19tdi", /1\.3 t hatchback/, /Volkswagen
     `"${said}"; ${r.info?.vehicle}, idle ${Math.round(r.rpm)} rpm; at 85%: ${Math.round(go.rpm)} rpm, ${go.kmh.toFixed(1)} km/h`);
 }
 
-// ---- a custom engine's grid file (ADR-014) ----
-// the hatchback's grid, relabelled as a custom engine that drives the SUV: if
-// the worker honours the file's "vehicle", the dash reports the SUV
-const gridsDir = path.join(here, "..", "public", "grids");
-const custom = JSON.parse(fs.readFileSync(path.join(gridsDir, "hatch15.json"), "utf8"));
-Object.assign(custom, { preset: "testeng", name: "Test engine", custom: true, vehicle: "crdi22" });
-fs.mkdirSync(path.join(here, "out"), { recursive: true });
-const customPath = path.join(here, "out", "custom.grid.json"), badPath = path.join(here, "out", "not-a-grid.json");
-fs.writeFileSync(customPath, JSON.stringify(custom));
-fs.writeFileSync(badPath, JSON.stringify({ hello: 1 }));
+// ---- deploy/enjoy-only: no custom engine option ----
+// main's run imports a custom engine's grid file here (ADR-014). This deployment
+// has the roster only: no file input (grid or project), no "Your engines" group,
+// every engine option a roster key, and no link out to the solver pages.
 if (await page.$("button.stop")) await tapEl("button.stop");
-await page.waitForSelector("input[type=file]");
-await (await page.$("input[type=file]")).uploadFile(badPath);
-await page.waitForSelector(".import-err", { timeout: 5000 }).catch(() => {});
-const badMsg = await page.$eval(".import-err", e => e.textContent).catch(() => "");
-check("a file that is not a grid is refused, with the reason", /not a grid file/.test(badMsg), badMsg.trim());
-await (await page.$("input[type=file]")).uploadFile(customPath);
-await page.waitForFunction(() => [...document.querySelectorAll("select option")].some(o => o.selected && /Test engine/.test(o.textContent)),
-  { timeout: 5000 }).catch(() => {});
-await tapEl("button.start");
-await page.waitForFunction(() => globalThis.__enjoy.info()?.vehicle, { timeout: 60_000 }).catch(() => {});
-const cinfo = await page.evaluate(() => globalThis.__enjoy.info());
-const csel = await page.$eval("select", s => s.selectedOptions[0]?.textContent ?? "");
-check("an imported custom engine drives, in the vehicle its file names", /Test engine/.test(csel) && /SUV/.test(cinfo?.vehicle ?? ""),
-  `engine "${csel.trim()}", vehicle "${cinfo?.vehicle}"`);
+await page.waitForSelector("button.start");
+const noCustom = await page.evaluate(() => ({
+  files: document.querySelectorAll("input[type=file]").length,
+  groups: [...document.querySelectorAll('select[aria-label="Engine"] optgroup')].map(g => g.label),
+  options: [...document.querySelectorAll('select[aria-label="Engine"] option')].map(o => o.value),
+  links: document.querySelectorAll("a[href]").length,
+}));
+check("deploy/enjoy-only: no custom engine option (no file input, no \"Your engines\", fifteen roster engines, no links out)",
+  noCustom.files === 0 && !noCustom.groups.includes("Your engines") && noCustom.options.length === 15
+  && noCustom.options.every(v => /^[a-z0-9]+$/.test(v)) && noCustom.links === 0, JSON.stringify(noCustom));
+// the root and an old solver page's link both land on Enjoy, with the route kept
+const rootTab = await browser.newPage();
+await rootTab.goto(`http://localhost:${port}${BASE}?route=city`, { waitUntil: "load" });
+await rootTab.waitForSelector("button.start", { timeout: 30_000 }).catch(() => {});
+const atRoot = await rootTab.evaluate(() => ({ path: location.pathname + location.search, start: !!document.querySelector("button.start") }));
+await rootTab.goto(`http://localhost:${port}${BASE}spec`, { waitUntil: "load" });
+await rootTab.waitForSelector("button.start", { timeout: 30_000 }).catch(() => {});
+const atSpec = await rootTab.evaluate(() => ({ path: location.pathname, start: !!document.querySelector("button.start") }));
+await rootTab.close();
+check("deploy/enjoy-only: the root and an old /spec link open Enjoy (the root keeps ?route=)",
+  atRoot.start && atRoot.path === `${BASE}enjoy?route=city` && atSpec.start && atSpec.path === `${BASE}enjoy`,
+  JSON.stringify({ atRoot, atSpec }));
 
 // ---- Phase 8: the driver's units (the owner's choice: Metric / US / UK, driver pages only) ----
 // US, then back to metric: this browser carries localStorage from page to page (CLAUDE.md)

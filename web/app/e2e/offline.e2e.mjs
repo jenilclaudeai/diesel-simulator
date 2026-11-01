@@ -106,10 +106,14 @@ try {
 
   // 2. the service worker takes the page and keeps the app
   await until(() => page.evaluate(() => !!navigator.serviceWorker?.controller), 60_000, "the service worker to control the page");
-  const app = await until(async () => { const c = await cached("app"); return c.length >= 13 ? c : null; }, 60_000, "the app's files in the cache");
-  check("the service worker controls the page and keeps the app's files",
-    app.some(u => /\/main-[^/]+\.js$/.test(u)) && app.some(u => u.startsWith(`${BASE}audio/`)) && app.includes(`${BASE}index.html`),
-    `${app.length} files`);
+  // deploy/enjoy-only: as many as ngsw.json's app group lists (main's build: 13; here 12, the
+  // solver's orphan worker chunk removed by scripts/enjoy-only.mjs), not a fixed 13
+  const appUrls = JSON.parse(fs.readFileSync(path.join(root, "ngsw.json"), "utf8")).assetGroups.find(g => g.name === "app").urls;
+  const app = await until(async () => { const c = await cached("app"); return c.length >= appUrls.length ? c : null; }, 60_000, "the app's files in the cache");
+  check("the service worker controls the page and keeps every file of the app group",
+    app.some(u => /\/main-[^/]+\.js$/.test(u)) && app.some(u => u.startsWith(`${BASE}audio/`)) && app.includes(`${BASE}index.html`)
+    && appUrls.every(u => app.includes(u)) && !app.some(u => /\/worker-[^/]+\.js$/.test(u) && !appUrls.includes(u)),
+    `${app.length} files of ${appUrls.length}`);
   const inst = await cdp.send("Page.getInstallabilityErrors");
   check("Chrome finds the page installable", inst.installabilityErrors.length === 0,
     JSON.stringify(inst.installabilityErrors.map(e => e.errorId)));

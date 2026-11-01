@@ -7,11 +7,20 @@
 # COOP/COEP headers, which Pages cannot set. The build is the same
 # `npm run build:pages` CI checks on every PR; 404.html is index.html, so
 # deep links and refreshes reach the app's router.
+#
+# Branch `deploy/enjoy-only`: this copy builds the Enjoy-only app
+# (`npm run build:enjoy`: Enjoy alone, no custom engines, no Pyodide) and runs
+# ONLY when started by hand, so a push to this branch never replaces the
+# live site:
+#
+#   gh workflow run pages.yml --ref deploy/enjoy-only
+#
+# Pages has one site per repository, and main's copy of this file redeploys
+# the full app on every merge to main, which would replace this one. Pick
+# where this build lives before running it (status/deploy-enjoy-only.md).
 name: Pages
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -42,7 +51,9 @@ jobs:
       - run: npm ci
         working-directory: web/solver
       - run: npm ci
-      - run: npm run build:pages
+      - run: npm run build:enjoy
+      - name: Enjoy only, with no Pyodide shipped
+        run: test ! -e dist/app/browser/pyodide && test ! -e dist/app/browser/physics
       - name: the deep-link fallback is in place
         run: cmp dist/app/browser/index.html dist/app/browser/404.html
       # ADR-024: the offline copy. A deploy without these would leave installed
