@@ -75,7 +75,7 @@ class EngineSoundProcessor extends AudioWorkletProcessor {
     const out = outputs[0];
     if (!out || !out[0]) return true;
     const syn = this.syn, st = this.st, grid = this.grid;
-    if (!syn || !st || !grid) return true;                  // silence until the loop speaks
+    if (!syn || !st || !grid) return this.report();         // silence until the loop speaks
     if (out[0].length !== BLOCK) { this.fail(`render quantum ${out[0].length}, expected ${BLOCK}`); return true; }
     try {
       if (syn.src === null || this.n % BLEND_EVERY === 0) {
@@ -103,6 +103,11 @@ class EngineSoundProcessor extends AudioWorkletProcessor {
     } catch (e) {
       this.fail(String(e));
     }
+    return this.report();
+  }
+
+  /** The level, ~4 Hz -- in silence too (ENJ-09: after Stop the last engine's level stood on /drive's meter). */
+  private report(): boolean {
     if (++this.n % LEVEL_EVERY === 0) {
       this.port.postMessage({ type: 'level', rms: Math.sqrt(this.sq / (LEVEL_EVERY * BLOCK)), peak: this.peak, quanta: this.n });
       this.sq = 0;

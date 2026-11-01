@@ -18,6 +18,7 @@ import { derateLit } from './lamps';
 import { Pedal } from './pedal';
 import { ROSTER, rosterGroups } from './roster';
 import { testNote, VibrationSetting, Vibrator } from './vibration';
+import { enjoyGearbox } from './gearbox';
 import { bestKey, GoalBests, GOALS, judge, LapRun, lapTime, parseGoal, type GoalKind } from './goals';
 import { newSeed, parseRouteParam, roadAhead, ROUTE_CHOICES, routeKey, routeOf, routeSummary, SURFACE_FILL } from './road';
 import {
@@ -115,7 +116,7 @@ export class EnjoyPage implements OnDestroy {
   });
   // economy() and distance() are in the driver's units; economy() stays null where there is no figure
   protected readonly avg = computed(() => { const s = this.v(); return s ? economy(avgL100(s.trip_L, s.trip_km), this.u()) : null; });
-  protected readonly now = computed(() => { const s = this.v(); return s ? economy(nowL100(s.inst_kmpl, s.kmh), this.u()) : null; });
+  protected readonly now = computed(() => { const s = this.v(); return s ? economy(nowL100(s.inst_kmpl, s.kmh, s.fuel_kg_h), this.u()) : null; });
   protected readonly range = computed(() => {
     const s = this.v(), r = s ? rangeKm(s.tank_L, s.trip_L, s.trip_km) : null;
     return r === null ? null : distance(r, this.u());
@@ -275,7 +276,11 @@ export class EnjoyPage implements OnDestroy {
   protected trans(): Transmission { return this.manual() ? 'manual' : 'tc'; }
 
   protected selectPreset(p: string): void { this.preset.set(p); this.s.stop(); }
-  protected setManual(m: boolean): void { this.manual.set(m); this.s.stop(); }
+  protected setManual(m: boolean): void {
+    this.manual.set(m);
+    this.env.setGearbox(enjoyGearbox(m, this.env.gearbox()));   // ENJ-02: kept, as /drive keeps it
+    this.s.stop();
+  }
 
   /** One tap starts the engine and the sound (the tap is the audio gesture). */
   protected async start(): Promise<void> {

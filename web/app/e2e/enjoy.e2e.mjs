@@ -99,6 +99,26 @@ check("the fuel is picked beside it: sold here first, then summer, winter and ar
 // P01: the vibration switch, on the start screen, on by default (the owner's choice)
 const vibSwitch = await page.evaluate(() => document.querySelector("main.dash input.vibration")?.checked ?? null);
 check("P01: the vibration switch is on the start screen, on by default", vibSwitch === true, String(vibSwitch));
+// MOB-05: the place picker's labels were /drive's dark ink on this slate, 1.00:1; MOB-10: a start
+// screen taller than its panel squashed Start below its own padding and type (40 px of 55)
+const startScreen = await page.evaluate(() => {
+  const rgb = s => s.match(/[\d.]+/g).map(Number);
+  const lum = c => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+  const bg = rgb(getComputedStyle(document.querySelector(".enjoy")).backgroundColor);
+  const labels = [...document.querySelectorAll("main.dash label.field > span")].map(e => {
+    const c = rgb(getComputedStyle(e).color), a = c[3] ?? 1, mix = [0, 1, 2].map(i => a * c[i] + (1 - a) * bg[i]);
+    const L1 = lum(mix), L2 = lum(bg);
+    return [e.textContent.trim(), Math.round(100 * (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05)) / 100];
+  });
+  const st = document.querySelector("button.start"), cs = getComputedStyle(st), dash = document.querySelector("main.dash");
+  return { labels, startH: Math.round(st.getBoundingClientRect().height),
+    needs: Math.round(parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.fontSize)), overflows: dash.scrollHeight > dash.clientHeight };
+});
+check("MOB-05: the start screen's Place, Fuel and Units labels read at 4.5:1 or more",
+  startScreen.labels.length === 3 && startScreen.labels.every(([, r]) => r >= 4.5), JSON.stringify(startScreen.labels));
+check("MOB-10: Start keeps its height on a start screen taller than its panel",
+  startScreen.overflows && startScreen.startH >= startScreen.needs, `${startScreen.startH} px tall, its padding and type need ${startScreen.needs}; overflows ${startScreen.overflows}`);
 // P01 (2026-10-21): Test buzzes once and says what the browser did with it. Since P06's
 // route and goal pickers the start screen scrolls, and Test sits below the fold at 412 px:
 // scrolled to, as a thumb would
@@ -218,6 +238,17 @@ check("the trip computer counts the drive, labelled steady-state (FINDING-009)",
 // a manual, stalled: clutch down, 1st gear, clutch up with no throttle
 await tapEl(".seg button:nth-child(2)");                 // Manual (stops the engine)
 await page.waitForSelector("button.start");              // re-rendered: tapping before it raced once
+// ENJ-02: the choice is kept per browser. A tab of its own, not a reload (see the link tab below)
+{
+  const keptTab = await browser.newPage();
+  await keptTab.goto(`http://localhost:${port}${BASE}enjoy?e2e`, { waitUntil: "load" });
+  await keptTab.waitForSelector(".seg button");
+  const kept = await keptTab.evaluate(() => ({ manual: document.querySelector(".seg button:nth-child(2)").getAttribute("aria-pressed"),
+    stored: localStorage.getItem("dieselsim-drive-gearbox") }));
+  await keptTab.close();
+  await page.bringToFront();
+  check("Manual is kept: a fresh /enjoy starts in Manual (ENJ-02)", kept.manual === "true" && kept.stored === "manual", JSON.stringify(kept));
+}
 await tapEl("button.start");
 await page.waitForFunction(() => globalThis.__enjoy.view()?.trans === "manual", { timeout: 30_000 });
 await sleep(800);
@@ -667,6 +698,11 @@ await page.select("select.route", "");                    // the open road again
   const after = await p2.evaluate(t0 => globalThis.__levels.filter(([t, rms]) => t > t0 + 600 && rms > 1e-6).length, t0);
   check("B-07: Stop silences the engine, even when the stopped worker posts after Stop's reset",
     before > 0 && after === 0, `sound reports: ${before} while driving, ${after} from 0.6 to 1.8 s after Stop`);
+  // ENJ-09: and the level says so -- the worklet sent nothing while silent, so the last engine's level stood
+  const quiet = await p2.evaluate(t0 => ({ reports: globalThis.__levels.filter(([t]) => t > t0 + 600).length,
+    level: globalThis.__enjoy.level() }), t0);
+  check("ENJ-09: after Stop the level reads silent, not the last engine's", quiet.reports > 0 && quiet.level < -120,
+    `${quiet.reports} reports from 0.6 to 1.8 s after Stop; level ${quiet.level.toFixed(1)} dBFS`);
 
   // a page left driving or stuck by a failed check is recovered where it can be, so each
   // check runs and fails on its own rather than the run stopping at a timeout

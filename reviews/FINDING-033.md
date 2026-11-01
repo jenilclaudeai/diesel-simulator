@@ -2,8 +2,12 @@
 
 **Opened by:** session 10 (2026-10-21), building P06 tier 2's par runs.
 **Lens:** PHY1, SR1, USR1
-**Status:** **open, for the owner.** Nothing changed yet. **Latent:** no shipped grid
-reaches it in the 40 runs below. Only the test fixture's small crdi15 grid does.
+**Status:** **open, for the owner.** Nothing changed yet. ~~**Latent:** no shipped grid
+reaches it in the 40 runs below. Only the test fixture's small crdi15 grid does.~~
+**Not latent (corrected 2026-11-01, ENJ-04 in `reviews/ENJOY-TEST-2026-10-31.md`):** a
+shipped grid reaches it through waxed fuel. hatch15, Auto, Arctic winter with summer diesel
+on the live site: 60 rpm, 0.2 km/h, `stalled` false for the 50 s measured, and no lamp or
+Restart once the ~4 s hint goes. The 40 runs below never waxed the fuel.
 **Reproduce:** scratch scripts `par_trace.py`, `bog_matrix.py` and `bog_all.py` in the
 session's job directory; the live fixture's `par_random_leh`.
 

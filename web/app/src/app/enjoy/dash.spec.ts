@@ -57,10 +57,16 @@ describe('economy (steady-state, FINDING-009)', () => {
     expect(avgL100(0.001, 0.05)).toBeNull();
   });
   it('gives an instantaneous figure only when moving on fuel', () => {
-    expect(nowL100(20, 90)).toBeCloseTo(5, 12);
-    expect(nowL100(20, 1)).toBeNull();
-    expect(nowL100(0, 90)).toBeNull();
-    expect(nowL100(Infinity, 90)).toBeNull();
+    expect(nowL100(20, 90, 3.7)).toBeCloseTo(5, 12);
+    expect(nowL100(20, 1, 0.5)).toBeNull();
+    expect(nowL100(0, 90, 3.7)).toBeNull();
+    expect(nowL100(Infinity, 90, 3.7)).toBeNull();
+  });
+  it('shows no figure on a coast, though the loop\'s filtered km/L never reaches 0 (ENJ-01)', () => {
+    // the live loop, hatch15: 35 s into a coast from 114 km/h, fuel cut, km/L decayed to 3.1e-19
+    expect(nowL100(3.082e-19, 59.2, 0)).toBeNull();
+    // and under way just before it: 18.07 kg/h at 114.4 km/h, 5.0 km/L
+    expect(nowL100(5.001, 114.4, 18.07)).toBeCloseTo(20.0, 1);
   });
   it('estimates range from the tank at the trip average', () => {
     expect(rangeKm(40, 0.5, 10)).toBeCloseTo(800, 9);

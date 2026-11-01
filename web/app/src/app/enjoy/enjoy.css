@@ -35,7 +35,11 @@ button:disabled { opacity: 0.45; }
 /* B-02: when the dash can't fit (a short phone, a wide font), the strip scrolls; nothing overlaps */
 .dash { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; align-items: stretch; justify-content: safe center; gap: 6px; min-height: 0; overflow-y: auto; }
 .dash > .start, .dash > .hint, .dash > .err { align-self: center; text-align: center; }
-.start { font-size: 1.3rem !important; padding: 14px 28px !important; background: var(--amber) !important; color: var(--slate) !important; border-color: var(--amber) !important; }
+/* MOB-10: flex-shrink 0, or a start screen taller than the panel squashed Start to 40 px of its 55 */
+.start { flex-shrink: 0; font-size: 1.3rem !important; padding: 14px 28px !important; background: var(--amber) !important; color: var(--slate) !important; border-color: var(--amber) !important; }
+/* MOB-05: the place picker's labels are --slate-muted, made for /drive's grey; on this slate they
+   were 1.00:1. Grey at 0.8 here, as the page's other muted text */
+.dash > .place { --slate-muted: rgba(223, 227, 220, 0.8); }
 .hint { opacity: 0.8; max-width: 34em; }
 /* P01: the vibration switch, under the place and the fuel */
 .dash > .vibrate { align-self: center; display: flex; gap: 0.45rem; align-items: center; font-size: 0.95rem; opacity: 0.9; }

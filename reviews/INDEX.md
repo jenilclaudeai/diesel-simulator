@@ -45,7 +45,7 @@ Those lines are left as written. A finding's or proposal's status changes here f
 | 030 | P09's cold cells carry 6-140× a cold start's friction | fixed, option A (cold-cell friction at the running walls) | | #131 |
 | 031 | light pedal from cold: creeps, at 0 °C does not move | A (stated) shipped with P09; C, a cold-start ECU: proposal answered 2026-10-28, build not started | | #131, #142 |
 | 032 | the live loop's radiator, fan and drag breathe sea-level air | fixed, drag included | | #137 |
-| 033 | an automatic dragged to its 60 rpm floor stays "running" | **open, for the owner**; latent (no shipped grid reaches it). Recommended A: stall it | | |
+| 033 | an automatic dragged to its 60 rpm floor stays "running" | **open, for the owner**; ~~latent (no shipped grid reaches it)~~ reached by waxed fuel on a shipped grid (ENJ-04, 2026-11-01). Recommended A: stall it | | |
 
 ## Proposals
 
@@ -78,6 +78,7 @@ Those lines are left as written. A finding's or proposal's status changes here f
 | `REVIEW-006.md` | Phase 4 exit (audio) | passed; signed off by ear 2026-09-30 |
 | `REVIEW-007.md` | Phase 5 exit (Enjoy) | exit-ready; M-1, the owner's phone re-check, still open |
 | `REVIEW-008.md` | Phase 6 exit (Expert) | passed |
+| `ENJOY-TEST-2026-10-31.md` | the owner's Claude in Chrome test of /enjoy, ENJ-01 to ENJ-18, triaged (report in `enjoy-test-2026-10-31/`) | 3 fixed (ENJ-01, -02, -09) on `fix/enjoy-test-findings`; 8 for the owner; 7 not bugs. Mobile run (MOB-01 to -10): 3 fixed (MOB-05, -08, -10), 5 for the owner, 2 not bugs |
 
 ## Sheets
 
