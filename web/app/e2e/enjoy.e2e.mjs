@@ -99,6 +99,26 @@ check("the fuel is picked beside it: sold here first, then summer, winter and ar
 // P01: the vibration switch, on the start screen, on by default (the owner's choice)
 const vibSwitch = await page.evaluate(() => document.querySelector("main.dash input.vibration")?.checked ?? null);
 check("P01: the vibration switch is on the start screen, on by default", vibSwitch === true, String(vibSwitch));
+// MOB-05: the place picker's labels were /drive's dark ink on this slate, 1.00:1; MOB-10: a start
+// screen taller than its panel squashed Start below its own padding and type (40 px of 55)
+const startScreen = await page.evaluate(() => {
+  const rgb = s => s.match(/[\d.]+/g).map(Number);
+  const lum = c => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+  const bg = rgb(getComputedStyle(document.querySelector(".enjoy")).backgroundColor);
+  const labels = [...document.querySelectorAll("main.dash label.field > span")].map(e => {
+    const c = rgb(getComputedStyle(e).color), a = c[3] ?? 1, mix = [0, 1, 2].map(i => a * c[i] + (1 - a) * bg[i]);
+    const L1 = lum(mix), L2 = lum(bg);
+    return [e.textContent.trim(), Math.round(100 * (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05)) / 100];
+  });
+  const st = document.querySelector("button.start"), cs = getComputedStyle(st), dash = document.querySelector("main.dash");
+  return { labels, startH: Math.round(st.getBoundingClientRect().height),
+    needs: Math.round(parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.fontSize)), overflows: dash.scrollHeight > dash.clientHeight };
+});
+check("MOB-05: the start screen's Place, Fuel and Units labels read at 4.5:1 or more",
+  startScreen.labels.length === 3 && startScreen.labels.every(([, r]) => r >= 4.5), JSON.stringify(startScreen.labels));
+check("MOB-10: Start keeps its height on a start screen taller than its panel",
+  startScreen.overflows && startScreen.startH >= startScreen.needs, `${startScreen.startH} px tall, its padding and type need ${startScreen.needs}; overflows ${startScreen.overflows}`);
 // P01 (2026-10-21): Test buzzes once and says what the browser did with it. Since P06's
 // route and goal pickers the start screen scrolls, and Test sits below the fold at 412 px:
 // scrolled to, as a thumb would

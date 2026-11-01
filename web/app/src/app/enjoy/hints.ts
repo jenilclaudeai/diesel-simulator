@@ -22,7 +22,8 @@ export function touchHint(hint: string, units: UnitSystem = 'metric'): string {
   const b = BREAKER.exec(hint);
   if (b) {
     const r = (kmh: number) => Math.round(speed(kmh, units));
-    return `Speed breaker at ${r(Number(b[1]))} ${speedUnit(units)}: take them at ${r(Number(b[2]))}`;
+    const u = speedUnit(units);   // MOB-08: both speeds carry it ("take them at 9" said nothing in mph)
+    return `Speed breaker at ${r(Number(b[1]))} ${u}: take them at ${r(Number(b[2]))} ${u}`;
   }
   return TOUCH[hint] ?? hintInUnits(hint, units);
 }

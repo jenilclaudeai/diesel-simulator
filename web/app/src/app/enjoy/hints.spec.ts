@@ -19,10 +19,10 @@ describe('touchHint', () => {
 
   it("P06: says the loop's breaker hint in the driver's units", () => {
     const h = 'speed breaker at 95 km/h -- take them at 15';
-    expect(touchHint(h)).toBe('Speed breaker at 95 km/h: take them at 15');
-    expect(touchHint(h, 'metric')).toBe('Speed breaker at 95 km/h: take them at 15');
-    expect(touchHint(h, 'us')).toBe('Speed breaker at 59 mph: take them at 9');
-    expect(touchHint(h, 'uk')).toBe('Speed breaker at 59 mph: take them at 9');
+    expect(touchHint(h)).toBe('Speed breaker at 95 km/h: take them at 15 km/h');
+    expect(touchHint(h, 'metric')).toBe('Speed breaker at 95 km/h: take them at 15 km/h');
+    expect(touchHint(h, 'us')).toBe('Speed breaker at 59 mph: take them at 9 mph');   // MOB-08: the unit on both
+    expect(touchHint(h, 'uk')).toBe('Speed breaker at 59 mph: take them at 9 mph');
   });
 
   it("the waxed-fuel hint in the driver's units (Phase 8)", () => {
