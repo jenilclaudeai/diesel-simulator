@@ -51,8 +51,22 @@ enjoy mode". This branch is from `main` at `2aa1710`, not stacked. It merges cle
   offline. *My first runner read the exit code of a pipe into `tail` (always 0) and
   printed four as SURVIVED with "1 failed" beside them, and its fifth mutant (`if (false)`)
   didn't compile. Rerun with the verdict read from the counts and a compiling mutant.*
-- **Not run locally:** the other e2e checks (dyno, drive, sound, enjoy, cycle, spec, sweep,
-  durability, grid, custom), which now all run under the service worker. CI runs them.
+- **Existing e2e under the service worker, local:** enjoy **51 passed**, dyno **15 passed**
+  (Pyodide fetched through the worker), sound **6 passed**; 0 failed, no page errors.
+
+## CI on #150 at `ea3b632` (run 41285934702): 10 of 10 passed, every job read
+
+- physics **105 passed, 0 failed, 3 known** on 3.10 and 3.12 (no Python changed here:
+  `main`'s count, P14 batch 1's tests included); Pyodide **82 passed, 0 failed, 2 known,
+  23 skipped**;
+- golden fixtures + TS ports 5 / 68 / 13 / 18; SolverPort 20 / 15 / 30;
+- web app: units **175** (32 files), prepare-assets offline 4;
+- web e2e: dyno 15, drive 11, sound 6, enjoy 51, **offline 13** (764 rpm, 0 requests, the
+  same as here, on Linux Chrome), cycle 11, spec 18, sweep 6, durability 5; grid 9; custom
+  engine 7; claude-review passed. All 0 failed.
+- The web e2e job ran 21.6 min of its 30 (step times 07:43:49 → 08:05:28 UTC); the
+  offline step 4 s. The API's job-level `completed_at` reads exactly 1 h later than the
+  last step for every job here: read step times, not the job's, for a duration.
 
 ## Waiting on the owner
 
