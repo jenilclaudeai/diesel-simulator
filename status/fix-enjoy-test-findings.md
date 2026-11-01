@@ -45,7 +45,14 @@ On the tree merged with `main` (`2b8d067`):
 
 ~~On #151 at `0e85ace` (run 41287259563): 10 of 10 pass, every job's log read~~ (before the
 mobile fixes and the merge; physics 105 on 3.10 and 3.12, Pyodide 82 + 23 skipped, units 170,
-e2e enjoy 53 and the rest all 0 failed). **At the merged head: not yet read.**
+e2e enjoy 53 and the rest all 0 failed). **At the merged head `59a12af` (run 41315003651):
+10 of 10 pass, every job's log read:**
+- physics **105 passed, 0 failed, 3 known** on Python 3.10 and on 3.12;
+- Pyodide **82 passed, 0 failed, 2 known, 23 skipped**;
+- web app units **170**;
+- e2e: dyno 15, drive 11, sound 6, **enjoy 59** (the MOB-05, MOB-10, ENJ-02 and ENJ-09
+  checks pass), cycle 11, spec 18, sweep 6, durability 5, all 0 failed;
+- golden fixtures + TS ports, SolverPort, grid in Chrome, custom engine, claude-review: pass.
 
 ## Waiting on the owner
 
