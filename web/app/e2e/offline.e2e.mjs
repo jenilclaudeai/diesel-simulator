@@ -23,7 +23,7 @@ const root = path.resolve(here, "..", "dist", "app", "browser");
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript",
   ".css": "text/css", ".json": "application/json", ".wasm": "application/wasm", ".ico": "image/x-icon",
   ".png": "image/png", ".webmanifest": "application/manifest+json" };
-const BASE = "/diesel-simulator/";
+const BASE = process.env.E2E_BASE ?? "/diesel-simulator/";   // "/" for build:cloudflare
 let served = 0;
 const server = http.createServer((req, res) => {
   served++;

@@ -68,6 +68,24 @@ Nothing is deployed: the owner picks where it goes live (below).
 2. **Projects:** removed as part of "custom engine option" (assumption above). Keep them
    out?
 
+## Cloudflare Pages (the owner asked for the steps, 2026-11-02)
+
+- **`npm run build:cloudflare`:** `prepare-assets`, `ng build --base-href /`, then
+  `enjoy-only.mjs`. It writes **no `404.html`**, on purpose. Cloudflare's docs: with a
+  top-level `404.html`, Pages serves it with a 404 status; without one, it treats the site
+  as a single-page app and serves `index.html`. 37 files, the largest a 6.1 MB grid;
+  Pages allows 25 MiB a file and 20,000 files.
+- **Measured under `wrangler pages dev` (wrangler 4):** `/`, `/enjoy?route=city`, `/spec`
+  and `/drive` return `index.html` with 200. `ngsw.json`, the manifest and the grids are
+  served with their right types, grids with `cache-control: public, max-age=0,
+  must-revalidate`. Pyodide and the orphan worker are absent (their paths fall back to
+  `index.html`).
+- **e2e at base `/`** (`E2E_BASE=/`, a new override in both files; the default is still
+  `/diesel-simulator/`): **offline 13 passed, enjoy 59 passed, 0 failed.** The installed
+  app opens `/enjoy`, scoped to `/`.
+- Not done: no Cloudflare account was touched. The steps are in the reply of 2026-11-02:
+  Direct Upload with `wrangler pages deploy`, or Git integration on this branch.
+
 ## Keeping it current
 
 `git merge origin/main` into this branch picks up `main`'s fixes. Conflicts are likely only

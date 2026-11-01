@@ -34,7 +34,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..", "dist", "app", "browser");
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript",
   ".css": "text/css", ".json": "application/json", ".wasm": "application/wasm", ".ico": "image/x-icon" };
-const BASE = "/diesel-simulator/";
+const BASE = process.env.E2E_BASE ?? "/diesel-simulator/";   // "/" for build:cloudflare
 const server = http.createServer((req, res) => {
   const url = decodeURIComponent(new URL(req.url, "http://x").pathname);
   if (!url.startsWith(BASE)) { res.writeHead(404).end(); return; }

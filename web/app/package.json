@@ -16,6 +16,7 @@
     "prebuild:pages": "npm run prepare-assets",
     "postbuild:pages": "node scripts/pages-404.mjs",
     "build:enjoy": "npm run build:pages && node scripts/enjoy-only.mjs",
+    "build:cloudflare": "npm run prepare-assets && ng build --base-href / && node scripts/enjoy-only.mjs",
     "e2e": "node e2e/dyno.e2e.mjs",
     "e2e:grid": "node e2e/grid.e2e.mjs",
     "e2e:drive": "node e2e/drive.e2e.mjs",
